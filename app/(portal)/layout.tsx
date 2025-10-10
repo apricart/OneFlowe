@@ -6,7 +6,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
-import { LoaderOverlay } from "@/components/ui/skeleton"
+import { LoaderOverlay } from "@/components/ui/loader-overlay"
+import { OrgBranchProvider } from "@/components/context/org-branch-context"
 
 export default async function PortalLayout({ children }: { children: ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -16,10 +17,12 @@ export default async function PortalLayout({ children }: { children: ReactNode }
       <PreloadData />
       <Sidebar />
       <div className="flex-1 grid grid-rows-[auto_1fr]">
-        <Topbar />
-        <main className="p-4">
-          <Suspense fallback={<LoaderOverlay />}>{children}</Suspense>
-        </main>
+        <OrgBranchProvider initialRole={((session?.user as any)?.role as any) || "HEAD_OFFICE"}>
+          <Topbar />
+          <main className="p-4">
+            <Suspense fallback={<LoaderOverlay show />}>{children}</Suspense>
+          </main>
+        </OrgBranchProvider>
       </div>
     </div>
   )

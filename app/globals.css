@@ -125,5 +125,19 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* subtle premium background pattern, honors dark mode */
+    background-image: radial-gradient(
+        40rem 40rem at 0% 0%,
+        color-mix(in oklch, var(--color-brand-accent), transparent 96%),
+        transparent 60%
+      ),
+      radial-gradient(
+        40rem 40rem at 100% 0%,
+        color-mix(in oklch, var(--color-primary), transparent 96%),
+        transparent 60%
+      ), url("/images/patterns/dots-grid.jpg");
+    background-size: auto, auto, 900px;
+    background-attachment: fixed, fixed, fixed;
+    background-repeat: no-repeat, no-repeat, repeat;
   }
 }

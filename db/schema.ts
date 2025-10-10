@@ -38,6 +38,13 @@ export const users = pgTable(
       .notNull(),
     isActive: boolean("is_active").notNull().default(true),
     fullName: varchar("full_name", { length: 255 }),
+    firstName: varchar("first_name", { length: 100 }),
+    lastName: varchar("last_name", { length: 100 }),
+    phone: varchar("phone", { length: 32 }),
+    loginCode: varchar("login_code", { length: 64 }),
+    mfaEnabled: boolean("mfa_enabled").notNull().default(false),
+    organizationId: integer("organization_id").references(() => organizations.id),
+    branchId: integer("branch_id").references(() => branches.id),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
@@ -45,6 +52,9 @@ export const users = pgTable(
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
     roleIdx: index("users_role_idx").on(t.roleId),
     activeIdx: index("users_active_idx").on(t.isActive),
+    loginCodeIdx: uniqueIndex("users_login_code_idx").on(t.loginCode),
+    orgIdx: index("users_org_idx").on(t.organizationId),
+    branchIdx: index("users_branch_idx").on(t.branchId),
   }),
 )
 
@@ -53,11 +63,14 @@ export const organizations = pgTable(
   {
     id: serial("id").primaryKey(),
     name: varchar("name", { length: 255 }).notNull(),
+    code: varchar("code", { length: 64 }),
+    logoUrl: varchar("logo_url", { length: 512 }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (t) => ({
     orgNameIdx: uniqueIndex("org_name_idx").on(t.name),
+    // uniqueIndex("org_code_idx").on(t.code), // uncomment when data is ready to enforce
   }),
 )
 
@@ -70,12 +83,15 @@ export const branches = pgTable(
       .notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     adminUserId: uuid("admin_user_id").references(() => users.id),
+    code: varchar("code", { length: 64 }),
+    status: varchar("status", { length: 32 }).default("active"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (t) => ({
     orgIdx: index("branches_org_idx").on(t.organizationId),
     nameIdx: index("branches_name_idx").on(t.name),
+    statusIdx: index("branches_status_idx").on(t.status),
   }),
 )
 

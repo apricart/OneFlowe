@@ -18,5 +18,3 @@ export default {
   strict: true,
   verbose: true,
 } satisfies Config
-
-

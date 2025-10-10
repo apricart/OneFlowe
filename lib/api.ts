@@ -30,5 +30,3 @@ export async function requireApiRole(allowed: Role[]) {
   }
   return null
 }
-
-

@@ -27,4 +27,3 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   store.deleteWarehouse(id)
   return ok({ success: true })
 }
-
