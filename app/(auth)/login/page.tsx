@@ -3,9 +3,12 @@ import { useState } from "react"
 import type React from "react"
 
 import { useRouter } from "next/navigation"
+import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
+import { Spinner } from "@/components/ui/skeleton"
+import Image from "next/image"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -19,14 +22,10 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/api/v1/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Login failed")
-      router.replace("/super-admin/dashboard")
+      const result = await signIn("credentials", { redirect: false, email, password })
+      if (result?.error) throw new Error(result.error)
+      // All roles now go to /dashboard which renders role-specific content
+      router.replace("/dashboard")
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -38,9 +37,12 @@ export default function LoginPage() {
     <main className="min-h-[100svh] flex items-center justify-center bg-background">
       <Card className="w-full max-w-md border border-[var(--color-border)]">
         <CardHeader>
-          <CardTitle className="text-pretty text-2xl font-semibold" style={{ color: "var(--color-brand-primary)" }}>
-            Apricart OneFlowe
-          </CardTitle>
+          <div className="flex items-center gap-3">
+            <Image src="/logo-pos.svg" alt="Apricart" width={36} height={36} />
+            <CardTitle className="text-pretty text-2xl font-semibold" style={{ color: "var(--color-brand-primary)" }}>
+              Apricart OneFlowe
+            </CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="grid gap-4">
@@ -73,7 +75,11 @@ export default function LoginPage() {
               className="w-full"
               style={{ background: "var(--color-brand-primary)", color: "white" }}
             >
-              {loading ? "Signing in…" : "Sign In"}
+              {loading ? (
+                <span className="inline-flex items-center gap-2"><Spinner size={16} /> Signing in…</span>
+              ) : (
+                "Sign In"
+              )}
             </Button>
           </form>
         </CardContent>

@@ -41,7 +41,7 @@ export function CreateUserDialog() {
       }
       await jsonFetcher("/api/v1/users", {
         method: "POST",
-        body: JSON.stringify({ email, password, roleName: role }),
+        body: JSON.stringify({ name: email.split('@')[0], email, role, organizationId: null, branchId: null }),
       })
       setOpen(false)
       // Hard refresh users table by reloading page, or better: send custom event
@@ -78,13 +78,9 @@ export function CreateUserDialog() {
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
               <SelectContent>
-                {(roles?.data || [])
-                  .map((r) => r.name)
-                  .map((name) => (
-                    <SelectItem key={name} value={name}>
-                      {name}
-                    </SelectItem>
-                  ))}
+                {(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"]).map((name) => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             {rolesError && (

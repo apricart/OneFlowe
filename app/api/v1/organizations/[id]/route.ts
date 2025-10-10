@@ -1,43 +1,37 @@
-import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
 import { store } from "@/lib/store"
+import { ok, error, readJson, requireApiRole } from "@/lib/api"
 
-function requireSuperAdmin() {
-  const role = cookies().get("role")?.value
-  if (role !== "SUPER_ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-  }
-  return null
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const err = await requireApiRole(["SUPER_ADMIN"])
+  if (err) return err
+  const { id } = await params
+  const item = store.getOrganization(id)
+  if (!item) return error("Not found", 404)
+  return ok({ item })
 }
 
-export async function GET(_: Request, { params }: { params: { id: string } }) {
-  const err = requireSuperAdmin()
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const err = await requireApiRole(["SUPER_ADMIN"])
   if (err) return err
-  const item = store.getOrganization(params.id)
-  if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  return NextResponse.json({ item })
-}
-
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const err = requireSuperAdmin()
-  if (err) return err
-  const body = await req.json().catch(() => null)
-  if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 })
+  const body = await readJson<any>(req)
+  if (!body) return error("Invalid body", 400)
   try {
-    const item = store.updateOrganization(params.id, {
+    const { id } = await params
+    const item = store.updateOrganization(id, {
       name: body.name,
       code: body.code,
       status: body.status,
     })
-    return NextResponse.json({ item })
+    return ok({ item })
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Update failed" }, { status: 400 })
+    return error(e?.message || "Update failed", 400)
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
-  const err = requireSuperAdmin()
+export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const err = await requireApiRole(["SUPER_ADMIN"])
   if (err) return err
-  store.deleteOrganization(params.id)
-  return NextResponse.json({ ok: true })
+  const { id } = await params
+  store.deleteOrganization(id)
+  return ok({ ok: true })
 }

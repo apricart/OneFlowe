@@ -27,10 +27,35 @@ export type User = {
   createdAt: string
 }
 
+export type OrderStatus = "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED"
+
+export type OrderItem = {
+  sku: string
+  name: string
+  quantity: number
+  unit: string
+}
+
+export type Order = {
+  id: string
+  organizationId: string
+  branchId: string
+  requestedByUserId: string
+  status: OrderStatus
+  items: OrderItem[]
+  note?: string
+  createdAt: string
+  updatedAt: string
+}
+
 type Store = {
   organizations: Organization[]
   branches: Branch[]
   users: User[]
+  orders: Order[]
+  warehouses: Warehouse[]
+  suppliers: Supplier[]
+  inventoryTx: InventoryTransaction[]
 }
 
 declare global {
@@ -44,6 +69,10 @@ function getStore(): Store {
       organizations: [],
       branches: [],
       users: [],
+      orders: [],
+      warehouses: [],
+      suppliers: [],
+      inventoryTx: [],
     }
   }
   return globalThis.__ONEFLOWE_STORE__!
@@ -131,4 +160,161 @@ export const store = {
     const s = getStore()
     s.users = s.users.filter((u) => u.id !== id)
   },
+
+  // Orders
+  listOrders(filters?: { organizationId?: string; branchId?: string; status?: OrderStatus }): Order[] {
+    const s = getStore().orders
+    return s.filter((o) => {
+      if (filters?.organizationId && o.organizationId !== filters.organizationId) return false
+      if (filters?.branchId && o.branchId !== filters.branchId) return false
+      if (filters?.status && o.status !== filters.status) return false
+      return true
+    })
+  },
+  getOrder(id: string): Order | undefined {
+    return getStore().orders.find((o) => o.id === id)
+  },
+  createOrder(input: Omit<Order, "id" | "createdAt" | "updatedAt" | "status"> & { status?: OrderStatus }): Order {
+    const now = new Date().toISOString()
+    const order: Order = {
+      id: uid("ord"),
+      createdAt: now,
+      updatedAt: now,
+      status: input.status || "PENDING",
+      organizationId: input.organizationId,
+      branchId: input.branchId,
+      requestedByUserId: input.requestedByUserId,
+      items: input.items,
+      note: input.note,
+    }
+    getStore().orders.push(order)
+    return order
+  },
+  updateOrder(id: string, patch: Partial<Omit<Order, "id" | "createdAt">>): Order {
+    const o = this.getOrder(id)
+    if (!o) throw new Error("Order not found")
+    Object.assign(o, patch)
+    o.updatedAt = new Date().toISOString()
+    return o
+  },
+  deleteOrder(id: string): void {
+    const s = getStore()
+    s.orders = s.orders.filter((o) => o.id !== id)
+  },
+
+  // Warehouses
+  listWarehouses(filters?: { organizationId?: string; branchId?: string; isMain?: boolean }): Warehouse[] {
+    const s = getStore().warehouses
+    return s.filter((w) => {
+      if (filters?.organizationId && w.organizationId !== filters.organizationId) return false
+      if (filters?.branchId && w.branchId !== filters.branchId) return false
+      if (typeof filters?.isMain === 'boolean' && !!w.isMain !== filters.isMain) return false
+      return true
+    })
+  },
+  getWarehouse(id: string): Warehouse | undefined {
+    return getStore().warehouses.find((w) => w.id === id)
+  },
+  createWarehouse(input: Omit<Warehouse, "id" | "createdAt" | "updatedAt">): Warehouse {
+    const now = new Date().toISOString()
+    const w: Warehouse = { id: uid("wh"), createdAt: now, updatedAt: now, ...input }
+    getStore().warehouses.push(w)
+    return w
+  },
+  updateWarehouse(id: string, patch: Partial<Omit<Warehouse, "id" | "createdAt">>): Warehouse {
+    const w = this.getWarehouse(id)
+    if (!w) throw new Error("Warehouse not found")
+    Object.assign(w, patch)
+    w.updatedAt = new Date().toISOString()
+    return w
+  },
+  deleteWarehouse(id: string): void {
+    const s = getStore()
+    s.warehouses = s.warehouses.filter((w) => w.id !== id)
+  },
+
+  // Suppliers
+  listSuppliers(filters?: { organizationId?: string; branchId?: string }): Supplier[] {
+    const s = getStore().suppliers
+    return s.filter((sup) => {
+      if (filters?.organizationId && sup.organizationId !== filters.organizationId) return false
+      if (filters?.branchId && sup.branchId !== filters.branchId) return false
+      return true
+    })
+  },
+  getSupplier(id: string): Supplier | undefined {
+    return getStore().suppliers.find((s) => s.id === id)
+  },
+  createSupplier(input: Omit<Supplier, "id" | "createdAt" | "updatedAt">): Supplier {
+    const now = new Date().toISOString()
+    const sup: Supplier = { id: uid("sup"), createdAt: now, updatedAt: now, ...input }
+    getStore().suppliers.push(sup)
+    return sup
+  },
+  updateSupplier(id: string, patch: Partial<Omit<Supplier, "id" | "createdAt">>): Supplier {
+    const s = this.getSupplier(id)
+    if (!s) throw new Error("Supplier not found")
+    Object.assign(s, patch)
+    s.updatedAt = new Date().toISOString()
+    return s
+  },
+  deleteSupplier(id: string): void {
+    const s = getStore()
+    s.suppliers = s.suppliers.filter((x) => x.id !== id)
+  },
+
+  // Inventory Transactions (add/adjust)
+  listInventoryTransactions(filters?: { organizationId?: string; branchId?: string; type?: InventoryTransaction["type"] }): InventoryTransaction[] {
+    const s = getStore().inventoryTx
+    return s.filter((t) => {
+      if (filters?.organizationId && t.organizationId !== filters.organizationId) return false
+      if (filters?.branchId && t.branchId !== filters.branchId) return false
+      if (filters?.type && t.type !== filters.type) return false
+      return true
+    })
+  },
+  createInventoryTransaction(input: Omit<InventoryTransaction, "id" | "createdAt">): InventoryTransaction {
+    const now = new Date().toISOString()
+    const tx: InventoryTransaction = { id: uid("itx"), createdAt: now, ...input }
+    getStore().inventoryTx.push(tx)
+    return tx
+  },
+}
+
+export type Warehouse = {
+  id: string
+  organizationId: string
+  branchId: string
+  name: string
+  code: string
+  contact?: string
+  email?: string
+  description?: string
+  isMain?: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export type Supplier = {
+  id: string
+  organizationId: string
+  branchId: string
+  name: string
+  address?: string
+  contact?: string
+  email?: string
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type InventoryTransaction = {
+  id: string
+  organizationId: string
+  branchId: string
+  warehouseId?: string
+  type: "ADD" | "ADJUST"
+  note?: string
+  items: Array<{ sku: string; name: string; quantity: number; unit: string }>
+  createdAt: string
 }

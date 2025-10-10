@@ -84,7 +84,7 @@ export const categories = pgTable(
   {
     id: serial("id").primaryKey(),
     name: varchar("name", { length: 255 }).notNull(),
-    parentId: integer("parent_id").references(() => categories.id),
+    parentId: integer("parent_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
