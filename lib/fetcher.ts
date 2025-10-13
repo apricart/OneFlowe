@@ -24,16 +24,14 @@ export const apiFetch = jsonFetcher
 // Optimized fetcher for SWR with better error handling
 export async function fetcher<T>(url: string): Promise<T> {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 8000) // 8s timeout
+  const timeoutId = setTimeout(() => controller.abort("timeout" as any), 15000)
 
   try {
     const res = await fetch(url, {
       headers: COMMON_HEADERS,
       signal: controller.signal,
-      cache: "default", // Use browser cache
+      cache: "default",
     })
-
-    clearTimeout(timeoutId)
 
     if (!res.ok) {
       const error = new Error(`HTTP ${res.status}: ${res.statusText}`)
@@ -42,8 +40,12 @@ export async function fetcher<T>(url: string): Promise<T> {
     }
 
     return res.json()
-  } catch (error) {
-    clearTimeout(timeoutId)
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw new Error("Request timed out. Please try again.")
+    }
     throw error
+  } finally {
+    clearTimeout(timeoutId)
   }
 }

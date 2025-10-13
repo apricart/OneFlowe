@@ -1,19 +1,33 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
-import { store } from "@/lib/store"
+import { db } from "@/lib/db"
+import { warehouses } from "@/db/schema"
+import { and, desc, eq } from "drizzle-orm"
 
 export async function GET(req: Request) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
   if (err) return err
   const { searchParams } = new URL(req.url)
-  const organizationId = searchParams.get("organizationId") || undefined
-  const branchId = searchParams.get("branchId") || undefined
+  const organizationId = searchParams.get("organizationId")
+  const branchId = searchParams.get("branchId")
   const isMain = searchParams.get("isMain")
-  const items = store.listWarehouses({
-    organizationId,
-    branchId,
-    isMain: isMain === null ? undefined as any : isMain === "true",
-  } as any)
-  return ok({ items })
+  const where = [
+    organizationId ? eq(warehouses.organizationId, Number(organizationId)) : undefined,
+    branchId ? eq(warehouses.branchId, Number(branchId)) : undefined,
+    isMain === null ? undefined : eq(warehouses.isMain, isMain === "true"),
+  ].filter(Boolean) as any
+  try {
+    const items = await db
+      .select()
+      .from(warehouses)
+      .where(where.length ? and(...where) : (undefined as any))
+      .orderBy(desc(warehouses.createdAt))
+    return ok({ items })
+  } catch (e: any) {
+    if (e?.code === '42P01') {
+      return ok({ items: [] })
+    }
+    throw e
+  }
 }
 
 export async function POST(req: Request) {
@@ -23,15 +37,19 @@ export async function POST(req: Request) {
   if (!body?.organizationId || !body?.branchId || !body?.name || !body?.code) {
     return error("organizationId, branchId, name, code are required", 400)
   }
-  const created = store.createWarehouse({
-    organizationId: String(body.organizationId),
-    branchId: String(body.branchId),
-    name: String(body.name),
-    code: String(body.code),
-    contact: body.contact ? String(body.contact) : undefined,
-    email: body.email ? String(body.email) : undefined,
-    description: body.description ? String(body.description) : undefined,
-    isMain: Boolean(body.isMain),
-  })
-  return ok({ item: created }, { status: 201 })
+  const [item] = await db
+    .insert(warehouses)
+    .values({
+      organizationId: Number(body.organizationId),
+      branchId: Number(body.branchId),
+      name: String(body.name),
+      code: String(body.code),
+      contact: body.contact ? String(body.contact) : null,
+      email: body.email ? String(body.email) : null,
+      description: body.description ? String(body.description) : null,
+      isMain: Boolean(body.isMain),
+    })
+    .returning()
+  return ok({ item }, { status: 201 })
 }
+

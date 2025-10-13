@@ -89,6 +89,16 @@ export function SuperAdminDashboard() {
           icon={Bell}
         />
       </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border p-4">
+          <div className="text-sm font-medium mb-2">Sales by Day</div>
+          <div className="h-40 grid place-items-center text-sm text-muted-foreground">Chart placeholder</div>
+        </div>
+        <div className="rounded-xl border p-4">
+          <div className="text-sm font-medium mb-2">GMV vs Tax</div>
+          <div className="h-40 grid place-items-center text-sm text-muted-foreground">Chart placeholder</div>
+        </div>
+      </div>
     </div>
   )
 }

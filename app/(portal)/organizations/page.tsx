@@ -1,6 +1,7 @@
 "use client"
 import { useOrganizations, useBranches } from "@/lib/hooks/use-api"
-import type { Organization, Branch } from "@/lib/store"
+type Organization = { id: number; name: string; code: string }
+type Branch = { id: number; name: string; code: string; organizationId: number }
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"

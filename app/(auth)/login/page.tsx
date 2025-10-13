@@ -2,7 +2,7 @@
 import { useState } from "react"
 import type React from "react"
 
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import Image from "next/image"
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -24,8 +25,8 @@ export default function LoginPage() {
     try {
       const result = await signIn("credentials", { redirect: false, email, password })
       if (result?.error) throw new Error(result.error)
-      // All roles now go to /dashboard which renders role-specific content
-      router.replace("/dashboard")
+      const cb = searchParams.get("callbackUrl")
+      router.replace(cb || "/dashboard")
     } catch (err: any) {
       setError(err.message)
     } finally {

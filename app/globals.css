@@ -135,7 +135,7 @@
         40rem 40rem at 100% 0%,
         color-mix(in oklch, var(--color-primary), transparent 96%),
         transparent 60%
-      ), url("/images/patterns/dots-grid.jpg");
+      ), url("/images/bg-grid.jpg");
     background-size: auto, auto, 900px;
     background-attachment: fixed, fixed, fixed;
     background-repeat: no-repeat, no-repeat, repeat;

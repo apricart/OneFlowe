@@ -1,0 +1,18 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+
+export function KpiCard({ title, value, hint, icon: Icon, colorClass = "text-blue-600" }: { title: string; value: string | number; hint?: string; icon?: any; colorClass?: string }) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {Icon ? <Icon size={18} className="opacity-70" /> : null}
+      </CardHeader>
+      <CardContent>
+        <div className={`text-2xl font-bold ${colorClass}`}>{value}</div>
+        {hint ? <div className="text-xs opacity-70 mt-1">{hint}</div> : null}
+      </CardContent>
+    </Card>
+  )
+}
+
+

@@ -7,6 +7,14 @@ export function ok<T>(data: T, init?: ResponseInit) {
   return NextResponse.json(data as any, init)
 }
 
+export function okCached<T>(data: T, seconds = 30) {
+  return NextResponse.json(data as any, {
+    headers: {
+      "Cache-Control": `public, max-age=${seconds}, stale-while-revalidate=${seconds * 10}`,
+    },
+  })
+}
+
 export function error(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status })
 }
@@ -30,3 +38,5 @@ export async function requireApiRole(allowed: Role[]) {
   }
   return null
 }
+
+

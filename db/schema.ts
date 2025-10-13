@@ -12,6 +12,44 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core"
 
+export const organizations = pgTable(
+  "organizations",
+  {
+    id: serial("id").primaryKey(),
+    name: varchar("name", { length: 255 }).notNull(),
+    code: varchar("code", { length: 64 }),
+    logoUrl: varchar("logo_url", { length: 512 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    orgNameIdx: uniqueIndex("org_name_idx").on(t.name),
+    // uniqueIndex("org_code_idx").on(t.code), // uncomment when data is ready to enforce
+  }),
+)
+
+export const branches = pgTable(
+  "branches",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    // Avoid circular type init between users <-> branches; store admin user id without FK
+    adminUserId: uuid("admin_user_id"),
+    code: varchar("code", { length: 64 }),
+    status: varchar("status", { length: 32 }).default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("branches_org_idx").on(t.organizationId),
+    nameIdx: index("branches_name_idx").on(t.name),
+    statusIdx: index("branches_status_idx").on(t.status),
+  }),
+)
+
 export const roles = pgTable(
   "roles",
   {
@@ -44,7 +82,8 @@ export const users = pgTable(
     loginCode: varchar("login_code", { length: 64 }),
     mfaEnabled: boolean("mfa_enabled").notNull().default(false),
     organizationId: integer("organization_id").references(() => organizations.id),
-    branchId: integer("branch_id").references(() => branches.id),
+    // Avoid circular type init; store branch id without FK
+    branchId: integer("branch_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
@@ -55,43 +94,6 @@ export const users = pgTable(
     loginCodeIdx: uniqueIndex("users_login_code_idx").on(t.loginCode),
     orgIdx: index("users_org_idx").on(t.organizationId),
     branchIdx: index("users_branch_idx").on(t.branchId),
-  }),
-)
-
-export const organizations = pgTable(
-  "organizations",
-  {
-    id: serial("id").primaryKey(),
-    name: varchar("name", { length: 255 }).notNull(),
-    code: varchar("code", { length: 64 }),
-    logoUrl: varchar("logo_url", { length: 512 }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => ({
-    orgNameIdx: uniqueIndex("org_name_idx").on(t.name),
-    // uniqueIndex("org_code_idx").on(t.code), // uncomment when data is ready to enforce
-  }),
-)
-
-export const branches = pgTable(
-  "branches",
-  {
-    id: serial("id").primaryKey(),
-    organizationId: integer("organization_id")
-      .references(() => organizations.id)
-      .notNull(),
-    name: varchar("name", { length: 255 }).notNull(),
-    adminUserId: uuid("admin_user_id").references(() => users.id),
-    code: varchar("code", { length: 64 }),
-    status: varchar("status", { length: 32 }).default("active"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => ({
-    orgIdx: index("branches_org_idx").on(t.organizationId),
-    nameIdx: index("branches_name_idx").on(t.name),
-    statusIdx: index("branches_status_idx").on(t.status),
   }),
 )
 
@@ -163,6 +165,59 @@ export const inventory = pgTable(
   (t) => ({
     byBranchSku: uniqueIndex("inventory_branch_sku_uq").on(t.branchId, t.skuId),
     branchIdx: index("inventory_branch_idx").on(t.branchId),
+  }),
+)
+
+export const warehouses = pgTable(
+  "warehouses",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    branchId: integer("branch_id")
+      .references(() => branches.id)
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    code: varchar("code", { length: 64 }),
+    contact: varchar("contact", { length: 255 }),
+    email: varchar("email", { length: 255 }),
+    description: text("description"),
+    isMain: boolean("is_main").default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("warehouses_org_idx").on(t.organizationId),
+    branchIdx: index("warehouses_branch_idx").on(t.branchId),
+    nameIdx: index("warehouses_name_idx").on(t.name),
+    codeIdx: index("warehouses_code_idx").on(t.code),
+    mainIdx: index("warehouses_main_idx").on(t.isMain),
+  }),
+)
+
+export const suppliers = pgTable(
+  "suppliers",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    branchId: integer("branch_id")
+      .references(() => branches.id)
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    address: text("address"),
+    contact: varchar("contact", { length: 255 }),
+    email: varchar("email", { length: 255 }),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("suppliers_org_idx").on(t.organizationId),
+    branchIdx: index("suppliers_branch_idx").on(t.branchId),
+    nameIdx: index("suppliers_name_idx").on(t.name),
   }),
 )
 

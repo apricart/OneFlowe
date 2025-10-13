@@ -1,17 +1,14 @@
 "use client"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { Textarea } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
-import { useOrgBranch } from "@/components/context/org-branch-context"
-import { useBranches, useOrganizations } from "@/lib/hooks/use-api"
 
 export default function AddWarehousePage() {
-  const { organizationId: globalOrgId, branchId: globalBranchId } = useOrgBranch()
   const [form, setForm] = useState({
-    organizationId: globalOrgId || "",
-    branchId: globalBranchId || "",
+    organizationId: "",
+    branchId: "",
     name: "",
     code: "",
     contact: "",
@@ -19,10 +16,6 @@ export default function AddWarehousePage() {
     description: "",
     isMain: false,
   })
-  const { data: orgRes } = useOrganizations()
-  const { data: branchRes } = useBranches(form.organizationId || undefined)
-  const orgs = orgRes?.items || []
-  const branches = branchRes?.items || []
   const [saving, setSaving] = useState(false)
   async function onSave() {
     setSaving(true)
@@ -33,16 +26,7 @@ export default function AddWarehousePage() {
         body: JSON.stringify(form),
       })
       if (!res.ok) throw new Error("Failed")
-      setForm({
-        organizationId: "",
-        branchId: "",
-        name: "",
-        code: "",
-        contact: "",
-        email: "",
-        description: "",
-        isMain: false,
-      })
+      setForm({ organizationId: "", branchId: "", name: "", code: "", contact: "", email: "", description: "", isMain: false })
       alert("Warehouse saved")
     } catch {
       alert("Could not save")
@@ -75,59 +59,28 @@ export default function AddWarehousePage() {
             <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} />
           </div>
           <div className="grid gap-1">
-            <label className="text-sm">Organization</label>
-            <Select
-              value={form.organizationId}
-              onChange={(e: any) => setForm({ ...form, organizationId: e.target.value, branchId: "" })}
-            >
-              <option value="">{globalOrgId ? "Use Global Org" : "Select organization"}</option>
-              {orgs.map((o: any) => (
-                <option key={o.id} value={String(o.id)}>
-                  {o.name}
-                </option>
-              ))}
-            </Select>
+            <label className="text-sm">Organization Id</label>
+            <Input value={form.organizationId} onChange={(e) => setForm({ ...form, organizationId: e.target.value })} />
           </div>
           <div className="grid gap-1">
-            <label className="text-sm">Branch</label>
-            <Select
-              value={form.branchId}
-              onChange={(e: any) => setForm({ ...form, branchId: e.target.value })}
-              disabled={!form.organizationId}
-            >
-              <option value="">{globalBranchId ? "Use Global Branch" : "Select branch"}</option>
-              {branches.map((b: any) => (
-                <option key={b.id} value={String(b.id)}>
-                  {b.name}
-                </option>
-              ))}
-            </Select>
+            <label className="text-sm">Branch Id</label>
+            <Input value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })} />
           </div>
         </div>
         <div className="grid gap-1">
           <label className="text-sm">Description</label>
-          <Textarea value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} />
+          <Textarea as-child value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} />
         </div>
         <div className="flex items-center gap-2">
-          <input
-            id="isMain"
-            type="checkbox"
-            checked={form.isMain}
-            onChange={(e) => setForm({ ...form, isMain: e.target.checked })}
-          />
-          <label htmlFor="isMain" className="text-sm">
-            Is Main Store
-          </label>
+          <input id="isMain" type="checkbox" checked={form.isMain} onChange={(e) => setForm({ ...form, isMain: e.target.checked })} />
+          <label htmlFor="isMain" className="text-sm">Is Main Store</label>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => history.back()}>
-            Back
-          </Button>
-          <Button onClick={onSave} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
-          </Button>
+          <Button variant="secondary" onClick={() => history.back()}>Back</Button>
+          <Button onClick={onSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
         </div>
       </div>
     </div>
   )
 }
+

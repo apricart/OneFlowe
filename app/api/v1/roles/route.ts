@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
 import { roles } from "@/db/schema"
-import { ok, requireApiRole } from "@/lib/api"
+import { okCached as ok, requireApiRole } from "@/lib/api"
 
 export async function GET() {
   const err = await requireApiRole(["SUPER_ADMIN"])

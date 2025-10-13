@@ -14,9 +14,7 @@ export function useAPI<T>(url: string | null, options?: any) {
 
 // Predefined hooks for common endpoints
 export function useUsers(organizationId?: string) {
-  const url = organizationId 
-    ? `/api/v1/users?organizationId=${organizationId}` 
-    : '/api/v1/users'
+  const url = organizationId ? `/api/v1/users?organizationId=${organizationId}` : '/api/v1/users'
   return useAPI<{ items: any[] }>(url)
 }
 
@@ -25,9 +23,7 @@ export function useOrganizations() {
 }
 
 export function useBranches(organizationId?: string) {
-  const url = organizationId 
-    ? `/api/v1/branches?organizationId=${organizationId}` 
-    : '/api/v1/branches'
+  const url = organizationId ? `/api/v1/branches?organizationId=${organizationId}` : '/api/v1/branches'
   return useAPI<{ items: any[] }>(url)
 }
 
@@ -51,12 +47,47 @@ export const prefetchData = {
     const { fetcher } = await import('@/lib/fetcher')
     preload('/api/v1/roles', fetcher)
   },
+
+  async branches() {
+    const { fetcher } = await import('@/lib/fetcher')
+    preload('/api/v1/branches', fetcher)
+  },
+
+  async orders() {
+    const { fetcher } = await import('@/lib/fetcher')
+    preload('/api/v1/orders', fetcher)
+  },
+
+  async suppliers() {
+    const { fetcher } = await import('@/lib/fetcher')
+    preload('/api/v1/suppliers', fetcher)
+  },
+
+  async warehouses() {
+    const { fetcher } = await import('@/lib/fetcher')
+    preload('/api/v1/warehouses', fetcher)
+  },
+
+  async inventoryTx() {
+    const { fetcher } = await import('@/lib/fetcher')
+    preload('/api/v1/inventory/transactions', fetcher)
+  },
 }
 
 export function useOrders(params?: { organizationId?: string; branchId?: string; status?: string }) {
   const qs = new URLSearchParams()
-  if (params?.organizationId) qs.set('organizationId', params.organizationId)
-  if (params?.branchId) qs.set('branchId', params.branchId)
+  let orgId = params?.organizationId
+  let brId = params?.branchId
+  if (!orgId && typeof window !== 'undefined') {
+    const v = localStorage.getItem('ctx.organizationId')
+    if (v) orgId = v
+  }
+  if (!brId && typeof window !== 'undefined') {
+    const v = localStorage.getItem('ctx.branchId')
+    if (v) brId = v
+  }
+  if (orgId) qs.set('organizationId', orgId)
+  if (brId) qs.set('branchId', brId)
   if (params?.status) qs.set('status', params.status)
   const url = `/api/v1/orders${qs.toString() ? `?${qs.toString()}` : ''}`
   return useAPI<{ items: any[] }>(url)

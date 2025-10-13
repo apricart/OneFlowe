@@ -8,7 +8,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/skeleton"
 
-type UserRow = { id: string; name: string; email: string; role: string; organizationId?: string | null; branchId?: string | null; createdAt: string }
+type UserRow = { id: string; firstName: string; lastName: string; email: string; role: string; organizationId?: string | null; branchId?: string | null; phone?: string; loginCode?: string; mfaEnabled?: boolean; createdAt: string }
 type UsersResp = { items: UserRow[] }
 
 export function UsersTable() {
@@ -28,12 +28,17 @@ export function UsersTable() {
       </div>
     )
 
-  const rows = (data?.items || []).filter((u) => u.email.toLowerCase().includes(filter.toLowerCase()))
+  const f = filter.toLowerCase()
+  const rows = (data?.items || []).filter((u) =>
+    (u.firstName || "").toLowerCase().includes(f) ||
+    (u.lastName || "").toLowerCase().includes(f) ||
+    (u.email || "").toLowerCase().includes(f)
+  )
 
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-2">
-        <Input placeholder="Search by email" value={filter} onChange={(e) => setFilter(e.target.value)} className="max-w-xs" />
+        <Input placeholder="Search by name or email" value={filter} onChange={(e) => setFilter(e.target.value)} className="max-w-xs" />
         {isLoading && <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><Spinner size={14} /> Loading…</span>}
       </div>
       <Table>
@@ -41,25 +46,29 @@ export function UsersTable() {
           <TableRow>
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
+            <TableHead>Phone</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Org</TableHead>
             <TableHead>Branch</TableHead>
+            <TableHead>MFA</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">No users found.</TableCell>
+              <TableCell colSpan={8} className="text-center text-sm text-muted-foreground">No users found.</TableCell>
             </TableRow>
           ) : (
             rows.map((u) => (
               <TableRow key={u.id}>
-                <TableCell>{u.name}</TableCell>
+                <TableCell>{u.firstName} {u.lastName}</TableCell>
                 <TableCell>{u.email}</TableCell>
+                <TableCell>{u.phone || "-"}</TableCell>
                 <TableCell>{u.role}</TableCell>
                 <TableCell>{u.organizationId || "-"}</TableCell>
                 <TableCell>{u.branchId || "-"}</TableCell>
+                <TableCell>{u.mfaEnabled ? "✓" : "-"}</TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button size="sm" variant="destructive" onClick={() => deleteUser(u)}>Delete</Button>
                 </TableCell>

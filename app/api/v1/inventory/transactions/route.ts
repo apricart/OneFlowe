@@ -1,14 +1,18 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
-import { store } from "@/lib/store"
+import { db } from "@/lib/db"
+import { inventory } from "@/db/schema"
+import { and, desc, eq } from "drizzle-orm"
 
 export async function GET(req: Request) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"]) 
   if (err) return err
   const { searchParams } = new URL(req.url)
-  const organizationId = searchParams.get("organizationId") || undefined
-  const branchId = searchParams.get("branchId") || undefined
+  const branchId = searchParams.get("branchId")
   const type = (searchParams.get("type") || undefined) as any
-  const items = store.listInventoryTransactions({ organizationId, branchId, type })
+  const where = [
+    branchId ? eq(inventory.branchId, Number(branchId)) : undefined,
+  ].filter(Boolean) as any
+  const items = await db.select().from(inventory).where(where.length ? and(...where) : undefined as any).orderBy(desc(inventory.updatedAt))
   return ok({ items })
 }
 
@@ -19,13 +23,8 @@ export async function POST(req: Request) {
   if (!body?.organizationId || !body?.branchId || !Array.isArray(body?.items) || !body?.type) {
     return error("organizationId, branchId, type, items are required", 400)
   }
-  const created = store.createInventoryTransaction({
-    organizationId: String(body.organizationId),
-    branchId: String(body.branchId),
-    warehouseId: body.warehouseId ? String(body.warehouseId) : undefined,
-    type: body.type,
-    note: body.note ? String(body.note) : undefined,
-    items: body.items,
-  })
-  return ok({ item: created }, { status: 201 })
+  // Inventory adjustments by writing to inventory table per SKU
+  // For now, respond 501 until full SKU mapping is ready
+  return error("Not implemented: inventory transaction write path pending SKU mapping", 501)
 }
+

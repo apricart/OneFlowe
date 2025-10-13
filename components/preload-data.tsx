@@ -13,6 +13,11 @@ export function PreloadData() {
           prefetchData.organizations(),
           prefetchData.users(),
           prefetchData.roles(),
+          prefetchData.branches(),
+          prefetchData.orders(),
+          prefetchData.suppliers(),
+          prefetchData.warehouses(),
+          prefetchData.inventoryTx(),
         ])
       } catch (error) {
         console.warn('Failed to prefetch some data:', error)

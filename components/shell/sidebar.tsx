@@ -64,7 +64,7 @@ export function Sidebar() {
         <Image src="/logo-pos.svg" alt="logo" width={24} height={24} />
         <span>OneFlowe {role === "SUPER_ADMIN" ? "Admin" : role === "HEAD_OFFICE" ? "Head Office" : "Branch"}</span>
       </div>
-      <nav className="p-2 grid gap-1">
+      <nav className="p-2 grid gap-1" aria-busy={!session} aria-live="polite">
         {nav.map((item) => {
           const active = pathname.startsWith(item.href)
           return (

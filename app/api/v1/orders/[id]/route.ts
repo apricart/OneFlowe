@@ -1,11 +1,14 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
-import { store, type OrderStatus } from "@/lib/store"
+import { db } from "@/lib/db"
+import { orders } from "@/db/schema"
+import { eq } from "drizzle-orm"
+type OrderStatus = "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
   if (err) return err
   const { id } = await params
-  const item = store.getOrder(id)
+  const [item] = await db.select().from(orders).where(eq(orders.id, Number(id)))
   if (!item) return error("Not found", 404)
   return ok({ item })
 }
@@ -21,18 +24,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.status && !allowedStatuses.includes(body.status)) {
     return error("Invalid status", 400)
   }
-  const updated = store.updateOrder(id, {
-    status: body.status as OrderStatus | undefined,
-    note: body.note,
-    items: body.items,
-  })
-  return ok({ item: updated })
+  const patch: any = {}
+  if (body.status) patch.status = String(body.status)
+  const [item] = await db.update(orders).set(patch).where(eq(orders.id, Number(id))).returning()
+  return ok({ item })
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const err = await requireApiRole(["SUPER_ADMIN"])
   if (err) return err
   const { id } = await params
-  store.deleteOrder(id)
+  await db.delete(orders).where(eq(orders.id, Number(id)))
   return ok({ success: true })
 }
+
