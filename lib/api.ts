@@ -19,6 +19,9 @@ export function error(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status })
 }
 
+// Alias for error function
+export const err = error
+
 export async function readJson<T = any>(req: Request): Promise<T | null> {
   try {
     const body = await req.json()

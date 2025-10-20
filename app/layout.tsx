@@ -7,9 +7,9 @@ import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
+  title: 'ONE FLOWE',
+  description: 'Created by Swenta Solutions',
+  
 }
 
 export default function RootLayout({

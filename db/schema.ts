@@ -285,17 +285,24 @@ export const budgets = pgTable(
   "budgets",
   {
     id: serial("id").primaryKey(),
+    organizationId: integer("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
     branchId: integer("branch_id")
       .references(() => branches.id)
       .notNull(),
     period: varchar("period", { length: 16 }).notNull(), // e.g. '2025-10'
     amountAllocatedCents: integer("amount_allocated_cents").notNull().default(0),
     amountSpentCents: integer("amount_spent_cents").notNull().default(0),
+    amountHeldCents: integer("amount_held_cents").notNull().default(0),
+    amountCreditedCents: integer("amount_credited_cents").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (t) => ({
     branchPeriodUq: uniqueIndex("budgets_branch_period_uq").on(t.branchId, t.period),
+    orgIdx: index("budgets_org_idx").on(t.organizationId),
+    branchIdx: index("budgets_branch_idx").on(t.branchId),
   }),
 )
 
@@ -332,12 +339,16 @@ export const orders = pgTable(
   "orders",
   {
     id: serial("id").primaryKey(),
+    tid: varchar("tid", { length: 26 }).notNull().unique(), // Transaction ID
     organizationId: integer("organization_id").references(() => organizations.id),
     branchId: integer("branch_id")
       .references(() => branches.id)
       .notNull(),
-    status: varchar("status", { length: 32 }).notNull().default("PENDING"), // PENDING/APPROVED/REJECTED
+    status: varchar("status", { length: 32 }).notNull().default("PENDING"), // PENDING/APPROVED/REJECTED/FULFILLED/REFUNDED
+    subtotalCents: integer("subtotal_cents").notNull().default(0),
+    taxCents: integer("tax_cents").notNull().default(0),
     totalCents: integer("total_cents").notNull().default(0),
+    notes: text("notes"),
     createdByUserId: uuid("created_by_user_id")
       .references(() => users.id)
       .notNull(),
@@ -345,6 +356,7 @@ export const orders = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (t) => ({
+    tidIdx: uniqueIndex("orders_tid_idx").on(t.tid),
     branchIdx: index("orders_branch_idx").on(t.branchId),
     statusIdx: index("orders_status_idx").on(t.status),
     createdIdx: index("orders_created_idx").on(t.createdAt),
@@ -361,15 +373,44 @@ export const orderItems = pgTable(
     orderId: integer("order_id")
       .references(() => orders.id)
       .notNull(),
-    skuId: integer("sku_id")
-      .references(() => skus.id)
+    globalProductId: integer("global_product_id")
+      .references(() => globalProducts.id)
       .notNull(),
+    // Product snapshot - store at time of order for historical accuracy
+    productName: varchar("product_name", { length: 255 }).notNull(),
+    productCode: varchar("product_code", { length: 128 }),
+    unit: varchar("unit", { length: 64 }).notNull(),
     quantity: integer("quantity").notNull(),
-    priceCents: integer("price_cents").notNull(),
+    priceCents: integer("price_cents").notNull(), // Price at time of order
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => ({
     orderIdx: index("order_items_order_idx").on(t.orderId),
     orderItemsOrgIdx: index("order_items_org_idx").on(t.organizationId),
+    globalProductIdx: index("order_items_product_idx").on(t.globalProductId),
+  }),
+)
+
+export const refunds = pgTable(
+  "refunds",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id").references(() => organizations.id),
+    orderId: integer("order_id")
+      .references(() => orders.id)
+      .notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    reason: varchar("reason", { length: 255 }),
+    processedByUserId: uuid("processed_by_user_id")
+      .references(() => users.id)
+      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    orderIdx: index("refunds_order_idx").on(t.orderId),
+    refundsOrgIdx: index("refunds_org_idx").on(t.organizationId),
+    processedByIdx: index("refunds_processed_by_idx").on(t.processedByUserId),
   }),
 )
 
@@ -728,5 +769,33 @@ export const branchInventory = pgTable(
     visibleIdx: index("branch_inventory_visible_idx").on(t.isVisible),
     activeIdx: index("branch_inventory_active_idx").on(t.isActive),
     deletedAtIdx: index("branch_inventory_deleted_at_idx").on(t.deletedAt),
+  }),
+)
+
+// Employee Credentials - For Order Portal access
+export const employeeCredentials = pgTable(
+  "employee_credentials",
+  {
+    id: serial("id").primaryKey(),
+    branchId: integer("branch_id").references(() => branches.id).notNull(),
+    organizationId: integer("organization_id").references(() => organizations.id).notNull(),
+    email: varchar("email", { length: 255 }).notNull(),
+    passwordHash: varchar("password_hash", { length: 255 }).notNull(),
+    firstName: varchar("first_name", { length: 128 }),
+    lastName: varchar("last_name", { length: 128 }),
+    mfaEnabled: boolean("mfa_enabled").default(false).notNull(),
+    mfaSecret: varchar("mfa_secret", { length: 255 }),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+  },
+  (t) => ({
+    emailUq: uniqueIndex("employee_creds_email_uq").on(t.email),
+    branchIdx: index("employee_creds_branch_idx").on(t.branchId),
+    orgIdx: index("employee_creds_org_idx").on(t.organizationId),
+    activeIdx: index("employee_creds_active_idx").on(t.isActive),
+    createdByIdx: index("employee_creds_created_by_idx").on(t.createdByUserId),
   }),
 )

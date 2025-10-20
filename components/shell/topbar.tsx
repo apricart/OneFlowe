@@ -36,7 +36,14 @@ export function Topbar() {
       {/* Right Side - Actions & Profile */}
       <div className="flex items-center gap-3">
         {/* Order Portal link */}
-        <Link href="/order-portal" className="hidden sm:block">
+        <Link 
+          href={
+            userRole === "BRANCH_ADMIN" || userRole === "HEAD_OFFICE" || userRole === "SUPER_ADMIN"
+              ? "/shop"
+              : "/shop/login"
+          } 
+          className="hidden sm:block"
+        >
           <Button variant="outline" size="sm" className="gap-2">
             <ShoppingBag className="h-4 w-4" />
             Order Portal

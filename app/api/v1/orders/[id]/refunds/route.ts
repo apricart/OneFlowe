@@ -18,7 +18,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!ord) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
     await db.transaction(async (tx) => {
-      await tx.insert(refunds).values({ orderId, amountCents, reason: reason || null, approvedByUserId: (session.user as any).id, approvedAt: new Date() })
+      await tx.insert(refunds).values({ 
+        organizationId: (ord as any).organizationId,
+        orderId, 
+        amountCents, 
+        reason: reason || null, 
+        processedByUserId: (session.user as any).id,
+      })
 
       const [budget] = await tx.select().from(budgets).where(eq(budgets.branchId, (ord as any).branchId)).limit(1)
       if (budget) {

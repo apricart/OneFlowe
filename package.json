@@ -9,6 +9,7 @@
     "db:migrate": "drizzle-kit migrate --config=drizzle.config.ts",
     "db:seed": "tsx lib/seed.ts",
     "db:studio": "drizzle-kit studio --config=drizzle.config.ts",
+    "db:sync": "tsx scripts/sync-schema.ts",
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start"

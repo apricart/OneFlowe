@@ -3,12 +3,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { SectionHeader } from "@/components/ui/section-header"
 import { MFASettings } from "@/components/mfa/mfa-settings"
+import { EmployeeCredentialsManager } from "@/components/admin/employee-credentials-manager"
 import { useSession } from "next-auth/react"
-import { Settings, User, Shield, Bell } from "lucide-react"
+import { Settings, User, Shield, Bell, Users } from "lucide-react"
 
 export default function SettingsPage() {
   const { data: session } = useSession()
   const userEmail = (session?.user as any)?.email
+  const userRole = (session?.user as any)?.role
+  const isBranchAdmin = userRole === "BRANCH_ADMIN"
 
   return (
     <div className="space-y-6 p-6">
@@ -22,6 +25,24 @@ export default function SettingsPage() {
           </div>
         }
       />
+
+      {/* Employee Credentials Manager (Branch Admin Only) */}
+      {isBranchAdmin && (
+        <Card className="border-blue-200 dark:border-blue-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Employee Portal Access
+            </CardTitle>
+            <CardDescription>
+              Create and manage employee credentials for the Order Portal
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EmployeeCredentialsManager />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Profile Settings */}
