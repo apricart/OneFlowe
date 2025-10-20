@@ -1,4 +1,4 @@
-import { okCached as ok, error, requireApiRole, readJson } from "@/lib/api"
+import { ok, error, requireApiRole, readJson } from "@/lib/api"
 import { db } from "@/lib/db"
 import { organizations as orgsTable } from "@/db/schema"
 import { and, desc, eq } from "drizzle-orm"
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   }
   const [item] = await db
     .insert(orgsTable)
-    .values({ name: String(body.name), code: String(body.code) })
+    .values({ name: String(body.name), code: String(body.code), status: body?.status ? String(body.status) : undefined })
     .returning()
   return ok({ item }, { status: 201 })
 }

@@ -1,6 +1,6 @@
-import { LoaderOverlay } from "@/components/ui/skeleton"
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton"
 
 export default function Loading() {
-  return <LoaderOverlay />
+  return <DashboardSkeleton />
 }
 

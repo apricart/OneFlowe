@@ -92,3 +92,23 @@ export function useOrders(params?: { organizationId?: string; branchId?: string;
   const url = `/api/v1/orders${qs.toString() ? `?${qs.toString()}` : ''}`
   return useAPI<{ items: any[] }>(url)
 }
+
+// Admin-specific hooks
+export function useRolePermissions(roleId?: number) {
+  const url = roleId ? `/api/v1/roles/permissions?roleId=${roleId}` : null
+  return useAPI<{ data: any[] }>(url)
+}
+
+export function useOrganizationSettings(organizationId?: number) {
+  const url = organizationId ? `/api/v1/settings?organizationId=${organizationId}` : null
+  return useAPI<{ data: any[] }>(url)
+}
+
+export function useAuditLogs(params?: { limit?: number; entity?: string; action?: string }) {
+  const qs = new URLSearchParams()
+  if (params?.limit) qs.set('limit', params.limit.toString())
+  if (params?.entity) qs.set('entity', params.entity)
+  if (params?.action) qs.set('action', params.action)
+  const url = `/api/v1/audit-logs${qs.toString() ? `?${qs.toString()}` : ''}`
+  return useAPI<{ data: any[] }>(url)
+}

@@ -6,10 +6,12 @@ import { useBranches, useOrganizations } from "@/lib/hooks/use-api"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { useOrgBranch } from "@/components/context/org-branch-context"
+import { useAppContext } from "@/components/context/app-context"
 
 export function UniversalContextSelector() {
-  const { organizationId, branchId, setOrganization, setBranch, level } = useOrgBranch()
+  const { organizationId, branchId, setOrganizationId, setBranchId } = useAppContext()
+  // Calculate level based on context
+  const level = branchId ? "BRANCH" : organizationId ? "ORGANIZATION" : "GLOBAL"
   const { data: orgRes } = useOrganizations()
   const { data: branchRes } = useBranches(organizationId || undefined)
   const orgs = orgRes?.items || []
@@ -28,8 +30,8 @@ export function UniversalContextSelector() {
   function applyChange() {
     if (!pending) return
     // Apply org first, then branch
-    setOrganization(pending.organizationId)
-    setBranch(pending.branchId)
+    setOrganizationId(pending.organizationId)
+    setBranchId(pending.branchId)
     setConfirmOpen(false)
   }
 

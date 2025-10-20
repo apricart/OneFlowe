@@ -5,14 +5,14 @@ import { PreloadData } from "@/components/preload-data"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { redirect } from "next/navigation"
-import { OrgBranchProvider } from "@/components/context/org-branch-context"
+import { AppContextProvider } from "@/components/context/app-context"
 
 export default async function PortalLayout({ children }: { children: ReactNode }) {
   const session = await getServerSession(authOptions)
   if (!session) redirect("/login")
-  const role = (session.user as any)?.role || "HEAD_OFFICE"
+  
   return (
-    <OrgBranchProvider initialRole={role}>
+    <AppContextProvider>
       <div className="min-h-svh w-full flex bg-[oklch(0.98_0.01_250)]">
         <PreloadData />
         <Sidebar />
@@ -21,6 +21,6 @@ export default async function PortalLayout({ children }: { children: ReactNode }
           <main className="p-4">{children}</main>
         </div>
       </div>
-    </OrgBranchProvider>
+    </AppContextProvider>
   )
 }

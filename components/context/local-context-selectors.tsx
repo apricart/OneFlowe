@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { useOrgBranch } from "@/components/context/org-branch-context"
+import { useAppContext } from "@/components/context/app-context"
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
@@ -19,7 +19,7 @@ export function LocalContextSelectors({
 }: {
   onChange?: (ctx: { organizationId?: string | null; branchId?: string | null }) => void
 }) {
-  const { organizationId: globalOrgId, branchId: globalBranchId } = useOrgBranch()
+  const { organizationId: globalOrgId, branchId: globalBranchId } = useAppContext()
   const [localSel, setLocalSel] = React.useState<{ organizationId?: string | null; branchId?: string | null }>({
     organizationId: globalOrgId ?? null,
     branchId: globalBranchId ?? null,

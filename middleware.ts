@@ -18,7 +18,13 @@ export async function middleware(req: NextRequest) {
   // Enforce SUPER_ADMIN for admin sections
   const role = (token as any).role as string | undefined
   // Super Admin only routes
-  if ((pathname.startsWith("/organizations") || pathname.startsWith("/users")) && role !== "SUPER_ADMIN") {
+  if (pathname.startsWith("/organizations") && role !== "SUPER_ADMIN") {
+    logger("middleware", { reason: "insufficient_role", path: pathname, role })
+    const url = new URL("/login", req.url)
+    return NextResponse.redirect(url)
+  }
+  // Users route - accessible by SUPER_ADMIN and HEAD_OFFICE
+  if (pathname.startsWith("/users") && !["SUPER_ADMIN", "HEAD_OFFICE"].includes(role || "")) {
     logger("middleware", { reason: "insufficient_role", path: pathname, role })
     const url = new URL("/login", req.url)
     return NextResponse.redirect(url)

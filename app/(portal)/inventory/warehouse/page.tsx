@@ -1,7 +1,7 @@
 "use client"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
 
@@ -69,7 +69,7 @@ export default function AddWarehousePage() {
         </div>
         <div className="grid gap-1">
           <label className="text-sm">Description</label>
-          <Textarea as-child value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} />
+          <Textarea value={form.description} onChange={(e: any) => setForm({ ...form, description: e.target.value })} />
         </div>
         <div className="flex items-center gap-2">
           <input id="isMain" type="checkbox" checked={form.isMain} onChange={(e) => setForm({ ...form, isMain: e.target.checked })} />

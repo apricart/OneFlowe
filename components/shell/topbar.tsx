@@ -3,83 +3,102 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { signOut, useSession } from "next-auth/react"
 import Image from "next/image"
-import { useEffect } from "react"
-import { useOrganizations, useBranches } from "@/lib/hooks/use-api"
+import { Bell, Moon, Sun, ShoppingBag } from "lucide-react"
+import { useTheme } from "next-themes"
+import { CommandPalette } from "@/components/ui/command-palette"
+import { ContextSelector } from "@/components/shell/context-selector"
+import Link from "next/link"
 
 export function Topbar() {
   const { data: session } = useSession()
   const [open, setOpen] = useState(false)
-  const [organizationId, setOrganizationId] = useState<string>("")
-  const [branchId, setBranchId] = useState<string>("")
-  const { data: orgs } = useOrganizations()
-  const { data: brs } = useBranches(organizationId || undefined)
+  const { theme, setTheme } = useTheme()
+  
+  const userRole = (session?.user as any)?.role
 
-  useEffect(() => {
-    const oid = localStorage.getItem("ctx.organizationId") || ""
-    const bid = localStorage.getItem("ctx.branchId") || ""
-    setOrganizationId(oid)
-    setBranchId(bid)
-  }, [])
-
-  useEffect(() => {
-    if (organizationId) localStorage.setItem("ctx.organizationId", organizationId)
-  }, [organizationId])
-  useEffect(() => {
-    if (branchId) localStorage.setItem("ctx.branchId", branchId)
-  }, [branchId])
   async function logout() {
     await signOut({ callbackUrl: "/login", redirect: true })
   }
+  
   return (
     <header
-      className="sticky top-0 z-40 w-full h-14 flex items-center justify-between px-4 border-b backdrop-blur supports-[backdrop-filter]:bg-white/70"
+      className="sticky top-0 z-40 w-full h-14 flex items-center justify-between px-4 border-b backdrop-blur supports-[backdrop-filter]:bg-background/80"
       style={{ borderColor: "var(--color-border)" }}
     >
-      <div className="text-sm flex items-center gap-3">
-        <Image src="/logo-pos.svg" alt="logo" width={32} height={32} />
-        <span className="hidden md:inline font-semibold tracking-tight" style={{ color: "var(--color-brand-primary)" }}>OneFlowe Admin</span>
+      {/* Left Side - Context Selector & Command Palette */}
+      <div className="flex items-center gap-3">
+        <div className="hidden lg:flex">
+          <ContextSelector />
+        </div>
+        <CommandPalette />
       </div>
-      <div className="hidden md:flex items-center gap-2">
-        <select
-          value={organizationId}
-          onChange={(e) => {
-            setOrganizationId(e.target.value)
-            setBranchId("")
-          }}
-          className="border rounded-md px-3 py-1.5 text-sm shadow-sm hover:bg-[oklch(0.98_0.01_250)]"
-          aria-label="Select organization"
+
+      {/* Right Side - Actions & Profile */}
+      <div className="flex items-center gap-3">
+        {/* Order Portal link */}
+        <Link href="/order-portal" className="hidden sm:block">
+          <Button variant="outline" size="sm" className="gap-2">
+            <ShoppingBag className="h-4 w-4" />
+            Order Portal
+          </Button>
+        </Link>
+        {/* Notifications */}
+        <Button variant="ghost" size="icon" className="relative">
+          <Bell className="h-5 w-5" />
+          <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
+        </Button>
+
+        {/* Theme Toggle */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
-          <option value="">Organization</option>
-          {(orgs?.items || []).map((o: any) => (
-            <option key={o.id} value={o.id}>{o.name}</option>
-          ))}
-        </select>
-        <select
-          value={branchId}
-          onChange={(e) => setBranchId(e.target.value)}
-          className="border rounded-md px-3 py-1.5 text-sm shadow-sm hover:bg[oklch(0.98_0.01_250)]"
-          aria-label="Select branch"
-          disabled={!organizationId}
-        >
-          <option value="">Branch</option>
-          {(brs?.items || []).map((b: any) => (
-            <option key={b.id} value={b.id}>{b.name}</option>
-          ))}
-        </select>
-      </div>
-      <div className="relative flex items-center gap-2">
-        <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-2 rounded-full px-2 py-1 hover:bg-[oklch(0.95_0.01_250)]">
-          <Image src="/placeholder-user.jpg" alt="avatar" width={28} height={28} className="rounded-full" />
-          <span className="text-sm">{(session?.user as any)?.email || "Account"}</span>
-        </button>
-        {open && (
-          <div className="absolute right-0 top-10 z-50 min-w-56 rounded-md border bg-white p-2 shadow-md">
-            <div className="px-2 py-1 text-xs opacity-70">Signed in as {(session?.user as any)?.email || "user"}</div>
-            <div className="h-px my-1 bg-gray-200" />
-            <button className="w-full text-left px-2 py-1 rounded hover:bg-[oklch(0.96_0.01_250)]" onClick={() => (window.location.href = "/settings")}>Settings</button>
-            <button className="w-full text-left px-2 py-1 rounded hover:bg-[oklch(0.96_0.01_250)]" onClick={logout}>Logout</button>
-      </div>
-        )}
+          <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+          <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <span className="sr-only">Toggle theme</span>
+        </Button>
+
+        {/* Profile Menu */}
+        <div className="relative">
+          <button 
+            onClick={() => setOpen((v) => !v)} 
+            className="flex items-center gap-2 rounded-full px-2 py-1 hover:bg-accent transition-colors"
+          >
+            <Image 
+              src="/placeholder-user.jpg" 
+              alt="avatar" 
+              width={32} 
+              height={32} 
+              className="rounded-full ring-2 ring-background" 
+            />
+            <span className="text-sm hidden md:inline font-medium">
+              {(session?.user as any)?.email?.split("@")[0] || "Account"}
+            </span>
+          </button>
+          {open && (
+            <div className="absolute right-0 top-12 z-50 min-w-56 rounded-lg border bg-card p-2 shadow-lg">
+              <div className="px-3 py-2 text-sm">
+                <p className="font-medium">{(session?.user as any)?.fullName || "User"}</p>
+                <p className="text-xs text-muted-foreground">{(session?.user as any)?.email || "user@example.com"}</p>
+                <p className="text-xs text-muted-foreground mt-1 capitalize">{userRole?.toLowerCase().replace("_", " ")}</p>
+              </div>
+              <div className="h-px my-1 bg-border" />
+              <button 
+                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors" 
+                onClick={() => (window.location.href = "/settings")}
+              >
+                Settings
+              </button>
+              <button 
+                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent text-destructive transition-colors" 
+                onClick={logout}
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   )

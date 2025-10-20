@@ -33,3 +33,37 @@ export function LoaderOverlay() {
 }
 
 export { Skeleton }
+
+export function ListSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-8 w-48" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-24" />
+        </div>
+      </div>
+      <div className="rounded-xl border">
+        <div className="grid grid-cols-12 gap-2 p-4">
+          <Skeleton className="col-span-3 h-4" />
+          <Skeleton className="col-span-3 h-4" />
+          <Skeleton className="col-span-2 h-4" />
+          <Skeleton className="col-span-2 h-4" />
+          <Skeleton className="col-span-2 h-4" />
+        </div>
+        <div className="divide-y">
+          {Array.from({ length: rows }).map((_, i) => (
+            <div key={i} className="grid grid-cols-12 gap-2 p-4">
+              <Skeleton className="col-span-3 h-4" />
+              <Skeleton className="col-span-3 h-4" />
+              <Skeleton className="col-span-2 h-4" />
+              <Skeleton className="col-span-2 h-4" />
+              <Skeleton className="col-span-2 h-4" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
