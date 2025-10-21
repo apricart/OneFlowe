@@ -169,9 +169,10 @@ export default function ShopLoginPage() {
           {/* Back to Dashboard */}
           <Button
             variant="outline"
-            className="w-full"
+            className="w-full gap-2"
             onClick={() => router.push("/login")}
           >
+            <ChevronLeft className="h-4 w-4" />
             Back to Dashboard Login
           </Button>
         </Card>

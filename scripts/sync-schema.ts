@@ -80,6 +80,13 @@ async function syncSchema() {
       FOREIGN KEY ("global_product_id") REFERENCES "global_products"("id")
     `).catch((e) => console.log("ℹ️ New FK:", e.message))
 
+    // Drop sku_id column from order_items if it exists (not in schema)
+    console.log("📝 Removing sku_id column from order_items...")
+    await client.query(`
+      ALTER TABLE "order_items"
+      DROP COLUMN IF EXISTS "sku_id"
+    `).catch((e) => console.log("ℹ️ Drop sku_id:", e.message))
+
     // Create indexes
     await client.query(`
       CREATE INDEX IF NOT EXISTS "orders_tid_idx" ON "orders" USING btree ("tid")

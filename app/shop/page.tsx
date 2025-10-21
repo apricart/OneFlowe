@@ -4,12 +4,14 @@ import useSWR from "swr"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
+import { useAppContext } from "@/components/context/app-context"
+import { ContextSelector } from "@/components/shell/context-selector"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
-import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, AlertTriangle, DollarSign, Star, Zap, Package, TrendingDown, Grid, LogOut } from "lucide-react"
+import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, AlertTriangle, DollarSign, Star, Zap, Package, TrendingDown, Grid, LogOut, ArrowRight, Calendar, MapPin } from "lucide-react"
 import Image from "next/image"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -41,6 +43,7 @@ export default function OrderPortalPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const { toast } = useToast()
+  const { branchId: contextBranchId, organizationId: contextOrgId } = useAppContext()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState("name")
@@ -50,20 +53,31 @@ export default function OrderPortalPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [showProductDetail, setShowProductDetail] = useState(false)
   const [tempQuantity, setTempQuantity] = useState(1)
+  const [showOrders, setShowOrders] = useState(false)
 
   // Auth check
   React.useEffect(() => {
+    if (status === "loading") {
+      return
+    }
+    
     if (status === "unauthenticated") {
       router.push("/shop/login")
+      return
     }
+    
     if (status === "authenticated") {
       const userRole = (session?.user as any)?.role
       const isEmployee = (session?.user as any)?.isEmployee
       const isAdmin = userRole === "BRANCH_ADMIN" || userRole === "HEAD_OFFICE" || userRole === "SUPER_ADMIN"
 
-      if (!isAdmin && !isEmployee) {
-        router.push("/")
+      // Allow admin users and employees
+      if (isAdmin || isEmployee) {
+        return // User is authorized, allow access
       }
+      
+      // Redirect unauthorized users
+      router.push("/")
     }
   }, [status, session, router])
 
@@ -72,8 +86,20 @@ export default function OrderPortalPage() {
   const isAdmin = userRole === "BRANCH_ADMIN" || userRole === "HEAD_OFFICE" || userRole === "SUPER_ADMIN"
   const userName = (session?.user as any)?.fullName || (session?.user as any)?.email || "User"
 
-  const { data: branchInventory } = useSWR<any>("/api/v1/branch/inventory?visibility=visible", fetcher)
-  const { data: budget } = useSWR<any>("/api/v1/budgets", fetcher)
+  // Use context branch ID, fallback to session branch ID for BRANCH_ADMIN
+  const activeBranchId = contextBranchId ? parseInt(contextBranchId) : (session?.user as any)?.branchId
+  const activeOrgId = contextOrgId ? parseInt(contextOrgId) : (session?.user as any)?.organizationId
+
+  // Build API URLs using context
+  const branchInventoryUrl = activeBranchId 
+    ? `/api/v1/branch/inventory?visibility=visible${isAdmin && !((session?.user as any)?.branchId) ? `&branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
+    : null
+  const budgetsUrl = activeBranchId 
+    ? `/api/v1/budgets${isAdmin && !((session?.user as any)?.branchId) ? `?branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
+    : null
+
+  const { data: branchInventory } = useSWR<any>(branchInventoryUrl, fetcher)
+  const { data: budget } = useSWR<any>(budgetsUrl, fetcher)
   const { data: ordersData, mutate: mutateOrders } = useSWR<any>("/api/v1/orders", fetcher)
 
   const products: Product[] = useMemo(() => {
@@ -156,6 +182,7 @@ export default function OrderPortalPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items: cart.map(c => ({ organizationInventoryId: c.id, quantity: c.quantity })),
+          ...(isAdmin && activeBranchId && { branchId: activeBranchId, organizationId: activeOrgId }),
         })
       })
       const json = await res.json()
@@ -170,6 +197,8 @@ export default function OrderPortalPage() {
     }
   }
 
+  // Show loading only if truly loading AND not yet authenticated
+  // If status is loading but we'll eventually be authenticated, don't block the UI
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
@@ -179,6 +208,16 @@ export default function OrderPortalPage() {
         </div>
       </div>
     )
+  }
+  
+  // If not authenticated, redirect happens in useEffect
+  if (status === "unauthenticated") {
+    return null // useEffect will handle redirect
+  }
+  
+  // If still no user data despite being authenticated, show loading
+  if (!session?.user) {
+    return null
   }
 
   return (
@@ -197,6 +236,11 @@ export default function OrderPortalPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Context Selector for managing organization and branch */}
+            {isAdmin && (
+              <ContextSelector />
+            )}
+
             {/* Budget Status */}
             <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
               <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -231,7 +275,116 @@ export default function OrderPortalPage() {
       </header>
 
       <div className="max-w-7xl mx-auto p-4 md:p-6">
-        {!showCart ? (
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6">
+          <Button
+            onClick={() => setShowOrders(false)}
+            variant={!showOrders ? "default" : "outline"}
+            className="gap-2"
+          >
+            <Grid className="h-4 w-4" />
+            Shop
+          </Button>
+          <Button
+            onClick={() => setShowOrders(true)}
+            variant={showOrders ? "default" : "outline"}
+            className="gap-2"
+          >
+            <Package className="h-4 w-4" />
+            Orders ({ordersData?.items?.length || 0})
+          </Button>
+        </div>
+
+        {showOrders ? (
+          // Orders View
+          <div className="space-y-4">
+            {!ordersData?.items || ordersData.items.length === 0 ? (
+              <div className="text-center py-16">
+                <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium text-muted-foreground">No orders yet</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {ordersData.items.map((order: any) => {
+                  const statusColors: Record<string, { bg: string; text: string; icon: any }> = {
+                    pending: { bg: "bg-yellow-50 dark:bg-yellow-950", text: "text-yellow-700 dark:text-yellow-300", icon: Clock },
+                    approved: { bg: "bg-blue-50 dark:bg-blue-950", text: "text-blue-700 dark:text-blue-300", icon: CheckCircle },
+                    fulfilled: { bg: "bg-green-50 dark:bg-green-950", text: "text-green-700 dark:text-green-300", icon: CheckCircle },
+                    rejected: { bg: "bg-red-50 dark:bg-red-950", text: "text-red-700 dark:text-red-300", icon: AlertTriangle },
+                    refunded: { bg: "bg-slate-50 dark:bg-slate-950", text: "text-slate-700 dark:text-slate-300", icon: TrendingDown },
+                  }
+                  const statusInfo = statusColors[order.status?.toLowerCase()] || statusColors.pending
+                  const StatusIcon = statusInfo.icon
+
+                  return (
+                    <Card key={order.id} className="p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-slate-900 dark:text-white">Order {order.tid}</p>
+                            <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
+                              <StatusIcon className="h-3 w-3 mr-1" />
+                              {order.status || "PENDING"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            <Calendar className="h-3 w-3 inline mr-1" />
+                            {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString()}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-lg text-slate-900 dark:text-white">${(order.totalCents / 100).toFixed(2)}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {order.status === "pending" ? "Awaiting Approval" :
+                             order.status === "approved" ? "Approved" :
+                             order.status === "fulfilled" ? "Completed" :
+                             order.status === "rejected" ? "Cancelled" :
+                             order.status === "refunded" ? "Refunded" :
+                             "In Progress"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Order Items Preview */}
+                      <div className="bg-slate-50 dark:bg-slate-800 rounded p-3 text-sm space-y-1">
+                        <p className="font-medium text-muted-foreground">Items</p>
+                        <p className="text-slate-600 dark:text-slate-300">
+                          {order.status === "pending" && "⏳ Waiting for approval..."}
+                          {order.status === "approved" && "✓ Approved - Processing"}
+                          {order.status === "fulfilled" && "🎉 Order completed and delivered"}
+                          {order.status === "rejected" && "❌ Order was rejected"}
+                          {order.status === "refunded" && "💰 Order has been refunded"}
+                        </p>
+                      </div>
+
+                      {/* Order Timeline */}
+                      <div className="mt-3 pt-3 border-t space-y-2">
+                        <div className="flex items-center gap-2 text-xs">
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <span className="text-muted-foreground">Order Created</span>
+                          <span className="text-slate-600 dark:text-slate-400">{new Date(order.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        {(order.status === "approved" || order.status === "fulfilled") && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <CheckCircle className="h-4 w-4 text-blue-600" />
+                            <span className="text-muted-foreground">Order Approved</span>
+                          </div>
+                        )}
+                        {order.status === "fulfilled" && (
+                          <div className="flex items-center gap-2 text-xs">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <span className="text-muted-foreground">Order Fulfilled</span>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          // Shop View
           <>
             {/* Search & Filters */}
             <div className="mb-8 space-y-4">
@@ -375,148 +528,6 @@ export default function OrderPortalPage() {
               </div>
             )}
           </>
-        ) : (
-          /* Cart View */
-          <div className="max-w-2xl mx-auto">
-            <Card className="bg-white dark:bg-slate-800">
-              <div className="p-6 space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold">Shopping Cart</h2>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowCart(false)}
-                  >
-                    <X className="h-5 w-5" />
-                  </Button>
-                </div>
-
-                {cart.length === 0 ? (
-                  <div className="text-center py-8">
-                    <ShoppingBag className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                    <p className="text-muted-foreground">Your cart is empty</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
-                      {cart.map(item => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors"
-                        >
-                          <div className="flex-1">
-                            <p className="font-medium text-slate-900 dark:text-white">{item.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              ${(item.priceCents / 100).toFixed(2)} each × {item.quantity}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() => updateQty(item.id, item.quantity - 1)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-8 text-center font-semibold text-sm">
-                              {item.quantity}
-                            </span>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() => updateQty(item.id, item.quantity + 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-destructive"
-                              onClick={() => removeFromCart(item.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="h-px bg-slate-200 dark:bg-slate-700" />
-
-                    {/* Cart Summary */}
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-lg font-bold">
-                        <span>Total:</span>
-                        <span className="text-blue-600 dark:text-blue-400">
-                          ${(cartTotal / 100).toFixed(2)}
-                        </span>
-                      </div>
-
-                      {/* Budget Progress */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Budget Used</span>
-                          <span className="font-medium">
-                            {cartTotal > remainingBudget ? (
-                              <span className="text-destructive">
-                                ${(cartTotal / 100).toFixed(2)} / ${((budget?.amountAllocatedCents || 0) / 100).toFixed(2)}
-                              </span>
-                            ) : (
-                              <span className="text-green-600 dark:text-green-400">
-                                ${(cartTotal / 100).toFixed(2)} / ${((budget?.amountAllocatedCents || 0) / 100).toFixed(2)}
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                        <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full transition-all ${
-                              cartTotal > remainingBudget
-                                ? "bg-red-500"
-                                : "bg-gradient-to-r from-green-500 to-blue-500"
-                            }`}
-                            style={{
-                              width: `${Math.min(
-                                100,
-                                ((cartTotal) / (budget?.amountAllocatedCents || 1)) * 100
-                              )}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {cartTotal > remainingBudget && (
-                        <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
-                          <p className="text-sm text-red-700 dark:text-red-300">
-                            Exceeds budget by ${(((cartTotal - remainingBudget) / 100).toFixed(2))}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-3 pt-4">
-                        <Button
-                          onClick={() => setShowCart(false)}
-                          variant="outline"
-                          className="h-11"
-                        >
-                          Continue Shopping
-                        </Button>
-                        <Button
-                          onClick={() => setShowCheckout(true)}
-                          disabled={!canCheckout}
-                          className="h-11"
-                        >
-                          Checkout
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </Card>
-          </div>
         )}
       </div>
 

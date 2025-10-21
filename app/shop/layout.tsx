@@ -1,4 +1,4 @@
-import { AuthSessionProvider } from "@/components/session-provider"
+import { AppContextProvider } from "@/components/context/app-context"
 
 export const metadata = {
   title: "Order Portal - Apricart OneFlowe",
@@ -11,8 +11,8 @@ export default function ShopLayout({
   children: React.ReactNode
 }) {
   return (
-    <AuthSessionProvider>
+    <AppContextProvider>
       {children}
-    </AuthSessionProvider>
+    </AppContextProvider>
   )
 }

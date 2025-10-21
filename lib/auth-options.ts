@@ -129,23 +129,38 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         const email = String(credentials?.email || "").toLowerCase()
         const password = String(credentials?.password || "")
-        if (!email || !password) return null
+        if (!email || !password) {
+          console.log("❌ Employee login: missing email or password")
+          return null
+        }
         
         const [emp] = await db
           .select()
           .from(employeeCredentials)
           .where(and(eq(employeeCredentials.email, email), eq(employeeCredentials.isActive, true)))
         
-        if (!emp) return null
+        if (!emp) {
+          console.log(`❌ Employee login: no active employee found for ${email}`)
+          return null
+        }
+        
+        console.log(`✓ Employee found: ${emp.email}`)
         
         const passwordMatch = await compare(password, emp.passwordHash)
-        if (!passwordMatch) return null
+        if (!passwordMatch) {
+          console.log(`❌ Employee login: password mismatch for ${email}`)
+          return null
+        }
+        
+        console.log(`✓ Employee password matched for ${email}`)
         
         // Check if MFA is enabled
         if (emp.mfaEnabled) {
+          console.log(`✓ Employee MFA required for ${email}`)
           throw new Error("MFA_REQUIRED")
         }
         
+        console.log(`✓ Employee login successful for ${email}`)
         return {
           id: `emp_${emp.id}`,
           email: emp.email,

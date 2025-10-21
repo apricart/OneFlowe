@@ -15,18 +15,45 @@ export async function GET(req: NextRequest) {
     }
 
     const userRole = (session.user as any).role
-    if (userRole !== "BRANCH_ADMIN") {
-      return NextResponse.json({ error: "Forbidden - Branch Admin access required" }, { status: 403 })
-    }
-
-    const organizationId = (session.user as any).organizationId
-    const branchId = (session.user as any).branchId
+    let organizationId = (session.user as any).organizationId
+    let branchId = (session.user as any).branchId
     
-    if (!organizationId || !branchId) {
-      return NextResponse.json({ error: "Organization or branch not found in session" }, { status: 400 })
+    const { searchParams } = new URL(req.url)
+    
+    // Allow BRANCH_ADMIN to access their own inventory
+    // Allow HEAD_OFFICE and SUPER_ADMIN to access if they provide branchId param
+    if (userRole === "BRANCH_ADMIN") {
+      // BRANCH_ADMIN uses their own branch
+      if (!organizationId || !branchId) {
+        return NextResponse.json({ error: "Organization or branch not found in session" }, { status: 400 })
+      }
+    } else if (userRole === "HEAD_OFFICE" || userRole === "SUPER_ADMIN") {
+      // Admin users need to specify branchId in query params
+      const branchIdParam = searchParams.get("branchId")
+      const orgIdParam = searchParams.get("organizationId")
+      
+      if (!branchIdParam) {
+        return NextResponse.json({ error: "branchId parameter required for admin users" }, { status: 400 })
+      }
+      
+      branchId = parseInt(branchIdParam)
+      if (!Number.isFinite(branchId)) {
+        return NextResponse.json({ error: "Invalid branch ID" }, { status: 400 })
+      }
+
+      // Use organizationId from query param if provided (from context selector), otherwise use session
+      if (orgIdParam) {
+        organizationId = parseInt(orgIdParam)
+        if (!Number.isFinite(organizationId)) {
+          return NextResponse.json({ error: "Invalid organization ID" }, { status: 400 })
+        }
+      } else if (!organizationId) {
+        return NextResponse.json({ error: "Organization context not found" }, { status: 400 })
+      }
+    } else {
+      return NextResponse.json({ error: "Forbidden - Access denied" }, { status: 403 })
     }
 
-    const { searchParams } = new URL(req.url)
     const search = searchParams.get("search") || ""
     const visibility = searchParams.get("visibility") || ""
     const page = parseInt(searchParams.get("page") || "1")
@@ -35,7 +62,7 @@ export async function GET(req: NextRequest) {
 
     const conditions = [
       eq(branchInventory.organizationId, parseInt(organizationId)),
-      eq(branchInventory.branchId, parseInt(branchId)),
+      eq(branchInventory.branchId, branchId),
       isNull(branchInventory.deletedAt),
       isNull(organizationInventory.deletedAt)
     ]

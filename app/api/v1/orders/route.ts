@@ -72,63 +72,101 @@ export async function POST(req: NextRequest) {
     const session = await getServerSession(authOptions)
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const role = (session.user as any).role
-    const organizationId = parseInt((session.user as any).organizationId)
+    let organizationId = (session.user as any).organizationId
+    if (organizationId) organizationId = parseInt(String(organizationId))
     const userId = (session.user as any).id
 
     const body = await req.json()
-    const { items, branchId: branchIdInput, notes } = body as { items: { organizationInventoryId: number, quantity: number }[], branchId?: number, notes?: string }
+    const { items, branchId: branchIdInput, organizationId: orgIdInput, notes } = body as { items: { organizationInventoryId: number, quantity: number }[], branchId?: number, organizationId?: number, notes?: string }
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Items required" }, { status: 400 })
     }
 
-    const branchId = role === "HEAD_OFFICE" || role === "SUPER_ADMIN" ? parseInt(branchIdInput) : parseInt((session.user as any).branchId)
-    if (!branchId) return NextResponse.json({ error: "Branch context required" }, { status: 400 })
+    // For admin users, accept organizationId and branchId from request body (from context selector)
+    if (role === "HEAD_OFFICE" || role === "SUPER_ADMIN") {
+      if (orgIdInput && Number.isFinite(orgIdInput)) {
+        organizationId = orgIdInput
+      }
+    }
+
+    if (!Number.isFinite(organizationId)) {
+      return NextResponse.json({ error: "Organization ID not found" }, { status: 400 })
+    }
+
+    const branchId = role === "HEAD_OFFICE" || role === "SUPER_ADMIN" ? parseInt(String(branchIdInput)) : parseInt(String((session.user as any).branchId))
+    if (!Number.isFinite(branchId)) return NextResponse.json({ error: "Branch context required" }, { status: 400 })
 
     // Fetch inventory details and prices
     const orgInvIds = items.map(i => i.organizationInventoryId)
-    const invRows = await db.select({
-      id: organizationInventory.id,
-      globalProductId: organizationInventory.globalProductId,
-      customPriceCents: organizationInventory.customPriceCents,
-    }).from(organizationInventory)
+    const allInvRows = await db.select().from(organizationInventory)
       .where(and(
         eq(organizationInventory.organizationId, organizationId),
         inArray(organizationInventory.id, orgInvIds as any)
       ))
+    
+    const invRows = allInvRows.map(r => ({ 
+      id: r.id, 
+      globalProductId: r.globalProductId, 
+      customPrice: r.customPrice // Use customPrice not customPriceCents
+    }))
+
+    console.log("Organization ID:", organizationId)
+    console.log("Org Inventory IDs:", orgInvIds)
+    console.log("Inventory rows fetched:", invRows.length)
 
     if (invRows.length !== orgInvIds.length) return NextResponse.json({ error: "Some items invalid" }, { status: 400 })
 
     // join to global products for base price and unit
     const gpIds = invRows.map(r => r.globalProductId)
-    const gpRows = await db.select({ id: globalProducts.id, basePriceCents: globalProducts.basePriceCents, name: globalProducts.name, productCode: globalProducts.productCode, unit: globalProducts.unit })
-      .from(globalProducts).where(inArray(globalProducts.id, gpIds as any))
+    const allGpRows = await db.select().from(globalProducts).where(inArray(globalProducts.id, gpIds as any))
+    
+    console.log("Global product rows:", allGpRows.map(r => ({ id: r.id, unit: r.unit, name: r.name })))
+    
+    const gpRows = allGpRows.map(r => ({ 
+      id: r.id, 
+      basePrice: r.basePrice, // Use basePrice not basePriceCents
+      name: r.name, 
+      productCode: r.productCode, 
+      unit: r.unit 
+    }))
+    
+    console.log("Mapped gp rows:", gpRows)
 
     const gpById = new Map(gpRows.map(r => [r.id, r]))
     const invById = new Map(invRows.map(r => [r.id, r]))
 
     let subtotal = 0
     const calculatedItems = items.map(i => {
-      const inv = invById.get(i.organizationInventoryId)!
-      const gp = gpById.get(inv.globalProductId)!
-      const unitPrice = inv.customPriceCents ?? gp.basePriceCents
+      const inv = invById.get(i.organizationInventoryId)
+      if (!inv) throw new Error(`Inventory item ${i.organizationInventoryId} not found`)
+      const gp = gpById.get(inv.globalProductId)
+      if (!gp) throw new Error(`Global product for inventory ${inv.globalProductId} not found`)
+      
+      console.log(`Item ${i.organizationInventoryId}:`, {
+        customPriceCents: inv.customPrice,
+        basePriceCents: gp.basePrice,
+        gpId: gp.id,
+      })
+      
+      const unitPrice = inv.customPrice ?? gp.basePrice
+      if (unitPrice === null || unitPrice === undefined) throw new Error(`Price not found for item ${i.organizationInventoryId}. Custom: ${inv.customPrice}, Base: ${gp.basePrice}`)
       const line = unitPrice * (i.quantity || 0)
       subtotal += line
       return {
-        organizationInventoryId: i.organizationInventoryId,
+        globalProductId: inv.globalProductId,
         quantity: i.quantity,
-        unitPriceCents: unitPrice,
-        lineTotalCents: line,
-        productNameSnapshot: gp.name,
-        productCodeSnapshot: gp.productCode,
-        unitSnapshot: gp.unit,
+        priceCents: unitPrice,
+        productName: gp.name,
+        productCode: gp.productCode,
+        unit: gp.unit,
       }
     })
     const tax = 0
     const total = subtotal + tax
 
     // budget check and hold
-    const [budget] = await db.select({ id: budgets.id, amountAllocatedCents: budgets.amountAllocatedCents, amountSpentCents: budgets.amountSpentCents, amountHeldCents: budgets.amountHeldCents, amountCreditedCents: budgets.amountCreditedCents })
-      .from(budgets).where(eq(budgets.branchId, branchId)).limit(1)
+    const budgetRows = await db.select().from(budgets).where(eq(budgets.branchId, branchId)).limit(1)
+    const budget = budgetRows[0]
     if (!budget) return NextResponse.json({ error: "Budget not configured for branch" }, { status: 400 })
 
     const remaining = (budget.amountAllocatedCents + budget.amountCreditedCents) - (budget.amountSpentCents + budget.amountHeldCents)
@@ -139,30 +177,48 @@ export async function POST(req: NextRequest) {
     const created = await db.transaction(async (tx) => {
       const [ord] = await tx.insert(orders).values({
         tid,
-        organizationId,
-        branchId,
+        organizationId: Number(organizationId),
+        branchId: Number(branchId),
         status: 'pending',
         subtotalCents: subtotal,
         taxCents: tax,
         totalCents: total,
         notes: notes || null,
-        budgetAtOrderCents: remaining,
         createdByUserId: userId,
-        createdByRole: (session.user as any).role,
-      }).returning()
+  }).returning()
 
-      await tx.insert(orderItems).values(calculatedItems.map(ci => ({ ...ci, orderId: ord.id })))
+      await tx.insert(orderItems).values(calculatedItems.map(ci => {
+        console.log("Inserting order item:", ci)
+        return {
+          ...ci, 
+          orderId: ord.id,
+          organizationId: Number(organizationId),
+        }
+      }))
 
-      await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} + ${total}` }).where(eq(budgets.id, budget.id))
+      const budgetId = budget?.id
+      if (!budgetId) throw new Error("Budget ID missing")
+      
+      await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} + ${total}` }).where(eq(budgets.id, budgetId))
 
-      await tx.insert(auditLogs).values({ userId, action: 'CREATE', entity: 'Order', entityId: String(ord.id), organizationId, branchId, metadata: { tid, total, items: items.length } })
+      await tx.insert(auditLogs).values({ 
+        userId, 
+        action: 'CREATE_ORDER', 
+        entity: 'Order', 
+        entityId: String(ord.id), 
+        organizationId: Number(organizationId), 
+        branchId: Number(branchId), 
+        metadata: { tid, total, items: items.length } 
+      })
 
       return ord
     })
 
     return NextResponse.json({ message: 'Order created', order: created })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    console.error("Order creation error:", e)
+    console.error("Error stack:", e.stack)
+    return NextResponse.json({ error: e.message || "Internal server error" }, { status: 500 })
   }
 }
 

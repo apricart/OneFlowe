@@ -11,12 +11,21 @@ export async function GET(req: NextRequest) {
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const role = (session.user as any).role
-    const orgId = (session.user as any).organizationId
+    let orgId = (session.user as any).organizationId
     const userBranchId = (session.user as any).branchId
 
     const { searchParams } = new URL(req.url)
     const allParam = searchParams.get("all")
     const branchIdParam = searchParams.get("branchId")
+    const orgIdParam = searchParams.get("organizationId")
+
+    // For admin users using context selector, accept organizationId from query param
+    if (orgIdParam && (role === "HEAD_OFFICE" || role === "SUPER_ADMIN")) {
+      const parsedOrgId = parseInt(orgIdParam)
+      if (Number.isFinite(parsedOrgId)) {
+        orgId = parsedOrgId
+      }
+    }
 
     // Head Office users can fetch all budgets in their org
     if (allParam && (role === "HEAD_OFFICE" || role === "SUPER_ADMIN")) {
