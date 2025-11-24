@@ -318,7 +318,7 @@ export function ProductForm({
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="basePrice">Base Price ($) *</Label>
+                <Label htmlFor="basePrice">Base Price (PKR) *</Label>
                 <Input
                   id="basePrice"
                   type="number"

@@ -121,8 +121,8 @@ export async function PUT(req: NextRequest) {
     }
 
     const userRole = (session.user as any).role
-    if (userRole !== "HEAD_OFFICE" && userRole !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Forbidden - Head Office or Super Admin access required" }, { status: 403 })
+    if (userRole !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden - Super Admin access required" }, { status: 403 })
     }
 
     const body = await req.json()
@@ -130,8 +130,8 @@ export async function PUT(req: NextRequest) {
     // Get organization ID from session context (should be set by middleware)
     // For Super Admin, get from request body if available
     let organizationId = (session.user as any).organizationId
-    if (userRole === "SUPER_ADMIN" && body.organizationId) {
-      organizationId = body.organizationId
+    if (body.organizationId) {
+      organizationId = parseInt(body.organizationId)
     }
     if (!organizationId) {
       return NextResponse.json({ error: "Organization not found in session" }, { status: 400 })

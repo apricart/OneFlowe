@@ -59,6 +59,11 @@ export async function GET(req: NextRequest) {
         unit: globalProducts.unit,
         status: globalProducts.status,
         metadata: globalProducts.metadata,
+        discountType: globalProducts.discountType,
+        discountValue: globalProducts.discountValue,
+        discountStartAt: globalProducts.discountStartAt,
+        discountEndAt: globalProducts.discountEndAt,
+        discountActive: globalProducts.discountActive,
         createdAt: globalProducts.createdAt,
         updatedAt: globalProducts.updatedAt,
         categoryName: categories.name,
@@ -141,7 +146,12 @@ export async function POST(req: NextRequest) {
       basePrice,
       unit,
       status = "active",
-      metadata = {}
+      metadata = {},
+      discountType,
+      discountValue, // for percent provide number in basis points (e.g., 1000 = 10%) or cents for flat
+      discountStartAt,
+      discountEndAt,
+      discountActive,
     } = body
 
     if (!productCode || !name || !basePrice) {
@@ -169,6 +179,11 @@ export async function POST(req: NextRequest) {
         unit: unit || "unit",
         status,
         metadata,
+        discountType: discountType || null,
+        discountValue: discountValue !== undefined && discountValue !== null ? parseInt(discountValue) : null,
+        discountStartAt: discountStartAt ? new Date(discountStartAt) : null,
+        discountEndAt: discountEndAt ? new Date(discountEndAt) : null,
+        discountActive: !!discountActive,
       })
       .returning()
 
@@ -215,7 +230,12 @@ export async function PUT(req: NextRequest) {
       basePrice,
       unit,
       status,
-      metadata
+      metadata,
+      discountType,
+      discountValue,
+      discountStartAt,
+      discountEndAt,
+      discountActive,
     } = body
 
     if (!id) {
@@ -245,6 +265,11 @@ export async function PUT(req: NextRequest) {
     if (unit !== undefined) updateData.unit = unit
     if (status !== undefined) updateData.status = status
     if (metadata !== undefined) updateData.metadata = metadata
+    if (discountType !== undefined) updateData.discountType = discountType || null
+    if (discountValue !== undefined) updateData.discountValue = discountValue !== null ? parseInt(discountValue) : null
+    if (discountStartAt !== undefined) updateData.discountStartAt = discountStartAt ? new Date(discountStartAt) : null
+    if (discountEndAt !== undefined) updateData.discountEndAt = discountEndAt ? new Date(discountEndAt) : null
+    if (discountActive !== undefined) updateData.discountActive = !!discountActive
     updateData.updatedAt = new Date()
 
     const [updatedProduct] = await db.update(globalProducts)

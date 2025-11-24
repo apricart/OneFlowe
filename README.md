@@ -22,6 +22,20 @@ Continue building your app on:
 
 **[https://v0.app/chat/projects/LsHE4sxac76](https://v0.app/chat/projects/LsHE4sxac76)**
 
+## Local Development
+
+- Start the dev server with Turbopack for faster compile times:
+
+  ```bash
+  npm run dev
+  ```
+
+- If you hit an unsupported edge case, fall back to the classic webpack dev server:
+
+  ```bash
+  npm run dev:legacy
+  ```
+
 ## How It Works
 
 1. Create and modify your project using [v0.app](https://v0.app)

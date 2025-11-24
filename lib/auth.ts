@@ -13,7 +13,10 @@ export type CurrentUser = {
   role: Role
 }
 
+import { cookies } from 'next/headers'
+
 export async function getCurrentUser(): Promise<CurrentUser | null> {
+  // const headerList = headers()
   const session = await getServerSession(authOptions)
   if (!session?.user) return null
   return {

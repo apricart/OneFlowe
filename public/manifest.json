@@ -1,0 +1,17 @@
+{
+  "name": "ONE FLOWE - Apricart OneFlowe",
+  "short_name": "ONE FLOWE",
+  "description": "Created by Swenta Solutions",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3a8a",
+  "icons": [
+    {
+      "src": "/logo-web.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

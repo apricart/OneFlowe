@@ -95,7 +95,6 @@ export const users = pgTable(
     firstName: varchar("first_name", { length: 100 }),
     lastName: varchar("last_name", { length: 100 }),
     phone: varchar("phone", { length: 32 }),
-    loginCode: varchar("login_code", { length: 64 }),
     mfaEnabled: boolean("mfa_enabled").notNull().default(false),
     organizationId: integer("organization_id").references(() => organizations.id),
     // Avoid circular type init; store branch id without FK
@@ -107,7 +106,6 @@ export const users = pgTable(
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
     roleIdx: index("users_role_idx").on(t.roleId),
     activeIdx: index("users_active_idx").on(t.isActive),
-    loginCodeIdx: uniqueIndex("users_login_code_idx").on(t.loginCode),
     orgIdx: index("users_org_idx").on(t.organizationId),
     branchIdx: index("users_branch_idx").on(t.branchId),
   }),
@@ -211,34 +209,6 @@ export const inventory = pgTable(
     branchIdx: index("inventory_branch_idx").on(t.branchId),
     inventoryOrgIdx: index("inventory_org_idx").on(t.organizationId),
     inventoryOrgBranchSkuIdx: index("inventory_org_branch_sku_idx").on(t.organizationId, t.branchId, t.skuId),
-  }),
-)
-
-export const warehouses = pgTable(
-  "warehouses",
-  {
-    id: serial("id").primaryKey(),
-    organizationId: integer("organization_id")
-      .references(() => organizations.id)
-      .notNull(),
-    branchId: integer("branch_id")
-      .references(() => branches.id)
-      .notNull(),
-    name: varchar("name", { length: 255 }).notNull(),
-    code: varchar("code", { length: 64 }),
-    contact: varchar("contact", { length: 255 }),
-    email: varchar("email", { length: 255 }),
-    description: text("description"),
-    isMain: boolean("is_main").default(false),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-  },
-  (t) => ({
-    orgIdx: index("warehouses_org_idx").on(t.organizationId),
-    branchIdx: index("warehouses_branch_idx").on(t.branchId),
-    nameIdx: index("warehouses_name_idx").on(t.name),
-    codeIdx: index("warehouses_code_idx").on(t.code),
-    mainIdx: index("warehouses_main_idx").on(t.isMain),
   }),
 )
 
@@ -495,6 +465,12 @@ export const globalProducts = pgTable(
     categoryId: integer("category_id").references(() => categories.id),
     imageUrl: varchar("image_url", { length: 512 }),
     basePrice: integer("base_price_cents").notNull().default(0),
+    // Global discount configuration
+    discountType: varchar("discount_type", { length: 16 }), // percent | flat
+    discountValue: integer("discount_value_cents"), // cents for flat, basis points for percent? we will store percent as integer 0-10000 basis points
+    discountStartAt: timestamp("discount_start_at", { withTimezone: true }),
+    discountEndAt: timestamp("discount_end_at", { withTimezone: true }),
+    discountActive: boolean("discount_active").default(false),
     unit: varchar("unit", { length: 64 }).notNull().default("unit"), // kg, box, piece, etc.
     status: varchar("status", { length: 32 }).notNull().default("active"), // active, inactive, discontinued
     metadata: jsonb("metadata").$type<Record<string, any>>().default({}),

@@ -37,7 +37,6 @@ export const ERROR_MESSAGES = {
   
   // Duplicate errors
   DUPLICATE_EMAIL: 'This email address is already registered. Please use a different email',
-  DUPLICATE_LOGIN_CODE: 'This login code is already in use. Please use a different code or leave it empty to auto-generate',
   
   // Not found errors
   USER_NOT_FOUND: 'User not found. It may have been deleted by another user',
@@ -138,14 +137,6 @@ export function parseError(error: any): ErrorDetails {
     }
   }
   
-  if (errorMsg.includes('Login code already exists') || errorMsg.includes('login code')) {
-    return {
-      type: 'DUPLICATE_ERROR',
-      message: ERROR_MESSAGES.DUPLICATE_LOGIN_CODE,
-      field: 'loginCode',
-      statusCode: 400
-    }
-  }
   
   // Permission errors
   if (errorMsg.includes('organization')) {

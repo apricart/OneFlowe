@@ -4,6 +4,8 @@ import { SectionHeader } from '@/components/ui/section-header'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { Card, CardContent } from '@/components/ui/card'
 import useSWR from 'swr'
+import { NotificationRail } from '@/components/notifications/notification-center'
+import { formatPKR } from '@/lib/utils'
   
 export function SuperAdminDashboard() {
   const { data: orgsData, isLoading: orgsLoading } = useOrganizations()
@@ -22,7 +24,7 @@ export function SuperAdminDashboard() {
   const { data: todaysRefunded } = useSWR<{ items: any[] }>(`/api/v1/orders?status=refunded&from=${encodeURIComponent(startOfToday)}`, fetcher)
 
   const todaysGMVCents = (todaysOrders?.items || []).reduce((sum, o) => sum + (o.totalCents || 0), 0)
-  const todaysGMV = `$${(todaysGMVCents / 100).toFixed(2)}`
+  const todaysGMV = formatPKR(todaysGMVCents / 100, { maximumFractionDigits: 0 })
   const pendingCount = pendingOrders?.items?.length || 0
   const todaysRefundCount = todaysRefunded?.items?.length || 0
 
@@ -46,6 +48,8 @@ export function SuperAdminDashboard() {
   return (
     <main className="p-6 space-y-6">
       <SectionHeader title="Super Admin Dashboard" subtitle="System-wide overview and activity" />
+
+      <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KpiCard title="Total Organizations" value={orgsCount} colorClass="text-blue-600" />

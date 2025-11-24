@@ -29,7 +29,6 @@ export function PreloadData() {
           await Promise.all([
             ...commonPrefetch,
             prefetchData.suppliers(),
-            prefetchData.warehouses(),
             prefetchData.inventoryTx(),
           ])
         } else {

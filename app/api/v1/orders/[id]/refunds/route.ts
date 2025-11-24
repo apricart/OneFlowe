@@ -2,14 +2,65 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { refunds, orders, budgets, auditLogs } from "@/db/schema"
-import { eq, sql } from "drizzle-orm"
+import { refunds, orders, budgets, auditLogs, users } from "@/db/schema"
+import { eq, sql, desc } from "drizzle-orm"
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const orderId = parseInt(params.id)
+    
+    const { id } = await params
+    const orderId = parseInt(id)
+    if (!Number.isFinite(orderId)) return NextResponse.json({ error: "Invalid order ID" }, { status: 400 })
+
+    // Get order details first to check permissions
+    const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+    if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 })
+
+    const userRole = (session.user as any).role
+    const userOrgId = (session.user as any).organizationId
+    const userBranchId = (session.user as any).branchId
+
+    // Check permissions
+    if (userRole === "BRANCH_ADMIN" && (order as any).branchId !== userBranchId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+    if (userRole === "HEAD_OFFICE" && (order as any).organizationId !== userOrgId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    // Fetch refunds with user details
+    const refundsData = await db
+      .select({
+        id: refunds.id,
+        amountCents: refunds.amountCents,
+        reason: refunds.reason,
+        createdAt: refunds.createdAt,
+        processedByUserId: refunds.processedByUserId,
+        processedByUser: {
+          email: users.email,
+          fullName: users.fullName,
+        }
+      })
+      .from(refunds)
+      .leftJoin(users, eq(refunds.processedByUserId, users.id))
+      .where(eq(refunds.orderId, orderId))
+      .orderBy(desc(refunds.createdAt))
+
+    return NextResponse.json({ refunds: refundsData })
+  } catch (error: any) {
+    console.error("Error fetching refunds:", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const { id } = await params
+    const orderId = parseInt(id)
     const body = await req.json()
     const { amountCents, reason } = body as { amountCents: number, reason?: string }
     if (!amountCents || amountCents <= 0) return NextResponse.json({ error: 'Positive amountCents required' }, { status: 400 })

@@ -3,11 +3,12 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { signOut, useSession } from "next-auth/react"
 import Image from "next/image"
-import { Bell, Moon, Sun, ShoppingBag } from "lucide-react"
+import { Moon, Sun, ShoppingBag } from "lucide-react"
 import { useTheme } from "next-themes"
 import { CommandPalette } from "@/components/ui/command-palette"
 import { ContextSelector } from "@/components/shell/context-selector"
 import Link from "next/link"
+import { NotificationBell } from "@/components/notifications/notification-center"
 
 export function Topbar() {
   const { data: session } = useSession()
@@ -50,10 +51,7 @@ export function Topbar() {
           </Button>
         </Link>
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full" />
-        </Button>
+        <NotificationBell />
 
         {/* Theme Toggle */}
         <Button

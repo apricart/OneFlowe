@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
-import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, AlertTriangle, DollarSign, Star, Zap, Package, TrendingDown, Grid, LogOut, ArrowRight, Calendar, MapPin } from "lucide-react"
+import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, AlertTriangle, DollarSign, Star, Zap, Package, TrendingDown, Grid, LogOut, ArrowRight, Calendar, MapPin, RefreshCw } from "lucide-react"
+import { RefundManagement } from "@/components/refunds/refund-management"
 import Image from "next/image"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -54,6 +55,8 @@ export default function OrderPortalPage() {
   const [showProductDetail, setShowProductDetail] = useState(false)
   const [tempQuantity, setTempQuantity] = useState(1)
   const [showOrders, setShowOrders] = useState(false)
+  const [showOrderDetail, setShowOrderDetail] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
 
   // Auth check
   React.useEffect(() => {
@@ -86,16 +89,22 @@ export default function OrderPortalPage() {
   const isAdmin = userRole === "BRANCH_ADMIN" || userRole === "HEAD_OFFICE" || userRole === "SUPER_ADMIN"
   const userName = (session?.user as any)?.fullName || (session?.user as any)?.email || "User"
 
-  // Use context branch ID, fallback to session branch ID for BRANCH_ADMIN
+  // Use context branch ID, fallback to session branch ID for BRANCH_ADMIN and employees
   const activeBranchId = contextBranchId ? parseInt(contextBranchId) : (session?.user as any)?.branchId
   const activeOrgId = contextOrgId ? parseInt(contextOrgId) : (session?.user as any)?.organizationId
 
+  // Determine if we need to pass branchId/organizationId as query params
+  // We need to pass them if:
+  // 1. User is admin using context selector (no default branch in session)
+  // 2. User is employee (always pass to ensure correct context)
+  const needsContextParams = (isAdmin && !((session?.user as any)?.branchId)) || isEmployee
+
   // Build API URLs using context
   const branchInventoryUrl = activeBranchId 
-    ? `/api/v1/branch/inventory?visibility=visible${isAdmin && !((session?.user as any)?.branchId) ? `&branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
+    ? `/api/v1/branch/inventory?visibility=visible${needsContextParams ? `&branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
     : null
   const budgetsUrl = activeBranchId 
-    ? `/api/v1/budgets${isAdmin && !((session?.user as any)?.branchId) ? `?branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
+    ? `/api/v1/budgets${needsContextParams ? `?branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
     : null
 
   const { data: branchInventory } = useSWR<any>(branchInventoryUrl, fetcher)
@@ -274,6 +283,106 @@ export default function OrderPortalPage() {
         </div>
       </header>
 
+      {/* Cart Drawer */}
+      <Dialog open={showCart} onOpenChange={setShowCart}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Cart</DialogTitle>
+            <DialogDescription>Items ready to submit for purchase.</DialogDescription>
+          </DialogHeader>
+
+          {cart.length === 0 ? (
+            <div className="py-10 text-center text-muted-foreground">
+              <ShoppingBag className="mx-auto mb-4 h-12 w-12 opacity-40" />
+              <p className="font-medium">Your cart is empty</p>
+              <p className="text-xs">Browse the catalog and add products to get started.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+                {cart.map(item => (
+                  <Card key={item.id} className="p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate text-slate-900 dark:text-white">{item.name}</p>
+                        <p className="text-xs text-muted-foreground">{item.code}</p>
+                        <p className="text-xs mt-1 text-slate-500">${(item.priceCents / 100).toFixed(2)} / {item.unit}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => updateQty(item.id, item.quantity - 1)}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => updateQty(item.id, Math.min(item.quantity + 1, item.stock || 999))}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => removeFromCart(item.id)}
+                        title="Remove"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+
+              <div className="space-y-2 rounded-lg border bg-slate-50 dark:bg-slate-800 p-3 text-sm">
+                <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                  <span>Items</span>
+                  <span>{cart.length}</span>
+                </div>
+                <div className="flex justify-between text-base font-semibold text-slate-900 dark:text-white">
+                  <span>Total</span>
+                  <span>${(cartTotal / 100).toFixed(2)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Remaining budget after checkout: ${((remainingBudget - cartTotal) / 100).toFixed(2)}
+                </p>
+                {cartTotal > remainingBudget && (
+                  <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-600 dark:border-red-900 dark:bg-red-950">
+                    <AlertTriangle className="h-4 w-4" />
+                    Cart exceeds remaining budget.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setShowCart(false)}
+            >
+              Continue shopping
+            </Button>
+            <Button
+              className="w-full sm:w-auto gap-2"
+              disabled={!canCheckout}
+              onClick={() => {
+                setShowCart(false)
+                setShowCheckout(true)
+              }}
+            >
+              Proceed to checkout
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="max-w-7xl mx-auto p-4 md:p-6">
         {/* Tabs */}
         <div className="flex gap-2 mb-6">
@@ -376,6 +485,22 @@ export default function OrderPortalPage() {
                             <span className="text-muted-foreground">Order Fulfilled</span>
                           </div>
                         )}
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="mt-4 pt-3 border-t flex gap-2">
+                        <Button
+                          onClick={() => {
+                            setSelectedOrder(order)
+                            setShowOrderDetail(true)
+                          }}
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 gap-2"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          View Details
+                        </Button>
                       </div>
                     </Card>
                   )
@@ -691,6 +816,70 @@ export default function OrderPortalPage() {
             <Button onClick={placeOrder}>
               Place Order
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Order Detail Dialog */}
+      <Dialog open={showOrderDetail} onOpenChange={setShowOrderDetail}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Order Details</DialogTitle>
+          </DialogHeader>
+
+          {selectedOrder && (
+            <div className="space-y-6">
+              {/* Order Information */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Transaction ID</p>
+                  <p className="font-mono font-semibold text-slate-900 dark:text-white">{selectedOrder.tid}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Order ID</p>
+                  <p className="font-semibold text-slate-900 dark:text-white">{selectedOrder.id}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Status</p>
+                  <Badge variant="outline" className="w-fit">
+                    {selectedOrder.status}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Date</p>
+                  <p className="text-slate-900 dark:text-white">
+                    {new Date(selectedOrder.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                <div className="flex justify-between">
+                  <span className="font-bold">Total</span>
+                  <span className="font-bold text-lg text-blue-600 dark:text-blue-400">
+                    ${(selectedOrder.totalCents / 100).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Refund Management */}
+              <RefundManagement
+                orderId={selectedOrder.id}
+                orderTotalCents={selectedOrder.totalCents}
+                orderStatus={selectedOrder.status}
+                onRefundSuccess={() => {
+                  // Refresh orders data
+                  mutateOrders?.()
+                }}
+              />
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={() => setShowOrderDetail(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

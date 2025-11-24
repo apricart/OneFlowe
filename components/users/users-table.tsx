@@ -1,7 +1,7 @@
 "use client"
 
 import useSWR from "swr"
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { jsonFetcher } from "@/lib/fetcher"
 import { Button } from "@/components/ui/button"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Edit, Trash2 } from "lucide-react"
+import { Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { handleError } from "@/lib/error-handler"
 
-type UserRow = { id: string; firstName: string; lastName: string; email: string; role: string; organizationId?: number | null; branchId?: number | null; phone?: string; loginCode?: string; mfaEnabled?: boolean; createdAt: string }
+type UserRow = { id: string; firstName: string; lastName: string; email: string; role: string; organizationId?: number | null; branchId?: number | null; phone?: string; mfaEnabled?: boolean; createdAt: string }
 type UsersResp = { items: UserRow[] }
 
 export function UsersTable() {
@@ -22,7 +22,9 @@ export function UsersTable() {
   const { data: branchesData } = useSWR("/api/v1/branches", jsonFetcher)
   const { toast } = useToast()
   
+  const PAGE_SIZE = 20
   const [filter, setFilter] = useState("")
+  const [page, setPage] = useState(1)
   const [editingUser, setEditingUser] = useState<UserRow | null>(null)
   const [editForm, setEditForm] = useState({
     firstName: "",
@@ -139,17 +141,63 @@ export function UsersTable() {
     )
 
   const f = filter.toLowerCase()
-  const rows = (data?.items || []).filter((u) =>
-    (u.firstName || "").toLowerCase().includes(f) ||
-    (u.lastName || "").toLowerCase().includes(f) ||
-    (u.email || "").toLowerCase().includes(f)
-  )
+  const filteredRows = useMemo(() => {
+    return (data?.items || []).filter((u) =>
+      (u.firstName || "").toLowerCase().includes(f) ||
+      (u.lastName || "").toLowerCase().includes(f) ||
+      (u.email || "").toLowerCase().includes(f)
+    )
+  }, [data?.items, f])
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE))
+
+  useMemo(() => {
+    setPage(1)
+  }, [filter])
+
+  useMemo(() => {
+    if (page > totalPages) {
+      setPage(totalPages)
+    }
+  }, [totalPages, page])
+
+  const rows = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return filteredRows.slice(start, start + PAGE_SIZE)
+  }, [filteredRows, page])
 
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-2">
         <Input placeholder="Search by name or email" value={filter} onChange={(e) => setFilter(e.target.value)} className="max-w-xs" />
         {isLoading && <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><Spinner size={14} /> Loading…</span>}
+      </div>
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-sm text-muted-foreground">
+        <span>
+          Showing{" "}
+          <span className="font-medium text-foreground">
+            {filteredRows.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
+            –
+            {Math.min(filteredRows.length, page * PAGE_SIZE)}
+          </span>{" "}
+          of <span className="font-medium text-foreground">{filteredRows.length}</span> users
+        </span>
+        <div className="inline-flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-xs">
+            Page <span className="font-medium text-foreground">{page}</span> / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === totalPages || filteredRows.length === 0}
+            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       <Table>
         <TableHeader>

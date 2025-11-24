@@ -27,6 +27,7 @@ import {
 } from "lucide-react"
 import useSWR from "swr"
 import { useToast } from "@/components/ui/use-toast"
+import { formatPKR } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -388,7 +389,7 @@ export default function OrganizationAssignmentsPage() {
                   <td className="p-4">
                     <div className="text-sm">
                       {assignment.customPrice ? (
-                        `$${(assignment.customPrice / 100).toFixed(2)}`
+                        formatPKR(assignment.customPrice / 100)
                       ) : (
                         <span className="text-gray-400 italic">No override</span>
                       )}

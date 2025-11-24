@@ -1,510 +1,235 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
-import { Card } from "@/components/ui/card"
-import { SectionHeader } from "@/components/ui/section-header"
-import { Button } from "@/components/ui/button"
+import { useMemo, useState } from "react"
+import useSWR from "swr"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Table } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import {
-  Search,
-  Package,
-  Eye,
-  EyeOff,
-  Settings,
-  AlertTriangle,
-  CheckCircle,
-  Lock,
-} from "lucide-react"
-import useSWR from "swr"
-import { useToast } from "@/components/ui/use-toast"
-import { StockStatusBadge } from "@/components/inventory/stock-status-badge"
-import { FieldSourceBadge } from "@/components/inventory/field-source-badge"
-import { ProductDetailCard } from "@/components/inventory/product-detail-card"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { InventoryTableSkeleton } from "@/components/inventory/inventory-table-skeleton"
-import { EmptyInventoryState } from "@/components/inventory/empty-inventory-state"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useAppContext } from "@/components/context/app-context"
+import { formatPKR } from "@/lib/utils"
+import { Search, Package, Sparkles, Eye, AlertTriangle } from "lucide-react"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
-interface BranchInventoryItem {
+type BranchInventoryItem = {
   id: number
-  branchId: number
-  organizationId: number
-  organizationInventoryId: number
+  productName: string
+  productCode: string
+  productImageUrl?: string
+  customName?: string
+  customPrice?: number
+  customDescription?: string
+  customImageUrl?: string
+  categoryName?: string
+  basePrice: number
+  unit: string
   isVisible: boolean
   isActive: boolean
   stockQuantity: number
   reorderThreshold: number
   assignedAt: string
-  updatedAt: string
-  // Effective product data (org override or global default)
-  productName: string
-  productCode: string
-  productImageUrl?: string
-  basePrice: number
-  unit: string
-  status: string
-  categoryName?: string
-  // Organization overrides (for source attribution)
-  customName?: string
-  customPrice?: number
-  customDescription?: string
-  customImageUrl?: string
 }
 
 export default function BranchInventoryPage() {
-  const { toast } = useToast()
+  const { branchId, organizationId } = useAppContext()
   const [searchQuery, setSearchQuery] = useState("")
   const [visibilityFilter, setVisibilityFilter] = useState("all")
-  const [showEditDialog, setShowEditDialog] = useState(false)
-  const [editingItem, setEditingItem] = useState<BranchInventoryItem | null>(null)
 
-  // Edit form data
-  const [editData, setEditData] = useState({
-    isVisible: true,
-    stockQuantity: 0,
-    reorderThreshold: 10,
-  })
+  const params = new URLSearchParams()
+  params.set("search", searchQuery)
+  params.set("visibility", visibilityFilter)
+  if (branchId) params.set("branchId", String(branchId))
+  if (organizationId) params.set("organizationId", String(organizationId))
 
-  // Fetch data
-  const { data: inventory, error: inventoryError, isLoading: inventoryLoading, mutate: mutateInventory } = useSWR<{
+  const { data, isLoading } = useSWR<{
     items: BranchInventoryItem[]
     total: number
-  }>(`/api/v1/branch/inventory?search=${searchQuery}&visibility=${visibilityFilter}`, fetcher, {
-    fallbackData: { items: [], total: 0 }
+  }>(`/api/v1/branch/inventory?${params.toString()}`, fetcher, {
+    fallbackData: { items: [], total: 0 },
+    revalidateOnFocus: false,
   })
 
-  // Filter inventory
-  const filteredInventory = useMemo(() => {
-    if (!inventory?.items) return []
-    return inventory.items
-  }, [inventory?.items])
-
-  // Calculate summary stats
-  const totalProducts = inventory?.total || 0
-  const visibleProducts = useMemo(() => {
-    if (!inventory?.items) return 0
-    return inventory.items.filter(item => item.isVisible).length
-  }, [inventory?.items])
-
-  const lowStockProducts = useMemo(() => {
-    if (!inventory?.items) return 0
-    return inventory.items.filter(item => item.stockQuantity <= item.reorderThreshold).length
-  }, [inventory?.items])
-
-  const outOfStockProducts = useMemo(() => {
-    if (!inventory?.items) return 0
-    return inventory.items.filter(item => item.stockQuantity === 0).length
-  }, [inventory?.items])
-
-  const handleEditItem = (item: BranchInventoryItem) => {
-    setEditData({
-      isVisible: item.isVisible,
-      stockQuantity: item.stockQuantity,
-      reorderThreshold: item.reorderThreshold,
-    })
-    setEditingItem(item)
-    setShowEditDialog(true)
-  }
-
-  const handleSubmitEdit = async () => {
-    if (!editingItem) return
-
-    try {
-      const response = await fetch("/api/v1/branch/inventory", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editingItem.id,
-          isVisible: editData.isVisible,
-          stockQuantity: editData.stockQuantity,
-          reorderThreshold: editData.reorderThreshold,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: result.message,
-        })
-        setShowEditDialog(false)
-        mutateInventory()
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || "Failed to update inventory",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error updating inventory:", error)
-      toast({
-        title: "Error",
-        description: "Failed to update inventory",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const getStockStatus = (item: BranchInventoryItem) => {
-    if (item.stockQuantity === 0) {
-      return { status: "out", color: "text-red-600", icon: AlertTriangle }
-    } else if (item.stockQuantity <= item.reorderThreshold) {
-      return { status: "low", color: "text-yellow-600", icon: AlertTriangle }
-    } else {
-      return { status: "good", color: "text-green-600", icon: CheckCircle }
-    }
-  }
+  const inventory = data?.items ?? []
+  const totalProducts = data?.total ?? 0
+  const visibleProducts = useMemo(() => inventory.filter((item) => item.isVisible).length, [inventory])
+  const lowStock = useMemo(
+    () => inventory.filter((item) => item.stockQuantity <= item.reorderThreshold && item.stockQuantity > 0).length,
+    [inventory]
+  )
+  const outOfStock = useMemo(
+    () => inventory.filter((item) => item.stockQuantity === 0).length,
+    [inventory]
+  )
 
   return (
-    <TooltipProvider>
-    <div className="space-y-6 overflow-x-hidden max-w-full">
-      <SectionHeader
-        title="Branch Inventory Management"
-        subtitle="Manage product visibility and stock levels for your branch"
-      />
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Products</p>
-              <p className="text-2xl font-bold">{totalProducts}</p>
-            </div>
-            <Package className="h-8 w-8 text-blue-600" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Visible Products</p>
-              <p className="text-2xl font-bold">{visibleProducts}</p>
-            </div>
-            <Eye className="h-8 w-8 text-green-600" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Low Stock</p>
-              <p className="text-2xl font-bold">{lowStockProducts}</p>
-            </div>
-            <AlertTriangle className="h-8 w-8 text-yellow-600" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Out of Stock</p>
-              <p className="text-2xl font-bold">{outOfStockProducts}</p>
-            </div>
-            <AlertTriangle className="h-8 w-8 text-red-600" />
-          </div>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-          <Input
-            placeholder="Search products..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 w-64"
-          />
+    <div className="space-y-8 p-6">
+      <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-purple-900 to-indigo-800 text-white shadow-xl">
+        <div className="pointer-events-none absolute inset-0 opacity-30">
+          <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-indigo-400/40 blur-3xl" />
         </div>
-        <select
-          value={visibilityFilter}
-          onChange={(e) => setVisibilityFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Products</option>
-          <option value="visible">Visible Only</option>
-          <option value="hidden">Hidden Only</option>
-        </select>
-      </div>
-
-      {/* Inventory Table */}
-      <Card className="max-w-full">
-        <div className="overflow-x-auto">
-        <Table className="w-full">
-          <thead>
-            <tr>
-              <th className="text-left p-4 font-medium">Product</th>
-              <th className="text-left p-4 font-medium">Category</th>
-              <th className="text-left p-4 font-medium">Price</th>
-              <th className="text-left p-4 font-medium">Visibility</th>
-              <th className="text-left p-4 font-medium">Stock Level</th>
-              <th className="text-left p-4 font-medium">Reorder Threshold</th>
-              <th className="text-left p-4 font-medium">Status</th>
-              <th className="text-right p-4 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {inventoryLoading ? (
-              <tr>
-                <td colSpan={8} className="p-8">
-                  <InventoryTableSkeleton rows={3} columns={8} />
-                </td>
-              </tr>
-            ) : filteredInventory.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="p-0">
-                  <EmptyInventoryState
-                    title="No Products Assigned"
-                    description="No products have been assigned to your branch yet. Contact Head Office to request product assignments."
-                  />
-                </td>
-              </tr>
-            ) : (
-              filteredInventory.map(item => {
-                const stockStatus = getStockStatus(item)
-                const StockIcon = stockStatus.icon
-                
-                return (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="p-4 align-middle">
-                      <div className="flex items-center gap-3">
-                        {item.customImageUrl || item.productImageUrl ? (
-                          <img
-                            src={item.customImageUrl || item.productImageUrl}
-                            alt={item.productName}
-                            className="w-12 h-12 object-cover rounded-lg border"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 bg-gray-100 rounded-lg border flex items-center justify-center">
-                            <Package className="w-6 h-6 text-gray-400" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium break-words">
-                            {item.customName || item.productName}
-                          </div>
-                          <div className="text-xs text-gray-500 break-words">{item.productCode}</div>
-                          <div className="mt-1">
-                            <FieldSourceBadge 
-                              source={item.customName ? "organization" : "global"} 
-                              field="name" 
-                            />
-                          </div>
-                          {item.customDescription && (
-                            <div className="text-xs text-gray-400 line-clamp-1 break-words">
-                              {item.customDescription}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4 align-middle">
-                      <Badge variant="outline">
-                        {item.categoryName || "No Category"}
-                      </Badge>
-                    </td>
-                    <td className="p-4 align-middle">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-semibold">
-                          ${((item.customPrice || item.basePrice) / 100).toFixed(2)} {item.unit}
-                        </span>
-                        <div className="text-xs">
-                          <FieldSourceBadge 
-                            source={item.customPrice ? "organization" : "global"} 
-                            field="price" 
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4 align-middle">
-                      <Badge
-                        variant={item.isVisible ? "default" : "secondary"}
-                        className={item.isVisible ? "bg-green-100 text-green-800" : ""}
-                      >
-                        {item.isVisible ? "Visible" : "Hidden"}
-                      </Badge>
-                    </td>
-                    <td className="p-4 align-middle">
-                      <StockStatusBadge 
-                        quantity={item.stockQuantity}
-                        threshold={item.reorderThreshold}
-                        showIcon={true}
-                      />
-                    </td>
-                    <td className="p-4 align-middle">
-                      <div className="text-sm">{item.reorderThreshold}</div>
-                    </td>
-                    <td className="p-4 align-middle">
-                      <Badge
-                        variant={item.isActive ? "default" : "secondary"}
-                        className={item.isActive ? "bg-blue-100 text-blue-800" : ""}
-                      >
-                        {item.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </td>
-                    <td className="p-4 text-right align-middle">
-                      <div className="flex items-center gap-2 justify-end">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditItem(item)}
-                        >
-                          <Settings size={14} />
-                        </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Edit stock and visibility settings</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </Table>
-        </div>
+        <CardHeader className="relative space-y-3">
+          <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-white/70">
+            <Sparkles className="h-4 w-4" />
+            Branch Catalog
+          </p>
+          <CardTitle className="text-3xl font-semibold text-white">Assigned branch inventory</CardTitle>
+          <p className="text-sm text-white/80">
+            All SKUs below come directly from Head Office. Branches can monitor stock levels and visibility, but any changes
+            to product details must be requested from Admin.
+          </p>
+        </CardHeader>
       </Card>
 
-      {/* Edit Item Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={() => setShowEditDialog(false)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Update Product Settings</DialogTitle>
-            <DialogDescription>
-              Manage visibility and stock levels for this product
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {editingItem && (
-              <div className="p-4 border rounded-lg bg-gray-50">
-                <div className="flex items-center gap-3">
-                  {editingItem.customImageUrl || editingItem.productImageUrl ? (
-                    <img
-                      src={editingItem.customImageUrl || editingItem.productImageUrl}
-                      alt={editingItem.productName}
-                      className="w-12 h-12 object-cover rounded-lg border"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 bg-gray-100 rounded-lg border flex items-center justify-center">
-                      <Package className="w-6 h-6 text-gray-400" />
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                      {editingItem.customName || editingItem.productName}
-                      </span>
-                      <FieldSourceBadge 
-                        source={editingItem.customName ? "organization" : "global"} 
-                        field="name" 
-                      />
-                    </div>
-                    <div className="text-xs text-gray-500">{editingItem.productCode}</div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-sm font-semibold">
-                        ${((editingItem.customPrice || editingItem.basePrice) / 100).toFixed(2)} {editingItem.unit}
-                      </span>
-                      <FieldSourceBadge 
-                        source={editingItem.customPrice ? "organization" : "global"} 
-                        field="price" 
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard label="Total products" value={totalProducts} helper="Currently assigned" accent="from-blue-500 to-cyan-500" />
+        <SummaryCard label="Visible to customers" value={visibleProducts} helper={`${totalProducts - visibleProducts} hidden`} accent="from-emerald-500 to-lime-500" />
+        <SummaryCard label="Low stock" value={lowStock} helper="At or below threshold" accent="from-amber-500 to-orange-500" />
+        <SummaryCard label="Out of stock" value={outOfStock} helper="Require replenishment" accent="from-rose-500 to-pink-500" />
+      </div>
 
-            <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="isVisible"
-                checked={editData.isVisible}
-                onChange={(e) => setEditData({ ...editData, isVisible: e.target.checked })}
-                className="rounded"
-              />
-              <label htmlFor="isVisible" className="text-sm font-medium">
-                Make this product visible to customers
-              </label>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <CheckCircle className="h-3 w-3 text-green-600" />
-                <span>You can control product visibility</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Current Stock Quantity</label>
-              <Input
-                type="number"
-                value={editData.stockQuantity}
-                onChange={(e) => setEditData({ ...editData, stockQuantity: parseInt(e.target.value) || 0 })}
-                placeholder="0"
-                min="0"
-              />
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <CheckCircle className="h-3 w-3 text-green-600" />
-                <span>You can manage stock levels</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium">Reorder Threshold</label>
-              <Input
-                type="number"
-                value={editData.reorderThreshold}
-                onChange={(e) => setEditData({ ...editData, reorderThreshold: parseInt(e.target.value) || 10 })}
-                placeholder="10"
-                min="0"
-              />
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <CheckCircle className="h-3 w-3 text-green-600" />
-                <span>You'll be notified when stock falls below this level</span>
-              </div>
-            </div>
-
-            {editingItem && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <Lock className="w-4 h-4 text-blue-600 mt-0.5" />
-                  <div className="text-sm text-blue-800">
-                    <p className="font-medium">Field Restrictions:</p>
-                    <ul className="mt-1 space-y-1 text-xs">
-                      <li>• Product name, price, description, and image are managed by Head Office</li>
-                      <li>• You can only control visibility, stock quantity, and reorder threshold</li>
-                      <li>• Changes to product details require Head Office approval</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            )}
+      <Card className="border-none shadow-md">
+        <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <CardTitle className="text-xl">Branch product list</CardTitle>
+            <p className="text-sm text-muted-foreground">Real-time view of branch-ready SKUs, including stock alerts.</p>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmitEdit}>
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="flex flex-col gap-3 w-full lg:flex-row lg:items-center lg:justify-end">
+            <div className="relative w-full lg:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or code"
+                className="pl-9"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </div>
+            <select
+              value={visibilityFilter}
+              onChange={(event) => setVisibilityFilter(event.target.value)}
+              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="all">All products</option>
+              <option value="visible">Visible only</option>
+              <option value="hidden">Hidden only</option>
+            </select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>Visibility</TableHead>
+                  <TableHead>Stock</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                      Loading branch inventory…
+                    </TableCell>
+                  </TableRow>
+                ) : inventory.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                      No products have been assigned to this branch. Once Head Office shares SKUs, they will appear here.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  inventory.map((item) => (
+                    <TableRow key={item.id} className="hover:bg-muted/40">
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          {item.customImageUrl || item.productImageUrl ? (
+                            <img
+                              src={item.customImageUrl || item.productImageUrl}
+                              alt={item.productName}
+                              className="h-12 w-12 rounded-lg border object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-12 w-12 items-center justify-center rounded-lg border bg-muted/40">
+                              <Package className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-medium">{item.customName || item.productName}</p>
+                            <p className="text-xs text-muted-foreground">{item.productCode}</p>
+                            {item.customDescription && (
+                              <p className="text-xs text-muted-foreground line-clamp-1">{item.customDescription}</p>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{item.categoryName || "Uncategorized"}</Badge>
+                      </TableCell>
+                      <TableCell>{formatPKR((item.customPrice ?? item.basePrice) / 100)}</TableCell>
+                      <TableCell>
+                        <Badge variant={item.isVisible ? "default" : "secondary"}>
+                          {item.isVisible ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Eye className="h-3 w-3" /> Visible
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <Eye className="h-3 w-3" /> Hidden
+                            </span>
+                          )}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {item.stockQuantity <= item.reorderThreshold ? (
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                          ) : null}
+                          <span className="text-sm font-medium">
+                            {item.stockQuantity} <span className="text-xs text-muted-foreground">{item.unit}</span>
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Reorder &le; {item.reorderThreshold}</p>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={item.isActive ? "default" : "secondary"}>{item.isActive ? "Active" : "Inactive"}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
-    </TooltipProvider>
   )
 }
+
+function SummaryCard({
+  label,
+  value,
+  helper,
+  accent,
+}: {
+  label: string
+  value: string | number
+  helper: string
+  accent: string
+}) {
+  return (
+    <Card className="border-none shadow-md">
+      <CardContent className="p-5 space-y-2">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+        <p className="text-2xl font-semibold text-foreground">{value}</p>
+        <p className="text-xs text-muted-foreground">{helper}</p>
+        <div className={`h-1 rounded-full bg-gradient-to-r ${accent}`} />
+      </CardContent>
+    </Card>
+  )
+}
+

@@ -9,7 +9,12 @@ import './globals.css'
 export const metadata: Metadata = {
   title: 'ONE FLOWE',
   description: 'Created by Swenta Solutions',
-  
+  icons: {
+    icon: '/logo-web.png',
+    shortcut: '/logo-web.png',
+    apple: '/logo-web.png',
+  },
+  manifest: '/manifest.json',
 }
 
 export default function RootLayout({
@@ -19,6 +24,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="icon" href="/logo-web.png" type="image/png" />
+        <link rel="shortcut icon" href="/logo-web.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/logo-web.png" />
+        <meta name="theme-color" content="#1e3a8a" />
+      </head>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
         <AuthSessionProvider>
           {children}

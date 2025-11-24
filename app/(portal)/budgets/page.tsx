@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { SectionHeader } from "@/components/ui/section-header"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Wallet, AlertCircle, Edit2, Zap, PieChart, Calendar, CheckCircle2, Clock, AlertTriangle } from "lucide-react"
+import { formatPKR } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -44,6 +45,8 @@ export default function BudgetsPage() {
   )
 
   const budgets: BudgetAllocation[] = budgetsData?.budgets || []
+
+const formatAmount = (cents: number) => formatPKR(cents / 100)
 
   const filteredBudgets = useMemo(() => {
     return budgets.filter(b =>
@@ -86,7 +89,10 @@ export default function BudgetsPage() {
         return toast({ title: "Failed", description: json.error, variant: "destructive" })
       }
 
-      toast({ title: "Budget Updated", description: `${editingBudget.branchName} monthly budget set to $${newAmount}` })
+      toast({
+        title: "Budget Updated",
+        description: `${editingBudget.branchName} monthly budget set to ${formatPKR(parseFloat(newAmount))}`,
+      })
       setShowDialog(false)
       setEditingBudget(null)
       mutate()
@@ -118,7 +124,7 @@ export default function BudgetsPage() {
 
       toast({ 
         title: "Bulk Allocation Complete", 
-        description: `Allocated $${bulkAmount} to ${successCount}/${budgets.length} branches` 
+        description: `Allocated ${formatPKR(parseFloat(bulkAmount))} to ${successCount}/${budgets.length} branches` 
       })
       setShowBulkDialog(false)
       setBulkAmount("")
@@ -168,23 +174,23 @@ export default function BudgetsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
         <Card className="p-4">
           <p className="text-xs font-medium text-muted-foreground">Total Allocated</p>
-          <p className="text-2xl font-bold text-blue-600">${(totalAllocated / 100).toFixed(2)}</p>
+          <p className="text-2xl font-bold text-blue-600">{formatAmount(totalAllocated)}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium text-muted-foreground">Total Spent</p>
-          <p className="text-2xl font-bold text-orange-600">${(totalSpent / 100).toFixed(2)}</p>
+          <p className="text-2xl font-bold text-orange-600">{formatAmount(totalSpent)}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium text-muted-foreground">On Hold</p>
-          <p className="text-2xl font-bold text-yellow-600">${(totalHeld / 100).toFixed(2)}</p>
+          <p className="text-2xl font-bold text-yellow-600">{formatAmount(totalHeld)}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium text-muted-foreground">Remaining</p>
-          <p className="text-2xl font-bold text-green-600">${(totalRemaining / 100).toFixed(2)}</p>
+          <p className="text-2xl font-bold text-green-600">{formatAmount(totalRemaining)}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs font-medium text-muted-foreground">Avg per Branch</p>
-          <p className="text-2xl font-bold text-slate-600">${(avgBudget / 100).toFixed(2)}</p>
+          <p className="text-2xl font-bold text-slate-600">{formatAmount(avgBudget)}</p>
         </Card>
       </div>
 
@@ -256,16 +262,16 @@ export default function BudgetsPage() {
                     <TableRow key={budget.branchId} className={isUnderutilized ? "bg-gray-50 dark:bg-gray-900" : isNearLimit ? "bg-red-50 dark:bg-red-950/20" : isMedium ? "bg-yellow-50 dark:bg-yellow-950/20" : ""}>
                       <TableCell className="font-semibold text-slate-900 dark:text-white">{budget.branchName}</TableCell>
                       <TableCell className="text-right font-bold text-lg">
-                        <span className="text-blue-600 dark:text-blue-400">${(budget.amountAllocatedCents / 100).toFixed(2)}</span>
+                        <span className="text-blue-600 dark:text-blue-400">{formatAmount(budget.amountAllocatedCents)}</span>
                       </TableCell>
                       <TableCell className="text-right">
-                        <span className="text-orange-600">${(budget.amountSpentCents / 100).toFixed(2)}</span>
+                        <span className="text-orange-600">{formatAmount(budget.amountSpentCents)}</span>
                       </TableCell>
                       <TableCell className="text-right">
-                        <span className="text-yellow-600 dark:text-yellow-400">${(budget.amountHeldCents / 100).toFixed(2)}</span>
+                        <span className="text-yellow-600 dark:text-yellow-400">{formatAmount(budget.amountHeldCents)}</span>
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        <span className={budget.remainingCents < 0 ? "text-red-600" : "text-green-600"}>${(budget.remainingCents / 100).toFixed(2)}</span>
+                        <span className={budget.remainingCents < 0 ? "text-red-600" : "text-green-600"}>{formatAmount(budget.remainingCents)}</span>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1 w-24">
@@ -351,23 +357,23 @@ export default function BudgetsPage() {
             <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-lg space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Current Monthly Budget</span>
-                <span className="font-semibold">${((editingBudget?.amountAllocatedCents || 0) / 100).toFixed(2)}</span>
+                <span className="font-semibold">{formatAmount(editingBudget?.amountAllocatedCents || 0)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Already Spent</span>
-                <span className="font-semibold text-orange-600">${((editingBudget?.amountSpentCents || 0) / 100).toFixed(2)}</span>
+                <span className="font-semibold text-orange-600">{formatAmount(editingBudget?.amountSpentCents || 0)}</span>
               </div>
               <div className="h-px bg-border" />
               <div className="flex justify-between font-bold">
                 <span>Remaining</span>
-                <span className="text-green-600">${((editingBudget?.remainingCents || 0) / 100).toFixed(2)}</span>
+                <span className="text-green-600">{formatAmount(editingBudget?.remainingCents || 0)}</span>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-2">New Monthly Budget (USD)</label>
+              <label className="block text-sm font-semibold mb-2">New Monthly Budget (PKR)</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-bold text-muted-foreground">$</span>
-                <Input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-8 text-lg font-bold h-11" />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">PKR</span>
+                <Input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-12 text-lg font-bold h-11" />
               </div>
               <p className="text-xs text-muted-foreground mt-2">Set the total budget this branch can spend this month</p>
             </div>
@@ -393,10 +399,10 @@ export default function BudgetsPage() {
               <p className="text-sm font-medium text-blue-900 dark:text-blue-100">This will update ALL branches to the same amount</p>
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-2">Monthly Budget Amount (USD)</label>
+              <label className="block text-sm font-semibold mb-2">Monthly Budget Amount (PKR)</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-bold">$</span>
-                <Input type="number" value={bulkAmount} onChange={(e) => setBulkAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-8 text-lg font-bold h-11" />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">PKR</span>
+                <Input type="number" value={bulkAmount} onChange={(e) => setBulkAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-12 text-lg font-bold h-11" />
               </div>
               <p className="text-xs text-muted-foreground mt-2">This amount will be assigned to all {budgets.length} branches</p>
             </div>

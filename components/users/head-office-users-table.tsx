@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
-import { Edit, Trash2, Search, User, Mail, Phone, Shield, Building2, MapPin, AlertCircle } from "lucide-react"
+import { Edit, Trash2, Search, User, Mail, Phone, Shield, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react"
 
 type UserRow = { 
   id: string
@@ -22,7 +22,6 @@ type UserRow = {
   organizationId?: number | null
   branchId?: number | null
   phone?: string
-  loginCode?: string
   mfaEnabled?: boolean
   createdAt: string
 }
@@ -30,12 +29,15 @@ type UserRow = {
 type HeadOfficeUsersTableProps = {
   users: UserRow[]
   branches: any[]
+  organizations: any[]
   onUserUpdate: () => void
 }
 
-export function HeadOfficeUsersTable({ users, branches, onUserUpdate }: HeadOfficeUsersTableProps) {
+export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpdate }: HeadOfficeUsersTableProps) {
+  const PAGE_SIZE = 20
   const [searchQuery, setSearchQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState("all")
+  const [page, setPage] = useState(1)
   const [editingUser, setEditingUser] = useState<UserRow | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<UserRow | null>(null)
@@ -48,8 +50,7 @@ export function HeadOfficeUsersTable({ users, branches, onUserUpdate }: HeadOffi
     role: "",
     organizationId: "",
     branchId: "",
-    mfaEnabled: false,
-    loginCode: ""
+    mfaEnabled: false
   })
 
   // Filter users
@@ -75,11 +76,51 @@ export function HeadOfficeUsersTable({ users, branches, onUserUpdate }: HeadOffi
     return filtered
   }, [users, searchQuery, roleFilter])
 
-  // Get branch name by ID
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE))
+
+  useMemo(() => {
+    setPage(1)
+  }, [searchQuery, roleFilter])
+
+  useMemo(() => {
+    if (page > totalPages) {
+      setPage(totalPages)
+    }
+  }, [totalPages, page])
+
+  const paginatedUsers = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return filteredUsers.slice(start, start + PAGE_SIZE)
+  }, [filteredUsers, page])
+
+  const organizationMap = useMemo(() => {
+    const map = new Map<number, string>()
+    organizations.forEach((org: any) => {
+      if (org?.id) {
+        map.set(org.id, org.name)
+      }
+    })
+    return map
+  }, [organizations])
+
+  const branchMap = useMemo(() => {
+    const map = new Map<number, string>()
+    branches.forEach((branch: any) => {
+      if (branch?.id) {
+        map.set(branch.id, branch.name)
+      }
+    })
+    return map
+  }, [branches])
+
   const getBranchName = (branchId: number | null) => {
     if (!branchId) return "—"
-    const branch = branches.find(b => b.id === branchId)
-    return branch?.name || "Unknown"
+    return branchMap.get(branchId) || "Unknown"
+  }
+
+  const getOrganizationName = (organizationId: number | null | undefined) => {
+    if (!organizationId) return null
+    return organizationMap.get(organizationId) || "Unknown"
   }
 
   // Open edit dialog
@@ -93,8 +134,7 @@ export function HeadOfficeUsersTable({ users, branches, onUserUpdate }: HeadOffi
       role: user.role || "",
       organizationId: user.organizationId ? String(user.organizationId) : "",
       branchId: user.branchId ? String(user.branchId) : "",
-      mfaEnabled: user.mfaEnabled || false,
-      loginCode: user.loginCode || ""
+      mfaEnabled: user.mfaEnabled || false
     })
   }
 
@@ -109,8 +149,7 @@ export function HeadOfficeUsersTable({ users, branches, onUserUpdate }: HeadOffi
       role: "",
       organizationId: "",
       branchId: "",
-      mfaEnabled: false,
-      loginCode: ""
+      mfaEnabled: false
     })
   }
 
@@ -130,8 +169,7 @@ export function HeadOfficeUsersTable({ users, branches, onUserUpdate }: HeadOffi
           role: editForm.role,
           organizationId: editForm.organizationId ? parseInt(editForm.organizationId) : null,
           branchId: editForm.branchId ? parseInt(editForm.branchId) : null,
-          mfaEnabled: editForm.mfaEnabled,
-          loginCode: editForm.loginCode || null
+          mfaEnabled: editForm.mfaEnabled
         })
       })
 
@@ -224,7 +262,7 @@ export function HeadOfficeUsersTable({ users, branches, onUserUpdate }: HeadOffi
                 </TableCell>
               </TableRow>
             ) : (
-              filteredUsers.map((user) => (
+              paginatedUsers.map((user) => (
                 <TableRow key={user.id} className="hover:bg-muted/30">
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -258,18 +296,19 @@ export function HeadOfficeUsersTable({ users, branches, onUserUpdate }: HeadOffi
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
-                      {user.branchId ? (
+                      {user.organizationId ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Building2 className="h-3 w-3 text-muted-foreground" />
+                          {getOrganizationName(user.organizationId)}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
+                      {user.branchId && (
                         <div className="flex items-center gap-2 text-sm">
                           <MapPin className="h-3 w-3 text-muted-foreground" />
                           {getBranchName(user.branchId)}
                         </div>
-                      ) : user.organizationId ? (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Building2 className="h-3 w-3 text-muted-foreground" />
-                          Organization
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
                       )}
                     </div>
                   </TableCell>
@@ -311,6 +350,34 @@ export function HeadOfficeUsersTable({ users, branches, onUserUpdate }: HeadOffi
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-sm text-muted-foreground">
+        <span>
+          Showing{" "}
+          <span className="font-medium text-foreground">
+            {filteredUsers.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
+            –
+            {Math.min(filteredUsers.length, page * PAGE_SIZE)}
+          </span>{" "}
+          of <span className="font-medium text-foreground">{filteredUsers.length}</span> users
+        </span>
+        <div className="inline-flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-xs">
+            Page <span className="font-medium text-foreground">{page}</span> / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page === totalPages || filteredUsers.length === 0}
+            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Edit User Dialog */}
@@ -406,19 +473,6 @@ export function HeadOfficeUsersTable({ users, branches, onUserUpdate }: HeadOffi
             {/* Security Settings */}
             <div className="space-y-4">
               <h3 className="text-sm font-semibold">Security Settings</h3>
-              <div className="space-y-2">
-                <Label htmlFor="loginCode">Login Code</Label>
-                <Input
-                  id="loginCode"
-                  value={editForm.loginCode}
-                  onChange={e => setEditForm({ ...editForm, loginCode: e.target.value })}
-                  placeholder="6-digit code (optional)"
-                  maxLength={6}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Leave empty to auto-generate a new code
-                </p>
-              </div>
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="mfaEnabled"

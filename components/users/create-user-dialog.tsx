@@ -33,23 +33,31 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     password: "",
     phone: "",
     role: "",
+    organizationId: "",
     branchId: "",
     mfaEnabled: false
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Fetch branches for the current organization
-  const { data: branchesData } = useSWR(
-    organizationId ? `/api/v1/branches?organizationId=${organizationId}` : null,
+  // Fetch organizations (for Super Admin)
+  const { data: organizationsData } = useSWR(
+    userRole === "SUPER_ADMIN" ? "/api/v1/organizations" : null,
     jsonFetcher
   )
 
+  // Fetch branches for the selected organization
+  const { data: branchesData } = useSWR(
+    form.organizationId ? `/api/v1/branches?organizationId=${form.organizationId}` : null,
+    jsonFetcher
+  )
+
+  const organizations = organizationsData?.items || []
   const branches = branchesData?.items || []
 
-  // Reset form when dialog opens/closes
+  // Initialize form with context when dialog opens
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setForm({
         firstName: "",
         lastName: "",
@@ -57,13 +65,28 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         password: "",
         phone: "",
         role: "",
+        organizationId: organizationId || "",
+        branchId: "",
+        mfaEnabled: false
+      })
+      setErrors({})
+      setStep(1)
+    } else {
+      setForm({
+        firstName: "",
+        lastName: "",
+        email: "",
+        password: "",
+        phone: "",
+        role: "",
+        organizationId: "",
         branchId: "",
         mfaEnabled: false
       })
       setErrors({})
       setStep(1)
     }
-  }, [open])
+  }, [open, organizationId])
 
   // Validate form
   const validateForm = () => {
@@ -81,6 +104,9 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
       newErrors.password = "Password must be at least 6 characters"
     }
     if (!form.role) newErrors.role = "Role is required"
+    if ((form.role === "HEAD_OFFICE" || form.role === "BRANCH_ADMIN") && !form.organizationId) {
+      newErrors.organizationId = "Organization is required for this role"
+    }
     if (form.role === "BRANCH_ADMIN" && !form.branchId) {
       newErrors.branchId = "Branch assignment is required for Branch Admin"
     }
@@ -104,7 +130,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
           password: form.password,
           phone: form.phone.trim() || null,
           role: form.role,
-          organizationId: organizationId,
+          organizationId: parseInt(form.organizationId),
           branchId: form.role === "BRANCH_ADMIN" ? parseInt(form.branchId) : null,
           mfaEnabled: form.mfaEnabled
         })
@@ -147,6 +173,13 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Get selected organization name
+  const getSelectedOrganizationName = () => {
+    if (!form.organizationId) return ""
+    const org = organizations.find(o => o.id === parseInt(form.organizationId))
+    return org?.name || ""
   }
 
   // Get selected branch name
@@ -284,37 +317,90 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
           {step === 2 && (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold">Role & Assignment</h3>
+              
+              {/* Organization Selector - Only for Super Admin */}
+              {userRole === "SUPER_ADMIN" && (
+                <div className="space-y-2">
+                  <Label htmlFor="organization">Organization *</Label>
+                  <Select 
+                    value={form.organizationId} 
+                    onValueChange={value => setForm({ ...form, organizationId: value, branchId: "" })}
+                  >
+                    <SelectTrigger name="organizationId" className={errors.organizationId ? 'border-red-500' : ''}>
+                      <SelectValue placeholder="Select organization" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {organizations.map((org) => (
+                        <SelectItem key={org.id} value={String(org.id)}>
+                          {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.organizationId && (
+                    <p className="text-xs text-muted-foreground">
+                      Selected: {getSelectedOrganizationName()}
+                    </p>
+                  )}
+                  {errors.organizationId && (
+                    <p className="text-xs text-red-600">{errors.organizationId}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Show current context for non-Super Admin users */}
+              {userRole !== "SUPER_ADMIN" && form.organizationId && (
+                <div className="p-3 bg-muted/50 rounded-md border">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">Organization:</span>
+                    <span className="text-muted-foreground">{getSelectedOrganizationName()}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Role Selector */}
               <div className="space-y-2">
                 <Label htmlFor="role">Role *</Label>
                 <Select value={form.role} onValueChange={value => setForm({ ...form, role: value, branchId: "" })}>
                   <SelectTrigger name="role" className={errors.role ? 'border-red-500' : ''}>
                     <SelectValue placeholder="Select role" />
-                </SelectTrigger>
-                <SelectContent>
+                  </SelectTrigger>
+                  <SelectContent>
                     <SelectItem value="HEAD_OFFICE">Head Office</SelectItem>
                     <SelectItem value="BRANCH_ADMIN">Branch Admin</SelectItem>
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
                 {errors.role && (
                   <p className="text-xs text-red-600">{errors.role}</p>
                 )}
-            </div>
+              </div>
 
+              {/* Branch Selector - Only for Branch Admin */}
               {form.role === "BRANCH_ADMIN" && (
                 <div className="space-y-2">
                   <Label htmlFor="branch">Branch Assignment *</Label>
-                  <Select value={form.branchId} onValueChange={value => setForm({ ...form, branchId: value })}>
+                  <Select 
+                    value={form.branchId} 
+                    onValueChange={value => setForm({ ...form, branchId: value })}
+                    disabled={!form.organizationId}
+                  >
                     <SelectTrigger name="branchId" className={errors.branchId ? 'border-red-500' : ''}>
-                <SelectValue placeholder="Select branch" />
-              </SelectTrigger>
-              <SelectContent>
+                      <SelectValue placeholder={form.organizationId ? "Select branch" : "Select organization first"} />
+                    </SelectTrigger>
+                    <SelectContent>
                       {branches.map((branch) => (
                         <SelectItem key={branch.id} value={String(branch.id)}>
                           {branch.name}
                         </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.branchId && (
+                    <p className="text-xs text-muted-foreground">
+                      Selected: {getSelectedBranchName()}
+                    </p>
+                  )}
                   {errors.branchId && (
                     <p className="text-xs text-red-600">{errors.branchId}</p>
                   )}
@@ -325,20 +411,36 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
               {form.role && (
                 <Card className="p-4 bg-muted/50">
                   <div className="flex items-start gap-3">
-                    <Building2 className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <div className="text-sm font-medium">Assignment Summary</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {form.role === "HEAD_OFFICE" ? (
-                          "This user will have access to all branches in your organization"
-                        ) : form.role === "BRANCH_ADMIN" && getSelectedBranchName() ? (
-                          `This user will manage: ${getSelectedBranchName()}`
-                        ) : (
-                          "Please select a branch for Branch Admin role"
+                    <div className="p-2 rounded-full bg-blue-100">
+                      <Shield className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-medium">
+                        {form.role === "HEAD_OFFICE" ? "Head Office User" : "Branch Admin User"}
+                      </p>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        {form.organizationId && (
+                          <div className="flex items-center gap-1">
+                            <Building2 className="h-3 w-3" />
+                            <span>Organization: {getSelectedOrganizationName()}</span>
+                          </div>
+                        )}
+                        {form.role === "BRANCH_ADMIN" && form.branchId && (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            <span>Branch: {getSelectedBranchName()}</span>
+                          </div>
+                        )}
+                        {form.role === "HEAD_OFFICE" && (
+                          <p>Can manage organization-wide settings and create branch admins</p>
+                        )}
+                        {form.role === "BRANCH_ADMIN" && !form.branchId && (
+                          <p className="text-amber-600">Please select a branch assignment</p>
                         )}
                       </div>
                     </div>
-          </div>
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  </div>
                 </Card>
               )}
           </div>
@@ -377,8 +479,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                       Security Configuration
                     </div>
                     <div className="text-xs text-green-700 dark:text-green-300 mt-1">
-                      {form.mfaEnabled ? "MFA enabled" : "MFA disabled"} • 
-                      {form.loginCode ? ` Custom login code: ${form.loginCode}` : " Auto-generated login code"}
+                      {form.mfaEnabled ? "MFA enabled" : "MFA disabled"}
                     </div>
                   </div>
                 </div>

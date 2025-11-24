@@ -19,7 +19,6 @@ export async function GET(req: Request) {
       firstName: usersTable.firstName,
       lastName: usersTable.lastName,
       phone: usersTable.phone,
-      loginCode: usersTable.loginCode,
       mfaEnabled: usersTable.mfaEnabled,
       organizationId: usersTable.organizationId,
       branchId: usersTable.branchId,
@@ -40,7 +39,6 @@ export async function GET(req: Request) {
     firstName: r.firstName || "",
     lastName: r.lastName || "",
     phone: r.phone || null,
-    loginCode: r.loginCode || null,
     mfaEnabled: !!r.mfaEnabled,
     organizationId: r.organizationId ?? null,
     branchId: r.branchId ?? null,
@@ -129,9 +127,6 @@ export async function POST(req: Request) {
   } catch (err: any) {
     // Handle database constraint violations
     if (err.code === '23505') {
-      if (err.constraint === 'users_login_code_idx') {
-        return error("Login code already exists. Please use a different code.", 400)
-      }
       if (err.constraint === 'users_email_key' || err.constraint === 'users_email_idx') {
         return error("Email address already exists. Please use a different email.", 400)
       }

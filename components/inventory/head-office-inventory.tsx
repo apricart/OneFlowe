@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import useSWR from "swr"
 import { useToast } from "@/components/ui/use-toast"
+import { formatPKR } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
@@ -410,8 +411,9 @@ export default function HeadOfficeInventory({ organizationId }: { organizationId
                       </td>
                       <td className="p-4">
                         <div className="text-sm">
-                          {product.customPrice ? `$${(product.customPrice / 100).toFixed(2)}` : 
-                           `$${(product.basePrice / 100).toFixed(2)}`}
+                          {product.customPrice
+                            ? formatPKR(product.customPrice / 100)
+                            : formatPKR(product.basePrice / 100)}
                         </div>
                       </td>
                       <td className="p-4">

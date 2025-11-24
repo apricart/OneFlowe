@@ -21,7 +21,7 @@ import bcrypt from "bcryptjs"
 
 // Default organization settings
 const DEFAULT_SETTINGS = [
-  { key: "default_currency", value: "USD" },
+  { key: "default_currency", value: "PKR" },
   { key: "tax_rate", value: 0 },
   { key: "auto_approve_orders", value: false },
   { key: "order_approval_threshold", value: 10000 },

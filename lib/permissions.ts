@@ -47,7 +47,6 @@ export enum Permission {
   INVENTORY_DELETE = "inventory:delete",
   INVENTORY_ADJUST = "inventory:adjust",
   INVENTORY_TRANSFER = "inventory:transfer",
-  INVENTORY_MANAGE_WAREHOUSES = "inventory:manage_warehouses",
   INVENTORY_MANAGE_SUPPLIERS = "inventory:manage_suppliers",
   
   // Order Management
@@ -256,13 +255,7 @@ export const PERMISSION_DEFINITIONS: PermissionInfo[] = [
   {
     key: Permission.INVENTORY_TRANSFER,
     label: "Transfer Inventory",
-    description: "Move inventory between warehouses",
-    category: PermissionCategory.INVENTORY,
-  },
-  {
-    key: Permission.INVENTORY_MANAGE_WAREHOUSES,
-    label: "Manage Warehouses",
-    description: "Create and configure warehouses",
+    description: "Move inventory between branches",
     category: PermissionCategory.INVENTORY,
   },
   {

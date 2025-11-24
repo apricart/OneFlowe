@@ -91,21 +91,31 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     console.log("POST /api/v1/admin/organization-assignments - Request body:", body)
     
-    const { 
-      productIds, 
-      organizationId, 
+    const {
+      productIds,
+      assignments: assignmentOverrides,
+      organizationId,
       isActive = true,
       customName,
       customPrice,
       customDescription,
-      customImageUrl
+      customImageUrl,
     } = body
 
     console.log("Parsed data:", { productIds, organizationId, isActive, customName, customPrice, customDescription, customImageUrl })
 
-    if (!productIds || productIds.length === 0) {
-      console.log("Validation error: Product IDs are required")
-      return NextResponse.json({ error: "Product IDs are required" }, { status: 400 })
+    let normalizedProductIds: number[] = []
+    if (Array.isArray(assignmentOverrides) && assignmentOverrides.length > 0) {
+      normalizedProductIds = assignmentOverrides
+        .map((entry: any) => parseInt(entry.productId))
+        .filter((value: number) => Number.isFinite(value))
+    } else if (Array.isArray(productIds) && productIds.length > 0) {
+      normalizedProductIds = productIds.map((id: any) => parseInt(id)).filter((value: number) => Number.isFinite(value))
+    }
+
+    if (normalizedProductIds.length === 0) {
+      console.log("Validation error: Product identifiers are required")
+      return NextResponse.json({ error: "Product IDs or detailed assignments are required" }, { status: 400 })
     }
     if (!organizationId) {
       console.log("Validation error: Organization ID is required")
@@ -116,7 +126,7 @@ export async function POST(req: NextRequest) {
     console.log("Validating assignment data for organizationId:", parseInt(organizationId), "productIds:", productIds)
     const validation = await validateAssignmentData({
       organizationId: parseInt(organizationId),
-      globalProductId: productIds[0], // Check first product as representative
+      globalProductId: normalizedProductIds[0], // representative
       userId: (session.user as any).id
     })
 
@@ -137,8 +147,8 @@ export async function POST(req: NextRequest) {
     .from(organizationInventory)
     .where(
       and(
-        eq(organizationInventory.organizationId, parseInt(organizationId)),
-        inArray(organizationInventory.globalProductId, productIds.map(id => parseInt(id))),
+      eq(organizationInventory.organizationId, parseInt(organizationId)),
+      inArray(organizationInventory.globalProductId, normalizedProductIds),
         isNull(organizationInventory.deletedAt)
       )
     )
@@ -157,42 +167,66 @@ export async function POST(req: NextRequest) {
     }
 
     // If some products are already assigned, return partial success with details
-    if (unassignedProductIds.length < productIds.length) {
-      const alreadyAssignedIds = productIds.filter(id => existingProductIds.has(parseInt(id)))
+    if (unassignedProductIds.length < normalizedProductIds.length) {
+      const alreadyAssignedIds = normalizedProductIds.filter(id => existingProductIds.has(id))
       
       // Create assignments only for unassigned products
-      const assignments = unassignedProductIds.map(productId => ({
-        globalProductId: parseInt(productId),
-        organizationId: parseInt(organizationId),
-        assignedByUserId: (session.user as any).id,
-        isActive,
-        customName: customName || null,
-        customPrice: customPrice ? Math.round(parseFloat(customPrice) * 100) : null,
-        customDescription: customDescription || null,
-        customImageUrl: customImageUrl || null,
-      }))
+      const assignments = unassignedProductIds.map(productId => {
+        const override = Array.isArray(assignmentOverrides)
+          ? assignmentOverrides.find((entry: any) => parseInt(entry.productId) === productId)
+          : null
+        const resolvedCustomPrice =
+          override && override.customPrice !== undefined && override.customPrice !== null
+            ? Math.round(parseFloat(override.customPrice) * 100)
+            : customPrice
+            ? Math.round(parseFloat(customPrice) * 100)
+            : null
+
+        return {
+          globalProductId: productId,
+          organizationId: parseInt(organizationId),
+          assignedByUserId: (session.user as any).id,
+          isActive: override?.isActive ?? isActive,
+          customName: override?.customName ?? customName ?? null,
+          customPrice: resolvedCustomPrice,
+          customDescription: override?.customDescription ?? customDescription ?? null,
+          customImageUrl: override?.customImageUrl ?? customImageUrl ?? null,
+        }
+      })
 
       const result = await db.insert(organizationInventory).values(assignments).returning()
 
       return NextResponse.json({
         message: `Successfully assigned ${assignments.length} products. ${alreadyAssignedIds.length} products were already assigned.`,
         assignments: result,
-        alreadyAssigned: alreadyAssignedIds.map(id => parseInt(id)),
-        unassigned: unassignedProductIds.map(id => parseInt(id))
+        alreadyAssigned: alreadyAssignedIds,
+        unassigned: unassignedProductIds
       }, { status: 200 })
     }
 
     // All products are unassigned, proceed with normal assignment
-    const assignments = productIds.map(productId => ({
-      globalProductId: parseInt(productId),
-      organizationId: parseInt(organizationId),
-      assignedByUserId: (session.user as any).id,
-      isActive,
-      customName: customName || null,
-      customPrice: customPrice ? Math.round(parseFloat(customPrice) * 100) : null,
-      customDescription: customDescription || null,
-      customImageUrl: customImageUrl || null,
-    }))
+    const assignments = normalizedProductIds.map(productId => {
+      const override = Array.isArray(assignmentOverrides)
+        ? assignmentOverrides.find((entry: any) => parseInt(entry.productId) === productId)
+        : null
+      const resolvedCustomPrice =
+        override && override.customPrice !== undefined && override.customPrice !== null
+          ? Math.round(parseFloat(override.customPrice) * 100)
+          : customPrice
+          ? Math.round(parseFloat(customPrice) * 100)
+          : null
+
+      return {
+        globalProductId: productId,
+        organizationId: parseInt(organizationId),
+        assignedByUserId: (session.user as any).id,
+        isActive: override?.isActive ?? isActive,
+        customName: override?.customName ?? customName ?? null,
+        customPrice: resolvedCustomPrice,
+        customDescription: override?.customDescription ?? customDescription ?? null,
+        customImageUrl: override?.customImageUrl ?? customImageUrl ?? null,
+      }
+    })
 
     const newAssignments = await db.insert(organizationInventory)
       .values(assignments)

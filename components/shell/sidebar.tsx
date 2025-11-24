@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Home, Building2, Users, Package, Boxes, Wallet, BarChart3, Settings, Warehouse, ShieldCheck, ShoppingBag, FolderTree, FolderOpen, Tags, ChevronDown, ChevronRight } from "lucide-react"
+import { Home, Building2, Users, Package, Boxes, Wallet, BarChart3, Settings, ShieldCheck, ShoppingBag, FolderTree, FolderOpen, Tags, ChevronDown, ChevronRight } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
 
@@ -32,7 +32,20 @@ const getNavigationByRole = (role: string) => {
       },
       { href: "/global-inventory", label: "Global Inventory", icon: Boxes },
       { href: "/budgets", label: "Budgets", icon: Wallet },
-      { href: "/reports", label: "Reports", icon: BarChart3 },
+      { 
+        href: "/reports", 
+        label: "Reports", 
+        icon: BarChart3,
+        subItems: [
+          { href: "/reports/sales-summary", label: "Summary Report" },
+          { href: "/reports/refund-orders", label: "Refund Order Report" },
+          { href: "/reports/product-summary", label: "Product Summary" },
+          { href: "/reports/product-summary-details", label: "Product Summary Details" },
+          { href: "/reports/stock-store-summary", label: "Stock Store Summary" },
+          { href: "/reports/stock-reports", label: "Stock Reports" },
+          { href: "/reports/stock-logs", label: "Stock Logs" },
+        ]
+      },
       { href: "/settings", label: "Settings", icon: Settings },
     ]
   }
@@ -42,11 +55,23 @@ const getNavigationByRole = (role: string) => {
       ...baseNav,
       { href: "/branches", label: "My Branches", icon: Building2 },
       { href: "/users", label: "Users", icon: Users },
-      { href: "/orders", label: "Orders", icon: Package },
+      { href: "/head-office-orders", label: "Orders", icon: Package },
       { href: "/inventory", label: "Inventory", icon: Boxes },
-      { href: "/inventory/warehouse", label: "Warehouse", icon: Warehouse },
       { href: "/budgets", label: "Budgets", icon: Wallet },
-      { href: "/reports", label: "Reports", icon: BarChart3 },
+      { 
+        href: "/reports", 
+        label: "Reports", 
+        icon: BarChart3,
+        subItems: [
+          { href: "/reports/sales-summary", label: "Summary Report" },
+          { href: "/reports/refund-orders", label: "Refund Order Report" },
+          { href: "/reports/product-summary", label: "Product Summary" },
+          { href: "/reports/product-summary-details", label: "Product Summary Details" },
+          { href: "/reports/stock-store-summary", label: "Stock Store Summary" },
+          { href: "/reports/stock-reports", label: "Stock Reports" },
+          { href: "/reports/stock-logs", label: "Stock Logs" },
+        ]
+      },
       { href: "/settings", label: "Settings", icon: Settings },
     ]
   }
@@ -56,8 +81,7 @@ const getNavigationByRole = (role: string) => {
       ...baseNav,
       { href: "/orders", label: "Orders", icon: Package },
       { href: "/branch-inventory", label: "Inventory", icon: Boxes },
-      { href: "/inventory/warehouse", label: "Warehouse", icon: Warehouse },
-      { href: "/budgets", label: "Budgets", icon: Wallet },
+      { href: "/employee-management", label: "Employee Management", icon: Users },
       { href: "/settings", label: "Settings", icon: Settings },
     ]
   }
@@ -92,7 +116,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 shrink-0 h-svh border-r" style={{ borderColor: "var(--color-border)" }}>
+    <aside className="w-64 shrink-0 h-svh border-r flex flex-col" style={{ borderColor: "var(--color-border)" }}>
       <div className="px-4 py-4 flex items-center gap-3" style={{ color: "white", background: "var(--color-brand-primary)" }}>
         <div className="bg-white rounded-lg p-1.5 flex items-center justify-center">
           <Image src="/logo-pos.png" alt="OneFlowe" width={32} height={32} />
@@ -102,7 +126,7 @@ export function Sidebar() {
           <div className="text-xs opacity-90">{role === "SUPER_ADMIN" ? "Admin" : role === "HEAD_OFFICE" ? "Head Office" : "Branch"}</div>
         </div>
       </div>
-      <nav className="p-2 grid gap-1" aria-busy={!session} aria-live="polite">
+      <nav className="p-2 grid gap-1 overflow-y-auto flex-1 min-h-0" aria-busy={!session} aria-live="polite">
         {nav.map((item) => {
           const active = isItemActive(item)
           const hasSubItems = 'subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0;

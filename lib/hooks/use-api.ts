@@ -63,11 +63,6 @@ export const prefetchData = {
     preload('/api/v1/suppliers', fetcher)
   },
 
-  async warehouses() {
-    const { fetcher } = await import('@/lib/fetcher')
-    preload('/api/v1/warehouses', fetcher)
-  },
-
   async inventoryTx() {
     const { fetcher } = await import('@/lib/fetcher')
     preload('/api/v1/inventory/transactions', fetcher)

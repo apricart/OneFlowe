@@ -54,7 +54,7 @@ const PREDEFINED_SETTINGS = [
     label: "Default Currency",
     type: "text",
     category: "financial",
-    defaultValue: "USD",
+    defaultValue: "PKR",
     description: "Default currency for transactions",
   },
   {

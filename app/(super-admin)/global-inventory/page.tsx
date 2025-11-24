@@ -1,13 +1,14 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
-import { Card } from "@/components/ui/card"
-import { SectionHeader } from "@/components/ui/section-header"
+import React, { useState, useMemo, useEffect, useCallback } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue, SelectLabel, SelectGroup } from "@/components/ui/select"
 import { Table } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -28,11 +29,19 @@ import {
   X,
   Eye,
   EyeOff,
+  Upload,
+  Globe,
+  Download,
+  Sparkles,
 } from "lucide-react"
 import useSWR from "swr"
 import { useToast } from "@/components/ui/use-toast"
 import { CascadeImpactPreview } from "@/components/inventory/cascade-impact-preview"
 import { useAppContext } from "@/components/context/app-context"
+import { formatPKR } from "@/lib/utils"
+import { LocalContextSelectors } from "@/components/context/local-context-selectors"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 const fetcher = async (url: string) => {
   try {
@@ -54,7 +63,7 @@ const fetcher = async (url: string) => {
     
     return response.json()
   } catch (error) {
-    if (error.name === 'AbortError') {
+    if (error instanceof Error && error.name === 'AbortError') {
       throw new Error('Request timeout')
     }
     throw error
@@ -100,6 +109,40 @@ interface OrganizationAssignment {
   organizationName: string
 }
 
+interface Category {
+  id: number
+  name: string
+}
+
+function SummaryTile({
+  label,
+  value,
+  helper,
+  accent,
+}: {
+  label: string
+  value: string | number
+  helper: string
+  accent: string
+}) {
+  return (
+    <Card className="border-none shadow-md">
+      <CardContent className="p-5 space-y-2">
+        <div className="flex items-center gap-3">
+          <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r ${accent}`}>
+            <Package className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+            <p className="text-2xl font-semibold text-foreground">{value}</p>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">{helper}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function GlobalInventoryPage() {
   const { toast } = useToast()
   const { organizationId } = useAppContext()
@@ -107,8 +150,6 @@ export default function GlobalInventoryPage() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [selectedProducts, setSelectedProducts] = useState<number[]>([])
   const [showAssignmentDialog, setShowAssignmentDialog] = useState(false)
-  const [showAddDialog, setShowAddDialog] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<GlobalProduct | null>(null)
   const [activeTab, setActiveTab] = useState("products")
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deletingProduct, setDeletingProduct] = useState<GlobalProduct | null>(null)
@@ -131,18 +172,48 @@ export default function GlobalInventoryPage() {
     customDescription: "",
     customImageUrl: "",
   })
+  const [perProductOverrides, setPerProductOverrides] = useState<Record<number, { customPrice: string }>>({})
+  const [showCsvDialog, setShowCsvDialog] = useState(false)
+  const [csvOrganizationId, setCsvOrganizationId] = useState("")
+  const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [isUploadingCsv, setIsUploadingCsv] = useState(false)
+  const [csvResult, setCsvResult] = useState<{ message: string; imported: number; skippedExisting: number } | null>(null)
+  const [csvErrors, setCsvErrors] = useState<string[]>([])
+
+  useEffect(() => {
+    setPerProductOverrides((prev) => {
+      const next: Record<number, { customPrice: string }> = {}
+      assignmentData.productIds.forEach((productId) => {
+        if (prev[productId]) {
+          next[productId] = prev[productId]
+        }
+      })
+      return next
+    })
+  }, [assignmentData.productIds])
+
+  useEffect(() => {
+    if (organizationId && assignmentData.organizationId !== String(organizationId)) {
+      setAssignmentData((prev) => ({ ...prev, organizationId: String(organizationId) }))
+    }
+  }, [organizationId, assignmentData.organizationId])
+
+  useEffect(() => {
+    if (assignmentData.organizationId && csvOrganizationId !== assignmentData.organizationId) {
+      setCsvOrganizationId(assignmentData.organizationId)
+    }
+  }, [assignmentData.organizationId, csvOrganizationId])
+
+  const handleLocalContextChange = useCallback((ctx: { organizationId?: string | null }) => {
+    if (ctx.organizationId !== undefined) {
+      const nextOrg = ctx.organizationId || ""
+      setAssignmentData((prev) => ({ ...prev, organizationId: nextOrg }))
+      setCsvOrganizationId(nextOrg)
+    }
+  }, [])
 
   // Product form data
-  const [productData, setProductData] = useState({
-    productCode: "",
-    name: "",
-    description: "",
-    categoryId: "",
-    imageUrl: "",
-    basePrice: "",
-    unit: "unit",
-    status: "active",
-  })
+  const router = useRouter()
 
   // Fetch data
   const { data: products, error: productsError, isLoading: productsLoading, mutate: mutateProducts } = useSWR<{
@@ -154,6 +225,14 @@ export default function GlobalInventoryPage() {
       totalPages: number
     }
   }>(`/api/v1/admin/global-inventory?search=${searchQuery}&status=${statusFilter}`, fetcher)
+
+  // Fetch categories (parent categories)
+  const { data: categoriesData, isLoading: categoriesLoading, error: categoriesError } = useSWR<{ items: Category[] }>(
+    `/api/v1/categories?type=parent`,
+    fetcher,
+    { fallbackData: { items: [] }, revalidateOnFocus: false }
+  )
+  const categories = categoriesData?.items || []
 
   const { data: orgsData, error: orgsError, isLoading: orgsLoading, mutate: mutateOrgs } = useSWR<{ items: Organization[] }>("/api/v1/organizations", fetcher, {
     fallbackData: { items: [] },
@@ -206,6 +285,33 @@ export default function GlobalInventoryPage() {
     return assignments.items.filter(a => a.isActive).length
   }, [assignments?.items])
 
+  const selectedOrgAssignments = useMemo(() => {
+    if (!assignments?.items || !assignmentData.organizationId) return []
+    const orgId = parseInt(assignmentData.organizationId)
+    if (!Number.isFinite(orgId)) return []
+    return assignments.items.filter((assignment) => assignment.organizationId === orgId)
+  }, [assignments?.items, assignmentData.organizationId])
+
+  const selectedOrg = useMemo(() => {
+    if (!assignmentData.organizationId) return null
+    return organizations.find((org) => String(org.id) === assignmentData.organizationId) || null
+  }, [assignmentData.organizationId, organizations])
+
+  const selectedOrgActiveAssignments = useMemo(() => {
+    return selectedOrgAssignments.filter((assignment) => assignment.isActive).length
+  }, [selectedOrgAssignments])
+
+  const selectedOrgCustomPriceCount = useMemo(() => {
+    return selectedOrgAssignments.filter((assignment) => assignment.customPrice).length
+  }, [selectedOrgAssignments])
+
+  const visibleAssignments = useMemo(() => {
+    if (assignmentData.organizationId) {
+      return selectedOrgAssignments
+    }
+    return assignments?.items || []
+  }, [assignmentData.organizationId, assignments?.items, selectedOrgAssignments])
+
   // Get assigned product IDs for the selected organization
   const getAssignedProductIds = useMemo(() => {
     if (!assignments?.items || !assignmentData.organizationId) return new Set<number>()
@@ -253,90 +359,15 @@ export default function GlobalInventoryPage() {
   const hasPrevPage = currentPage > 1
 
   const handleAddProduct = () => {
-    setProductData({
-      productCode: "",
-      name: "",
-      description: "",
-      categoryId: "",
-      imageUrl: "",
-      basePrice: "",
-      unit: "unit",
-      status: "active",
-    })
-    setEditingProduct(null)
-    setShowAddDialog(true)
+    router.push("/global-inventory/new")
   }
 
-  const handleEditProduct = (product: GlobalProduct) => {
-    setProductData({
-      productCode: product.productCode,
-      name: product.name,
-      description: product.description || "",
-      categoryId: product.categoryId?.toString() || "",
-      imageUrl: product.imageUrl || "",
-      basePrice: (product.basePrice / 100).toFixed(2),
-      unit: product.unit,
-      status: product.status,
-    })
-    setEditingProduct(product)
-    setShowAddDialog(true)
-  }
-
-  const handleSubmitProduct = async () => {
-    if (!productData.productCode || !productData.name || !productData.basePrice) {
-      toast({
-        title: "Validation Error",
-        description: "Product code, name, and base price are required",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      const url = editingProduct 
-        ? `/api/v1/admin/global-inventory` 
-        : `/api/v1/admin/global-inventory`
-      
-      const method = editingProduct ? "PUT" : "POST"
-      
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...productData,
-          id: editingProduct?.id,
-          basePrice: parseFloat(productData.basePrice),
-        }),
-      })
-
-      const result = await response.json()
-
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: result.message,
-        })
-        setShowAddDialog(false)
-        mutateProducts()
-      } else {
-        toast({
-          title: "Error",
-          description: result.error || "Failed to save product",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      console.error("Error saving product:", error)
-      toast({
-        title: "Error",
-        description: "Failed to save product",
-        variant: "destructive",
-      })
-    }
+  const handleEditProductNavigation = (productId: number) => {
+    router.push(`/global-inventory/${productId}/edit`)
   }
 
   const handleDeleteProduct = async (productId: number) => {
-    const product = products?.find(p => p.id === productId)
+    const product = products?.items?.find((p: GlobalProduct) => p.id === productId)
     if (!product) return
 
     // Show cascade impact preview
@@ -384,15 +415,64 @@ export default function GlobalInventoryPage() {
     }
   }
 
+  const handleRemoveAssignment = async (assignmentId: number) => {
+    try {
+      const response = await fetch(`/api/v1/admin/organization-assignments?id=${assignmentId}`, {
+        method: "DELETE",
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to remove assignment")
+      }
+      toast({
+        title: "Assignment removed",
+        description: result.message || "Product removed from organization catalog.",
+      })
+      mutateAssignments()
+      mutateProducts()
+    } catch (error: any) {
+      toast({
+        title: "Removal failed",
+        description: error.message || "Could not remove assignment",
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleAssignment = (product: GlobalProduct) => {
       setAssignmentData({
       productIds: [product.id],
       organizationId: organizationId ? organizationId.toString() : "",
       isActive: true,
       customName: product.name,
+      customPrice: "",
       customDescription: product.description || "",
+      customImageUrl: "",
     })
     setShowOnlyUnassigned(true) // Default to showing only unassigned
+    setShowAssignmentDialog(true)
+  }
+
+  const handleEditAssignment = (assignment: OrganizationAssignment) => {
+    setAssignmentData({
+      productIds: [assignment.globalProductId],
+      organizationId: String(assignment.organizationId),
+      isActive: assignment.isActive,
+      customName: assignment.customName || "",
+      customPrice: assignment.customPrice ? (assignment.customPrice / 100).toString() : "",
+      customDescription: assignment.customDescription || "",
+      customImageUrl: assignment.customImageUrl || "",
+    })
+    setPerProductOverrides(
+      assignment.customPrice
+        ? {
+            [assignment.globalProductId]: {
+              customPrice: (assignment.customPrice / 100).toString(),
+            },
+          }
+        : {}
+    )
+    setShowOnlyUnassigned(false)
     setShowAssignmentDialog(true)
   }
 
@@ -409,14 +489,84 @@ export default function GlobalInventoryPage() {
       productIds: selectedProducts,
       organizationId: organizationId ? organizationId.toString() : "",
       isActive: true,
-        customName: "",
+      customName: "",
       customPrice: "",
-        customDescription: "",
-      })
+      customDescription: "",
+      customImageUrl: "",
+    })
     setShowOnlyUnassigned(true) // Default to showing only unassigned
     setProductSearchQuery("") // Reset search
     setCurrentPage(1) // Reset to first page
     setShowAssignmentDialog(true)
+  }
+
+  const handleCsvUpload = async () => {
+    if (!csvFile || !csvOrganizationId) {
+      toast({
+        title: "Missing information",
+        description: "Select an organization and upload a CSV file.",
+        variant: "destructive",
+      })
+      return
+    }
+    setIsUploadingCsv(true)
+    setCsvErrors([])
+    setCsvResult(null)
+    try {
+      const formData = new FormData()
+      formData.append("file", csvFile)
+      formData.append("organizationId", csvOrganizationId)
+      const response = await fetch("/api/v1/admin/organization-assignments/import", {
+        method: "POST",
+        body: formData,
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw result
+      }
+      setCsvResult({
+        message: result.message,
+        imported: result.imported,
+        skippedExisting: result.skippedExisting,
+      })
+      setCsvErrors(result.parsingErrors || [])
+      toast({
+        title: "CSV imported",
+        description: result.message,
+      })
+      mutateAssignments()
+      mutateProducts()
+    } catch (error: any) {
+      setCsvErrors(error?.parsingErrors || [error?.error || "Failed to import CSV"])
+      toast({
+        title: "Import failed",
+        description: error?.error || "Could not process CSV file",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUploadingCsv(false)
+    }
+  }
+
+  const handleDownloadTemplate = () => {
+    const csvContent = `productCode,customPrice,customName,customDescription,isActive
+PRD-001,1200,Custom Label,Optional description,true`
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "organization-assignment-template.csv"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handlePerProductPriceChange = (productId: number, value: string) => {
+    setPerProductOverrides((prev) => ({
+      ...prev,
+      [productId]: { customPrice: value },
+    }))
   }
 
   // Pagination handlers
@@ -468,14 +618,30 @@ export default function GlobalInventoryPage() {
     }
 
     try {
-      const requestBody = {
-          productIds: assignmentData.productIds,
-          organizationId: assignmentData.organizationId,
-          isActive: assignmentData.isActive,
+      const assignmentsPayload = assignmentData.productIds.map((productId) => {
+        const override = perProductOverrides[productId]
+        const priceInput =
+          override && override.customPrice !== undefined && override.customPrice !== ""
+            ? parseFloat(override.customPrice)
+            : assignmentData.customPrice
+            ? parseFloat(assignmentData.customPrice)
+            : null
+        return {
+          productId,
+          customPrice: priceInput,
           customName: assignmentData.customName || null,
-          customPrice: assignmentData.customPrice ? parseFloat(assignmentData.customPrice) : null,
           customDescription: assignmentData.customDescription || null,
           customImageUrl: assignmentData.customImageUrl || null,
+          isActive: assignmentData.isActive,
+        }
+      })
+      const requestBody = {
+        organizationId: assignmentData.organizationId,
+        isActive: assignmentData.isActive,
+        assignments: assignmentsPayload,
+        customName: assignmentData.customName || null,
+        customDescription: assignmentData.customDescription || null,
+        customImageUrl: assignmentData.customImageUrl || null,
       }
       
       console.log("Sending assignment request:", requestBody)
@@ -511,7 +677,9 @@ export default function GlobalInventoryPage() {
           customName: "",
           customPrice: "",
           customDescription: "",
+          customImageUrl: "",
         })
+        setPerProductOverrides({})
       mutateAssignments()
         mutateProducts()
       } else {
@@ -559,57 +727,90 @@ export default function GlobalInventoryPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        title="Global Inventory Management"
-        subtitle="Manage global products and assign them to organizations"
-      />
+    <div className="space-y-8">
+      <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-purple-900 to-indigo-800 text-white shadow-xl">
+        <div className="pointer-events-none absolute inset-0 opacity-30">
+          <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-indigo-400/40 blur-3xl" />
+        </div>
+        <CardHeader className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-3">
+            <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-white/70">
+              <Sparkles className="h-4 w-4" />
+              Global Catalog
+            </p>
+            <CardTitle className="text-3xl font-semibold text-white">Inventory assignment control</CardTitle>
+            <p className="text-sm text-white/80">
+              Approve products once, assign them everywhere. Select an organization context below to stage custom prices,
+              bulk uploads, and CSV-based distributions.
+            </p>
+          </div>
+          <div className="rounded-full bg-white/15 px-4 py-2 text-xs uppercase tracking-wide text-white">
+            {totalProducts} products • {totalAssignments} assignments
+          </div>
+        </CardHeader>
+      </Card>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Products</p>
-              <p className="text-2xl font-bold">{totalProducts}</p>
-            </div>
-            <Package className="h-8 w-8 text-blue-600" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Organizations</p>
-              <p className="text-2xl font-bold">{totalOrganizations}</p>
-            </div>
-            <Building2 className="h-8 w-8 text-green-600" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Assignments</p>
-              <p className="text-2xl font-bold">{totalAssignments}</p>
-            </div>
-            <Share2 className="h-8 w-8 text-purple-600" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Active Assignments</p>
-              <p className="text-2xl font-bold">{activeAssignments}</p>
-            </div>
-            <Check className="h-8 w-8 text-green-600" />
-          </div>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <SummaryTile label="Global products" value={totalProducts} helper="In master catalog" accent="from-indigo-500 to-sky-500" />
+        <SummaryTile label="Organizations" value={totalOrganizations} helper="Ready for assignment" accent="from-emerald-500 to-lime-500" />
+        <SummaryTile label="Assignments" value={totalAssignments} helper="Across all orgs" accent="from-blue-500 to-cyan-500" />
+        <SummaryTile label="Active assignments" value={activeAssignments} helper="Currently live" accent="from-rose-500 to-orange-500" />
       </div>
 
-      {/* Main Content Tabs */}
+      <Card className="border-none shadow-md">
+        <CardHeader>
+          <CardTitle className="text-xl">Assignment workspace</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Use the context selector to focus on an organization, then bulk assign via quick actions or CSV upload.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <LocalContextSelectors onChange={handleLocalContextChange} />
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              {selectedOrg ? (
+                <>
+                  <Badge variant="secondary">Context: {selectedOrg.name}</Badge>
+                  <Badge variant="outline">
+                    Assigned {selectedOrgAssignments.length} • Active {selectedOrgActiveAssignments}
+                  </Badge>
+                  <Badge variant="outline">Custom pricing {selectedOrgCustomPriceCount}</Badge>
+                </>
+              ) : (
+                <Badge variant="secondary">Select an organization to manage assignments</Badge>
+              )}
+              {selectedProducts.length > 0 && (
+                <Badge variant="outline" className="border-dashed">
+                  {selectedProducts.length} product{selectedProducts.length === 1 ? "" : "s"} selected
+                </Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={handleBulkAssignment}
+                disabled={!assignmentData.organizationId || selectedProducts.length === 0}
+              >
+                <Share2 className="mr-2 h-4 w-4" />
+                Assign selected
+              </Button>
+              <Button variant="outline" onClick={() => setShowCsvDialog(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                Upload CSV
+              </Button>
+              <Button variant="ghost" onClick={handleDownloadTemplate}>
+                <Download className="mr-2 h-4 w-4" />
+                Template
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="products">Global Products</TabsTrigger>
-          <TabsTrigger value="assignments">Organization Assignments</TabsTrigger>
+          <TabsTrigger value="products">Global catalog</TabsTrigger>
+          <TabsTrigger value="assignments">Organization inventory</TabsTrigger>
         </TabsList>
 
         {/* Global Products Tab */}
@@ -636,16 +837,10 @@ export default function GlobalInventoryPage() {
               </select>
             </div>
             <div className="flex items-center gap-2">
-              {selectedProducts.length > 0 && (
-                <Button onClick={handleBulkAssignment}>
-                  <Share2 size={16} className="mr-2" />
-                  Assign Selected ({selectedProducts.length})
-                </Button>
-              )}
               <Button onClick={handleAddProduct}>
-                  <Plus size={16} className="mr-2" />
-                  Add Product
-                </Button>
+                <Plus size={16} className="mr-2" />
+                Add Product
+              </Button>
             </div>
           </div>
 
@@ -725,7 +920,7 @@ export default function GlobalInventoryPage() {
                           {product.categoryName || "No Category"}
                         </Badge>
                       </td>
-                      <td className="p-4 text-sm">${(product.basePrice / 100).toFixed(2)}</td>
+                      <td className="p-4 text-sm">{formatPKR(product.basePrice / 100)}</td>
                       <td className="p-4 text-sm">{product.unit}</td>
                       <td className="p-4">
                         <Badge
@@ -745,7 +940,7 @@ export default function GlobalInventoryPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleEditProduct(product)}
+                            onClick={() => handleEditProductNavigation(product.id)}
                           >
                               <Edit size={14} />
                             </Button>
@@ -776,7 +971,14 @@ export default function GlobalInventoryPage() {
         {/* Organization Assignments Tab */}
         <TabsContent value="assignments" className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Organization Assignments</h3>
+            <div>
+              <h3 className="text-lg font-semibold">Organization inventory</h3>
+              <p className="text-sm text-muted-foreground">
+                {selectedOrg
+                  ? `Showing catalog for ${selectedOrg.name}`
+                  : "Select an organization in the workspace to filter assignments."}
+              </p>
+            </div>
           </div>
 
           <Card>
@@ -788,7 +990,7 @@ export default function GlobalInventoryPage() {
                   <th className="text-left p-4 font-medium">Status</th>
                   <th className="text-left p-4 font-medium">Custom Name</th>
                   <th className="text-left p-4 font-medium">Custom Price</th>
-                  <th className="text-left p-4 font-medium">Assigned Date</th>
+                  <th className="text-left p-4 font-medium">Assigned</th>
                   <th className="text-right p-4 font-medium">Actions</th>
                 </tr>
               </thead>
@@ -799,14 +1001,16 @@ export default function GlobalInventoryPage() {
                       Loading assignments...
                     </td>
                   </tr>
-                ) : assignments?.items?.length === 0 ? (
+                ) : visibleAssignments.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="p-8 text-center text-gray-500">
-                      No assignments found
+                      {assignmentData.organizationId
+                        ? "No products assigned to this organization yet."
+                        : "No assignments found."}
                     </td>
                   </tr>
                 ) : (
-                  assignments?.items?.map(assignment => (
+                  visibleAssignments.map((assignment) => (
                     <tr key={assignment.id} className="hover:bg-gray-50">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
@@ -822,7 +1026,7 @@ export default function GlobalInventoryPage() {
                             </div>
                           )}
                           <div>
-                        <div className="font-medium">{assignment.productName}</div>
+                            <div className="font-medium">{assignment.productName}</div>
                             <div className="text-xs text-gray-500">{assignment.productCode}</div>
                           </div>
                         </div>
@@ -843,7 +1047,7 @@ export default function GlobalInventoryPage() {
                       </td>
                       <td className="p-4">
                         <div className="text-sm">
-                          {assignment.customPrice ? `$${(assignment.customPrice / 100).toFixed(2)}` : "-"}
+                          {assignment.customPrice ? formatPKR(assignment.customPrice / 100) : "-"}
                         </div>
                       </td>
                       <td className="p-4">
@@ -853,13 +1057,10 @@ export default function GlobalInventoryPage() {
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex items-center gap-2 justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              // Handle remove assignment
-                            }}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => handleEditAssignment(assignment)}>
+                            <Edit size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleRemoveAssignment(assignment.id)}>
                             <X size={14} />
                           </Button>
                         </div>
@@ -873,114 +1074,103 @@ export default function GlobalInventoryPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Add/Edit Product Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={() => setShowAddDialog(false)}>
-        <DialogContent className="max-w-2xl">
+      {/* CSV Import Dialog */}
+      <Dialog
+        open={showCsvDialog}
+        onOpenChange={(open) => {
+          setShowCsvDialog(open)
+          if (!open) {
+            setCsvFile(null)
+            setCsvResult(null)
+            setCsvErrors([])
+            setCsvOrganizationId("")
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>{editingProduct ? "Edit Product" : "Add New Product"}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Bulk assign via CSV
+            </DialogTitle>
             <DialogDescription>
-              {editingProduct ? "Update product information" : "Create a new global product"}
+              Upload a CSV file containing product codes and optional custom pricing to assign products instantly.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-            <div>
-                <label className="block text-sm font-medium mb-2">Product Code *</label>
-                <Input
-                  value={productData.productCode}
-                  onChange={(e) => setProductData({ ...productData, productCode: e.target.value })}
-                  placeholder="PRD-001"
-                required
-                />
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Target Organization</label>
+              <select
+                value={csvOrganizationId}
+                onChange={(e) => setCsvOrganizationId(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Select organization</option>
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                  </option>
+                ))}
+              </select>
             </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Name *</label>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">CSV File</label>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Input
-                  value={productData.name}
-                  onChange={(e) => setProductData({ ...productData, name: e.target.value })}
-                  placeholder="Product Name"
-                  required
+                  type="file"
+                  accept=".csv"
+                  onChange={(event) => setCsvFile(event.target.files?.[0] || null)}
                 />
-                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={handleDownloadTemplate}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download template
+                </Button>
               </div>
-
-              <div>
-              <label className="block text-sm font-medium mb-2">Description</label>
-              <textarea
-                value={productData.description}
-                onChange={(e) => setProductData({ ...productData, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                rows={3}
-                placeholder="Product description"
-                />
-              </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Base Price *</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={productData.basePrice}
-                  onChange={(e) => setProductData({ ...productData, basePrice: e.target.value })}
-                  placeholder="0.00"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Unit</label>
-                <Input
-                  value={productData.unit}
-                  onChange={(e) => setProductData({ ...productData, unit: e.target.value })}
-                  placeholder="unit"
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Required column: <code>productCode</code>. Optional: <code>customPrice</code>, <code>customName</code>,
+                <code>customDescription</code>, <code>isActive</code>.
+              </p>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-            <div>
-                <label className="block text-sm font-medium mb-2">Category ID</label>
-              <Input
-                  value={productData.categoryId}
-                  onChange={(e) => setProductData({ ...productData, categoryId: e.target.value })}
-                  placeholder="1"
-                />
+            {csvResult && (
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                <p className="font-medium text-foreground">{csvResult.message}</p>
+                <p className="text-xs text-muted-foreground">
+                  Imported {csvResult.imported} product(s), skipped {csvResult.skippedExisting} already assigned.
+                </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Status</label>
-                <select
-                  value={productData.status}
-                  onChange={(e) => setProductData({ ...productData, status: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
+            )}
+            {csvErrors.length > 0 && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                <p className="font-semibold">Import warnings</p>
+                <ul className="mt-2 space-y-1 text-xs">
+                  {csvErrors.map((err, idx) => (
+                    <li key={idx}>• {err}</li>
+                  ))}
+                </ul>
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Image URL</label>
-              <Input
-                value={productData.imageUrl}
-                onChange={(e) => setProductData({ ...productData, imageUrl: e.target.value })}
-                placeholder="https://example.com/image.jpg"
-              />
-            </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddDialog(false)}>
+            <Button variant="outline" onClick={() => setShowCsvDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmitProduct}>
-              {editingProduct ? "Update Product" : "Create Product"}
+            <Button onClick={handleCsvUpload} disabled={!csvFile || !csvOrganizationId || isUploadingCsv}>
+              {isUploadingCsv ? "Importing..." : "Upload CSV"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Assignment Dialog */}
-      <Dialog open={showAssignmentDialog} onOpenChange={() => setShowAssignmentDialog(false)}>
+      <Dialog
+        open={showAssignmentDialog}
+        onOpenChange={(open) => {
+          setShowAssignmentDialog(open)
+          if (!open) {
+            setPerProductOverrides({})
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
              <DialogTitle className="flex items-center gap-2">
@@ -1143,7 +1333,7 @@ export default function GlobalInventoryPage() {
                                       )}
                                     </div>
                                     <div className="text-xs text-gray-500">
-                                      {product.productCode} • ${(product.basePrice / 100).toFixed(2)}
+                                      {product.productCode} • {formatPKR(product.basePrice / 100)}
                                     </div>
                                   </div>
                                 </div>
@@ -1205,16 +1395,31 @@ export default function GlobalInventoryPage() {
                           const product = products?.items?.find(p => p.id === productId)
                           const isAssigned = assignmentData.organizationId ? getAssignedProductIds.has(productId) : false
                           return product ? (
-                            <div key={productId} className="flex items-center justify-between p-2 bg-white rounded border">
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm truncate">{product.name}</div>
-                                <div className="text-xs text-gray-500">{product.productCode}</div>
+                            <div key={productId} className="space-y-2 rounded border bg-white p-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-sm truncate">{product.name}</div>
+                                  <div className="text-xs text-gray-500">{product.productCode}</div>
+                                </div>
+                                {isAssigned && (
+                                  <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
+                                    Already Assigned
+                                  </span>
+                                )}
                               </div>
-                              {isAssigned && (
-                                <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
-                                  Already Assigned
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={perProductOverrides[productId]?.customPrice ?? ""}
+                                  onChange={(e) => handlePerProductPriceChange(productId, e.target.value)}
+                                  placeholder="Custom price (PKR)"
+                                  className="text-sm"
+                                />
+                                <span className="text-xs text-gray-500">
+                                  Default {formatPKR(product.basePrice / 100)}
                                 </span>
-                              )}
+                              </div>
                             </div>
                           ) : null
                         })}

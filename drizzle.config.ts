@@ -1,20 +1,17 @@
-import dotenv from "dotenv"
-import { existsSync } from "node:fs"
-import { resolve } from "node:path"
+import { defineConfig } from "drizzle-kit";
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
 
-const envPath = existsSync(resolve(process.cwd(), ".env.local"))
-  ? resolve(process.cwd(), ".env.local")
-  : resolve(process.cwd(), ".env")
-dotenv.config({ path: envPath })
-import type { Config } from "drizzle-kit"
-
-export default {
+export default defineConfig({
   schema: "./db/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL || "",
+    url: process.env.DATABASE_URL!,
   },
-  strict: true,
   verbose: true,
-} satisfies Config
+  strict: true,
+  migrations: {
+    prefix: "timestamp",
+  },
+});

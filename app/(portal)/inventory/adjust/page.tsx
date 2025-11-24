@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
 export default function AdjustInventoryPage() {
-  const [form, setForm] = useState({ organizationId: "", branchId: "", warehouseId: "", note: "", items: [{ sku: "", name: "", quantity: 0, unit: "pcs" }] })
+  const [form, setForm] = useState({ organizationId: "", branchId: "", note: "", items: [{ sku: "", name: "", quantity: 0, unit: "pcs" }] })
   const [saving, setSaving] = useState(false)
   function setItem(idx: number, field: string, value: any) {
     const items = [...form.items]
@@ -24,10 +24,9 @@ export default function AdjustInventoryPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Adjust Inventory</h1>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="grid gap-1"><label className="text-sm">Organization Id</label><Input value={form.organizationId} onChange={(e) => setForm({ ...form, organizationId: e.target.value })} /></div>
         <div className="grid gap-1"><label className="text-sm">Branch Id</label><Input value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })} /></div>
-        <div className="grid gap-1"><label className="text-sm">Warehouse Id</label><Input value={form.warehouseId} onChange={(e) => setForm({ ...form, warehouseId: e.target.value })} /></div>
       </div>
       <div className="grid gap-2">
         <div className="text-sm font-medium">Items</div>

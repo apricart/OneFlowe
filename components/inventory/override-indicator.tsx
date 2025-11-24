@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { Edit3, Globe } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, formatPKR } from "@/lib/utils"
 
 interface OverrideIndicatorProps {
   field: "name" | "price" | "description" | "image"
@@ -23,7 +23,7 @@ export function OverrideIndicator({
     if (value === null || value === undefined) return "Not set"
     
     if (field === "price") {
-      return typeof value === "number" ? `$${(value / 100).toFixed(2)}` : value
+      return typeof value === "number" ? formatPKR(value / 100) : value
     }
     
     return value

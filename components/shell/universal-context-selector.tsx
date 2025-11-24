@@ -1,6 +1,6 @@
 "use client"
 
-import { Building2, Warehouse } from "lucide-react"
+import { Building2, GitBranch } from "lucide-react"
 import { useState, useMemo } from "react"
 import { useBranches, useOrganizations } from "@/lib/hooks/use-api"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -62,7 +62,7 @@ export function UniversalContextSelector() {
         </Select>
       </div>
       <div className="flex items-center gap-2 px-2 py-1 rounded-md border bg-card text-foreground">
-        <Warehouse size={16} className="opacity-70" />
+        <GitBranch size={16} className="opacity-70" />
         <Select
           value={branchId ?? undefined}
           onValueChange={(val) => {

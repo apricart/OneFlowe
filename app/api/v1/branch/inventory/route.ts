@@ -21,9 +21,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     
     // Allow BRANCH_ADMIN to access their own inventory
+    // Allow EMPLOYEE to access their assigned branch inventory
     // Allow HEAD_OFFICE and SUPER_ADMIN to access if they provide branchId param
-    if (userRole === "BRANCH_ADMIN") {
-      // BRANCH_ADMIN uses their own branch
+    if (userRole === "BRANCH_ADMIN" || userRole === "EMPLOYEE") {
+      // BRANCH_ADMIN and EMPLOYEE use their own branch
       if (!organizationId || !branchId) {
         return NextResponse.json({ error: "Organization or branch not found in session" }, { status: 400 })
       }
@@ -146,16 +147,20 @@ export async function PUT(req: NextRequest) {
     }
 
     const userRole = (session.user as any).role
-    if (userRole !== "BRANCH_ADMIN") {
-      return NextResponse.json({ error: "Forbidden - Branch Admin access required" }, { status: 403 })
+    if (userRole !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden - Super Admin access required" }, { status: 403 })
     }
 
-    const organizationId = (session.user as any).organizationId
-    const branchId = (session.user as any).branchId
-    
-    if (!organizationId || !branchId) {
-      return NextResponse.json({ error: "Organization or branch not found in session" }, { status: 400 })
+    const { searchParams } = new URL(req.url)
+    const organizationIdParam = searchParams.get("organizationId")
+    const branchIdParam = searchParams.get("branchId")
+
+    if (!organizationIdParam || !branchIdParam) {
+      return NextResponse.json({ error: "organizationId and branchId query params are required" }, { status: 400 })
     }
+
+    const organizationId = parseInt(organizationIdParam)
+    const branchId = parseInt(branchIdParam)
 
     const body = await req.json()
     const {

@@ -2,6 +2,7 @@ import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { db } from "@/lib/db"
 import { branches } from "@/db/schema"
 import { eq } from "drizzle-orm"
+import { getRequestScope } from "@/lib/auth"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
@@ -13,12 +14,25 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const err = await requireApiRole(["SUPER_ADMIN"])
+  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
   if (err) return err
   const body = await readJson<any>(req)
   if (!body) return error("Invalid body", 400)
   try {
     const { id } = await params
+
+    const scope = await getRequestScope()
+    if (scope?.role === "HEAD_OFFICE") {
+      const [branch] = await db
+        .select({ organizationId: branches.organizationId })
+        .from(branches)
+        .where(eq(branches.id, Number(id)))
+      if (!branch) return error("Not found", 404)
+      if (!scope.organizationId || scope.organizationId !== branch.organizationId) {
+        return error("Forbidden", 403)
+      }
+    }
+
     const patch: any = {}
     if (body.name) patch.name = String(body.name)
     if (body.code) patch.code = String(body.code)
