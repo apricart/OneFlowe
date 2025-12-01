@@ -1,27 +1,79 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { SectionHeader } from "@/components/ui/section-header"
 import { MFASettings } from "@/components/mfa/mfa-settings"
 import { useSession } from "next-auth/react"
-import { Settings, User, Shield, Bell } from "lucide-react"
+import { Settings, User, Shield, Bell, Building2, GitBranch, Mail, Clock3 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 export default function SettingsPage() {
   const { data: session } = useSession()
   const userEmail = (session?.user as any)?.email
 
+  const heroStats = [
+    {
+      label: "Role",
+      value: ((session?.user as any)?.role || "N/A").toString().replace(/_/g, " "),
+      icon: Shield,
+      gradient: "from-sky-400 to-indigo-500",
+      sub: "Current permissions",
+    },
+    {
+      label: "Organization",
+      value: (session?.user as any)?.organizationName || "Unassigned",
+      icon: Building2,
+      gradient: "from-purple-400 to-fuchsia-500",
+      sub: "Primary org",
+    },
+    {
+      label: "Branch",
+      value: (session?.user as any)?.branchName || "All branches",
+      icon: GitBranch,
+      gradient: "from-emerald-400 to-teal-500",
+      sub: "Active branch context",
+    },
+    {
+      label: "Last login",
+      value: new Date().toLocaleDateString(),
+      icon: Clock3,
+      gradient: "from-amber-400 to-orange-500",
+      sub: new Date().toLocaleTimeString(),
+    },
+  ]
+
   return (
     <div className="space-y-6 p-6">
-      <SectionHeader
-        title="Settings"
-        subtitle="Manage your account settings and preferences"
-        actions={
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Settings className="h-4 w-4" />
-            Account Settings
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#121F6F] via-[#2C3AD1] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs tracking-[0.2em] text-white/70">HEAD OFFICE · ACCOUNT</p>
+            <h1 className="text-3xl font-semibold">Preferences & security</h1>
+            <p className="text-sm text-white/80">
+              Review your profile, MFA, and notifications to keep your workspace secure.
+            </p>
           </div>
-        }
-      />
+          <Button variant="secondary" size="sm" className="gap-2 bg-white/15 text-white hover:bg-white/25 border-0">
+            <Settings className="h-4 w-4" />
+            Refresh data
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {heroStats.map((stat) => {
+          const Icon = stat.icon
+          return (
+            <Card key={stat.label} className="rounded-2xl border-0 p-4 shadow-md">
+              <div className={`mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${stat.gradient} text-white shadow-inner`}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{stat.label}</p>
+              <p className="text-2xl font-semibold text-slate-900 capitalize">{stat.value}</p>
+              <p className="text-sm text-muted-foreground">{stat.sub}</p>
+            </Card>
+          )
+        })}
+      </div>
 
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -46,9 +98,10 @@ export default function SettingsPage() {
               </div>
               <div>
                 <label className="text-sm font-medium">Email Address</label>
-                <p className="text-sm text-muted-foreground">
-                  {userEmail || "N/A"}
-                </p>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-4 w-4" />
+                  <span>{userEmail || "N/A"}</span>
+                </div>
               </div>
               <div>
                 <label className="text-sm font-medium">Role</label>

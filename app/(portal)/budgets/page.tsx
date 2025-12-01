@@ -8,9 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
-import { SectionHeader } from "@/components/ui/section-header"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Wallet, AlertCircle, Edit2, Zap, PieChart, Calendar, CheckCircle2, Clock, AlertTriangle } from "lucide-react"
+import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -160,38 +159,62 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        title="Monthly Budget Allocation"
-        subtitle={`Manage and allocate monthly budgets for all branches - ${currentMonth}`}
-        actions={
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            Financial Control
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0A1C92] via-[#2F2CC9] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs tracking-[0.2em] text-white/70">HEAD OFFICE · FINANCE</p>
+            <h1 className="text-3xl font-semibold">Budget intelligence overview</h1>
+            <p className="text-sm text-white/80">
+              Manage {currentMonth} allocations, holds, and spending health for every branch.
+            </p>
           </div>
-        }
-      />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              className="gap-2 bg-white/15 text-white hover:bg-white/25 border-0"
+              onClick={() => mutate()}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh data
+            </Button>
+            {/* <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="gap-2 bg-white text-indigo-600 hover:bg-slate-100"
+              onClick={() => setShowBulkDialog(true)}
+            >
+              <Zap className="h-4 w-4" />
+              Allocate all
+            </Button> */}
+            <div className="rounded-full bg-white/20 px-4 py-2 text-sm font-semibold">
+              {budgets.length} branches
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-        <Card className="p-4">
-          <p className="text-xs font-medium text-muted-foreground">Total Allocated</p>
-          <p className="text-2xl font-bold text-blue-600">{formatAmount(totalAllocated)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium text-muted-foreground">Total Spent</p>
-          <p className="text-2xl font-bold text-orange-600">{formatAmount(totalSpent)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium text-muted-foreground">On Hold</p>
-          <p className="text-2xl font-bold text-yellow-600">{formatAmount(totalHeld)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium text-muted-foreground">Remaining</p>
-          <p className="text-2xl font-bold text-green-600">{formatAmount(totalRemaining)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs font-medium text-muted-foreground">Avg per Branch</p>
-          <p className="text-2xl font-bold text-slate-600">{formatAmount(avgBudget)}</p>
-        </Card>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {[
+          { label: "Total allocated", value: formatAmount(totalAllocated), icon: Wallet, gradient: "from-indigo-500 to-purple-500", sub: currentMonth },
+          { label: "Total spent", value: formatAmount(totalSpent), icon: PieChart, gradient: "from-orange-400 to-pink-500", sub: "Across branches" },
+          { label: "On hold", value: formatAmount(totalHeld), icon: AlertTriangle, gradient: "from-amber-400 to-yellow-500", sub: "Pending fulfillment" },
+          { label: "Remaining", value: formatAmount(totalRemaining), icon: CheckCircle2, gradient: "from-emerald-400 to-teal-500", sub: "Available balance" },
+          { label: "Avg per branch", value: formatAmount(avgBudget), icon: Zap, gradient: "from-slate-400 to-slate-600", sub: `${budgets.length || 0} branches` },
+        ].map((metric) => {
+          const Icon = metric.icon
+          return (
+            <Card key={metric.label} className="p-4 rounded-2xl border-0 shadow-md">
+              <div className={`mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${metric.gradient} text-white shadow-inner`}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{metric.label}</p>
+              <p className="text-2xl font-bold text-slate-900">{metric.value}</p>
+              <p className="text-xs text-muted-foreground">{metric.sub}</p>
+            </Card>
+          )
+        })}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

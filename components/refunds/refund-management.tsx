@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect } from "react"
+import React, { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,20 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/components/ui/use-toast"
-import { 
-  DollarSign, 
-  RefreshCw, 
-  AlertTriangle, 
-  CheckCircle, 
-  Clock,
-  User,
-  Calendar,
-  FileText,
-  Plus,
-  Eye
-} from "lucide-react"
+import { DollarSign, RefreshCw, AlertTriangle, Clock, User, Plus, Check, ArrowDownToLine } from "lucide-react"
 import useSWR from "swr"
 import { formatPKR } from "@/lib/utils"
+import { Progress } from "@/components/ui/progress"
 
 interface Refund {
   id: number
@@ -55,7 +45,6 @@ export function RefundManagement({
 }: RefundManagementProps) {
   const { toast } = useToast()
   const [showRefundDialog, setShowRefundDialog] = useState(false)
-  const [showRefundHistory, setShowRefundHistory] = useState(false)
   const [refundAmount, setRefundAmount] = useState("")
   const [refundReason, setRefundReason] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
@@ -70,6 +59,17 @@ export function RefundManagement({
   const totalRefundedCents = refunds.reduce((sum, refund) => sum + refund.amountCents, 0)
   const remainingAmountCents = orderTotalCents - totalRefundedCents
   const canRefund = orderStatus === "fulfilled" && remainingAmountCents > 0
+  const refundedPercent = Math.min(100, Math.round((totalRefundedCents / orderTotalCents) * 100))
+
+  const refundState = useMemo(() => {
+    if (totalRefundedCents === 0) {
+      return { label: "No refunds processed", tone: "text-slate-600", badge: "Pending" }
+    }
+    if (remainingAmountCents > 0) {
+      return { label: "Partially refunded", tone: "text-amber-600", badge: "In progress" }
+    }
+    return { label: "Fully refunded", tone: "text-emerald-600", badge: "Complete" }
+  }, [remainingAmountCents, totalRefundedCents])
 
   const handleRefund = async () => {
     if (!refundAmount || parseFloat(refundAmount) <= 0) {
@@ -136,24 +136,35 @@ export function RefundManagement({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-              <p className="text-sm text-muted-foreground">Order Total</p>
-              <p className="text-xl font-bold text-slate-900 dark:text-white">
-                {formatCurrency(orderTotalCents)}
-              </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3 rounded-2xl border bg-muted/30 p-4">
+              <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground">
+                <span>Order total</span>
+                <span>{formatCurrency(orderTotalCents)}</span>
+              </div>
+              <Progress value={refundedPercent} className="h-2" />
+              <div className="flex items-center justify-between text-sm">
+                <div>
+                  <p className="text-muted-foreground">Refunded</p>
+                  <p className="font-semibold text-emerald-600">{formatCurrency(totalRefundedCents)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-muted-foreground">Remaining</p>
+                  <p className="font-semibold text-amber-600">{formatCurrency(remainingAmountCents)}</p>
+                </div>
+              </div>
             </div>
-            <div className="text-center p-3 bg-red-50 dark:bg-red-950 rounded-lg">
-              <p className="text-sm text-red-600 dark:text-red-400">Total Refunded</p>
-              <p className="text-xl font-bold text-red-700 dark:text-red-300">
-                {formatCurrency(totalRefundedCents)}
-              </p>
-            </div>
-            <div className="text-center p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-              <p className="text-sm text-green-600 dark:text-green-400">Remaining</p>
-              <p className="text-xl font-bold text-green-700 dark:text-green-300">
-                {formatCurrency(remainingAmountCents)}
-              </p>
+            <div className="rounded-2xl border p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Refund status</p>
+                  <p className={`text-lg font-semibold ${refundState.tone}`}>{refundState.label}</p>
+                </div>
+                <Badge variant="outline" className="uppercase tracking-wide">{refundState.badge}</Badge>
+              </div>
+              <div className="mt-4 text-xs text-muted-foreground">
+                Head office can log refunds with internal notes for audit tracking.
+              </div>
             </div>
           </div>
 
@@ -171,24 +182,82 @@ export function RefundManagement({
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => setShowRefundDialog(true)}
               disabled={!canRefund}
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              Process Refund
+              Process refund
             </Button>
             <Button
-              onClick={() => setShowRefundHistory(true)}
-              variant="outline"
-              className="gap-2"
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-muted-foreground"
+              onClick={() => mutateRefunds()}
             >
-              <Eye className="h-4 w-4" />
-              View History
+              <RefreshCw className="h-4 w-4" />
+              Refresh log
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Refund Timeline */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Refund timeline</CardTitle>
+          <p className="text-sm text-muted-foreground">Track actions, notes, and processors in one view.</p>
+        </CardHeader>
+        <CardContent className="space-y-4 max-h-[360px] overflow-y-auto pr-1">
+          {refunds.length === 0 ? (
+            <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No refunds logged for this order yet.
+            </div>
+          ) : (
+            <ol className="space-y-4">
+              {refunds.map((refund, index) => {
+                const isLast = index === refunds.length - 1
+                return (
+                  <li key={refund.id} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600">
+                        <Check className="h-4 w-4" />
+                      </div>
+                      {!isLast && <div className="h-full w-px bg-border" />}
+                    </div>
+                    <div className="flex-1 rounded-2xl border p-4 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                            Processed
+                          </Badge>
+                          <p className="text-base font-semibold text-slate-900 dark:text-white">
+                            {formatCurrency(refund.amountCents)}
+                          </p>
+                        </div>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatDate(refund.createdAt)}
+                        </span>
+                      </div>
+                      {refund.reason && (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          <span className="font-medium text-slate-900 dark:text-white">Notes:</span> {refund.reason}
+                        </p>
+                      )}
+                      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                        <User className="h-3 w-3" />
+                        {refund.processedByUser.fullName || refund.processedByUser.email}
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          )}
         </CardContent>
       </Card>
 
@@ -225,12 +294,12 @@ export function RefundManagement({
             </div>
 
             <div>
-              <Label htmlFor="refundReason">Reason (Optional)</Label>
+              <Label htmlFor="refundReason">Internal notes</Label>
               <Textarea
                 id="refundReason"
                 value={refundReason}
                 onChange={(e) => setRefundReason(e.target.value)}
-                placeholder="Enter reason for refund..."
+                placeholder="Share context for finance & audit teams..."
                 className="min-h-20"
               />
             </div>
@@ -244,11 +313,7 @@ export function RefundManagement({
             >
               Cancel
             </Button>
-            <Button
-              onClick={handleRefund}
-              disabled={isProcessing || !refundAmount}
-              className="gap-2"
-            >
+            <Button onClick={handleRefund} disabled={isProcessing || !refundAmount} className="gap-2">
               {isProcessing ? (
                 <>
                   <RefreshCw className="h-4 w-4 animate-spin" />
@@ -256,72 +321,10 @@ export function RefundManagement({
                 </>
               ) : (
                 <>
-                  <DollarSign className="h-4 w-4" />
-                  Process Refund
+                  <ArrowDownToLine className="h-4 w-4" />
+                  Log refund
                 </>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Refund History Dialog */}
-      <Dialog open={showRefundHistory} onOpenChange={setShowRefundHistory}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Refund History</DialogTitle>
-            <DialogDescription>
-              All refunds processed for this order.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 max-h-96 overflow-y-auto">
-            {refunds.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No refunds processed yet</p>
-              </div>
-            ) : (
-              refunds.map((refund) => (
-                <Card key={refund.id} className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Refunded
-                        </Badge>
-                        <span className="text-lg font-bold text-slate-900 dark:text-white">
-                          {formatCurrency(refund.amountCents)}
-                        </span>
-                      </div>
-                      
-                      {refund.reason && (
-                        <p className="text-sm text-muted-foreground">
-                          <strong>Reason:</strong> {refund.reason}
-                        </p>
-                      )}
-                      
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          {refund.processedByUser.fullName || refund.processedByUser.email}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {formatDate(refund.createdAt)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              ))
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button onClick={() => setShowRefundHistory(false)}>
-              Close
             </Button>
           </DialogFooter>
         </DialogContent>

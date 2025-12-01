@@ -1,27 +1,17 @@
 "use client"
 import React, { useState, useMemo } from "react"
 import useSWR from "swr"
-import { useSession } from "next-auth/react"
 import { useToast } from "@/components/ui/use-toast"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
-import { 
-  Package, 
-  Search, 
-  Filter, 
-  CheckCircle, 
-  Clock, 
-  AlertTriangle, 
-  TrendingDown,
-  RefreshCw,
-  Check,
-  X,
-  Eye
-} from "lucide-react"
-import { RefundManagement } from "@/components/refunds/refund-management"
+import { Package, Search, Filter, CheckCircle, Clock, AlertTriangle, TrendingDown, RefreshCw, Check, X, Eye, ShieldCheck, ArchiveRestore } from "lucide-react"
+import { formatPKR } from "@/lib/utils"
+import { useAppContext } from "@/components/context/app-context"
+import Link from "next/link"
+import { getAutoApprovalCountdown } from "@/lib/order-utils"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -36,26 +26,32 @@ interface OrderItem {
   totalCents: number
   createdAt: string
   createdByUserId: string
-  branchName?: string
+  branchName?: string | null
 }
 
 export default function HeadOfficeOrdersPage() {
-  const { data: session } = useSession()
   const { toast } = useToast()
-  const userRole = (session?.user as any)?.role
+  const { organizationId, branchId, isInitialized } = useAppContext()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null)
-  const [showOrderDetail, setShowOrderDetail] = useState(false)
   const [showApprovalDialog, setShowApprovalDialog] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
 
-  // Fetch orders
+  const ordersEndpoint = useMemo(() => {
+    if (!isInitialized) return null
+    const params = new URLSearchParams()
+    if (organizationId) params.set("organizationId", organizationId)
+    if (branchId) params.set("branchId", branchId)
+    return `/api/v1/orders${params.toString() ? `?${params.toString()}` : ""}`
+  }, [organizationId, branchId, isInitialized])
+
+  // Fetch orders scoped by context
   const { data: ordersData, mutate: mutateOrders } = useSWR<any>(
-    "/api/v1/orders",
+    ordersEndpoint,
     fetcher
   )
 
@@ -146,34 +142,6 @@ export default function HeadOfficeOrdersPage() {
     }
   }
 
-  // Fulfill order
-  const handleFulfillOrder = async (orderId: number) => {
-    setIsProcessing(true)
-    try {
-      const res = await fetch("/api/v1/orders", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: orderId,
-          action: "fulfill"
-        })
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to fulfill order")
-      }
-
-      toast({ title: "Success", description: "Order fulfilled successfully" })
-      mutateOrders()
-      setSelectedOrder(null)
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" })
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
   const getStatusColor = (status: string) => {
     const colors: Record<string, { bg: string; text: string; icon: any }> = {
       pending: { bg: "bg-yellow-50 dark:bg-yellow-950", text: "text-yellow-700 dark:text-yellow-300", icon: Clock },
@@ -192,39 +160,105 @@ export default function HeadOfficeOrdersPage() {
     fulfilled: orders.filter((o: OrderItem) => o.status.toLowerCase() === "fulfilled").length,
   }
 
+  if (!isInitialized || !ordersEndpoint) {
+    return (
+      <div className="py-24 text-center text-muted-foreground">
+        Loading your context…
+      </div>
+    )
+  }
+
+  const scopeText = branchId
+    ? `Branch #${branchId}`
+    : organizationId
+    ? "Selected organization"
+    : "All organizations"
+
+  const statCards = [
+    {
+      label: "Total orders",
+      value: statusCounts.all,
+      sub: "Across selection",
+      icon: Package,
+      gradient: "from-indigo-500 to-purple-500",
+    },
+    {
+      label: "Pending review",
+      value: statusCounts.pending,
+      sub: "Auto-approval safety net",
+      icon: Clock,
+      gradient: "from-amber-400 to-orange-500",
+    },
+    {
+      label: "Approved",
+      value: statusCounts.approved,
+      sub: "Ready for fulfillment",
+      icon: ShieldCheck,
+      gradient: "from-sky-400 to-blue-600",
+    },
+    {
+      label: "Fulfilled",
+      value: statusCounts.fulfilled,
+      sub: "Includes refunded",
+      icon: ArchiveRestore,
+      gradient: "from-emerald-400 to-teal-500",
+    },
+  ]
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Orders Management</h1>
-          <p className="text-muted-foreground mt-1">Manage and approve orders from branches</p>
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#141EAE] via-[#4427CA] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs tracking-[0.2em] text-white/70">HEAD OFFICE · ORDERS</p>
+            <h1 className="text-3xl font-semibold">Order intelligence overview</h1>
+            <p className="text-sm text-white/80">
+              Manage approvals and fulfillment pipelines across {scopeText.toLowerCase()}.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => mutateOrders()}
+              variant="secondary"
+              size="sm"
+              className="gap-2 bg-white/15 text-white hover:bg-white/25 border-0"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh data
+            </Button>
+            <div className="rounded-full bg-white/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide">
+              {scopeText}
+            </div>
+          </div>
         </div>
-        <Button
-          onClick={() => mutateOrders()}
-          variant="outline"
-          size="sm"
-          className="gap-2"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Total Orders", count: statusCounts.all, color: "text-slate-600" },
-          { label: "Pending", count: statusCounts.pending, color: "text-yellow-600" },
-          { label: "Approved", count: statusCounts.approved, color: "text-blue-600" },
-          { label: "Fulfilled", count: statusCounts.fulfilled, color: "text-green-600" },
-        ].map((stat) => (
-          <Card key={stat.label} className="p-4">
-            <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
-            <p className={`text-3xl font-bold ${stat.color}`}>{stat.count}</p>
-          </Card>
-        ))}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {statCards.map((card) => {
+          const Icon = card.icon
+          return (
+            <Card key={card.label} className="rounded-2xl border-0 p-4 shadow-md">
+              <div className={`mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${card.gradient} text-white shadow-inner`}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{card.label}</p>
+              <p className="text-3xl font-semibold text-slate-900">{card.value}</p>
+              <p className="text-sm text-muted-foreground">{card.sub}</p>
+            </Card>
+          )
+        })}
       </div>
+
+      <Card className="flex flex-col gap-3 border-dashed border-slate-300/70 bg-gradient-to-r from-slate-50 to-white p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Clock className="h-4 w-4 text-amber-600" />
+          Auto-approval safety net
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Pending orders are automatically approved after 2 hours to keep branches moving. Review aging requests here if you
+          need to intervene before the timer elapses.
+        </p>
+      </Card>
 
       {/* Filters */}
       <Card className="p-4 space-y-4">
@@ -303,10 +337,13 @@ export default function HeadOfficeOrdersPage() {
                           <StatusIcon className="h-3 w-3 mr-1" />
                           {order.status}
                         </Badge>
+                        {order.status.toLowerCase() === "pending" && (
+                          <p className="mt-1 text-xs text-amber-600">{getAutoApprovalCountdown(order)}</p>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <p className="font-bold text-slate-900 dark:text-white">
-                          ${(order.totalCents / 100).toFixed(2)}
+                          {formatPKR(order.totalCents / 100)}
                         </p>
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
@@ -314,17 +351,11 @@ export default function HeadOfficeOrdersPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <Button
-                            onClick={() => {
-                              setSelectedOrder(order)
-                              setShowOrderDetail(true)
-                            }}
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1"
-                          >
-                            <Eye className="h-4 w-4" />
-                            View
+                          <Button asChild variant="ghost" size="sm" className="gap-1">
+                            <Link href={`/head-office-orders/${order.id}`}>
+                              <Eye className="h-4 w-4" />
+                              View
+                            </Link>
                           </Button>
 
                           {order.status.toLowerCase() === "pending" && (
@@ -354,17 +385,6 @@ export default function HeadOfficeOrdersPage() {
                               </Button>
                             </>
                           )}
-
-                          {order.status.toLowerCase() === "approved" && (
-                            <Button
-                              onClick={() => handleFulfillOrder(order.id)}
-                              size="sm"
-                              className="gap-1 bg-blue-600 hover:bg-blue-700"
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                              Fulfill
-                            </Button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -376,74 +396,7 @@ export default function HeadOfficeOrdersPage() {
         )}
       </Card>
 
-      {/* Order Detail Dialog */}
-      <Dialog open={showOrderDetail} onOpenChange={setShowOrderDetail}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Order Details</DialogTitle>
-          </DialogHeader>
-
-          {selectedOrder && (
-            <div className="space-y-6">
-              {/* Order Information */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Transaction ID</p>
-                  <p className="font-mono font-semibold text-slate-900 dark:text-white">{selectedOrder.tid}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Order ID</p>
-                  <p className="font-semibold text-slate-900 dark:text-white">{selectedOrder.id}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Branch</p>
-                  <p className="text-slate-900 dark:text-white">
-                    {selectedOrder.branchName || `Branch ${selectedOrder.branchId}`}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Status</p>
-                  <Badge variant="outline" className={`${getStatusColor(selectedOrder.status).bg} ${getStatusColor(selectedOrder.status).text} border-0 w-fit`}>
-                    {selectedOrder.status}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-semibold">${(selectedOrder.subtotalCents / 100).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span className="font-semibold">${(selectedOrder.taxCents / 100).toFixed(2)}</span>
-                </div>
-                <div className="border-t pt-2 flex justify-between">
-                  <span className="font-bold">Total</span>
-                  <span className="font-bold text-lg text-blue-600 dark:text-blue-400">
-                    ${(selectedOrder.totalCents / 100).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Refund Management */}
-              <RefundManagement
-                orderId={selectedOrder.id}
-                orderTotalCents={selectedOrder.totalCents}
-                orderStatus={selectedOrder.status}
-                onRefundSuccess={() => mutateOrders()}
-              />
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button onClick={() => setShowOrderDetail(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Order Detail Dialog removed in favour of dedicated pages */}
 
       {/* Approval Dialog */}
       <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>
@@ -464,7 +417,7 @@ export default function HeadOfficeOrdersPage() {
               <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                 <p className="text-sm text-muted-foreground mb-1">Total Amount</p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                  ${(selectedOrder.totalCents / 100).toFixed(2)}
+                  {formatPKR(selectedOrder.totalCents / 100)}
                 </p>
               </div>
             </div>

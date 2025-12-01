@@ -5,6 +5,48 @@ import { db } from "@/lib/db"
 import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 
+const AUTO_APPROVAL_WINDOW_MS = 1000 * 60 * 60 * 2 // 2 hours
+
+async function autoApproveStaleOrders() {
+  const threshold = new Date(Date.now() - AUTO_APPROVAL_WINDOW_MS)
+
+  const staleOrders = await db
+    .select({
+      id: orders.id,
+      tid: orders.tid,
+      organizationId: orders.organizationId,
+      branchId: orders.branchId,
+    })
+    .from(orders)
+    .where(and(eq(orders.status, "pending"), lte(orders.createdAt, threshold)))
+
+  if (!staleOrders.length) return
+
+  const ids = staleOrders.map((o) => o.id)
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(orders)
+      .set({ status: "approved", updatedAt: new Date() })
+      .where(inArray(orders.id, ids))
+
+    await tx.insert(auditLogs).values(
+      staleOrders.map((ord) => ({
+        userId: null,
+        organizationId: ord.organizationId,
+        branchId: ord.branchId,
+        action: "AUTO_APPROVE",
+        entity: "Order",
+        entityId: String(ord.id),
+        metadata: {
+          tid: ord.tid,
+          reason: "auto_approved_after_2_hours",
+        },
+      })),
+    )
+  })
+}
+
 function generateTid(): string {
   // Simple ULID-like: timestamp base36 + random base36
   const ts = Date.now().toString(36)
@@ -23,16 +65,20 @@ export async function GET(req: NextRequest) {
     const orgIdNum = organizationIdRaw && /^\d+$/.test(String(organizationIdRaw)) ? Number(organizationIdRaw) : undefined
     const branchIdFromUser = branchIdFromUserRaw && /^\d+$/.test(String(branchIdFromUserRaw)) ? Number(branchIdFromUserRaw) : undefined
 
-  const { searchParams } = new URL(req.url)
+    const { searchParams } = new URL(req.url)
     const status = searchParams.get("status") || undefined
     const branchId = searchParams.get("branchId") || undefined
     const q = searchParams.get("q") || undefined
     const from = searchParams.get("from") || undefined
     const to = searchParams.get("to") || undefined
+    const organizationIdParam = searchParams.get("organizationId") || undefined
+    const idParam = searchParams.get("id") || undefined
 
     const conditions: any[] = []
     if (role === "SUPER_ADMIN") {
-      // optional org filter in future
+      if (organizationIdParam && /^\d+$/.test(organizationIdParam)) {
+        conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
+      }
     } else if (role === "HEAD_OFFICE") {
       if (typeof orgIdNum === 'number') conditions.push(eq(orders.organizationId, orgIdNum))
     } else {
@@ -40,21 +86,28 @@ export async function GET(req: NextRequest) {
       if (typeof branchIdFromUser === 'number') conditions.push(eq(orders.branchId, branchIdFromUser))
     }
     if (status) conditions.push(eq(orders.status, status))
+    if (idParam && /^\d+$/.test(idParam)) conditions.push(eq(orders.id, Number(idParam)))
     if (branchId && /^\d+$/.test(branchId)) conditions.push(eq(orders.branchId, Number(branchId)))
     if (from) conditions.push(gte(orders.createdAt, new Date(from)))
     if (to) conditions.push(lte(orders.createdAt, new Date(to)))
 
-    const selectBase = db.select({
-      id: orders.id,
-      tid: orders.tid,
-      organizationId: orders.organizationId,
-      branchId: orders.branchId,
-      status: orders.status,
-      subtotalCents: orders.subtotalCents,
-      taxCents: orders.taxCents,
-      totalCents: orders.totalCents,
-      createdAt: orders.createdAt,
-    }).from(orders)
+    await autoApproveStaleOrders()
+
+    const selectBase = db
+      .select({
+        id: orders.id,
+        tid: orders.tid,
+        organizationId: orders.organizationId,
+        branchId: orders.branchId,
+        status: orders.status,
+        subtotalCents: orders.subtotalCents,
+        taxCents: orders.taxCents,
+        totalCents: orders.totalCents,
+        createdAt: orders.createdAt,
+        branchName: branches.name,
+      })
+      .from(orders)
+      .leftJoin(branches, eq(orders.branchId, branches.id))
 
     const items = await (conditions.length 
       ? selectBase.where(and(...conditions)).orderBy(desc(orders.createdAt))
@@ -230,6 +283,10 @@ export async function PUT(req: NextRequest) {
     const body = await req.json()
     const { id, action } = body as { id: number, action: 'approve' | 'cancel' | 'fulfill' }
     if (!id || !action) return NextResponse.json({ error: 'id and action required' }, { status: 400 })
+
+    if (action === "fulfill" && role === "HEAD_OFFICE") {
+      return NextResponse.json({ error: "Head office users cannot fulfill orders" }, { status: 403 })
+    }
 
     const [ord] = await db.select().from(orders).where(eq(orders.id, id)).limit(1)
     if (!ord) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
