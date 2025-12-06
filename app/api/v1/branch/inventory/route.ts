@@ -61,11 +61,12 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
 
+    const orgIdNum = typeof organizationId === "string" ? parseInt(organizationId) : organizationId
+
+    // Build conditions based on organization-level inventory, with optional branch overrides
     const conditions = [
-      eq(branchInventory.organizationId, parseInt(organizationId)),
-      eq(branchInventory.branchId, branchId),
-      isNull(branchInventory.deletedAt),
-      isNull(organizationInventory.deletedAt)
+      eq(organizationInventory.organizationId, orgIdNum),
+      isNull(organizationInventory.deletedAt),
     ]
     
     if (search) {
@@ -79,8 +80,15 @@ export async function GET(req: NextRequest) {
     }
     if (visibility) {
       if (visibility === "visible") {
-        conditions.push(eq(branchInventory.isVisible, true))
+        // Visible when explicitly marked visible OR no branch override exists
+        conditions.push(
+          or(
+            eq(branchInventory.isVisible, true),
+            isNull(branchInventory.id)
+          )
+        )
       } else if (visibility === "hidden") {
+        // Hidden only when branch override says so
         conditions.push(eq(branchInventory.isVisible, false))
       }
     }
@@ -89,14 +97,17 @@ export async function GET(req: NextRequest) {
 
     const [items, totalResult] = await Promise.all([
       db.select({
-        id: branchInventory.id,
+        // Use organization-level ID as stable fallback when branch row doesn't exist
+        id: sql<number>`COALESCE(${branchInventory.id}, ${organizationInventory.id})`,
         branchId: branchInventory.branchId,
-        organizationId: branchInventory.organizationId,
-        organizationInventoryId: branchInventory.organizationInventoryId,
-        isVisible: branchInventory.isVisible,
-        isActive: branchInventory.isActive,
-        stockQuantity: branchInventory.stockQuantity,
-        reorderThreshold: branchInventory.reorderThreshold,
+        organizationId: organizationInventory.organizationId,
+        organizationInventoryId: organizationInventory.id,
+        isVisible: sql<boolean>`COALESCE(${branchInventory.isVisible}, true)`,
+        isActive: sql<boolean>`COALESCE(${branchInventory.isActive}, true)`,
+        // Stock comes from global products (single source of truth)
+        stockQuantity: globalProducts.stockQuantity,
+        // Reorder threshold no longer used – always 0 for compatibility
+        reorderThreshold: sql<number>`0`,
         assignedAt: branchInventory.assignedAt,
         updatedAt: branchInventory.updatedAt,
         // Global product details
@@ -113,19 +124,34 @@ export async function GET(req: NextRequest) {
         customDescription: organizationInventory.customDescription,
         customImageUrl: organizationInventory.customImageUrl,
       })
-      .from(branchInventory)
-      .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+      .from(organizationInventory)
       .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+      .leftJoin(
+        branchInventory,
+        and(
+          eq(branchInventory.organizationInventoryId, organizationInventory.id),
+          eq(branchInventory.branchId, branchId),
+          isNull(branchInventory.deletedAt),
+        )
+      )
       .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
       .where(whereClause)
-      .orderBy(desc(branchInventory.assignedAt))
+      .orderBy(desc(organizationInventory.id))
       .limit(limit)
       .offset(offset),
 
-      db.select({ count: sql<number>`count(*)` })
-        .from(branchInventory)
-        .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(organizationInventory)
         .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+        .leftJoin(
+          branchInventory,
+          and(
+            eq(branchInventory.organizationInventoryId, organizationInventory.id),
+            eq(branchInventory.branchId, branchId),
+            isNull(branchInventory.deletedAt),
+          )
+        )
         .where(whereClause),
     ])
 

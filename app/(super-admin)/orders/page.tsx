@@ -1,5 +1,7 @@
 "use client"
 import React, { useState, useMemo } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { useSession } from "next-auth/react"
 import { useToast } from "@/components/ui/use-toast"
@@ -8,13 +10,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
-import { 
-  Package, 
-  Search, 
-  Filter, 
-  CheckCircle, 
-  Clock, 
-  AlertTriangle, 
+import {
+  Package,
+  Search,
+  Filter,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
   TrendingDown,
   ChevronDown,
   Calendar,
@@ -24,9 +26,11 @@ import {
   RefreshCw,
   Check,
   X,
-  Eye
+  Eye,
+  Receipt,
 } from "lucide-react"
-import { RefundManagement } from "@/components/refunds/refund-management"
+import { formatPKR } from "@/lib/utils"
+import { useAppContext } from "@/components/context/app-context"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -41,25 +45,39 @@ interface OrderItem {
   totalCents: number
   createdAt: string
   createdByUserId: string
+  hasRefundRequests?: number
 }
 
 export default function OrdersManagementPage() {
+  const router = useRouter()
   const { data: session } = useSession()
   const { toast } = useToast()
+  const { organizationId, branchId, isInitialized } = useAppContext()
   const userRole = (session?.user as any)?.role
+  const isBranchAdmin = userRole === "BRANCH_ADMIN"
+  const isHeadOffice = userRole === "HEAD_OFFICE"
+  const isSuperAdmin = userRole === "SUPER_ADMIN"
 
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null)
-  const [showOrderDetail, setShowOrderDetail] = useState(false)
   const [showApprovalDialog, setShowApprovalDialog] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
 
-  // Fetch orders
+  // Build orders endpoint with context parameters
+  const ordersEndpoint = useMemo(() => {
+    if (!isInitialized) return null
+    const params = new URLSearchParams()
+    if (organizationId) params.set("organizationId", organizationId)
+    if (branchId) params.set("branchId", branchId)
+    return `/api/v1/orders${params.toString() ? `?${params.toString()}` : ""}`
+  }, [organizationId, branchId, isInitialized])
+
+  // Fetch orders scoped by context
   const { data: ordersData, mutate: mutateOrders } = useSWR<any>(
-    "/api/v1/orders",
+    ordersEndpoint,
     fetcher
   )
 
@@ -188,6 +206,18 @@ export default function OrdersManagementPage() {
     return colors[status?.toLowerCase()] || colors.pending
   }
 
+  // Derive scope display from context + org/branch metadata
+  // These hooks must be called before any conditional returns
+  const { data: orgsData } = useSWR(organizationId ? "/api/v1/organizations" : null, fetcher)
+  const { data: branchesData } = useSWR(
+    organizationId ? `/api/v1/branches?organizationId=${organizationId}` : null,
+    fetcher
+  )
+  const organizations = orgsData?.items || []
+  const branches = branchesData?.items || []
+  const selectedOrg = organizations.find((o: any) => o.id.toString() === organizationId)
+  const selectedBranch = branches.find((b: any) => b.id.toString() === branchId)
+
   const statusCounts = {
     all: orders.length,
     pending: orders.filter((o: OrderItem) => o.status.toLowerCase() === "pending").length,
@@ -195,26 +225,56 @@ export default function OrdersManagementPage() {
     fulfilled: orders.filter((o: OrderItem) => o.status.toLowerCase() === "fulfilled").length,
   }
 
+  const scopeText = branchId
+    ? selectedBranch?.name || `Branch #${branchId}`
+    : organizationId
+    ? selectedOrg?.name || "Selected organization"
+    : "All organizations"
+
+  if (!isInitialized || !ordersEndpoint) {
+    return (
+      <div className="py-24 text-center text-muted-foreground">
+        Loading your context…
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Orders Management</h1>
-          <p className="text-muted-foreground mt-1">Manage and approve orders from the Order Portal</p>
+      {/* Gradient Header */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#141EAE] via-[#4427CA] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs tracking-[0.2em] text-white/70">
+              {isBranchAdmin ? "BRANCH · ORDERS" : "CONTROL · ORDERS"}
+            </p>
+            <h1 className="text-3xl font-semibold">
+              {isBranchAdmin ? "Branch order overview" : "Order intelligence overview"}
+            </h1>
+            <p className="text-sm text-white/80">
+              {isBranchAdmin
+                ? "Review orders placed from your branch's Order Portal."
+                : `Monitor approvals and fulfillment pipelines across ${scopeText.toLowerCase()}.`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => mutateOrders()}
+              variant="secondary"
+              size="sm"
+              className="gap-2 bg-white/15 text-white hover:bg-white/25 border-0"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh data
+            </Button>
+            <div className="rounded-full bg-white/20 px-4 py-2 text-sm font-semibold uppercase tracking-wide">
+              {scopeText}
+            </div>
+          </div>
         </div>
-        <Button
-          onClick={() => mutateOrders()}
-          variant="outline"
-          size="sm"
-          className="gap-2"
-        >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats & Filters – shown for all roles; data is branch-scoped for branch admins */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: "Total Orders", count: statusCounts.all, color: "text-slate-600" },
@@ -229,7 +289,6 @@ export default function OrdersManagementPage() {
         ))}
       </div>
 
-      {/* Filters */}
       <Card className="p-4 space-y-4">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="h-4 w-4 text-muted-foreground" />
@@ -279,7 +338,9 @@ export default function OrdersManagementPage() {
                   <th className="px-4 py-3 text-left text-sm font-semibold">Status</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold">Amount</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
+                  {!isBranchAdmin && (
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -290,9 +351,9 @@ export default function OrdersManagementPage() {
                   return (
                     <tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
                       <td className="px-4 py-3">
-                        <div>
-                          <p className="font-semibold text-slate-900 dark:text-white">{order.tid}</p>
-                          <p className="text-xs text-muted-foreground">ID: {order.id}</p>
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-white">{order.tid}</p>
+                            <p className="text-xs text-muted-foreground">ID: {order.id}</p>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -303,67 +364,79 @@ export default function OrdersManagementPage() {
                       </td>
                       <td className="px-4 py-3">
                         <p className="font-bold text-slate-900 dark:text-white">
-                          ${(order.totalCents / 100).toFixed(2)}
+                          {formatPKR(order.totalCents / 100)}
                         </p>
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {new Date(order.createdAt).toLocaleDateString()}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            onClick={() => {
-                              setSelectedOrder(order)
-                              setShowOrderDetail(true)
-                            }}
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1"
-                          >
-                            <Eye className="h-4 w-4" />
-                            View
-                          </Button>
-
-                          {order.status.toLowerCase() === "pending" && (
-                            <>
-                              <Button
-                                onClick={() => {
-                                  setSelectedOrder(order)
-                                  setShowApprovalDialog(true)
-                                }}
-                                size="sm"
-                                className="gap-1 bg-green-600 hover:bg-green-700"
-                              >
-                                <Check className="h-4 w-4" />
-                                Approve
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  setSelectedOrder(order)
-                                  setShowRejectDialog(true)
-                                }}
-                                variant="destructive"
-                                size="sm"
-                                className="gap-1"
-                              >
-                                <X className="h-4 w-4" />
-                                Reject
-                              </Button>
-                            </>
-                          )}
-
-                          {order.status.toLowerCase() === "approved" && (
+                      {!isBranchAdmin && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
                             <Button
-                              onClick={() => handleFulfillOrder(order.id)}
+                              asChild
+                              variant="ghost"
                               size="sm"
-                              className="gap-1 bg-blue-600 hover:bg-blue-700"
+                              className="gap-1"
                             >
-                              <CheckCircle className="h-4 w-4" />
-                              Fulfill
+                              <Link href={`/orders/${order.id}`}>
+                                <Eye className="h-4 w-4" />
+                                View
+                              </Link>
                             </Button>
-                          )}
-                        </div>
-                      </td>
+
+                            {isSuperAdmin && order.status.toLowerCase() === "fulfilled" && (order.hasRefundRequests || 0) > 0 && (
+                              <Button
+                                onClick={() => router.push(`/orders/${order.id}/refunds`)}
+                                size="sm"
+                                className="gap-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                              >
+                                <Receipt className="h-4 w-4" />
+                                Refunds {(order.hasRefundRequests || 0) > 0 && `(${order.hasRefundRequests})`}
+                              </Button>
+                            )}
+
+                            {order.status.toLowerCase() === "pending" && (
+                              <>
+                                <Button
+                                  onClick={() => {
+                                    setSelectedOrder(order)
+                                    setShowApprovalDialog(true)
+                                  }}
+                                  size="sm"
+                                  className="gap-1 bg-green-600 hover:bg-green-700"
+                                >
+                                  <Check className="h-4 w-4" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    setSelectedOrder(order)
+                                    setShowRejectDialog(true)
+                                  }}
+                                  variant="destructive"
+                                  size="sm"
+                                  className="gap-1"
+                                >
+                                  <X className="h-4 w-4" />
+                                  Reject
+                                </Button>
+                              </>
+                            )}
+
+                            {order.status.toLowerCase() === "approved" && (
+                              <Button
+                                onClick={() => handleFulfillOrder(order.id)}
+                                size="sm"
+                                className="gap-1 bg-blue-600 hover:bg-blue-700"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                                Fulfill
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
@@ -372,75 +445,6 @@ export default function OrdersManagementPage() {
           </div>
         )}
       </Card>
-
-      {/* Order Detail Dialog */}
-      <Dialog open={showOrderDetail} onOpenChange={setShowOrderDetail}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Order Details</DialogTitle>
-          </DialogHeader>
-
-          {selectedOrder && (
-            <div className="space-y-6">
-              {/* Order Information */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Transaction ID</p>
-                  <p className="font-mono font-semibold text-slate-900 dark:text-white">{selectedOrder.tid}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Order ID</p>
-                  <p className="font-semibold text-slate-900 dark:text-white">{selectedOrder.id}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Status</p>
-                  <Badge variant="outline" className={`${getStatusColor(selectedOrder.status).bg} ${getStatusColor(selectedOrder.status).text} border-0 w-fit`}>
-                    {selectedOrder.status}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Date</p>
-                  <p className="text-slate-900 dark:text-white">
-                    {new Date(selectedOrder.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-semibold">${(selectedOrder.subtotalCents / 100).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span className="font-semibold">${(selectedOrder.taxCents / 100).toFixed(2)}</span>
-                </div>
-                <div className="border-t pt-2 flex justify-between">
-                  <span className="font-bold">Total</span>
-                  <span className="font-bold text-lg text-blue-600 dark:text-blue-400">
-                    ${(selectedOrder.totalCents / 100).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Refund Management */}
-              <RefundManagement
-                orderId={selectedOrder.id}
-                orderTotalCents={selectedOrder.totalCents}
-                orderStatus={selectedOrder.status}
-                onRefundSuccess={() => mutateOrders()}
-              />
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button onClick={() => setShowOrderDetail(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Approval Dialog */}
       <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>
@@ -461,7 +465,7 @@ export default function OrdersManagementPage() {
               <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                 <p className="text-sm text-muted-foreground mb-1">Total Amount</p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                  ${(selectedOrder.totalCents / 100).toFixed(2)}
+                  {formatPKR(selectedOrder.totalCents / 100)}
                 </p>
               </div>
             </div>

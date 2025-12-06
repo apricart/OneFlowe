@@ -52,8 +52,8 @@ export async function GET(req: NextRequest) {
           )`,
           productsCount: sql<number>`(
             SELECT COUNT(*)::int 
-            FROM ${globalProducts} 
-            WHERE category_id = ${categories.id}
+            FROM ${globalProducts} gp
+            WHERE (gp.metadata->>'subCategoryId')::int = ${categories.id}
           )`,
         })
         .from(categories)

@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo } from "react"
 import { Card } from "@/components/ui/card"
-import { SectionHeader } from "@/components/ui/section-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -32,7 +31,7 @@ interface Category {
   createdAt: string
   updatedAt: string
   subCategoriesCount: number
-  productsCount: number
+  productsCount?: number
 }
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -46,13 +45,75 @@ export default function CategoriesPage() {
     parentId: null as number | null,
   })
 
-  // Fetch categories
+  // Fetch only top-level (parent) categories
   const { data, error, isLoading, mutate } = useSWR<{ items: Category[] }>(
-    `/api/v1/categories?search=${searchQuery}`,
+    `/api/v1/categories?type=parent&search=${searchQuery}`,
     fetcher
   )
 
   const categories = data?.items || []
+
+  // Fetch all subcategories so we can map products from subcategories up to their parents
+  interface SubCategory {
+    id: number
+    name: string
+    parentId: number
+  }
+
+  const { data: subCategoriesData } = useSWR<{ items: SubCategory[] }>(
+    `/api/v1/subcategories?search=&parentId=`,
+    fetcher
+  )
+  const allSubCategories = subCategoriesData?.items || []
+
+  // Compute subcategory counts per parent category client-side
+  const subCategoriesByParent = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const sub of allSubCategories) {
+      map.set(sub.parentId, (map.get(sub.parentId) || 0) + 1)
+    }
+    return map
+  }, [allSubCategories])
+
+  // Fetch global products to compute product counts client-side
+  interface GlobalProduct {
+    id: number
+    categoryId: number | null
+    metadata?: { subCategoryId?: number } | null
+  }
+
+  const { data: productsData } = useSWR<{ items: GlobalProduct[] }>(
+    `/api/v1/admin/global-inventory?limit=1000`,
+    fetcher
+  )
+
+  const productsByParentCategory = useMemo(() => {
+    const map = new Map<number, number>()
+    const products = productsData?.items || []
+
+    // Build a quick lookup from subcategory id -> parent category id
+    const subToParent = new Map<number, number>()
+    for (const sub of allSubCategories) {
+      subToParent.set(sub.id, sub.parentId)
+    }
+
+    for (const product of products) {
+      const subId = (product.metadata as any)?.subCategoryId
+
+      if (subId) {
+        // If a subcategory is set, attribute the product ONLY to that subcategory's parent
+        const parentId = subToParent.get(subId)
+        if (parentId) {
+          map.set(parentId, (map.get(parentId) || 0) + 1)
+        }
+      } else if (product.categoryId) {
+        // Otherwise, fall back to counting directly on the assigned category
+        map.set(product.categoryId, (map.get(product.categoryId) || 0) + 1)
+      }
+    }
+
+    return map
+  }, [productsData, allSubCategories])
 
   // Filter categories by search
   const filteredCategories = useMemo(() => {
@@ -66,25 +127,30 @@ export default function CategoriesPage() {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
+    const trimmedName = formData.name.trim()
+    if (!trimmedName) {
+      alert("Category name is required")
+      return
+    }
+
     try {
-      const url = editingCategory 
-        ? `/api/v1/categories` 
-        : `/api/v1/categories`
-      const method = editingCategory ? 'PUT' : 'POST'
-      
+      const url = `/api/v1/categories`
+      const method = editingCategory ? "PUT" : "POST"
+
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
-          ...(editingCategory && { id: editingCategory.id })
+          name: trimmedName,
+          ...(editingCategory && { id: editingCategory.id }),
         }),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to save category')
+        throw new Error(error.error || "Failed to save category")
       }
 
       mutate()
@@ -92,8 +158,8 @@ export default function CategoriesPage() {
       setEditingCategory(null)
       setFormData({ name: "", parentId: null })
     } catch (error) {
-      console.error('Error saving category:', error)
-      alert(error instanceof Error ? error.message : 'Failed to save category')
+      console.error("Error saving category:", error)
+      alert(error instanceof Error ? error.message : "Failed to save category")
     }
   }
 
@@ -137,10 +203,18 @@ export default function CategoriesPage() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        title="Categories"
-        subtitle="Manage product categories and subcategories"
-      />
+      {/* Blue gradient header, aligned with Orders styling */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#141EAE] via-[#4427CA] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs tracking-[0.2em] text-white/70">PRODUCTS · CATEGORIES</p>
+            <h1 className="text-3xl font-semibold">Category taxonomy overview</h1>
+            <p className="text-sm text-white/80">
+              Manage top-level categories and their relationships for your product catalog.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Search and Actions */}
       <div className="flex items-center justify-between">
@@ -204,14 +278,18 @@ export default function CategoriesPage() {
                   <td className="p-4">
                     <div className="flex items-center gap-1">
                       <Package size={14} className="text-gray-400" />
-                      <span>{category.subCategoriesCount}</span>
+                      <span>{subCategoriesByParent.get(category.id) ?? 0}</span>
                     </div>
                   </td>
                   <td className="p-4">
-                    <div className="flex items-center gap-1">
-                      <Package size={14} className="text-gray-400" />
-                      <span>{category.productsCount}</span>
-                    </div>
+                    {productsByParentCategory.get(category.id) ? (
+                      <div className="flex items-center gap-1">
+                        <Package size={14} className="text-gray-400" />
+                        <span>{productsByParentCategory.get(category.id)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">—</span>
+                    )}
                   </td>
                   <td className="p-4 text-sm text-gray-500">
                     {new Date(category.createdAt).toLocaleDateString()}
@@ -244,51 +322,66 @@ export default function CategoriesPage() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={resetForm}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {editingCategory ? "Edit Category" : "Add New Category"}
+            <DialogTitle className="text-lg font-semibold">
+              {editingCategory ? "Edit category" : "Create new category"}
             </DialogTitle>
-            <DialogDescription>
-              {editingCategory ? "Update the category information below." : "Enter the details to create a new category."}
+            <DialogDescription className="text-sm text-muted-foreground">
+              Categories group your products into high-level buckets. Subcategories are managed on the{" "}
+              <span className="font-medium text-foreground">Subcategories</span> screen.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Name</label>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium">
+                Category name <span className="text-red-500">*</span>
+              </label>
               <Input
                 value={formData.name}
+                autoFocus
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter category name"
-                required
+                placeholder="e.g. Beverages, Personal Care, Stationery"
               />
+              <p className="text-xs text-muted-foreground">
+                Use a clear, business-friendly name. This will be visible everywhere products are categorized.
+              </p>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Parent Category (Optional)</label>
+
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium">
+                Parent category <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+              </label>
               <select
                 value={formData.parentId || ""}
-                onChange={(e) => setFormData({ 
-                  ...formData, 
-                  parentId: e.target.value ? parseInt(e.target.value) : null 
-                })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    parentId: e.target.value ? parseInt(e.target.value) : null,
+                  })
+                }
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring"
               >
-                <option value="">Select parent category (leave empty for top-level)</option>
+                <option value="">No parent (top-level category)</option>
                 {categories
-                  .filter(cat => !cat.parentId)
-                  .map(cat => (
+                  .filter((cat) => !cat.parentId)
+                  .map((cat) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.name}
                     </option>
                   ))}
               </select>
+              <p className="text-xs text-muted-foreground">
+                Only use a parent if you need a two-level hierarchy. Otherwise leave this empty.
+              </p>
             </div>
-            <DialogFooter>
+
+            <DialogFooter className="gap-2 sm:gap-3">
               <Button type="button" variant="outline" onClick={resetForm}>
                 Cancel
               </Button>
               <Button type="submit">
-                {editingCategory ? "Update" : "Create"} Category
+                {editingCategory ? "Save changes" : "Create category"}
               </Button>
             </DialogFooter>
           </form>

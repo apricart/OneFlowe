@@ -20,6 +20,70 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url)
+    const id = searchParams.get("id")
+
+    // If an ID is provided, return a single product record
+    if (id) {
+      const productId = parseInt(id)
+      if (Number.isNaN(productId)) {
+        return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
+      }
+
+      const [item] = await db
+        .select({
+          id: globalProducts.id,
+          productCode: globalProducts.productCode,
+          name: globalProducts.name,
+          description: globalProducts.description,
+          categoryId: globalProducts.categoryId,
+          imageUrl: globalProducts.imageUrl,
+          basePrice: globalProducts.basePrice,
+          unit: globalProducts.unit,
+          status: globalProducts.status,
+          stockQuantity: globalProducts.stockQuantity,
+          metadata: globalProducts.metadata,
+          discountType: globalProducts.discountType,
+          discountValue: globalProducts.discountValue,
+          discountStartAt: globalProducts.discountStartAt,
+          discountEndAt: globalProducts.discountEndAt,
+          discountActive: globalProducts.discountActive,
+          createdAt: globalProducts.createdAt,
+          updatedAt: globalProducts.updatedAt,
+          categoryName: categories.name,
+        })
+        .from(globalProducts)
+        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+        .where(eq(globalProducts.id, productId))
+        .limit(1)
+
+      if (!item) {
+        return NextResponse.json({ error: "Product not found" }, { status: 404 })
+      }
+
+      // Compute assignment count for this single product
+      const [assignment] = await db
+        .select({
+          globalProductId: organizationInventory.globalProductId,
+          assignedOrganizations: sql<number>`count(distinct ${organizationInventory.organizationId})`,
+        })
+        .from(organizationInventory)
+        .where(
+          and(
+            eq(organizationInventory.globalProductId, productId),
+            eq(organizationInventory.isActive, true)
+          )
+        )
+        .groupBy(organizationInventory.globalProductId)
+
+      const itemWithAssignments = {
+        ...item,
+        assignedOrganizations: assignment?.assignedOrganizations || 0,
+      }
+
+      return NextResponse.json({ item: itemWithAssignments })
+    }
+
+    // Otherwise, return paginated list
     const search = searchParams.get("search") || ""
     const category = searchParams.get("category") || ""
     const status = searchParams.get("status") || ""
@@ -58,6 +122,7 @@ export async function GET(req: NextRequest) {
         basePrice: globalProducts.basePrice,
         unit: globalProducts.unit,
         status: globalProducts.status,
+        stockQuantity: globalProducts.stockQuantity,
         metadata: globalProducts.metadata,
         discountType: globalProducts.discountType,
         discountValue: globalProducts.discountValue,
@@ -146,6 +211,7 @@ export async function POST(req: NextRequest) {
       basePrice,
       unit,
       status = "active",
+      stockQuantity = 0,
       metadata = {},
       discountType,
       discountValue, // for percent provide number in basis points (e.g., 1000 = 10%) or cents for flat
@@ -178,6 +244,7 @@ export async function POST(req: NextRequest) {
         basePrice: Math.round(parseFloat(basePrice) * 100), // Convert to cents
         unit: unit || "unit",
         status,
+        stockQuantity: stockQuantity !== undefined ? Math.max(0, parseInt(String(stockQuantity)) || 0) : 0,
         metadata,
         discountType: discountType || null,
         discountValue: discountValue !== undefined && discountValue !== null ? parseInt(discountValue) : null,
@@ -230,6 +297,7 @@ export async function PUT(req: NextRequest) {
       basePrice,
       unit,
       status,
+      stockQuantity,
       metadata,
       discountType,
       discountValue,
@@ -264,6 +332,7 @@ export async function PUT(req: NextRequest) {
     if (basePrice !== undefined) updateData.basePrice = Math.round(parseFloat(basePrice) * 100)
     if (unit !== undefined) updateData.unit = unit
     if (status !== undefined) updateData.status = status
+    if (stockQuantity !== undefined) updateData.stockQuantity = Math.max(0, parseInt(String(stockQuantity)) || 0)
     if (metadata !== undefined) updateData.metadata = metadata
     if (discountType !== undefined) updateData.discountType = discountType || null
     if (discountValue !== undefined) updateData.discountValue = discountValue !== null ? parseInt(discountValue) : null

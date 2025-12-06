@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts } from "@/db/schema"
+import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 
 const AUTO_APPROVAL_WINDOW_MS = 1000 * 60 * 60 * 2 // 2 hours
@@ -105,6 +105,11 @@ export async function GET(req: NextRequest) {
         totalCents: orders.totalCents,
         createdAt: orders.createdAt,
         branchName: branches.name,
+        hasRefundRequests: sql<number>`(
+          SELECT COUNT(*)::int
+          FROM ${refunds}
+          WHERE ${refunds.orderId} = ${orders.id}
+        )`,
       })
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -114,6 +119,34 @@ export async function GET(req: NextRequest) {
       : selectBase.orderBy(desc(orders.createdAt)))
 
     const filtered = q ? items.filter(o => o.tid.includes(q)) : items
+    
+    // If fetching a single order (idParam), include order items
+    if (idParam && /^\d+$/.test(idParam)) {
+      const orderId = Number(idParam)
+      const order = filtered[0]
+      if (order) {
+        // Fetch order items with product details
+        const itemsData = await db
+          .select({
+            id: orderItems.id,
+            productName: orderItems.productName,
+            productCode: orderItems.productCode,
+            quantity: orderItems.quantity,
+            priceCents: orderItems.priceCents,
+            unit: orderItems.unit,
+            globalProductId: orderItems.globalProductId,
+            imageUrl: globalProducts.imageUrl,
+          })
+          .from(orderItems)
+          .leftJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
+          .where(eq(orderItems.orderId, orderId))
+        
+        return NextResponse.json({ 
+          items: [{ ...order, orderItems: itemsData }] 
+        })
+      }
+    }
+    
     return NextResponse.json({ items: filtered })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
@@ -180,13 +213,29 @@ export async function POST(req: NextRequest) {
       basePrice: r.basePrice, // Use basePrice not basePriceCents
       name: r.name, 
       productCode: r.productCode, 
-      unit: r.unit 
+      unit: r.unit,
+      stockQuantity: r.stockQuantity
     }))
     
     console.log("Mapped gp rows:", gpRows)
 
     const gpById = new Map(gpRows.map(r => [r.id, r]))
     const invById = new Map(invRows.map(r => [r.id, r]))
+
+    // Check stock availability before processing
+    for (const i of items) {
+      const inv = invById.get(i.organizationInventoryId)
+      if (!inv) throw new Error(`Inventory item ${i.organizationInventoryId} not found`)
+      const gp = gpById.get(inv.globalProductId)
+      if (!gp) throw new Error(`Global product for inventory ${inv.globalProductId} not found`)
+      
+      const availableStock = gp.stockQuantity || 0
+      if (availableStock < i.quantity) {
+        return NextResponse.json({ 
+          error: `Insufficient stock for ${gp.name} (${gp.productCode}). Available: ${availableStock}, Requested: ${i.quantity}` 
+        }, { status: 400 })
+      }
+    }
 
     let subtotal = 0
     const calculatedItems = items.map(i => {
@@ -249,6 +298,16 @@ export async function POST(req: NextRequest) {
         }
       }))
 
+      // Deduct stock for each item
+      for (const ci of calculatedItems) {
+        await tx.update(globalProducts)
+          .set({ 
+            stockQuantity: sql`${globalProducts.stockQuantity} - ${ci.quantity}`,
+            updatedAt: new Date()
+          })
+          .where(eq(globalProducts.id, ci.globalProductId))
+      }
+
       const budgetId = budget?.id
       if (!budgetId) throw new Error("Budget ID missing")
       
@@ -298,6 +357,17 @@ export async function PUT(req: NextRequest) {
       if (action === 'cancel') {
         await tx.update(orders).set({ status: 'cancelled' }).where(eq(orders.id, id))
         await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}` }).where(eq(budgets.id, (budget as any).id))
+        
+        // Restore stock for cancelled orders
+        const orderItemsList = await tx.select().from(orderItems).where(eq(orderItems.orderId, id))
+        for (const item of orderItemsList) {
+          await tx.update(globalProducts)
+            .set({ 
+              stockQuantity: sql`${globalProducts.stockQuantity} + ${item.quantity}`,
+              updatedAt: new Date()
+            })
+            .where(eq(globalProducts.id, item.globalProductId))
+        }
       } else if (action === 'approve') {
         await tx.update(orders).set({ status: 'approved' }).where(eq(orders.id, id))
       } else if (action === 'fulfill') {
@@ -306,6 +376,7 @@ export async function PUT(req: NextRequest) {
           amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,
           amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
         }).where(eq(budgets.id, (budget as any).id))
+        // Stock already deducted on order creation, no additional action needed
       }
       await tx.insert(auditLogs).values({ userId: (session.user as any).id, action: 'UPDATE', entity: 'Order', entityId: String(id), organizationId: ord.organizationId, branchId: ord.branchId, metadata: { action, tid: ord.tid } })
     })

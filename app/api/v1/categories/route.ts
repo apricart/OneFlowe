@@ -54,8 +54,15 @@ export async function GET(req: NextRequest) {
           )`,
           productsCount: sql<number>`(
             SELECT COUNT(*)::int 
-            FROM ${globalProducts} 
-            WHERE category_id = ${categories.id}
+            FROM ${globalProducts} gp
+            WHERE 
+              -- Products assigned directly to this category
+              gp.category_id = ${categories.id}
+              OR
+              -- Products assigned to a subcategory whose parent is this category
+              gp.category_id IN (
+                SELECT sub.id FROM ${categories} sub WHERE sub.parent_id = ${categories.id}
+              )
           )`,
         })
         .from(categories)

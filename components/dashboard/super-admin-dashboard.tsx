@@ -1,27 +1,137 @@
 "use client"
-import { useOrganizations, useBranches, useUsers } from '@/lib/hooks/use-api'
-import { SectionHeader } from '@/components/ui/section-header'
-import { KpiCard } from '@/components/ui/kpi-card'
-import { Card, CardContent } from '@/components/ui/card'
-import useSWR from 'swr'
-import { NotificationRail } from '@/components/notifications/notification-center'
-import { formatPKR } from '@/lib/utils'
+import Link from "next/link"
+import { useOrganizations, useBranches, useUsers } from "@/lib/hooks/use-api"
+import { KpiCard } from "@/components/ui/kpi-card"
+import { Card, CardContent } from "@/components/ui/card"
+import useSWR from "swr"
+import { NotificationRail } from "@/components/notifications/notification-center"
+import { formatPKR } from "@/lib/utils"
+import { Building2, GitBranch, Users, Package, Warehouse, Wallet, BarChart3, ShieldCheck } from "lucide-react"
+import { TrendAreaChart, ComparisonBarChart } from "@/components/dashboard/charts"
+import { useAppContext } from "@/components/context/app-context"
+
+const navTiles = [
+  {
+    title: "Organizations",
+    description: "Configure groups and parent companies.",
+    href: "/organizations",
+    icon: Building2,
+  },
+  {
+    title: "Branches",
+    description: "Manage branches and assignments.",
+    href: "/branches",
+    icon: GitBranch,
+  },
+  {
+    title: "Users & Roles",
+    description: "Administer users and access levels.",
+    href: "/users",
+    icon: Users,
+  },
+  {
+    title: "Global Inventory",
+    description: "Master product catalog across orgs.",
+    href: "/global-inventory",
+    icon: Warehouse,
+  },
+  {
+    title: "Orders",
+    description: "Monitor and override orders.",
+    href: "/orders",
+    icon: Package,
+  },
+  {
+    title: "Budgets",
+    description: "Control branch spending limits.",
+    href: "/budgets",
+    icon: Wallet,
+  },
+  {
+    title: "Reports",
+    description: "Sales, refunds, and stock insights.",
+    href: "/reports",
+    icon: BarChart3,
+  },
+  {
+    title: "System Settings",
+    description: "Permissions, audit, and advanced config.",
+    href: "/admin",
+    icon: ShieldCheck,
+  },
+]
   
 export function SuperAdminDashboard() {
-  const { data: orgsData, isLoading: orgsLoading } = useOrganizations()
-  const { data: usersData, isLoading: usersLoading } = useUsers()
-  const { data: branchesData, isLoading: branchesLoading } = useBranches()
+  const { organizationId, branchId } = useAppContext()
 
-  const orgsCount = orgsData?.items?.length || 0
-  const usersCount = usersData?.items?.length || 0
-  const branchesCount = branchesData?.items?.length || 0
-  const activeBranches = branchesData?.items?.filter((b: any) => b.status === 'active')?.length || 0
+  // Scope org / branch data by context selector
+  const { data: orgsData } = useOrganizations()
+  const { data: usersData } = useUsers(organizationId || undefined)
+  const { data: branchesData } = useBranches(organizationId || undefined)
 
-  const fetcher = (url: string) => fetch(url).then(r => r.json())
-  const startOfToday = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.toISOString() })()
-  const { data: todaysOrders } = useSWR<{ items: any[] }>(`/api/v1/orders?from=${encodeURIComponent(startOfToday)}`, fetcher)
-  const { data: pendingOrders } = useSWR<{ items: any[] }>(`/api/v1/orders?status=pending`, fetcher)
-  const { data: todaysRefunded } = useSWR<{ items: any[] }>(`/api/v1/orders?status=refunded&from=${encodeURIComponent(startOfToday)}`, fetcher)
+  const orgs = orgsData?.items || []
+  const branchesRaw = branchesData?.items || []
+  const usersRaw = usersData?.items || []
+
+  const branchesInScope = branchId
+    ? branchesRaw.filter((b: any) => b.id?.toString() === branchId)
+    : branchesRaw
+
+  const usersInScope = branchId
+    ? usersRaw.filter((u: any) => u.branchId?.toString() === branchId)
+    : usersRaw
+
+  const orgsCount = organizationId
+    ? orgs.filter((o: any) => o.id?.toString() === organizationId).length
+    : orgs.length
+
+  const usersCount = usersInScope.length
+  const branchesCount = branchesInScope.length
+  const activeBranches = branchesInScope.filter((b: any) => b.status === "active").length
+
+  const selectedOrg = organizationId
+    ? orgs.find((o: any) => o.id?.toString() === organizationId)
+    : null
+  const selectedBranch = branchId
+    ? branchesRaw.find((b: any) => b.id?.toString() === branchId)
+    : null
+
+  const scopeText = branchId
+    ? selectedBranch?.name || `Branch #${branchId}`
+    : organizationId
+    ? selectedOrg?.name || `Organization #${organizationId}`
+    : "All organizations & branches"
+
+  const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
+  const buildOrdersUrl = (params: Record<string, string | undefined>) => {
+    const search = new URLSearchParams()
+    if (params.status) search.set("status", params.status)
+    if (params.from) search.set("from", params.from)
+    if (organizationId) search.set("organizationId", organizationId)
+    if (branchId) search.set("branchId", branchId)
+    const qs = search.toString()
+    return `/api/v1/orders${qs ? `?${qs}` : ""}`
+  }
+
+  const startOfToday = (() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString()
+  })()
+
+  const { data: todaysOrders } = useSWR<{ items: any[] }>(
+    buildOrdersUrl({ from: startOfToday }),
+    fetcher
+  )
+  const { data: pendingOrders } = useSWR<{ items: any[] }>(
+    buildOrdersUrl({ status: "pending" }),
+    fetcher
+  )
+  const { data: todaysRefunded } = useSWR<{ items: any[] }>(
+    buildOrdersUrl({ status: "refunded", from: startOfToday }),
+    fetcher
+  )
 
   const todaysGMVCents = (todaysOrders?.items || []).reduce((sum, o) => sum + (o.totalCents || 0), 0)
   const todaysGMV = formatPKR(todaysGMVCents / 100, { maximumFractionDigits: 0 })
@@ -29,34 +139,101 @@ export function SuperAdminDashboard() {
   const todaysRefundCount = todaysRefunded?.items?.length || 0
 
   const salesData = [
-    { day: 'Mon', sales: 1200 },
-    { day: 'Tue', sales: 1800 },
-    { day: 'Wed', sales: 900 },
-    { day: 'Thu', sales: 1600 },
-    { day: 'Fri', sales: 2100 },
-    { day: 'Sat', sales: 1400 },
-    { day: 'Sun', sales: 1700 },
+    { label: "Mon", value: 120000 },
+    { label: "Tue", value: 180000 },
+    { label: "Wed", value: 90000 },
+    { label: "Thu", value: 160000 },
+    { label: "Fri", value: 210000 },
+    { label: "Sat", value: 140000 },
+    { label: "Sun", value: 170000 },
   ]
 
   const gmvTaxData = [
-    { month: 'Jan', gmv: 12000, tax: 900 },
-    { month: 'Feb', gmv: 13500, tax: 980 },
-    { month: 'Mar', gmv: 15000, tax: 1100 },
-    { month: 'Apr', gmv: 14200, tax: 1050 },
+    { label: "Jan", value: 120 },
+    { label: "Feb", value: 135 },
+    { label: "Mar", value: 150 },
+    { label: "Apr", value: 142 },
   ]
 
   return (
     <main className="p-6 space-y-6">
-      <SectionHeader title="Super Admin Dashboard" subtitle="System-wide overview and activity" />
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#141EAE] via-[#3E2FBF] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs tracking-[0.2em] text-white/70">SUPER ADMIN · CONTROL</p>
+            <h1 className="text-3xl font-semibold">Super Admin dashboard</h1>
+            <p className="text-sm text-white/80">
+              System-wide overview and controls for {scopeText.toLowerCase()}.
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-medium uppercase tracking-wide">
+              <span className="text-white/80">Scope</span>
+              <span className="rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold">
+                {scopeText}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs text-white/80">
+              <div className="rounded-xl bg-black/15 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide">Organizations</p>
+                <p className="text-lg font-semibold text-white">{orgsCount}</p>
+              </div>
+              <div className="rounded-xl bg-black/15 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide">Branches</p>
+                <p className="text-lg font-semibold text-white">{branchesCount}</p>
+              </div>
+              <div className="rounded-xl bg-black/15 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide">Users</p>
+                <p className="text-lg font-semibold text-white">{usersCount}</p>
+              </div>
+              <div className="rounded-xl bg-black/15 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-wide">Pending orders</p>
+                <p className="text-lg font-semibold text-white">{pendingCount}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KpiCard title="Total Organizations" value={orgsCount} colorClass="text-blue-600" />
-        <KpiCard title="Active Branches" value={activeBranches} colorClass="text-green-600" />
-        <KpiCard title="Total Users" value={usersCount} colorClass="text-amber-600" />
-        <KpiCard title="Pending Orders" value={pendingCount} colorClass="text-red-600" />
+      {/* Quick navigation tiles into all admin pages */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-slate-900">Admin control areas</h2>
+        <p className="text-xs text-muted-foreground">
+          Jump straight into configuration, users, inventory, orders, budgets, and reports.
+        </p>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {navTiles.map((tile) => {
+            const Icon = tile.icon
+            return (
+              <Card
+                key={tile.title}
+                className="group border-dashed border-slate-200 hover:border-slate-400 hover:shadow-md transition-all"
+              >
+                <Link href={tile.href}>
+                  <CardContent className="p-4 flex flex-col gap-3 h-full">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-900 group-hover:text-indigo-700">
+                          {tile.title}
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">{tile.description}</p>
+                      </div>
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div className="mt-auto pt-1 text-[11px] font-medium text-indigo-600 group-hover:text-indigo-700">
+                      Open {tile.title}
+                    </div>
+                  </CardContent>
+                </Link>
+              </Card>
+            )
+          })}
       </div>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KpiCard title="Today's GMV" value={todaysGMV} colorClass="text-emerald-600" />
@@ -68,65 +245,16 @@ export function SuperAdminDashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardContent className="p-4">
-            <div className="text-sm font-medium mb-2">Sales by Day</div>
-            <div className="h-56 w-full">
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
-                <defs>
-                  <linearGradient id="lineGrad" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="oklch(0.65 0.2 250)" stopOpacity="0.6" />
-                    <stop offset="100%" stopColor="oklch(0.65 0.2 250)" stopOpacity="0.05" />
-                  </linearGradient>
-                </defs>
-                <polyline
-                  fill="none"
-                  stroke="oklch(0.65 0.2 250)"
-                  strokeWidth="2"
-                  points={salesData
-                    .map((d, i) => {
-                      const x = (i / (salesData.length - 1)) * 100
-                      const max = Math.max(...salesData.map(s => s.sales))
-                      const y = 100 - (d.sales / max) * 80 - 10
-                      return `${x},${y}`
-                    })
-                    .join(' ')}
-                />
-                <polygon
-                  fill="url(#lineGrad)"
-                  points={(() => {
-                    const pts = salesData.map((d, i) => {
-                      const x = (i / (salesData.length - 1)) * 100
-                      const max = Math.max(...salesData.map(s => s.sales))
-                      const y = 100 - (d.sales / max) * 80 - 10
-                      return `${x},${y}`
-                    })
-                    return `0,100 ${pts.join(' ')} 100,100`
-                  })()}
-                />
-              </svg>
-            </div>
+            <div className="mb-2 text-sm font-medium">Sales by day (PKR)</div>
+            <TrendAreaChart data={salesData} />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-sm font-medium mb-2">GMV vs Tax</div>
-            <div className="h-56 w-full">
-              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
-                {gmvTaxData.map((d, i) => {
-                  const groupWidth = 100 / (gmvTaxData.length * 2)
-                  const gap = groupWidth * 0.3
-                  const baseX = i * (groupWidth * 2)
-                  const max = Math.max(...gmvTaxData.map(v => Math.max(v.gmv, v.tax)))
-                  const gmvH = (d.gmv / max) * 80
-                  const taxH = (d.tax / max) * 80
-                  return (
-                    <g key={d.month}>
-                      <rect x={baseX + gap} y={100 - gmvH - 10} width={groupWidth - gap} height={gmvH} fill="oklch(0.7 0.2 150)" rx="2" />
-                      <rect x={baseX + groupWidth + gap} y={100 - taxH - 10} width={groupWidth - gap} height={taxH} fill="oklch(0.6 0.15 30)" rx="2" />
-                    </g>
-                  )
-                })}
-              </svg>
-            </div>
+            <ComparisonBarChart
+              title="Monthly GMV index"
+              data={gmvTaxData}
+            />
           </CardContent>
         </Card>
       </div>

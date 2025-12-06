@@ -253,6 +253,15 @@ export async function POST(req: NextRequest) {
     })
   } catch (error: any) {
     console.error("Error creating organization assignments:", error)
+
+    // Handle duplicate-assignment case more gracefully
+    if (error?.code === "23505") {
+      return NextResponse.json(
+        { error: "One or more of these products are already assigned to this organization." },
+        { status: 400 }
+      )
+    }
+
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
@@ -275,7 +284,20 @@ export async function DELETE(req: NextRequest) {
     const organizationId = searchParams.get("organizationId")
     const productId = searchParams.get("productId")
 
-    const whereConditions = [isNull(organizationInventory.deletedAt)]
+    // Support bulk deletion via JSON body: { assignmentIds: number[] }
+    let assignmentIdsFromBody: number[] = []
+    try {
+      const body = await req.json().catch(() => null)
+      if (body && Array.isArray(body.assignmentIds)) {
+        assignmentIdsFromBody = body.assignmentIds
+          .map((v: any) => parseInt(v))
+          .filter((v: number) => Number.isFinite(v))
+      }
+    } catch {
+      // Ignore body parse errors – we'll fall back to query-based deletion
+    }
+
+    const whereConditions = []
     if (id) {
       whereConditions.push(eq(organizationInventory.id, parseInt(id)))
     }
@@ -285,25 +307,32 @@ export async function DELETE(req: NextRequest) {
     if (productId) {
       whereConditions.push(eq(organizationInventory.globalProductId, parseInt(productId)))
     }
+    if (assignmentIdsFromBody.length > 0) {
+      whereConditions.push(inArray(organizationInventory.id, assignmentIdsFromBody))
+    }
 
-    if (whereConditions.length === 1) {
-      return NextResponse.json({ error: "Assignment ID, Organization ID, or Product ID is required" }, { status: 400 })
+    if (whereConditions.length === 0) {
+      return NextResponse.json(
+        { error: "Assignment ID, Organization ID, Product ID, or assignmentIds are required" },
+        { status: 400 }
+      )
     }
 
     // Find assignments to be deleted
-    const assignmentsToDelete = await db.select({
-      id: organizationInventory.id,
-      organizationId: organizationInventory.organizationId,
-      globalProductId: organizationInventory.globalProductId,
-    })
-    .from(organizationInventory)
-    .where(and(...whereConditions))
+    const assignmentsToDelete = await db
+      .select({
+        id: organizationInventory.id,
+        organizationId: organizationInventory.organizationId,
+        globalProductId: organizationInventory.globalProductId,
+      })
+      .from(organizationInventory)
+      .where(and(...whereConditions))
 
     if (!assignmentsToDelete || assignmentsToDelete.length === 0) {
       return NextResponse.json({ error: "No assignments found" }, { status: 404 })
     }
 
-    // Soft delete each assignment and cascade to branches
+    // Hard delete each assignment and cascade to branches
     let totalBranchDeletions = 0
     const affectedBranches: number[] = []
 
@@ -317,12 +346,9 @@ export async function DELETE(req: NextRequest) {
       totalBranchDeletions += cascadeResult.deletedCount
       affectedBranches.push(...cascadeResult.affectedBranches)
 
-      // Then soft delete the organization assignment
-      await db.update(organizationInventory)
-        .set({ 
-          deletedAt: new Date(),
-          updatedAt: new Date()
-        })
+      // Then hard delete the organization assignment
+      await db
+        .delete(organizationInventory)
         .where(eq(organizationInventory.id, assignment.id))
     }
 

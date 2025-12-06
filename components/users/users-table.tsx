@@ -26,6 +26,7 @@ export function UsersTable() {
   const [filter, setFilter] = useState("")
   const [page, setPage] = useState(1)
   const [editingUser, setEditingUser] = useState<UserRow | null>(null)
+  const [showPasswordReset, setShowPasswordReset] = useState(false)
   const [editForm, setEditForm] = useState({
     firstName: "",
     lastName: "",
@@ -33,7 +34,9 @@ export function UsersTable() {
     phone: "",
     organizationId: "",
     branchId: "",
-    mfaEnabled: false
+    mfaEnabled: false,
+    password: "",
+    confirmPassword: ""
   })
 
   const organizations = orgsData?.items || []
@@ -68,6 +71,7 @@ export function UsersTable() {
 
   function openEditDialog(user: UserRow) {
     setEditingUser(user)
+    setShowPasswordReset(false)
     setEditForm({
       firstName: user.firstName || "",
       lastName: user.lastName || "",
@@ -75,12 +79,15 @@ export function UsersTable() {
       phone: user.phone || "",
       organizationId: user.organizationId ? String(user.organizationId) : "",
       branchId: user.branchId ? String(user.branchId) : "",
-      mfaEnabled: user.mfaEnabled || false
+      mfaEnabled: user.mfaEnabled || false,
+      password: "",
+      confirmPassword: ""
     })
   }
 
   function closeEditDialog() {
     setEditingUser(null)
+    setShowPasswordReset(false)
     setEditForm({
       firstName: "",
       lastName: "",
@@ -88,7 +95,9 @@ export function UsersTable() {
       phone: "",
       organizationId: "",
       branchId: "",
-      mfaEnabled: false
+      mfaEnabled: false,
+      password: "",
+      confirmPassword: ""
     })
   }
 
@@ -96,18 +105,41 @@ export function UsersTable() {
     if (!editingUser) return
     
     try {
+      const body: any = {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        email: editForm.email,
+        phone: editForm.phone || null,
+        organizationId: editForm.organizationId ? parseInt(editForm.organizationId) : null,
+        branchId: editForm.branchId ? parseInt(editForm.branchId) : null,
+        mfaEnabled: editForm.mfaEnabled
+      }
+
+      // Include password if password reset is enabled and passwords match
+      if (showPasswordReset && editForm.password) {
+        if (editForm.password !== editForm.confirmPassword) {
+          toast({
+            title: "Error",
+            description: "Passwords do not match",
+            variant: "destructive",
+          })
+          return
+        }
+        if (editForm.password.length < 6) {
+          toast({
+            title: "Error",
+            description: "Password must be at least 6 characters",
+            variant: "destructive",
+          })
+          return
+        }
+        body.password = editForm.password
+      }
+
       const response = await jsonFetcher(`/api/v1/users/${editingUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: editForm.firstName,
-          lastName: editForm.lastName,
-          email: editForm.email,
-          phone: editForm.phone || null,
-          organizationId: editForm.organizationId ? parseInt(editForm.organizationId) : null,
-          branchId: editForm.branchId ? parseInt(editForm.branchId) : null,
-          mfaEnabled: editForm.mfaEnabled
-        })
+        body: JSON.stringify(body)
       })
 
       if (response.error) {
@@ -330,10 +362,62 @@ export function UsersTable() {
               />
               <Label htmlFor="mfaEnabled" className="cursor-pointer">Enable MFA</Label>
             </div>
+
+            {/* Password Reset Section */}
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Password Reset</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowPasswordReset(!showPasswordReset)
+                    if (showPasswordReset) {
+                      setEditForm({ ...editForm, password: "", confirmPassword: "" })
+                    }
+                  }}
+                >
+                  {showPasswordReset ? "Cancel" : "Reset Password"}
+                </Button>
+              </div>
+              {showPasswordReset && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="password">New Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={editForm.password}
+                      onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                      placeholder="Enter new password"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={editForm.confirmPassword}
+                      onChange={(e) => setEditForm({ ...editForm, confirmPassword: e.target.value })}
+                      placeholder="Confirm new password"
+                    />
+                    {editForm.password && editForm.confirmPassword && editForm.password !== editForm.confirmPassword && (
+                      <p className="text-sm text-red-600">Passwords do not match</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeEditDialog}>Cancel</Button>
-            <Button onClick={saveEdit}>Save Changes</Button>
+            <Button 
+              onClick={saveEdit}
+              disabled={showPasswordReset && editForm.password && editForm.password !== editForm.confirmPassword}
+            >
+              Save Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/components/ui/use-toast"
 import { DollarSign, RefreshCw, AlertTriangle, Clock, User, Plus, Check, ArrowDownToLine } from "lucide-react"
 import useSWR from "swr"
+import { useSession } from "next-auth/react"
 import { formatPKR } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
 
@@ -19,11 +20,12 @@ interface Refund {
   amountCents: number
   reason: string | null
   createdAt: string
-  processedByUserId: string
+  status: string
+  processedByUserId: string | null
   processedByUser: {
-    email: string
+    email: string | null
     fullName: string | null
-  }
+  } | null
 }
 
 interface RefundManagementProps {
@@ -44,6 +46,10 @@ export function RefundManagement({
   className = ""
 }: RefundManagementProps) {
   const { toast } = useToast()
+  const { data: session } = useSession()
+  const userRole = (session?.user as any)?.role
+  const isSuperAdmin = userRole === "SUPER_ADMIN"
+  const isRequester = userRole === "BRANCH_ADMIN" || userRole === "HEAD_OFFICE"
   const [showRefundDialog, setShowRefundDialog] = useState(false)
   const [refundAmount, setRefundAmount] = useState("")
   const [refundReason, setRefundReason] = useState("")
@@ -56,20 +62,39 @@ export function RefundManagement({
   )
 
   const refunds: Refund[] = refundsData?.refunds || []
-  const totalRefundedCents = refunds.reduce((sum, refund) => sum + refund.amountCents, 0)
+  const approvedRefunds = refunds.filter((r) => r.status === "APPROVED")
+  const totalRefundedCents = approvedRefunds.reduce((sum, refund) => sum + refund.amountCents, 0)
   const remainingAmountCents = orderTotalCents - totalRefundedCents
+  // Business rule: refunds only against fulfilled orders.
+  // Any role can APPLY; Super Admin is expected to review/process.
   const canRefund = orderStatus === "fulfilled" && remainingAmountCents > 0
   const refundedPercent = Math.min(100, Math.round((totalRefundedCents / orderTotalCents) * 100))
 
   const refundState = useMemo(() => {
-    if (totalRefundedCents === 0) {
-      return { label: "No refunds processed", tone: "text-slate-600", badge: "Pending" }
+    if (refunds.length === 0) {
+      return {
+        label: isSuperAdmin ? "No refunds processed" : "No refunds logged yet",
+        tone: "text-slate-600",
+        badge: "Pending",
+      }
     }
+
+    const hasPending = refunds.some((r) => r.status === "PENDING")
+
+    if (totalRefundedCents === 0 && hasPending) {
+      return { label: "Requested, awaiting approval", tone: "text-amber-600", badge: "Pending" }
+    }
+
     if (remainingAmountCents > 0) {
-      return { label: "Partially refunded", tone: "text-amber-600", badge: "In progress" }
+      return {
+        label: "Partially refunded",
+        tone: "text-amber-600",
+        badge: hasPending ? "In progress" : "Processed",
+      }
     }
+
     return { label: "Fully refunded", tone: "text-emerald-600", badge: "Complete" }
-  }, [remainingAmountCents, totalRefundedCents])
+  }, [remainingAmountCents, totalRefundedCents, refunds, isSuperAdmin])
 
   const handleRefund = async () => {
     if (!refundAmount || parseFloat(refundAmount) <= 0) {
@@ -132,7 +157,7 @@ export function RefundManagement({
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
             <DollarSign className="h-5 w-5" />
-            Refund Management
+            {isSuperAdmin ? "Refund Management" : "Refund request"}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -163,7 +188,9 @@ export function RefundManagement({
                 <Badge variant="outline" className="uppercase tracking-wide">{refundState.badge}</Badge>
               </div>
               <div className="mt-4 text-xs text-muted-foreground">
-                Head office can log refunds with internal notes for audit tracking.
+                {isSuperAdmin
+                  ? "Process and log refunds with internal notes for audit tracking."
+                  : "Submit a refund request; Super Admin will review and process it."}
               </div>
             </div>
           </div>
@@ -189,7 +216,7 @@ export function RefundManagement({
               className="gap-2"
             >
               <Plus className="h-4 w-4" />
-              Process refund
+              {isSuperAdmin ? "Process refund" : "Apply for refund"}
             </Button>
             <Button
               type="button"
@@ -250,7 +277,9 @@ export function RefundManagement({
                       )}
                       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                         <User className="h-3 w-3" />
-                        {refund.processedByUser.fullName || refund.processedByUser.email}
+                        {refund.processedByUser?.fullName ||
+                          refund.processedByUser?.email ||
+                          "Pending review"}
                       </div>
                     </div>
                   </li>
@@ -265,9 +294,13 @@ export function RefundManagement({
       <Dialog open={showRefundDialog} onOpenChange={setShowRefundDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Process Refund</DialogTitle>
+            <DialogTitle>
+              {isSuperAdmin ? "Process refund" : "Apply for refund"}
+            </DialogTitle>
             <DialogDescription>
-              Enter the refund amount and reason for this order.
+              {isSuperAdmin
+                ? "Enter the refund amount and reason for this order."
+                : "Request a refund by entering amount and reason. Super Admin will review and process it."}
             </DialogDescription>
           </DialogHeader>
 
@@ -322,7 +355,7 @@ export function RefundManagement({
               ) : (
                 <>
                   <ArrowDownToLine className="h-4 w-4" />
-                  Log refund
+                  {isSuperAdmin ? "Log refund" : "Submit request"}
                 </>
               )}
             </Button>
@@ -332,3 +365,4 @@ export function RefundManagement({
     </div>
   )
 }
+

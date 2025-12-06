@@ -24,12 +24,14 @@ type GlobalProduct = {
   basePrice: number
   unit: string
   status: string
+  stockQuantity?: number
   categoryName?: string
   discountType?: string | null
   discountValue?: number | null
   discountStartAt?: string | null
   discountEndAt?: string | null
   discountActive?: boolean
+  metadata?: Record<string, any> | null
 }
 
 type Category = {
@@ -46,6 +48,8 @@ type ProductFormState = {
   basePrice: string
   unit: string
   status: string
+  stockQuantity: string
+  subCategoryId: string
   discountType: string
   discountValue: string
   discountStartAt: string
@@ -73,6 +77,8 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
     basePrice: "",
     unit: "unit",
     status: "active",
+    stockQuantity: "0",
+    subCategoryId: "",
     discountType: "",
     discountValue: "",
     discountStartAt: "",
@@ -91,6 +97,12 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
         basePrice: (initialProduct.basePrice / 100).toFixed(2),
         unit: initialProduct.unit,
         status: initialProduct.status,
+        stockQuantity: initialProduct.stockQuantity?.toString() || "0",
+        subCategoryId:
+          (initialProduct.metadata as any)?.subCategoryId !== undefined &&
+          (initialProduct.metadata as any)?.subCategoryId !== null
+            ? String((initialProduct.metadata as any).subCategoryId)
+            : "",
         discountType: initialProduct.discountType || "",
         discountValue: initialProduct.discountValue?.toString() || "",
         discountStartAt: initialProduct.discountStartAt
@@ -114,6 +126,19 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
     { fallbackData: { items: [] }, revalidateOnFocus: false }
   )
   const categories = categoriesData?.items || []
+
+  type SubCategory = {
+    id: number
+    name: string
+    parentId: number
+  }
+
+  const { data: subCategoriesData } = useSWR<{ items: SubCategory[] }>(
+    productData.categoryId ? `/api/v1/subcategories?parentId=${productData.categoryId}` : null,
+    fetcher,
+    { fallbackData: { items: [] }, revalidateOnFocus: false }
+  )
+  const subCategories = subCategoriesData?.items || []
 
   const discountEnabled = productData.discountActive || !!productData.discountType
 
@@ -182,6 +207,16 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
 
     try {
       const method = mode === "edit" ? "PUT" : "POST"
+      const metadata: Record<string, any> = {
+        ...(initialProduct?.metadata || {}),
+      }
+
+      if (productData.subCategoryId) {
+        metadata.subCategoryId = parseInt(productData.subCategoryId)
+      } else if ("subCategoryId" in metadata) {
+        delete metadata.subCategoryId
+      }
+
       const response = await fetch(`/api/v1/admin/global-inventory`, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -189,7 +224,9 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
           ...productData,
           id: initialProduct?.id,
           basePrice: parseFloat(productData.basePrice),
+          stockQuantity: parseInt(productData.stockQuantity) || 0,
           categoryId: productData.categoryId ? parseInt(productData.categoryId) : null,
+          metadata,
           discountType: productData.discountType || null,
           discountValue: productData.discountValue ? parseInt(productData.discountValue) : null,
           discountStartAt: productData.discountStartAt || null,
@@ -236,7 +273,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
               <div>
                 <label className="block text-sm font-medium mb-1">Product Code *</label>
                 <Input
-                  value={productData.productCode}
+                  value={productData.productCode ?? ""}
                   onChange={(e) => setProductData({ ...productData, productCode: e.target.value })}
                   placeholder="PRD-001"
                   required
@@ -246,7 +283,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
               <div>
                 <label className="block text-sm font-medium mb-1">Name *</label>
                 <Input
-                  value={productData.name}
+                  value={productData.name ?? ""}
                   onChange={(e) => setProductData({ ...productData, name: e.target.value })}
                   placeholder="Product name"
                   required
@@ -279,6 +316,42 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 </Select>
               </div>
               <div>
+                <label className="block text-sm font-medium mb-1">Subcategory</label>
+                <Select
+                  value={productData.subCategoryId || "none"}
+                  onValueChange={(value) =>
+                    setProductData({
+                      ...productData,
+                      subCategoryId: value === "none" ? "" : value,
+                    })
+                  }
+                  disabled={!productData.categoryId || subCategories.length === 0}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue
+                      placeholder={
+                        !productData.categoryId
+                          ? "Select a category first"
+                          : subCategories.length === 0
+                          ? "No subcategories for this category"
+                          : "Optional: choose a subcategory"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectLabel>Subcategories</SelectLabel>
+                      <SelectItem value="none">None</SelectItem>
+                      {subCategories.map((sub) => (
+                        <SelectItem key={sub.id} value={String(sub.id)}>
+                          {sub.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium mb-1">Status</label>
                 <Select value={productData.status} onValueChange={(value) => setProductData({ ...productData, status: value })}>
                   <SelectTrigger className="w-full">
@@ -295,7 +368,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
             <div>
               <label className="block text-sm font-medium mb-1">Description</label>
               <textarea
-                value={productData.description}
+                value={productData.description ?? ""}
                 onChange={(e) => setProductData({ ...productData, description: e.target.value })}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 rows={3}
@@ -317,7 +390,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 <Input
                   type="number"
                   step="0.01"
-                  value={productData.basePrice}
+                  value={productData.basePrice ?? ""}
                   onChange={(e) => setProductData({ ...productData, basePrice: e.target.value })}
                   placeholder="0.00"
                   required
@@ -327,11 +400,23 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
               <div>
                 <label className="block text-sm font-medium mb-1">Unit</label>
                 <Input
-                  value={productData.unit}
+                  value={productData.unit ?? ""}
                   onChange={(e) => setProductData({ ...productData, unit: e.target.value })}
                   placeholder="ltr / kg / box"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">Shown in inventory cards and packing slips.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Stock Quantity</label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={productData.stockQuantity ?? "0"}
+                  onChange={(e) => setProductData({ ...productData, stockQuantity: e.target.value })}
+                  placeholder="0"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">Current available stock quantity. Defaults to 0.</p>
               </div>
             </div>
             <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
@@ -372,7 +457,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 </div>
               ) : (
                 <Input
-                  value={productData.imageUrl}
+                  value={productData.imageUrl ?? ""}
                   onChange={(e) => setProductData({ ...productData, imageUrl: e.target.value })}
                   placeholder="https://example.com/image.jpg"
                 />
@@ -422,7 +507,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                     type="number"
                     step={productData.discountType === "flat" ? "1" : "0.01"}
                     placeholder={productData.discountType === "flat" ? "Enter amount in PKR" : "Enter percentage"}
-                    value={productData.discountValue}
+                    value={productData.discountValue ?? ""}
                     onChange={(e) => setProductData({ ...productData, discountValue: e.target.value })}
                   />
                 </div>
@@ -430,7 +515,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   <label className="block text-sm font-medium mb-1">Discount Start</label>
                   <Input
                     type="datetime-local"
-                    value={productData.discountStartAt}
+                    value={productData.discountStartAt ?? ""}
                     onChange={(e) => setProductData({ ...productData, discountStartAt: e.target.value })}
                   />
                 </div>
@@ -438,7 +523,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   <label className="block text-sm font-medium mb-1">Discount End</label>
                   <Input
                     type="datetime-local"
-                    value={productData.discountEndAt}
+                    value={productData.discountEndAt ?? ""}
                     onChange={(e) => setProductData({ ...productData, discountEndAt: e.target.value })}
                   />
                 </div>
@@ -497,7 +582,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-muted-foreground">Base price</dt>
                   <dd className="font-medium">
-                    {productData.basePrice ? formatPKR(Number(productData.basePrice) / 100) : "PKR 0.00"}
+                    {productData.basePrice ? formatPKR(Number(productData.basePrice)) : "PKR 0.00"}
                   </dd>
                 </div>
                 <div>
@@ -509,6 +594,14 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   <dd className="font-medium">
                     {productData.categoryId
                       ? categories.find((cat) => String(cat.id) === productData.categoryId)?.name ?? "Selected"
+                      : "Not set"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Subcategory</dt>
+                  <dd className="font-medium">
+                    {productData.subCategoryId
+                      ? subCategories.find((sub) => String(sub.id) === productData.subCategoryId)?.name ?? "Selected"
                       : "Not set"}
                   </dd>
                 </div>

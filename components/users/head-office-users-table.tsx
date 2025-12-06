@@ -42,6 +42,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
   const [submitting, setSubmitting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<UserRow | null>(null)
 
+  const [showPasswordReset, setShowPasswordReset] = useState(false)
   const [editForm, setEditForm] = useState({
     firstName: "",
     lastName: "",
@@ -50,7 +51,9 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
     role: "",
     organizationId: "",
     branchId: "",
-    mfaEnabled: false
+    mfaEnabled: false,
+    password: "",
+    confirmPassword: ""
   })
 
   // Filter users
@@ -126,6 +129,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
   // Open edit dialog
   const openEditDialog = (user: UserRow) => {
     setEditingUser(user)
+    setShowPasswordReset(false)
     setEditForm({
       firstName: user.firstName || "",
       lastName: user.lastName || "",
@@ -134,13 +138,16 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
       role: user.role || "",
       organizationId: user.organizationId ? String(user.organizationId) : "",
       branchId: user.branchId ? String(user.branchId) : "",
-      mfaEnabled: user.mfaEnabled || false
+      mfaEnabled: user.mfaEnabled || false,
+      password: "",
+      confirmPassword: ""
     })
   }
 
   // Close edit dialog
   const closeEditDialog = () => {
     setEditingUser(null)
+    setShowPasswordReset(false)
     setEditForm({
       firstName: "",
       lastName: "",
@@ -149,7 +156,9 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
       role: "",
       organizationId: "",
       branchId: "",
-      mfaEnabled: false
+      mfaEnabled: false,
+      password: "",
+      confirmPassword: ""
     })
   }
 
@@ -157,20 +166,39 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
   const saveUser = async () => {
     if (!editingUser) return
 
+    // Validate password if reset is enabled
+    if (showPasswordReset && editForm.password) {
+      if (editForm.password !== editForm.confirmPassword) {
+        alert("Passwords do not match")
+        return
+      }
+      if (editForm.password.length < 6) {
+        alert("Password must be at least 6 characters")
+        return
+      }
+    }
+
     setSubmitting(true)
     try {
+      const body: any = {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        email: editForm.email,
+        phone: editForm.phone || null,
+        role: editForm.role,
+        organizationId: editForm.organizationId ? parseInt(editForm.organizationId) : null,
+        branchId: editForm.branchId ? parseInt(editForm.branchId) : null,
+        mfaEnabled: editForm.mfaEnabled
+      }
+
+      // Include password if password reset is enabled
+      if (showPasswordReset && editForm.password) {
+        body.password = editForm.password
+      }
+
       await jsonFetcher(`/api/v1/users/${editingUser.id}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          firstName: editForm.firstName,
-          lastName: editForm.lastName,
-          email: editForm.email,
-          phone: editForm.phone || null,
-          role: editForm.role,
-          organizationId: editForm.organizationId ? parseInt(editForm.organizationId) : null,
-          branchId: editForm.branchId ? parseInt(editForm.branchId) : null,
-          mfaEnabled: editForm.mfaEnabled
-        })
+        body: JSON.stringify(body)
       })
 
       onUserUpdate()
@@ -484,6 +512,56 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
                 </Label>
               </div>
             </div>
+
+            {/* Password Reset Section */}
+            <div className="space-y-4 pt-4 border-t">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold">Password Reset</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowPasswordReset(!showPasswordReset)
+                    if (showPasswordReset) {
+                      setEditForm({ ...editForm, password: "", confirmPassword: "" })
+                    }
+                  }}
+                >
+                  {showPasswordReset ? "Cancel" : "Reset Password"}
+                </Button>
+              </div>
+              {showPasswordReset && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="password">New Password *</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={editForm.password}
+                      onChange={e => setEditForm({ ...editForm, password: e.target.value })}
+                      placeholder="Enter new password (min. 6 characters)"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={editForm.confirmPassword}
+                      onChange={e => setEditForm({ ...editForm, confirmPassword: e.target.value })}
+                      placeholder="Confirm new password"
+                    />
+                    {editForm.password && editForm.confirmPassword && editForm.password !== editForm.confirmPassword && (
+                      <p className="text-sm text-red-600">Passwords do not match</p>
+                    )}
+                    {editForm.password && editForm.password.length > 0 && editForm.password.length < 6 && (
+                      <p className="text-sm text-red-600">Password must be at least 6 characters</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
@@ -492,7 +570,14 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
             </Button>
             <Button
               onClick={saveUser}
-              disabled={submitting || !editForm.firstName || !editForm.lastName || !editForm.email || !editForm.role}
+              disabled={
+                submitting || 
+                !editForm.firstName || 
+                !editForm.lastName || 
+                !editForm.email || 
+                !editForm.role ||
+                (showPasswordReset && (!editForm.password || !editForm.confirmPassword || editForm.password !== editForm.confirmPassword || editForm.password.length < 6))
+              }
               style={{ background: "var(--color-brand-primary)", color: "white" }}
             >
               {submitting ? "Saving..." : "Save Changes"}

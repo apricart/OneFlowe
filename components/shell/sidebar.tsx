@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Home, Building2, Users, Package, Boxes, Wallet, BarChart3, Settings, ShieldCheck, ShoppingBag, FolderTree, FolderOpen, Tags, ChevronDown, ChevronRight } from "lucide-react"
+import { Home, Building2, Users, Package, Boxes, Wallet, BarChart3, Settings, ShieldCheck, ShoppingBag, FolderTree, FolderOpen, ChevronDown, ChevronRight } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
 
@@ -16,7 +16,6 @@ const getNavigationByRole = (role: string) => {
   if (role === "SUPER_ADMIN") {
     return [
       ...baseNav,
-      { href: "/admin", label: "Admin Control", icon: ShieldCheck },
       { href: "/organizations", label: "Organizations", icon: Building2 },
       { href: "/users", label: "Users", icon: Users },
       { href: "/orders", label: "Orders", icon: Package },
@@ -27,7 +26,6 @@ const getNavigationByRole = (role: string) => {
         subItems: [
           { href: "/products/categories", label: "Categories", icon: FolderTree },
           { href: "/products/subcategories", label: "Sub Categories", icon: FolderOpen },
-          { href: "/products/modifiers", label: "Modifiers", icon: Tags },
         ]
       },
       { href: "/global-inventory", label: "Global Inventory", icon: Boxes },

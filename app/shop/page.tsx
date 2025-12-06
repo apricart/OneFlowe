@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
-import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, AlertTriangle, DollarSign, Star, Zap, Package, TrendingDown, Grid, LogOut, ArrowRight, Calendar, MapPin, RefreshCw } from "lucide-react"
+import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, AlertTriangle, DollarSign, Star, Zap, Package, TrendingDown, Grid, LogOut, ArrowRight, ArrowLeft, Calendar, MapPin, RefreshCw } from "lucide-react"
 import { RefundManagement } from "@/components/refunds/refund-management"
+import { Skeleton } from "@/components/ui/skeleton"
 import Image from "next/image"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -57,6 +58,8 @@ export default function OrderPortalPage() {
   const [showOrders, setShowOrders] = useState(false)
   const [showOrderDetail, setShowOrderDetail] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [pageSize, setPageSize] = useState(12)
+  const [currentPage, setCurrentPage] = useState(1)
 
   // Auth check
   React.useEffect(() => {
@@ -125,7 +128,7 @@ export default function OrderPortalPage() {
   }, [branchInventory?.items])
 
   const filteredProducts = useMemo(() => {
-    let filtered = products
+    let filtered = [...products]
     if (searchQuery) {
       filtered = filtered.filter(p =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -140,10 +143,33 @@ export default function OrderPortalPage() {
     return filtered
   }, [products, searchQuery, sortBy])
 
+  // Reset to first page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, sortBy])
+
+  const totalProducts = filteredProducts.length
+  const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize))
+
+  // Keep current page in range if product count changes
+  React.useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    const end = start + pageSize
+    return filteredProducts.slice(start, end)
+  }, [filteredProducts, currentPage, pageSize])
+
   const cartTotal = cart.reduce((sum, item) => sum + item.priceCents * item.quantity, 0)
   const remainingBudget = budget?.remainingCents || 0
   const canCheckout = cartTotal <= remainingBudget && cart.length > 0
-  const budgetPercent = ((((budget?.amountAllocatedCents || 0) - remainingBudget) / (budget?.amountAllocatedCents || 1)) * 100)
+  const rawBudgetPercent = ((((budget?.amountAllocatedCents || 0) - remainingBudget) / (budget?.amountAllocatedCents || 1)) * 100)
+  const budgetPercent = Math.min(100, Math.max(0, rawBudgetPercent || 0))
+  const isLoadingInventory = !!branchInventoryUrl && typeof branchInventory === "undefined"
 
   const openProductDetail = (product: Product) => {
     setSelectedProduct(product)
@@ -159,14 +185,42 @@ export default function OrderPortalPage() {
   }
 
   const addToCart = (product: Product, qty: number = 1) => {
+    const availableStock = product.stock || 0
+    if (availableStock === 0) {
+      toast({ 
+        title: "Out of stock", 
+        description: `${product.name} is currently out of stock.`,
+        variant: "destructive"
+      })
+      return
+    }
+    
+    if (qty > availableStock) {
+      toast({ 
+        title: "Insufficient stock", 
+        description: `Only ${availableStock} available for ${product.name}.`,
+        variant: "destructive"
+      })
+      return
+    }
+    
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id)
       if (existing) {
+        const newQuantity = existing.quantity + qty
+        if (newQuantity > availableStock) {
+          toast({ 
+            title: "Insufficient stock", 
+            description: `Only ${availableStock} available for ${product.name}.`,
+            variant: "destructive"
+          })
+          return prev
+        }
         return prev.map(item =>
-          item.id === product.id ? { ...item, quantity: Math.min(item.quantity + qty, item.stock || 999) } : item
+          item.id === product.id ? { ...item, quantity: newQuantity } : item
         )
       }
-      return [...prev, { ...product, quantity: Math.min(qty, product.stock || 999) }]
+      return [...prev, { ...product, quantity: qty }]
     })
     toast({ title: `${product.name} added to cart` })
   }
@@ -175,7 +229,22 @@ export default function OrderPortalPage() {
     if (qty <= 0) {
       removeFromCart(id)
     } else {
-      setCart(prev => prev.map(item => item.id === id ? { ...item, quantity: qty } : item))
+      setCart(prev => {
+        const item = prev.find(i => i.id === id)
+        if (!item) return prev
+        
+        const availableStock = item.stock || 0
+        if (qty > availableStock) {
+          toast({ 
+            title: "Insufficient stock", 
+            description: `Only ${availableStock} available for ${item.name}.`,
+            variant: "destructive"
+          })
+          return prev.map(i => i.id === id ? { ...i, quantity: availableStock } : i)
+        }
+        
+        return prev.map(i => i.id === id ? { ...i, quantity: qty } : i)
+      })
     }
   }
 
@@ -210,10 +279,18 @@ export default function OrderPortalPage() {
   // If status is loading but we'll eventually be authenticated, don't block the UI
   if (status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-muted-foreground">Loading portal...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50/90 to-white/95 dark:from-slate-950 dark:to-slate-900">
+        <div className="text-center space-y-3">
+          <div
+            className="inline-flex h-12 w-12 items-center justify-center rounded-2xl shadow-lg"
+            style={{
+              background:
+                "radial-gradient(circle at 30% 0%, color-mix(in oklab, var(--color-brand-accent), transparent 40%), transparent 60%), var(--color-brand-primary)",
+            }}
+          >
+            <ShoppingBag className="h-6 w-6 text-white animate-pulse" />
+          </div>
+          <p className="text-sm font-medium text-foreground/80">Loading Order Portal…</p>
         </div>
       </div>
     )
@@ -230,17 +307,41 @@ export default function OrderPortalPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Branded background layer */}
+      <div
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          // Soft branded gradients only – no grid texture
+          backgroundImage:
+            "radial-gradient(48rem 48rem at 0% 0%, color-mix(in oklab, var(--color-brand-accent), transparent 75%), transparent 60%), radial-gradient(48rem 48rem at 100% 0%, color-mix(in oklab, var(--color-primary), transparent 78%), transparent 60%)",
+          backgroundColor: "oklch(0.97 0 0)",
+          backgroundSize: "auto, auto",
+          backgroundAttachment: "fixed, fixed",
+          backgroundRepeat: "no-repeat, no-repeat",
+        }}
+      />
+
       {/* Modern Header */}
       <header className="sticky top-0 z-30 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg">
+            <div
+              className="p-2 rounded-xl shadow-sm"
+              style={{
+                background:
+                  "radial-gradient(circle at 30% 0%, color-mix(in oklab, var(--color-brand-accent), transparent 35%), transparent 60%), var(--color-brand-primary)",
+              }}
+            >
               <ShoppingBag className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Order Portal</h1>
-              <p className="text-xs text-muted-foreground">Welcome, {userName}</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+                Order Portal
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Welcome, <span className="font-medium text-foreground/80">{userName}</span>
+              </p>
             </div>
           </div>
 
@@ -251,11 +352,37 @@ export default function OrderPortalPage() {
             )}
 
             {/* Budget Status */}
-            <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
-              <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400" />
-              <div className="text-sm">
-                <p className="font-semibold text-slate-900 dark:text-white">${(remainingBudget / 100).toFixed(2)}</p>
-                <p className="text-xs text-muted-foreground">of ${((budget?.amountAllocatedCents || 0) / 100).toFixed(2)}</p>
+            <div className="hidden md:flex items-center gap-3 px-3 py-2 rounded-lg min-w-[220px] shadow-sm bg-slate-100/80 dark:bg-slate-800/80">
+              <div
+                className="flex h-7 w-7 items-center justify-center rounded-full"
+                style={{
+                  background:
+                    "radial-gradient(circle at 30% 0%, color-mix(in oklab, var(--color-brand-accent), transparent 35%), transparent 60%), var(--color-brand-primary)",
+                }}
+              >
+                <DollarSign className="h-4 w-4 text-white" />
+              </div>
+              <div className="text-sm w-full">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-slate-900 dark:text-white">
+                    PKR {(remainingBudget / 100).toFixed(2)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    of PKR {((budget?.amountAllocatedCents || 0) / 100).toFixed(2)}
+                  </p>
+                </div>
+                <div className="mt-1 h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${
+                      budgetPercent < 60
+                        ? "bg-[color:var(--color-brand-primary)]"
+                        : budgetPercent < 85
+                        ? "bg-amber-500"
+                        : "bg-red-500"
+                    }`}
+                    style={{ width: `${budgetPercent}%` }}
+                  />
+                </div>
               </div>
             </div>
 
@@ -270,12 +397,28 @@ export default function OrderPortalPage() {
               <span className="font-semibold">{cart.length}</span>
             </Button>
 
-            {/* Back Button */}
+            {/* Home / Back Button */}
             <Button
-              onClick={() => router.push("/")}
+              onClick={() => {
+                // Prefer going "back" when there is navigation history
+                if (typeof window !== "undefined" && window.history.length > 1) {
+                  router.back()
+                  return
+                }
+
+                // Fallbacks by role if there is no meaningful history
+                if (isAdmin) {
+                  router.push("/dashboard")
+                } else if (isEmployee) {
+                  // Employees don't have a dashboard – send them to login/home
+                  router.push("/auth/login")
+                } else {
+                  router.push("/")
+                }
+              }}
               variant="ghost"
               size="icon"
-              title="Back to dashboard"
+              title="Back to where you came from"
             >
               <Home className="h-4 w-4" />
             </Button>
@@ -306,7 +449,17 @@ export default function OrderPortalPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate text-slate-900 dark:text-white">{item.name}</p>
                         <p className="text-xs text-muted-foreground">{item.code}</p>
-                        <p className="text-xs mt-1 text-slate-500">${(item.priceCents / 100).toFixed(2)} / {item.unit}</p>
+                        <p className="text-xs mt-1 text-slate-500">PKR {(item.priceCents / 100).toFixed(2)} / {item.unit}</p>
+                        {item.stock !== undefined && item.quantity > item.stock && (
+                          <p className="text-xs mt-1 text-red-600 dark:text-red-400 font-medium">
+                            ⚠️ Only {item.stock} available (quantity adjusted)
+                          </p>
+                        )}
+                        {item.stock !== undefined && item.stock > 0 && item.stock <= 10 && item.quantity <= item.stock && (
+                          <p className="text-xs mt-1 text-yellow-600 dark:text-yellow-400">
+                            Low stock: {item.stock} remaining
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
@@ -320,7 +473,19 @@ export default function OrderPortalPage() {
                         <Button
                           size="icon"
                           variant="outline"
-                          onClick={() => updateQty(item.id, Math.min(item.quantity + 1, item.stock || 999))}
+                          onClick={() => {
+                            const maxStock = item.stock || 0
+                            if (item.quantity < maxStock) {
+                              updateQty(item.id, item.quantity + 1)
+                            } else {
+                              toast({
+                                title: "Maximum stock reached",
+                                description: `Only ${maxStock} available for ${item.name}.`,
+                                variant: "destructive"
+                              })
+                            }
+                          }}
+                          disabled={item.quantity >= (item.stock || 0)}
                         >
                           <Plus className="h-4 w-4" />
                         </Button>
@@ -345,10 +510,10 @@ export default function OrderPortalPage() {
                 </div>
                 <div className="flex justify-between text-base font-semibold text-slate-900 dark:text-white">
                   <span>Total</span>
-                  <span>${(cartTotal / 100).toFixed(2)}</span>
+                  <span>PKR {(cartTotal / 100).toFixed(2)}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Remaining budget after checkout: ${((remainingBudget - cartTotal) / 100).toFixed(2)}
+                  Remaining budget after checkout: PKR {((remainingBudget - cartTotal) / 100).toFixed(2)}
                 </p>
                 {cartTotal > remainingBudget && (
                   <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-600 dark:border-red-900 dark:bg-red-950">
@@ -385,7 +550,7 @@ export default function OrderPortalPage() {
 
       <div className="max-w-7xl mx-auto p-4 md:p-6">
         {/* Tabs */}
-        <div className="flex gap-2 mb-6">
+        <div className="mb-6 flex gap-2 rounded-2xl bg-white/80 p-1 shadow-sm ring-1 ring-black/5 backdrop-blur-md dark:bg-slate-900/80">
           <Button
             onClick={() => setShowOrders(false)}
             variant={!showOrders ? "default" : "outline"}
@@ -407,7 +572,22 @@ export default function OrderPortalPage() {
         {showOrders ? (
           // Orders View
           <div className="space-y-4">
-            {!ordersData?.items || ordersData.items.length === 0 ? (
+            {!ordersData ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, idx) => (
+                  <Card key={idx} className="p-4">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                      <Skeleton className="h-6 w-20" />
+                    </div>
+                    <Skeleton className="h-16 w-full" />
+                  </Card>
+                ))}
+              </div>
+            ) : !ordersData.items || ordersData.items.length === 0 ? (
               <div className="text-center py-16">
                 <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                 <p className="text-lg font-medium text-muted-foreground">No orders yet</p>
@@ -442,7 +622,7 @@ export default function OrderPortalPage() {
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold text-lg text-slate-900 dark:text-white">${(order.totalCents / 100).toFixed(2)}</p>
+                          <p className="font-bold text-lg text-slate-900 dark:text-white">PKR {(order.totalCents / 100).toFixed(2)}</p>
                           <p className="text-xs text-muted-foreground">
                             {order.status === "pending" ? "Awaiting Approval" :
                              order.status === "approved" ? "Approved" :
@@ -544,15 +724,48 @@ export default function OrderPortalPage() {
               )}
             </div>
 
+            {/* Products header */}
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                  Products
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Showing curated items available for your branch.
+                </p>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {totalProducts > 0 && (
+                  <span>
+                    {totalProducts} item{totalProducts !== 1 ? "s" : ""} found
+                  </span>
+                )}
+              </div>
+            </div>
+
             {/* Products Grid */}
-            {filteredProducts.length === 0 ? (
+            {isLoadingInventory ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {Array.from({ length: pageSize }).map((_, idx) => (
+                  <Card key={idx} className="overflow-hidden h-full flex flex-col">
+                    <Skeleton className="h-40 w-full" />
+                    <div className="p-4 space-y-3 flex-1 flex flex-col">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                      <div className="flex-1" />
+                      <Skeleton className="h-6 w-1/3" />
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : filteredProducts.length === 0 ? (
               <div className="text-center py-16">
                 <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
                 <p className="text-lg font-medium text-muted-foreground">No products found</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredProducts.map(product => (
+                {paginatedProducts.map(product => (
                   <div
                     key={product.id}
                     onClick={() => openProductDetail(product)}
@@ -560,7 +773,12 @@ export default function OrderPortalPage() {
                   >
                     <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 h-full flex flex-col bg-white dark:bg-slate-800">
                       {/* Product Image */}
-                      <div className="relative h-48 bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 overflow-hidden group-hover:bg-gradient-to-tl transition-all">
+                      <div className="relative h-48 overflow-hidden group-hover:bg-gradient-to-tl transition-all"
+                        style={{
+                          background:
+                            "radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--color-brand-accent), transparent 25%), transparent 55%), radial-gradient(circle at 100% 0%, color-mix(in oklab, var(--color-primary), transparent 40%), transparent 60%), oklch(0.93 0 0)",
+                        }}
+                      >
                         {product.imageUrl ? (
                           <img
                             src={product.imageUrl}
@@ -588,8 +806,15 @@ export default function OrderPortalPage() {
                           </Badge>
                         )}
 
-                        {/* Discount Badge (optional) */}
-                        <Badge className="absolute top-2 left-2 bg-blue-600">
+                        {/* Highlight Badge */}
+                        <Badge
+                          className="absolute top-2 left-2 text-[11px] px-2 py-0.5 font-medium border-0"
+                          style={{
+                            background:
+                              "color-mix(in oklab, var(--color-brand-primary), transparent 10%)",
+                            color: "white",
+                          }}
+                        >
                           <Zap className="h-3 w-3 mr-1" />
                           Trending
                         </Badge>
@@ -629,7 +854,7 @@ export default function OrderPortalPage() {
                         <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
                           <div>
                             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                              ${(product.priceCents / 100).toFixed(2)}
+                              PKR {(product.priceCents / 100).toFixed(2)}
                             </p>
                             <p className="text-xs text-muted-foreground">per {product.unit}</p>
                           </div>
@@ -650,6 +875,56 @@ export default function OrderPortalPage() {
                     </Card>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Pagination controls */}
+            {filteredProducts.length > 0 && (
+              <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="text-xs text-muted-foreground">
+                  {(() => {
+                    const start = (currentPage - 1) * pageSize + 1
+                    const end = Math.min(currentPage * pageSize, totalProducts)
+                    return `Showing ${start.toLocaleString()}–${end.toLocaleString()} of ${totalProducts.toLocaleString()} products`
+                  })()}
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <span>Rows per page:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="h-7 rounded-md border bg-background px-2 text-xs"
+                    >
+                      {[8, 12, 16, 24].map(size => (
+                        <option key={size} value={size}>{size}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    >
+                      <ArrowLeft className="h-3 w-3" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground px-1 min-w-[72px] text-center">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      disabled={currentPage === totalPages || totalProducts === 0}
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    >
+                      <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </>
@@ -694,7 +969,7 @@ export default function OrderPortalPage() {
                 <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                   <div>
                     <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                      ${(selectedProduct.priceCents / 100).toFixed(2)}
+                      PKR {(selectedProduct.priceCents / 100).toFixed(2)}
                     </p>
                     <p className="text-sm text-muted-foreground">per {selectedProduct.unit}</p>
                   </div>
@@ -737,18 +1012,34 @@ export default function OrderPortalPage() {
                     <Input
                       type="number"
                       value={tempQuantity}
-                      onChange={(e) => setTempQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 1
+                        const maxStock = selectedProduct.stock || 999
+                        setTempQuantity(Math.max(1, Math.min(val, maxStock)))
+                      }}
                       className="text-center h-10 font-bold text-lg"
                       min="1"
+                      max={selectedProduct.stock || 999}
                     />
                     <Button
                       size="icon"
                       variant="outline"
-                      onClick={() => setTempQuantity(tempQuantity + 1)}
+                      onClick={() => {
+                        const maxStock = selectedProduct.stock || 999
+                        setTempQuantity(Math.min(maxStock, tempQuantity + 1))
+                      }}
+                      disabled={tempQuantity >= (selectedProduct.stock || 999)}
                     >
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
+                  {selectedProduct.stock !== undefined && selectedProduct.stock < 10 && (
+                    <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                      {selectedProduct.stock === 0 
+                        ? "Out of stock" 
+                        : `Only ${selectedProduct.stock} available`}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -786,7 +1077,7 @@ export default function OrderPortalPage() {
               {cart.map(item => (
                 <div key={item.id} className="flex justify-between text-sm">
                   <span>{item.name} x{item.quantity}</span>
-                  <span className="font-semibold">${((item.priceCents * item.quantity) / 100).toFixed(2)}</span>
+                  <span className="font-semibold">PKR {((item.priceCents * item.quantity) / 100).toFixed(2)}</span>
                 </div>
               ))}
             </div>
@@ -797,11 +1088,11 @@ export default function OrderPortalPage() {
               <div className="flex justify-between font-bold text-lg">
                 <span>Total:</span>
                 <span className="text-blue-600 dark:text-blue-400">
-                  ${(cartTotal / 100).toFixed(2)}
+                  PKR {(cartTotal / 100).toFixed(2)}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Remaining Budget: ${((remainingBudget - cartTotal) / 100).toFixed(2)}
+                Remaining Budget: PKR {((remainingBudget - cartTotal) / 100).toFixed(2)}
               </p>
             </div>
           </div>
@@ -860,7 +1151,7 @@ export default function OrderPortalPage() {
                 <div className="flex justify-between">
                   <span className="font-bold">Total</span>
                   <span className="font-bold text-lg text-blue-600 dark:text-blue-400">
-                    ${(selectedOrder.totalCents / 100).toFixed(2)}
+                    PKR {(selectedOrder.totalCents / 100).toFixed(2)}
                   </span>
                 </div>
               </div>

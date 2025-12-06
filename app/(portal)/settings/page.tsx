@@ -1,14 +1,58 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { MFASettings } from "@/components/mfa/mfa-settings"
 import { useSession } from "next-auth/react"
-import { Settings, User, Shield, Bell, Building2, GitBranch, Mail, Clock3 } from "lucide-react"
+import { Settings, User, Shield, Building2, GitBranch, Mail, Clock3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import useSWR from "swr"
+import { useAppContext } from "@/components/context/app-context"
 
 export default function SettingsPage() {
   const { data: session } = useSession()
   const userEmail = (session?.user as any)?.email
+  const { organizationId: contextOrgId, branchId: contextBranchId } = useAppContext()
+
+  // Prefer active context (from header selector); fall back to user's assigned org/branch
+  const organizationId =
+    (contextOrgId ? Number(contextOrgId) : (session?.user as any)?.organizationId) as
+      | number
+      | undefined
+  const branchId =
+    (contextBranchId ? Number(contextBranchId) : (session?.user as any)?.branchId) as
+      | number
+      | undefined
+  const [lastLoginDate, setLastLoginDate] = useState<string>("—")
+  const [lastLoginTime, setLastLoginTime] = useState<string>("")
+
+  const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
+  const { data: orgData } = useSWR(
+    organizationId ? `/api/v1/organizations/${organizationId}` : null,
+    fetcher
+  )
+  const { data: branchData } = useSWR(
+    branchId ? `/api/v1/branches/${branchId}` : null,
+    fetcher
+  )
+
+  const organizationName =
+    orgData?.item?.name ||
+    (session?.user as any)?.organizationName ||
+    (organizationId ? `Organization #${organizationId}` : "Unassigned")
+
+  const branchName =
+    branchData?.item?.name ||
+    (session?.user as any)?.branchName ||
+    (branchId ? `Branch #${branchId}` : "All branches")
+
+  // Avoid hydration mismatches by setting date/time only on client
+  useEffect(() => {
+    const now = new Date()
+    setLastLoginDate(now.toLocaleDateString())
+    setLastLoginTime(now.toLocaleTimeString())
+  }, [])
 
   const heroStats = [
     {
@@ -20,24 +64,24 @@ export default function SettingsPage() {
     },
     {
       label: "Organization",
-      value: (session?.user as any)?.organizationName || "Unassigned",
+      value: organizationName,
       icon: Building2,
       gradient: "from-purple-400 to-fuchsia-500",
       sub: "Primary org",
     },
     {
       label: "Branch",
-      value: (session?.user as any)?.branchName || "All branches",
+      value: branchName,
       icon: GitBranch,
       gradient: "from-emerald-400 to-teal-500",
       sub: "Active branch context",
     },
     {
       label: "Last login",
-      value: new Date().toLocaleDateString(),
+      value: lastLoginDate,
       icon: Clock3,
       gradient: "from-amber-400 to-orange-500",
-      sub: new Date().toLocaleTimeString(),
+      sub: lastLoginTime || "Recently",
     },
   ]
 
@@ -126,61 +170,6 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             <MFASettings userEmail={userEmail} />
-          </CardContent>
-        </Card>
-
-        {/* Notification Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              Notifications
-            </CardTitle>
-            <CardDescription>
-              Configure your notification preferences
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="text-sm text-muted-foreground">
-                <p>Notification settings will be available in a future update.</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* System Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              System Information
-            </CardTitle>
-            <CardDescription>
-              View system information and account details
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Organization</label>
-                <p className="text-sm text-muted-foreground">
-                  {(session?.user as any)?.organizationName || "N/A"}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Branch</label>
-                <p className="text-sm text-muted-foreground">
-                  {(session?.user as any)?.branchName || "N/A"}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Last Login</label>
-                <p className="text-sm text-muted-foreground">
-                  {new Date().toLocaleString()}
-                </p>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

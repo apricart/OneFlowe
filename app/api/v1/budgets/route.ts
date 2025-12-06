@@ -44,11 +44,19 @@ export async function GET(req: NextRequest) {
             amountCreditedCents: budgets.amountCreditedCents,
           })
           .from(branches)
-          .leftJoin(budgets, and(
-            eq(budgets.branchId, branches.id),
-            eq(budgets.period, currentMonth)
-          ))
-          .where(role === "SUPER_ADMIN" ? undefined : eq(branches.organizationId, orgId))
+          .leftJoin(
+            budgets,
+            and(eq(budgets.branchId, branches.id), eq(budgets.period, currentMonth))
+          )
+          // SUPER_ADMIN: if an organizationId is provided (via context), scope to it; otherwise, global
+          // HEAD_OFFICE: always scoped to their organization
+          .where(
+            role === "SUPER_ADMIN"
+              ? orgId
+                ? eq(branches.organizationId, orgId)
+                : undefined
+              : eq(branches.organizationId, orgId)
+          )
 
         const budgetsWithRemaining = allBranches.map(b => ({
           ...b,
@@ -130,11 +138,12 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    // Update or create budget
+    // Update or create budget for current period
+    const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
     const [budget] = await db
       .select()
       .from(budgets)
-      .where(eq(budgets.branchId, branchId))
+      .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
       .limit(1)
 
     if (budget) {
@@ -142,7 +151,7 @@ export async function PUT(req: NextRequest) {
       await db.update(budgets).set({
         amountAllocatedCents,
         updatedAt: new Date(),
-      }).where(eq(budgets.branchId, branchId))
+      }).where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
 
       // Log action
       await db.insert(auditLogs).values({
@@ -158,8 +167,7 @@ export async function PUT(req: NextRequest) {
         },
       })
     } else {
-      // Create new budget record
-      const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
+      // Create new budget record for current period
       await db.insert(budgets).values({
         organizationId: branch.organizationId,
         branchId,

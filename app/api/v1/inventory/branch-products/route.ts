@@ -55,14 +55,9 @@ export async function GET(req: NextRequest) {
         customDescription: organizationProducts.customDescription,
         customPrice: organizationProducts.customPrice,
         customImageUrl: organizationProducts.customImageUrl,
-        // Branch specific
+        // Branch specific (visibility + notes only)
         branchProductId: branchProducts.id,
         isAvailable: branchProducts.isAvailable,
-        stockQuantity: branchProducts.stockQuantity,
-        reservedQuantity: branchProducts.reservedQuantity,
-        reorderThreshold: branchProducts.reorderThreshold,
-        reorderQuantity: branchProducts.reorderQuantity,
-        lastRestockDate: branchProducts.lastRestockDate,
         customNotes: branchProducts.customNotes
       })
       .from(globalProducts)
@@ -99,7 +94,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { branchProductId, isAvailable, stockQuantity, reorderThreshold, reorderQuantity, customNotes } = body
+    const { branchProductId, isAvailable, customNotes } = body
 
     if (!branchProductId) {
       return NextResponse.json({ error: "Branch product ID is required" }, { status: 400 })
@@ -109,9 +104,6 @@ export async function PUT(req: NextRequest) {
     const [updated] = await db.update(branchProducts)
       .set({
         ...(isAvailable !== undefined && { isAvailable }),
-        ...(stockQuantity !== undefined && { stockQuantity }),
-        ...(reorderThreshold !== undefined && { reorderThreshold }),
-        ...(reorderQuantity !== undefined && { reorderQuantity }),
         ...(customNotes !== undefined && { customNotes }),
         updatedByUserId: session.user.id as string,
         updatedAt: new Date()

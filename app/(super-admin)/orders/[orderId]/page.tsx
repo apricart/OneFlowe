@@ -12,7 +12,7 @@ import { ArrowLeft, Clock, TrendingDown, CheckCircle, RefreshCw, Package } from 
 import { formatDistanceToNow } from "date-fns"
 import Image from "next/image"
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 type OrderItem = {
   id: number
@@ -38,26 +38,29 @@ type OrderDetail = {
   orderItems?: OrderItem[]
 }
 
-export default function HeadOfficeOrderDetailsPage() {
+export default function SuperAdminOrderDetailsPage() {
   const params = useParams<{ orderId: string }>()
   const router = useRouter()
   const rawId = Array.isArray(params?.orderId) ? params?.orderId[0] : params?.orderId
   const numericId = rawId && /^\d+$/.test(rawId) ? Number(rawId) : null
 
-  const { data, error, isLoading, mutate } = useSWR(numericId ? `/api/v1/orders?id=${numericId}` : null, fetcher)
+  const { data, error, isLoading, mutate } = useSWR(
+    numericId ? `/api/v1/orders?id=${numericId}` : null,
+    fetcher
+  )
   const order: OrderDetail | undefined = data?.items?.[0]
 
   const autoMeta = order ? getAutoApproveMeta(order) : null
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#1D2CF4] via-[#4C26D3] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#141EAE] via-[#4427CA] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs tracking-[0.2em] text-white/70">HEAD OFFICE · ORDERS</p>
-            <h1 className="text-3xl font-semibold">Branch intelligence overview</h1>
+            <p className="text-xs tracking-[0.2em] text-white/70">SUPER ADMIN · ORDERS</p>
+            <h1 className="text-3xl font-semibold">Order intelligence overview</h1>
             <p className="text-sm text-white/80">
-              Watch live approvals, fulfillment, and refund indicators for order #{rawId}.
+              Watch approvals, fulfillment, and refund indicators for order #{rawId}.
             </p>
           </div>
           <div className="flex gap-2">
@@ -85,14 +88,15 @@ export default function HeadOfficeOrderDetailsPage() {
           </div>
         )}
       </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button variant="ghost" className="gap-2" onClick={() => router.push("/head-office-orders")}>
+        <Button variant="ghost" className="gap-2" onClick={() => router.push("/orders")}>
           <ArrowLeft className="h-4 w-4" />
           Back to orders
         </Button>
         {numericId && (
           <Button asChild variant="outline" className="gap-2">
-            <Link href={`/head-office-orders/${numericId}/refunds`}>
+            <Link href={`/orders/${numericId}/refunds`}>
               <TrendingDown className="h-4 w-4" />
               Manage refunds
             </Link>
@@ -104,15 +108,21 @@ export default function HeadOfficeOrderDetailsPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="rounded-2xl border-0 bg-white p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Order total</p>
-            <p className="text-2xl font-semibold text-slate-900">{formatPKR(order.totalCents / 100)}</p>
+            <p className="text-2xl font-semibold text-slate-900">
+              {formatPKR(order.totalCents / 100)}
+            </p>
             <p className="text-xs text-muted-foreground">
               Subtotal {formatPKR(order.subtotalCents / 100)} · Tax {formatPKR(order.taxCents / 100)}
             </p>
           </Card>
           <Card className="rounded-2xl border-0 bg-white p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Current status</p>
-            <p className="text-2xl font-semibold capitalize text-slate-900">{order.status.toLowerCase()}</p>
-            <p className="text-xs text-muted-foreground">Auto-approval safety applies while pending</p>
+            <p className="text-2xl font-semibold capitalize text-slate-900">
+              {order.status.toLowerCase()}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Auto-approval safety applies while pending
+            </p>
           </Card>
           <Card className="rounded-2xl border-0 bg-white p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Auto approval</p>
@@ -152,8 +162,8 @@ export default function HeadOfficeOrderDetailsPage() {
             </Card>
           )}
           {!isLoading && !order && !error && (
-            <Card className="p-6">
-              <p className="text-sm text-muted-foreground">Order not found or you lack access.</p>
+            <Card className="p-6 text-sm text-muted-foreground">
+              Order not found or you lack access.
             </Card>
           )}
 
@@ -162,15 +172,21 @@ export default function HeadOfficeOrderDetailsPage() {
               <Card className="space-y-4 border">
                 <div className="grid gap-4 border-b px-6 py-5 md:grid-cols-3">
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Transaction ID</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Transaction ID
+                    </p>
                     <p className="font-mono text-sm font-semibold">{order.tid}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Order ID</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Order ID
+                    </p>
                     <p className="font-semibold">{order.id}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Branch</p>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Branch
+                    </p>
                     <p className="font-semibold">
                       {order.branchName || `Branch ${order.branchId}`}
                     </p>
@@ -180,15 +196,21 @@ export default function HeadOfficeOrderDetailsPage() {
                 <div className="grid gap-3 px-6 pb-6 md:grid-cols-3">
                   <div className="rounded-2xl bg-white/80 p-4 shadow-sm">
                     <p className="text-xs uppercase text-muted-foreground">Subtotal</p>
-                    <p className="text-lg font-semibold">{formatPKR(order.subtotalCents / 100)}</p>
+                    <p className="text-lg font-semibold">
+                      {formatPKR(order.subtotalCents / 100)}
+                    </p>
                   </div>
                   <div className="rounded-2xl bg-white/80 p-4 shadow-sm">
                     <p className="text-xs uppercase text-muted-foreground">Tax</p>
-                    <p className="text-lg font-semibold">{formatPKR(order.taxCents / 100)}</p>
+                    <p className="text-lg font-semibold">
+                      {formatPKR(order.taxCents / 100)}
+                    </p>
                   </div>
                   <div className="rounded-2xl bg-indigo-50 p-4 shadow-sm">
                     <p className="text-xs uppercase text-indigo-700">Total</p>
-                    <p className="text-xl font-bold text-indigo-700">{formatPKR(order.totalCents / 100)}</p>
+                    <p className="text-xl font-bold text-indigo-700">
+                      {formatPKR(order.totalCents / 100)}
+                    </p>
                   </div>
                 </div>
 
@@ -274,7 +296,13 @@ export default function HeadOfficeOrderDetailsPage() {
                           >
                             {isComplete ? <CheckCircle className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
                           </div>
-                          {!isLast && <div className={`mt-1 w-px flex-1 ${isComplete ? "bg-emerald-100" : "bg-slate-200"}`} />}
+                          {!isLast && (
+                            <div
+                              className={`mt-1 w-px flex-1 ${
+                                isComplete ? "bg-emerald-100" : "bg-slate-200"
+                              }`}
+                            />
+                          )}
                         </div>
                         <div className="flex-1 rounded-xl border p-3 shadow-sm">
                           <p className="text-sm font-semibold">{step.label}</p>

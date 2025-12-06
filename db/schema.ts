@@ -199,9 +199,6 @@ export const inventory = pgTable(
     skuId: integer("sku_id")
       .references(() => skus.id)
       .notNull(),
-    quantity: integer("quantity").notNull().default(0),
-    reservedQuantity: integer("reserved_quantity").notNull().default(0),
-    reorderThreshold: integer("reorder_threshold").notNull().default(0),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (t) => ({
@@ -371,9 +368,10 @@ export const refunds = pgTable(
       .notNull(),
     amountCents: integer("amount_cents").notNull(),
     reason: varchar("reason", { length: 255 }),
-    processedByUserId: uuid("processed_by_user_id")
-      .references(() => users.id)
-      .notNull(),
+    // New workflow: support pending refund requests
+    status: varchar("status", { length: 16 }).notNull().default("PENDING"), // PENDING, APPROVED
+    requestedByUserId: uuid("requested_by_user_id").references(() => users.id),
+    processedByUserId: uuid("processed_by_user_id").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
@@ -473,6 +471,8 @@ export const globalProducts = pgTable(
     discountActive: boolean("discount_active").default(false),
     unit: varchar("unit", { length: 64 }).notNull().default("unit"), // kg, box, piece, etc.
     status: varchar("status", { length: 32 }).notNull().default("active"), // active, inactive, discontinued
+    // Single source of truth for stock across the system
+    stockQuantity: integer("stock_quantity").notNull().default(0),
     metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
     createdByUserId: uuid("created_by_user_id").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
@@ -526,11 +526,6 @@ export const branchProducts = pgTable(
     organizationProductId: integer("organization_product_id").references(() => organizationProducts.id, { onDelete: "cascade" }),
     isVisible: boolean("is_visible").notNull().default(true), // Branch can toggle visibility
     isAvailable: boolean("is_available").notNull().default(true), // Branch can mark unavailable
-    stockQuantity: integer("stock_quantity").notNull().default(0),
-    reservedQuantity: integer("reserved_quantity").notNull().default(0),
-    reorderThreshold: integer("reorder_threshold").notNull().default(10),
-    reorderQuantity: integer("reorder_quantity").notNull().default(50),
-    lastRestockDate: timestamp("last_restock_date", { withTimezone: true }),
     customNotes: text("custom_notes"), // Branch-specific notes
     metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
     updatedByUserId: uuid("updated_by_user_id").references(() => users.id),
@@ -545,7 +540,6 @@ export const branchProducts = pgTable(
     orgProductIdx: index("branch_products_org_product_idx").on(t.organizationProductId),
     visibleIdx: index("branch_products_visible_idx").on(t.isVisible),
     availableIdx: index("branch_products_available_idx").on(t.isAvailable),
-    lowStockIdx: index("branch_products_low_stock_idx").on(t.stockQuantity),
   }),
 )
 
@@ -730,8 +724,6 @@ export const branchInventory = pgTable(
     assignedByUserId: uuid("assigned_by_user_id").references(() => users.id).notNull(),
     isVisible: boolean("is_visible").notNull().default(true),
     isActive: boolean("is_active").notNull().default(true),
-    stockQuantity: integer("stock_quantity").notNull().default(0),
-    reorderThreshold: integer("reorder_threshold").notNull().default(10),
     assignedAt: timestamp("assigned_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),

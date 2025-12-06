@@ -1,5 +1,7 @@
 # 🛒 Order Portal - Quick Start Guide
 
+> For a high-level picture of how the Order Portal fits into the whole Apricart OneFlowe system (roles, inventory, budgets, and approvals), see `SYSTEM_OVERVIEW.md`.
+
 ## What's New?
 
 Your system now has a **separate, beautiful Order Portal** where branch employees can:

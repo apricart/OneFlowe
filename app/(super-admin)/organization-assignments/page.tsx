@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { SectionHeader } from "@/components/ui/section-header"
 import { Button } from "@/components/ui/button"
@@ -24,10 +24,12 @@ import {
   Eye,
   EyeOff,
   Trash2,
+  Edit,
 } from "lucide-react"
 import useSWR from "swr"
 import { useToast } from "@/components/ui/use-toast"
 import { formatPKR } from "@/lib/utils"
+import { useRouter, useSearchParams } from "next/navigation"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -54,13 +56,65 @@ interface Organization {
   createdAt: string
 }
 
+interface GlobalProduct {
+  id: number
+  productCode: string
+  name: string
+  basePrice: number
+}
+
 export default function OrganizationAssignmentsPage() {
   const { toast } = useToast()
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [organizationFilter, setOrganizationFilter] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [productFilter, setProductFilter] = useState("")
+  const [initialProductIds, setInitialProductIds] = useState<number[]>([])
+  const [assignmentDraft, setAssignmentDraft] = useState<Record<number, { customPrice: string }>>({})
   const [selectedAssignments, setSelectedAssignments] = useState<number[]>([])
   const [showRemoveDialog, setShowRemoveDialog] = useState(false)
+  const [editingAssignment, setEditingAssignment] = useState<OrganizationAssignment | null>(null)
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [editForm, setEditForm] = useState({
+    isActive: true,
+    customName: "",
+    customPrice: "",
+    customDescription: "",
+    customImageUrl: "",
+  })
+
+  const [showAssignDialog, setShowAssignDialog] = useState(false)
+  const [hasAutoOpenedEdit, setHasAutoOpenedEdit] = useState(false)
+  const [bootstrapDone, setBootstrapDone] = useState(false)
+
+  const searchParams = useSearchParams()
+
+  // Initialize filters from URL query params for deep-linking (run once per mount)
+  useEffect(() => {
+    if (bootstrapDone) return
+
+    const orgId = searchParams.get("organizationId") || ""
+    const productId = searchParams.get("productId") || ""
+    const productIdsParam = searchParams.get("productIds") || ""
+    if (orgId) {
+      setOrganizationFilter(orgId)
+    }
+    if (productId) {
+      setProductFilter(productId)
+    }
+    if (productIdsParam) {
+      const ids = productIdsParam
+        .split(",")
+        .map((v) => parseInt(v))
+        .filter((v) => Number.isFinite(v))
+      setInitialProductIds(ids)
+      if (ids.length > 0) {
+        setShowAssignDialog(true)
+      }
+    }
+    setBootstrapDone(true)
+  }, [searchParams, bootstrapDone])
 
   // Fetch data
   const { data: assignments, error: assignmentsError, isLoading: assignmentsLoading, mutate: mutateAssignments } = useSWR<{
@@ -68,13 +122,23 @@ export default function OrganizationAssignmentsPage() {
     total: number
   }>(`/api/v1/admin/organization-assignments?${new URLSearchParams({
     ...(organizationFilter && { organizationId: organizationFilter }),
+    ...(productFilter && { productId: productFilter }),
   })}`, fetcher, {
     fallbackData: { items: [], total: 0 }
   })
 
-  const { data: organizations, error: orgsError } = useSWR<Organization[]>("/api/v1/organizations", fetcher, {
-    fallbackData: []
-  })
+  const { data: organizationsData, error: orgsError } = useSWR<{ items: Organization[] }>(
+    "/api/v1/organizations",
+    fetcher,
+    { fallbackData: { items: [] } }
+  )
+  const organizations = organizationsData?.items || []
+
+  const { data: productsData } = useSWR<{ items: GlobalProduct[] }>(
+    "/api/v1/admin/global-inventory?limit=1000",
+    fetcher,
+    { fallbackData: { items: [] } }
+  )
 
   // Filter assignments
   const filteredAssignments = useMemo(() => {
@@ -100,6 +164,120 @@ export default function OrganizationAssignmentsPage() {
 
     return filtered
   }, [assignments?.items, searchQuery, statusFilter])
+
+  const preselectedAssignments = useMemo(() => {
+    if (!initialProductIds.length || !assignments?.items) return []
+    return assignments.items.filter((a) => initialProductIds.includes(a.globalProductId))
+  }, [initialProductIds, assignments?.items])
+
+  const selectedProductsForAssignment = useMemo(() => {
+    if (!initialProductIds.length || !productsData?.items) return []
+    const set = new Set(initialProductIds)
+    return productsData.items.filter((p) => set.has(p.id))
+  }, [initialProductIds, productsData?.items])
+
+  // Seed draft state for selected products when coming from "Assign selected"
+  useEffect(() => {
+    if (!selectedProductsForAssignment.length) return
+    setAssignmentDraft((prev) => {
+      const next = { ...prev }
+      selectedProductsForAssignment.forEach((p) => {
+        if (!next[p.id]) {
+          next[p.id] = { customPrice: "" }
+        }
+      })
+      return next
+    })
+  }, [selectedProductsForAssignment])
+
+  const existingProductIds = useMemo(() => {
+    if (!assignments?.items) return new Set<number>()
+    return new Set(assignments.items.map((a) => a.globalProductId))
+  }, [assignments?.items])
+
+  const handleCreateAssignments = async () => {
+    if (!organizationFilter) {
+      toast({
+        title: "No organization selected",
+        description: "Select an organization to assign products to.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const targetIds = initialProductIds.filter((id) => !existingProductIds.has(id))
+    if (targetIds.length === 0) {
+      toast({
+        title: "Nothing to assign",
+        description: "All selected products are already assigned to this organization.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const assignmentsPayload = targetIds.map((id) => ({
+      productId: id,
+      customPrice: assignmentDraft[id]?.customPrice || null,
+    }))
+
+    try {
+      const response = await fetch("/api/v1/admin/organization-assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: organizationFilter,
+          isActive: true,
+          productIds: initialProductIds,
+          assignments: assignmentsPayload,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: "Assignments created",
+          description: result.message || `${targetIds.length} product(s) assigned successfully.`,
+        })
+        setInitialProductIds([])
+        setShowAssignDialog(false)
+        await mutateAssignments()
+        // After creating assignments from a deep-link, normalize the URL while preserving organization filter
+        const qs = new URLSearchParams()
+        if (organizationFilter) {
+          qs.set("organizationId", organizationFilter)
+        }
+        router.replace(`/organization-assignments${qs.toString() ? `?${qs.toString()}` : ""}`)
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to create assignments",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error creating assignments:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create assignments",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Auto-open edit dialog when deep-linked with a specific productId
+  useEffect(() => {
+    if (!productFilter || editingAssignment || showAssignDialog || hasAutoOpenedEdit) return
+    if (!filteredAssignments.length) return
+
+    const match =
+      filteredAssignments.find((a) => String(a.globalProductId) === productFilter) ||
+      filteredAssignments[0]
+    if (match) {
+      openEditDialog(match)
+      setHasAutoOpenedEdit(true)
+    }
+  }, [productFilter, filteredAssignments, editingAssignment, showAssignDialog, hasAutoOpenedEdit])
 
   // Calculate summary stats
   const totalAssignments = assignments?.total || 0
@@ -207,12 +385,177 @@ export default function OrganizationAssignmentsPage() {
     )
   }
 
+  const openEditDialog = (assignment: OrganizationAssignment) => {
+    setEditingAssignment(assignment)
+    setEditForm({
+      isActive: assignment.isActive,
+      customName: assignment.customName || "",
+      customPrice: assignment.customPrice ? (assignment.customPrice / 100).toString() : "",
+      customDescription: assignment.customDescription || "",
+      customImageUrl: assignment.customImageUrl || "",
+    })
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingAssignment) return
+    setIsSavingEdit(true)
+    try {
+      const response = await fetch("/api/v1/admin/organization-assignments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingAssignment.id,
+          isActive: editForm.isActive,
+          customName: editForm.customName || null,
+          customPrice: editForm.customPrice || null,
+          customDescription: editForm.customDescription || null,
+          customImageUrl: editForm.customImageUrl || null,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: "Assignment updated",
+          description: result.message || "Overrides have been updated for this organization.",
+        })
+        setEditingAssignment(null)
+        await mutateAssignments()
+        // Clean up deep-link query while preserving organization filter
+        const qs = new URLSearchParams()
+        if (organizationFilter) {
+          qs.set("organizationId", organizationFilter)
+        }
+        router.replace(`/organization-assignments${qs.toString() ? `?${qs.toString()}` : ""}`)
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to update assignment",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error updating assignment:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update assignment",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <SectionHeader
         title="Organization Assignments"
-        subtitle="Manage which products are assigned to which organizations"
+        subtitle="Manage which products are assigned to which organizations, and edit organization-specific overrides."
       />
+
+      {/* Dedicated assignment dialog when coming from 'Assign selected' */}
+      <Dialog
+        open={!!organizationFilter && initialProductIds.length > 0 && showAssignDialog}
+        onOpenChange={(open) => {
+          setShowAssignDialog(open)
+          if (!open) {
+            setInitialProductIds([])
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">
+              Assign {initialProductIds.length} product{initialProductIds.length !== 1 ? "s" : ""} to{" "}
+              {organizations.find((o) => String(o.id) === organizationFilter)?.name || "organization"}
+            </DialogTitle>
+            <DialogDescription className="text-sm">
+              Review the selected products and optionally set custom prices before creating assignments. Products that
+              are already assigned will be shown as read-only.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-2 max-h-80 overflow-y-auto rounded-md border bg-muted/30">
+            <Table>
+              <thead>
+                <tr>
+                  <th className="text-left p-3 text-xs font-medium text-muted-foreground">Product</th>
+                  <th className="text-left p-3 text-xs font-medium text-muted-foreground">Global price</th>
+                  <th className="text-left p-3 text-xs font-medium text-muted-foreground">Custom price (PKR)</th>
+                  <th className="text-left p-3 text-xs font-medium text-muted-foreground">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedProductsForAssignment.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-4 text-sm text-muted-foreground text-center">
+                      Selected products could not be loaded from global inventory.
+                    </td>
+                  </tr>
+                ) : (
+                  selectedProductsForAssignment.map((product) => {
+                    const isAlreadyAssigned = existingProductIds.has(product.id)
+                    const draft = assignmentDraft[product.id] || { customPrice: "" }
+                    return (
+                      <tr key={product.id} className="border-t">
+                        <td className="p-3 text-sm">
+                          <div className="font-medium">{product.name}</div>
+                          <div className="text-xs text-muted-foreground">{product.productCode}</div>
+                        </td>
+                        <td className="p-3 text-sm">{formatPKR(product.basePrice / 100)}</td>
+                        <td className="p-3">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={draft.customPrice}
+                            onChange={(e) =>
+                              setAssignmentDraft((prev) => ({
+                                ...prev,
+                                [product.id]: { customPrice: e.target.value },
+                              }))
+                            }
+                            placeholder="Leave blank to use global price"
+                            className="h-8 text-sm"
+                            disabled={isAlreadyAssigned}
+                          />
+                        </td>
+                        <td className="p-3 text-xs">
+                          {isAlreadyAssigned ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-[11px] font-medium text-yellow-800">
+                              Already assigned
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                              Ready to assign
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </Table>
+          </div>
+
+          <DialogFooter className="mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowAssignDialog(false)
+                setInitialProductIds([])
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleCreateAssignments}>
+              Create assignments
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -365,6 +708,9 @@ export default function OrganizationAssignmentsPage() {
                       <div>
                         <div className="font-medium">{assignment.productName}</div>
                         <div className="text-xs text-gray-500">{assignment.productCode}</div>
+                        <div className="text-[11px] text-gray-400">
+                          Product ID: <span className="font-mono">{assignment.globalProductId}</span>
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -405,6 +751,13 @@ export default function OrganizationAssignmentsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        onClick={() => openEditDialog(assignment)}
+                      >
+                        <Edit size={14} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleRemoveAssignment(assignment.id)}
                       >
                         <X size={14} />
@@ -436,6 +789,132 @@ export default function OrganizationAssignmentsPage() {
               Remove Assignments
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Assignment Dialog */}
+      <Dialog
+        open={!!editingAssignment}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingAssignment(null)
+            setHasAutoOpenedEdit(true) // prevent any re-auto-open for this load
+            setProductFilter("") // stop productId-based auto targeting
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit organization override</DialogTitle>
+            <DialogDescription>
+              Adjust the organization-specific details for this product. Core product data remains read-only.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingAssignment && (
+            <div className="space-y-4">
+              {/* Read-only context */}
+              <Card className="p-3">
+                <div className="flex items-center gap-3">
+                  {editingAssignment.productImageUrl ? (
+                    <img
+                      src={editingAssignment.productImageUrl}
+                      alt={editingAssignment.productName}
+                      className="w-12 h-12 rounded-md object-cover border"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-md border bg-gray-50 flex items-center justify-center">
+                      <Package className="w-5 h-5 text-gray-400" />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className="font-semibold">{editingAssignment.productName}</div>
+                    <div className="text-xs text-gray-500">{editingAssignment.productCode}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Organization: <span className="font-medium">{editingAssignment.organizationName}</span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Editable overrides */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Assignment active</label>
+                  <input
+                    type="checkbox"
+                    checked={editForm.isActive}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, isActive: e.target.checked }))}
+                    className="rounded"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Custom name</label>
+                  <Input
+                    value={editForm.customName}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, customName: e.target.value }))}
+                    placeholder="Optional display name for this organization"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Custom price (PKR)</label>
+                  {(() => {
+                    const product = productsData?.items?.find(p => p.id === editingAssignment.globalProductId)
+                    const basePrice = product?.basePrice ? formatPKR(product.basePrice / 100) : "N/A"
+                    return (
+                      <div className="space-y-2">
+                        <div className="text-xs text-muted-foreground">
+                          Global base price: <span className="font-medium">{basePrice}</span>
+                        </div>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editForm.customPrice}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, customPrice: e.target.value }))}
+                          placeholder="Leave blank to use global price"
+                        />
+                      </div>
+                    )
+                  })()}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Custom description</label>
+                  <Input
+                    value={editForm.customDescription}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, customDescription: e.target.value }))}
+                    placeholder="Optional description override"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Custom image URL</label>
+                  <Input
+                    value={editForm.customImageUrl}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, customImageUrl: e.target.value }))}
+                    placeholder="Optional image URL override"
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingAssignment(null)}
+                  disabled={isSavingEdit}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveEdit} disabled={isSavingEdit}>
+                  {isSavingEdit ? "Saving..." : "Save changes"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

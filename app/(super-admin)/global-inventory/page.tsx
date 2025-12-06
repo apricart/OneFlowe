@@ -37,9 +37,10 @@ import {
 import useSWR from "swr"
 import { useToast } from "@/components/ui/use-toast"
 import { CascadeImpactPreview } from "@/components/inventory/cascade-impact-preview"
+import { StockStatusBadge } from "@/components/inventory/stock-status-badge"
 import { useAppContext } from "@/components/context/app-context"
 import { formatPKR } from "@/lib/utils"
-import { LocalContextSelectors } from "@/components/context/local-context-selectors"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -80,6 +81,7 @@ interface GlobalProduct {
   basePrice: number
   unit: string
   status: string
+  stockQuantity?: number
   createdAt: string
   updatedAt: string
   categoryName?: string
@@ -147,7 +149,9 @@ export default function GlobalInventoryPage() {
   const { toast } = useToast()
   const { organizationId } = useAppContext()
   const [searchQuery, setSearchQuery] = useState("")
+  const [showCsvConfirm, setShowCsvConfirm] = useState(false)
   const [statusFilter, setStatusFilter] = useState("all")
+  const [stockFilter, setStockFilter] = useState("all")
   const [selectedProducts, setSelectedProducts] = useState<number[]>([])
   const [showAssignmentDialog, setShowAssignmentDialog] = useState(false)
   const [activeTab, setActiveTab] = useState("products")
@@ -179,6 +183,14 @@ export default function GlobalInventoryPage() {
   const [isUploadingCsv, setIsUploadingCsv] = useState(false)
   const [csvResult, setCsvResult] = useState<{ message: string; imported: number; skippedExisting: number } | null>(null)
   const [csvErrors, setCsvErrors] = useState<string[]>([])
+  
+  // Product import state
+  const [showProductImportDialog, setShowProductImportDialog] = useState(false)
+  const [showProductImportConfirm, setShowProductImportConfirm] = useState(false)
+  const [productImportFile, setProductImportFile] = useState<File | null>(null)
+  const [isUploadingProducts, setIsUploadingProducts] = useState(false)
+  const [productImportResult, setProductImportResult] = useState<{ message: string; imported: number; failed: number } | null>(null)
+  const [productImportErrors, setProductImportErrors] = useState<string[]>([])
 
   useEffect(() => {
     setPerProductOverrides((prev) => {
@@ -204,13 +216,14 @@ export default function GlobalInventoryPage() {
     }
   }, [assignmentData.organizationId, csvOrganizationId])
 
-  const handleLocalContextChange = useCallback((ctx: { organizationId?: string | null }) => {
-    if (ctx.organizationId !== undefined) {
-      const nextOrg = ctx.organizationId || ""
-      setAssignmentData((prev) => ({ ...prev, organizationId: nextOrg }))
-      setCsvOrganizationId(nextOrg)
+  // Sync assignment data with global context
+  useEffect(() => {
+    if (organizationId) {
+      const orgIdStr = String(organizationId)
+      setAssignmentData((prev) => ({ ...prev, organizationId: orgIdStr }))
+      setCsvOrganizationId(orgIdStr)
     }
-  }, [])
+  }, [organizationId])
 
   // Product form data
   const router = useRouter()
@@ -273,8 +286,22 @@ export default function GlobalInventoryPage() {
   // Filter products
   const filteredProducts = useMemo(() => {
     if (!products?.items) return []
-    return products.items
-  }, [products?.items])
+    let filtered = products.items
+    
+    // Apply stock filter
+    if (stockFilter === "in-stock") {
+      filtered = filtered.filter(p => (p.stockQuantity || 0) > 10)
+    } else if (stockFilter === "low-stock") {
+      filtered = filtered.filter(p => {
+        const stock = p.stockQuantity || 0
+        return stock > 0 && stock <= 10
+      })
+    } else if (stockFilter === "out-of-stock") {
+      filtered = filtered.filter(p => (p.stockQuantity || 0) === 0)
+    }
+    
+    return filtered
+  }, [products?.items, stockFilter])
 
   // Calculate summary stats
   const totalProducts = products?.pagination?.total || 0
@@ -440,64 +467,55 @@ export default function GlobalInventoryPage() {
   }
 
   const handleAssignment = (product: GlobalProduct) => {
-      setAssignmentData({
-      productIds: [product.id],
-      organizationId: organizationId ? organizationId.toString() : "",
-      isActive: true,
-      customName: product.name,
-      customPrice: "",
-      customDescription: product.description || "",
-      customImageUrl: "",
+    if (!organizationId) {
+      toast({
+        title: "No organization selected",
+        description: "Choose a target organization in the workspace first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Redirect to dedicated assignment page with context
+    const params = new URLSearchParams({
+      organizationId: organizationId.toString(),
+      productIds: product.id.toString(),
     })
-    setShowOnlyUnassigned(true) // Default to showing only unassigned
-    setShowAssignmentDialog(true)
+    router.push(`/organization-assignments?${params.toString()}`)
   }
 
   const handleEditAssignment = (assignment: OrganizationAssignment) => {
-    setAssignmentData({
-      productIds: [assignment.globalProductId],
-      organizationId: String(assignment.organizationId),
-      isActive: assignment.isActive,
-      customName: assignment.customName || "",
-      customPrice: assignment.customPrice ? (assignment.customPrice / 100).toString() : "",
-      customDescription: assignment.customDescription || "",
-      customImageUrl: assignment.customImageUrl || "",
-    })
-    setPerProductOverrides(
-      assignment.customPrice
-        ? {
-            [assignment.globalProductId]: {
-              customPrice: (assignment.customPrice / 100).toString(),
-            },
-          }
-        : {}
+    // Redirect to dedicated Organization Assignments page for editing overrides
+    router.push(
+      `/organization-assignments?organizationId=${assignment.organizationId}&productId=${assignment.globalProductId}`
     )
-    setShowOnlyUnassigned(false)
-    setShowAssignmentDialog(true)
   }
 
   const handleBulkAssignment = () => {
     if (selectedProducts.length === 0) {
       toast({
-        title: "No Products Selected",
-        description: "Please select products to assign",
+        title: "No products selected",
+        description: "Please select products to assign.",
         variant: "destructive",
       })
       return
     }
-    setAssignmentData({
-      productIds: selectedProducts,
-      organizationId: organizationId ? organizationId.toString() : "",
-      isActive: true,
-      customName: "",
-      customPrice: "",
-      customDescription: "",
-      customImageUrl: "",
+
+    if (!organizationId) {
+      toast({
+        title: "No organization selected",
+        description: "Choose a target organization in the workspace first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Navigate to dedicated assignment page with context
+    const params = new URLSearchParams({
+      organizationId: organizationId.toString(),
+      productIds: selectedProducts.join(","),
     })
-    setShowOnlyUnassigned(true) // Default to showing only unassigned
-    setProductSearchQuery("") // Reset search
-    setCurrentPage(1) // Reset to first page
-    setShowAssignmentDialog(true)
+    router.push(`/organization-assignments?${params.toString()}`)
   }
 
   const handleCsvUpload = async () => {
@@ -560,6 +578,75 @@ PRD-001,1200,Custom Label,Optional description,true`
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadProductTemplate = () => {
+    const csvContent = `productCode,name,description,category,basePrice,unit,status,imageUrl,stockQuantity
+PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https://example.com/image.jpg,100`
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "global-products-template.csv"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleProductImport = async () => {
+    if (!productImportFile) {
+      toast({
+        title: "Missing file",
+        description: "Please select a CSV file to upload.",
+        variant: "destructive",
+      })
+      return
+    }
+    setIsUploadingProducts(true)
+    setProductImportErrors([])
+    setProductImportResult(null)
+    try {
+      const formData = new FormData()
+      formData.append("file", productImportFile)
+      const response = await fetch("/api/v1/admin/global-inventory/import", {
+        method: "POST",
+        body: formData,
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw result
+      }
+      setProductImportResult({
+        message: result.message,
+        imported: result.imported,
+        failed: result.failed || 0,
+      })
+      if (result.parsingErrors && result.parsingErrors.length > 0) {
+        setProductImportErrors(result.parsingErrors)
+      }
+      if (result.validationErrors && result.validationErrors.length > 0) {
+        const validationErrorMessages = result.validationErrors.map(
+          (err: any) => `Row ${err.row}: ${err.errors.join(", ")}`
+        )
+        setProductImportErrors((prev) => [...prev, ...validationErrorMessages])
+      }
+      toast({
+        title: "Products imported",
+        description: result.message,
+      })
+      mutateProducts()
+    } catch (error: any) {
+      const errorMessages = error?.parsingErrors || error?.validationErrors?.map((err: any) => `Row ${err.row}: ${err.errors.join(", ")}`) || [error?.error || "Failed to import products"]
+      setProductImportErrors(errorMessages)
+      toast({
+        title: "Import failed",
+        description: error?.error || "Could not process CSV file",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUploadingProducts(false)
+    }
   }
 
   const handlePerProductPriceChange = (productId: number, value: string) => {
@@ -762,11 +849,10 @@ PRD-001,1200,Custom Label,Optional description,true`
         <CardHeader>
           <CardTitle className="text-xl">Assignment workspace</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Use the context selector to focus on an organization, then bulk assign via quick actions or CSV upload.
+            Use the context selector in the top bar to focus on an organization, then bulk assign via quick actions or CSV upload.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <LocalContextSelectors onChange={handleLocalContextChange} />
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-3 text-sm">
               {selectedOrg ? (
@@ -778,7 +864,7 @@ PRD-001,1200,Custom Label,Optional description,true`
                   <Badge variant="outline">Custom pricing {selectedOrgCustomPriceCount}</Badge>
                 </>
               ) : (
-                <Badge variant="secondary">Select an organization to manage assignments</Badge>
+                <Badge variant="secondary">Select an organization in the top bar to manage assignments</Badge>
               )}
               {selectedProducts.length > 0 && (
                 <Badge variant="outline" className="border-dashed">
@@ -794,7 +880,7 @@ PRD-001,1200,Custom Label,Optional description,true`
                 <Share2 className="mr-2 h-4 w-4" />
                 Assign selected
               </Button>
-              <Button variant="outline" onClick={() => setShowCsvDialog(true)}>
+              <Button variant="outline" onClick={() => setShowCsvConfirm(true)}>
                 <Upload className="mr-2 h-4 w-4" />
                 Upload CSV
               </Button>
@@ -806,6 +892,33 @@ PRD-001,1200,Custom Label,Optional description,true`
           </div>
         </CardContent>
       </Card>
+
+      {/* CSV Upload Confirmation */}
+      <ConfirmDialog
+        open={showCsvConfirm}
+        onOpenChange={setShowCsvConfirm}
+        title="Upload CSV for bulk assignment?"
+        description={
+          selectedOrg
+            ? `This will assign products from the CSV file to ${selectedOrg.name}. Make sure your CSV file is formatted correctly before proceeding.`
+            : "Please select an organization in the top bar context selector first."
+        }
+        confirmText="Continue to Upload"
+        cancelText="Cancel"
+        onConfirm={() => {
+          if (organizationId) {
+            setShowCsvConfirm(false)
+            setShowCsvDialog(true)
+          } else {
+            toast({
+              title: "Organization required",
+              description: "Please select an organization in the top bar context selector first.",
+              variant: "destructive",
+            })
+            setShowCsvConfirm(false)
+          }
+        }}
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">
@@ -835,8 +948,26 @@ PRD-001,1200,Custom Label,Optional description,true`
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
+              <select
+                value={stockFilter}
+                onChange={(e) => setStockFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Stock</option>
+                <option value="in-stock">In Stock</option>
+                <option value="low-stock">Low Stock</option>
+                <option value="out-of-stock">Out of Stock</option>
+              </select>
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setShowProductImportConfirm(true)}>
+                <Upload size={16} className="mr-2" />
+                Import CSV
+              </Button>
+              <Button variant="ghost" onClick={handleDownloadProductTemplate}>
+                <Download size={16} className="mr-2" />
+                Template
+              </Button>
               <Button onClick={handleAddProduct}>
                 <Plus size={16} className="mr-2" />
                 Add Product
@@ -862,6 +993,7 @@ PRD-001,1200,Custom Label,Optional description,true`
                   <th className="text-left p-4 font-medium">Category</th>
                   <th className="text-left p-4 font-medium">Price</th>
                   <th className="text-left p-4 font-medium">Unit</th>
+                  <th className="text-left p-4 font-medium">Stock</th>
                   <th className="text-left p-4 font-medium">Status</th>
                   <th className="text-left p-4 font-medium">Assignments</th>
                   <th className="text-right p-4 font-medium">Actions</th>
@@ -870,13 +1002,13 @@ PRD-001,1200,Custom Label,Optional description,true`
               <tbody>
                 {productsLoading ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-gray-500">
+                    <td colSpan={11} className="p-8 text-center text-gray-500">
                       Loading products...
                     </td>
                   </tr>
                 ) : filteredProducts.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-gray-500">
+                    <td colSpan={11} className="p-8 text-center text-gray-500">
                       No products found
                     </td>
                   </tr>
@@ -922,6 +1054,12 @@ PRD-001,1200,Custom Label,Optional description,true`
                       </td>
                       <td className="p-4 text-sm">{formatPKR(product.basePrice / 100)}</td>
                       <td className="p-4 text-sm">{product.unit}</td>
+                      <td className="p-4">
+                        <StockStatusBadge 
+                          quantity={product.stockQuantity || 0} 
+                          threshold={10}
+                        />
+                      </td>
                       <td className="p-4">
                         <Badge
                           variant={product.status === "active" ? "default" : "secondary"}
@@ -1073,6 +1211,90 @@ PRD-001,1200,Custom Label,Optional description,true`
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Product Import Confirmation */}
+      <ConfirmDialog
+        open={showProductImportConfirm}
+        onOpenChange={setShowProductImportConfirm}
+        title="Import products from CSV?"
+        description="This will create or update products in the global catalog. Existing products with the same product code will be updated. Make sure your CSV file is formatted correctly."
+        confirmText="Continue to Upload"
+        cancelText="Cancel"
+        onConfirm={() => {
+          setShowProductImportConfirm(false)
+          setShowProductImportDialog(true)
+        }}
+      />
+
+      {/* Product Import Dialog */}
+      <Dialog
+        open={showProductImportDialog}
+        onOpenChange={(open) => {
+          setShowProductImportDialog(open)
+          if (!open) {
+            setProductImportFile(null)
+            setProductImportResult(null)
+            setProductImportErrors([])
+          }
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Import products from CSV
+            </DialogTitle>
+            <DialogDescription>
+              Upload a CSV file to bulk create or update products in the global catalog.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">CSV File</label>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Input
+                  type="file"
+                  accept=".csv"
+                  onChange={(event) => setProductImportFile(event.target.files?.[0] || null)}
+                />
+                <Button type="button" variant="ghost" size="sm" onClick={handleDownloadProductTemplate}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download template
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Required columns: <code>productCode</code>, <code>name</code>, <code>basePrice</code>. Optional: <code>description</code>, <code>category</code>, <code>unit</code>, <code>status</code>, <code>imageUrl</code>.
+              </p>
+            </div>
+            {productImportResult && (
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                <p className="font-medium text-foreground">{productImportResult.message}</p>
+                <p className="text-xs text-muted-foreground">
+                  Imported {productImportResult.imported} product(s){productImportResult.failed > 0 ? `, ${productImportResult.failed} failed` : ""}.
+                </p>
+              </div>
+            )}
+            {productImportErrors.length > 0 && (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive max-h-60 overflow-y-auto">
+                <p className="font-semibold">Import errors</p>
+                <ul className="mt-2 space-y-1 text-xs">
+                  {productImportErrors.map((err, idx) => (
+                    <li key={idx}>• {err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowProductImportDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleProductImport} disabled={!productImportFile || isUploadingProducts}>
+              {isUploadingProducts ? "Importing..." : "Import Products"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* CSV Import Dialog */}
       <Dialog
@@ -1402,19 +1624,30 @@ PRD-001,1200,Custom Label,Optional description,true`
                                   <div className="text-xs text-gray-500">{product.productCode}</div>
                                 </div>
                                 {isAssigned && (
-                                  <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
-                                    Already Assigned
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      // Close dialog and navigate to organization assignments page
+                                      setShowAssignmentDialog(false)
+                                      router.push(
+                                        `/organization-assignments?organizationId=${assignmentData.organizationId}&productId=${productId}`
+                                      )
+                                    }}
+                                    className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full hover:bg-yellow-200"
+                                  >
+                                    Already assigned · Manage overrides
+                                  </button>
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
                                 <Input
                                   type="number"
                                   step="0.01"
-                                  value={perProductOverrides[productId]?.customPrice ?? ""}
-                                  onChange={(e) => handlePerProductPriceChange(productId, e.target.value)}
-                                  placeholder="Custom price (PKR)"
-                                  className="text-sm"
+                                value={perProductOverrides[productId]?.customPrice ?? ""}
+                                onChange={(e) => handlePerProductPriceChange(productId, e.target.value)}
+                                placeholder={isAssigned ? "Overrides managed per organization" : "Custom price (PKR)"}
+                                className="text-sm"
+                                disabled={isAssigned}
                                 />
                                 <span className="text-xs text-gray-500">
                                   Default {formatPKR(product.basePrice / 100)}

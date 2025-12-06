@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { FieldSourceBadge } from "./field-source-badge"
 import { StockStatusBadge } from "./stock-status-badge"
 import { Eye, EyeOff, Settings, Package } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, formatPKR } from "@/lib/utils"
 
 interface ProductDetailCardProps {
   product: {
@@ -120,7 +120,7 @@ export function ProductDetailCard({
             <span className="text-sm font-medium text-muted-foreground">Price</span>
             <div className="flex items-center gap-2">
               <span className="font-semibold">
-                ${(effectivePrice / 100).toFixed(2)} {product.unit}
+                {formatPKR(effectivePrice / 100)} {product.unit}
               </span>
               {showSource && (
                 <FieldSourceBadge 
@@ -163,13 +163,22 @@ export function ProductDetailCard({
         {/* Stock Information */}
         <div className="pt-3 border-t space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-muted-foreground">Current Stock</span>
-            <span className="font-semibold">{product.stockQuantity}</span>
+            <span className="text-sm font-medium text-muted-foreground">Stock Status</span>
+            <StockStatusBadge 
+              quantity={product.stockQuantity || 0} 
+              threshold={product.reorderThreshold || 10}
+            />
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-muted-foreground">Reorder Threshold</span>
-            <span className="font-semibold">{product.reorderThreshold}</span>
+            <span className="text-sm font-medium text-muted-foreground">Current Stock</span>
+            <span className="font-semibold">{product.stockQuantity || 0}</span>
           </div>
+          {product.reorderThreshold > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">Reorder Threshold</span>
+              <span className="font-semibold">{product.reorderThreshold}</span>
+            </div>
+          )}
         </div>
 
         {/* Status Information */}

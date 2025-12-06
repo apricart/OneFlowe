@@ -7,6 +7,18 @@
 
 ## Overview
 
+Apricart OneFlowe is a **multi-role retail operations platform** with:
+- A **Super Admin dashboard** for global configuration (roles, permissions, global inventory, settings)
+- An **Organization / Branch portal** for everyday operations (inventory, orders, budgets, reports)
+- A separate **Order Portal** for branch employees to place e‑commerce style orders under budget control
+
+If you just want a **big-picture mental model** of how everything connects, see:
+- `SYSTEM_OVERVIEW.md` – architecture, roles, flows
+- `INVENTORY_SYSTEM.md` – global → organization → branch inventory model
+- `ORDER_PORTAL_IMPLEMENTATION.md` – separate employee Order Portal
+- `ADMIN_GUIDE.md` – Super Admin dashboard usage
+- `QUICK_START_ORDER_PORTAL.md` – how to enable and use the Order Portal
+
 This repository will stay in sync with your deployed chats on [v0.app](https://v0.app).
 Any changes you make to your deployed app will be automatically pushed to this repository from [v0.app](https://v0.app).
 

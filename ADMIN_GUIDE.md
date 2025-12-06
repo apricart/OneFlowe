@@ -1,5 +1,7 @@
 # 🛡️ Super Admin Dashboard - Complete Guide
 
+> New to the project and want a brief idea of how everything is connected (roles, portals, inventory, budgets, orders)? Start with `SYSTEM_OVERVIEW.md`, then come back here for Super Admin specifics.
+
 > Modern admin interface for managing permissions, settings, and system configuration
 
 ---

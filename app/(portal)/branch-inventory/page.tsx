@@ -57,11 +57,6 @@ export default function BranchInventoryPage() {
     () => inventory.filter((item) => item.stockQuantity <= item.reorderThreshold && item.stockQuantity > 0).length,
     [inventory]
   )
-  const outOfStock = useMemo(
-    () => inventory.filter((item) => item.stockQuantity === 0).length,
-    [inventory]
-  )
-
   return (
     <div className="space-y-8 p-6">
       <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-purple-900 to-indigo-800 text-white shadow-xl">
@@ -82,11 +77,9 @@ export default function BranchInventoryPage() {
         </CardHeader>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2">
         <SummaryCard label="Total products" value={totalProducts} helper="Currently assigned" accent="from-blue-500 to-cyan-500" />
         <SummaryCard label="Visible to customers" value={visibleProducts} helper={`${totalProducts - visibleProducts} hidden`} accent="from-emerald-500 to-lime-500" />
-        <SummaryCard label="Low stock" value={lowStock} helper="At or below threshold" accent="from-amber-500 to-orange-500" />
-        <SummaryCard label="Out of stock" value={outOfStock} helper="Require replenishment" accent="from-rose-500 to-pink-500" />
       </div>
 
       <Card className="border-none shadow-md">
@@ -125,20 +118,18 @@ export default function BranchInventoryPage() {
                   <TableHead>Category</TableHead>
                   <TableHead>Price</TableHead>
                   <TableHead>Visibility</TableHead>
-                  <TableHead>Stock</TableHead>
-                  <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
                       Loading branch inventory…
                     </TableCell>
                   </TableRow>
                 ) : inventory.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
                       No products have been assigned to this branch. Once Head Office shares SKUs, they will appear here.
                     </TableCell>
                   </TableRow>
@@ -183,20 +174,6 @@ export default function BranchInventoryPage() {
                             </span>
                           )}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {item.stockQuantity <= item.reorderThreshold ? (
-                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                          ) : null}
-                          <span className="text-sm font-medium">
-                            {item.stockQuantity} <span className="text-xs text-muted-foreground">{item.unit}</span>
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Reorder &le; {item.reorderThreshold}</p>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={item.isActive ? "default" : "secondary"}>{item.isActive ? "Active" : "Inactive"}</Badge>
                       </TableCell>
                     </TableRow>
                   ))

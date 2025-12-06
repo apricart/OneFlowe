@@ -153,6 +153,18 @@ export default function HeadOfficeOrdersPage() {
     return colors[status?.toLowerCase()] || colors.pending
   }
 
+  // Derive scope display from context + org/branch metadata, not from orders
+  // These hooks must be called before any conditional returns
+  const { data: orgsData } = useSWR(organizationId ? "/api/v1/organizations" : null, fetcher)
+  const { data: branchesData } = useSWR(
+    organizationId ? `/api/v1/branches?organizationId=${organizationId}` : null,
+    fetcher
+  )
+  const organizations = orgsData?.items || []
+  const branches = branchesData?.items || []
+  const selectedOrg = organizations.find((o: any) => o.id.toString() === organizationId)
+  const selectedBranch = branches.find((b: any) => b.id.toString() === branchId)
+
   const statusCounts = {
     all: orders.length,
     pending: orders.filter((o: OrderItem) => o.status.toLowerCase() === "pending").length,
@@ -169,9 +181,9 @@ export default function HeadOfficeOrdersPage() {
   }
 
   const scopeText = branchId
-    ? `Branch #${branchId}`
+    ? selectedBranch?.name || `Branch #${branchId}`
     : organizationId
-    ? "Selected organization"
+    ? selectedOrg?.name || "Selected organization"
     : "All organizations"
 
   const statCards = [

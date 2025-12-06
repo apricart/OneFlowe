@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo } from "react"
 import { Card } from "@/components/ui/card"
-import { SectionHeader } from "@/components/ui/section-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -32,8 +31,8 @@ interface SubCategory {
   parentId: number
   createdAt: string
   updatedAt: string
-  parentName: string
-  productsCount: number
+  parentName?: string
+  productsCount?: number
 }
 
 interface Category {
@@ -69,6 +68,31 @@ export default function SubCategoriesPage() {
   const subCategories = data?.items || []
   const parentCategories = categoriesData?.items || []
 
+  // Optionally fetch global products to compute product counts client-side
+  type GlobalProduct = {
+    id: number
+    metadata?: { subCategoryId?: number } | null
+  }
+
+  const { data: productsData } = useSWR<{ items: GlobalProduct[] }>(
+    `/api/v1/admin/global-inventory?limit=1000`,
+    fetcher
+  )
+
+  const productsBySubCategory = useMemo(() => {
+    const map = new Map<number, number>()
+    const products = productsData?.items || []
+
+    for (const product of products) {
+      const subId = (product.metadata as any)?.subCategoryId
+      if (typeof subId === "number") {
+        map.set(subId, (map.get(subId) || 0) + 1)
+      }
+    }
+
+    return map
+  }, [productsData])
+
   // Filter subcategories by search
   const filteredSubCategories = useMemo(() => {
     if (!searchQuery) return subCategories
@@ -82,31 +106,36 @@ export default function SubCategoriesPage() {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
+    const trimmedName = formData.name.trim()
+    if (!trimmedName) {
+      alert("Subcategory name is required")
+      return
+    }
+
     if (!formData.parentId) {
       alert("Please select a parent category")
       return
     }
-    
+
     try {
-      const url = editingSubCategory 
-        ? `/api/v1/subcategories` 
-        : `/api/v1/subcategories`
-      const method = editingSubCategory ? 'PUT' : 'POST'
-      
+      const url = `/api/v1/subcategories`
+      const method = editingSubCategory ? "PUT" : "POST"
+
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
+          name: trimmedName,
           parentId: parseInt(formData.parentId),
-          ...(editingSubCategory && { id: editingSubCategory.id })
+          ...(editingSubCategory && { id: editingSubCategory.id }),
         }),
       })
 
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || 'Failed to save subcategory')
+        throw new Error(error.error || "Failed to save subcategory")
       }
 
       mutate()
@@ -114,8 +143,8 @@ export default function SubCategoriesPage() {
       setEditingSubCategory(null)
       setFormData({ name: "", parentId: "" })
     } catch (error) {
-      console.error('Error saving subcategory:', error)
-      alert(error instanceof Error ? error.message : 'Failed to save subcategory')
+      console.error("Error saving subcategory:", error)
+      alert(error instanceof Error ? error.message : "Failed to save subcategory")
     }
   }
 
@@ -159,10 +188,18 @@ export default function SubCategoriesPage() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        title="Sub Categories"
-        subtitle="Manage product subcategories under main categories"
-      />
+      {/* Blue gradient header, aligned with Orders styling */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#141EAE] via-[#4427CA] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs tracking-[0.2em] text-white/70">PRODUCTS · SUBCATEGORIES</p>
+            <h1 className="text-3xl font-semibold">Subcategory management</h1>
+            <p className="text-sm text-white/80">
+              Define and maintain subcategories mapped under each main product category.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Search and Filters */}
       <div className="flex items-center justify-between">
@@ -234,14 +271,18 @@ export default function SubCategoriesPage() {
                   </td>
                   <td className="p-4">
                     <Badge variant="outline">
-                      {subCategory.parentName}
+                      {parentCategories.find((p) => p.id === subCategory.parentId)?.name ?? "—"}
                     </Badge>
                   </td>
                   <td className="p-4">
-                    <div className="flex items-center gap-1">
-                      <Package size={14} className="text-gray-400" />
-                      <span>{subCategory.productsCount}</span>
-                    </div>
+                    {productsBySubCategory.get(subCategory.id) ? (
+                      <div className="flex items-center gap-1">
+                        <Package size={14} className="text-gray-400" />
+                        <span>{productsBySubCategory.get(subCategory.id)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">—</span>
+                    )}
                   </td>
                   <td className="p-4 text-sm text-gray-500">
                     {new Date(subCategory.createdAt).toLocaleDateString()}
@@ -274,47 +315,59 @@ export default function SubCategoriesPage() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={resetForm}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {editingSubCategory ? "Edit Sub Category" : "Add New Sub Category"}
+            <DialogTitle className="text-lg font-semibold">
+              {editingSubCategory ? "Edit subcategory" : "Create new subcategory"}
             </DialogTitle>
-            <DialogDescription>
-              {editingSubCategory ? "Update the subcategory information below." : "Enter the details to create a new subcategory under a parent category."}
+            <DialogDescription className="text-sm text-muted-foreground">
+              Subcategories sit under a single parent category and help you segment products more precisely.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Name</label>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium">
+                Subcategory name <span className="text-red-500">*</span>
+              </label>
               <Input
                 value={formData.name}
+                autoFocus
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Enter subcategory name"
-                required
+                placeholder="e.g. Soft Drinks, Washing Powders, Notebooks"
               />
+              <p className="text-xs text-muted-foreground">
+                Choose a name that clearly describes the subset of products under the parent category.
+              </p>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Parent Category</label>
+
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium">
+                Parent category <span className="text-red-500">*</span>
+              </label>
               <select
                 value={formData.parentId}
                 onChange={(e) => setFormData({ ...formData, parentId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring"
                 required
               >
                 <option value="">Select parent category</option>
-                {parentCategories.map(category => (
+                {parentCategories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
                   </option>
                 ))}
               </select>
+              <p className="text-xs text-muted-foreground">
+                Only top-level categories are listed here. Each subcategory belongs to exactly one parent.
+              </p>
             </div>
-            <DialogFooter>
+
+            <DialogFooter className="gap-2 sm:gap-3">
               <Button type="button" variant="outline" onClick={resetForm}>
                 Cancel
               </Button>
               <Button type="submit">
-                {editingSubCategory ? "Update" : "Create"} Sub Category
+                {editingSubCategory ? "Save changes" : "Create subcategory"}
               </Button>
             </DialogFooter>
           </form>

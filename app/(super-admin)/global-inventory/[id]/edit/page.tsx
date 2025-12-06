@@ -55,6 +55,7 @@ export default function EditGlobalInventoryProductPage() {
             unit: product.unit,
             status: product.status,
             categoryName: product.categoryName,
+            metadata: product.metadata,
             discountType: product.discountType,
             discountValue: product.discountValue,
             discountStartAt: product.discountStartAt,

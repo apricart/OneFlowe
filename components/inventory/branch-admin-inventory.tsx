@@ -30,11 +30,7 @@ interface BranchProduct {
   organizationProductId: number
   isVisible: boolean
   isAvailable: boolean
-  stockQuantity: number
-  reservedQuantity: number
-  reorderThreshold: number
-  reorderQuantity: number
-  lastRestockDate: string | null
+  // Stock & reorder fields no longer used – kept out of UI
   customNotes: string | null
   createdAt: string
   updatedAt: string
@@ -96,7 +92,7 @@ export default function BranchAdminInventory({
   const totalProducts = products.length
   const visibleProducts = products.filter(p => p.isVisible).length
   const hiddenProducts = products.filter(p => !p.isVisible).length
-  const lowStockProducts = products.filter(p => p.stockQuantity <= p.reorderThreshold).length
+  const lowStockProducts = 0
 
   const handleToggleVisibility = async (branchProductId: number, isVisible: boolean) => {
     try {

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
+import { useAppContext } from "@/components/context/app-context"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -30,6 +31,7 @@ export default function BudgetsPage() {
   const { toast } = useToast()
   const role = (session?.user as any)?.role
   const isHeadOffice = role === "HEAD_OFFICE" || role === "SUPER_ADMIN"
+  const { organizationId, branchId, isInitialized } = useAppContext()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [editingBudget, setEditingBudget] = useState<BudgetAllocation | null>(null)
@@ -38,27 +40,44 @@ export default function BudgetsPage() {
   const [bulkAmount, setBulkAmount] = useState("")
   const [showBulkDialog, setShowBulkDialog] = useState(false)
 
-  const { data: budgetsData, mutate } = useSWR<any>(
-    isHeadOffice ? "/api/v1/budgets?all=true" : null,
-    fetcher
-  )
+  // Build endpoint respecting context (organization scope)
+  const budgetsEndpoint = useMemo(() => {
+    if (!isHeadOffice || !isInitialized) return null
+    const params = new URLSearchParams()
+    params.set("all", "true")
+    if (organizationId) {
+      params.set("organizationId", organizationId)
+    }
+    return `/api/v1/budgets?${params.toString()}`
+  }, [isHeadOffice, isInitialized, organizationId])
+
+  const { data: budgetsData, mutate } = useSWR<any>(budgetsEndpoint, fetcher)
 
   const budgets: BudgetAllocation[] = budgetsData?.budgets || []
 
 const formatAmount = (cents: number) => formatPKR(cents / 100)
 
+  // First apply org/branch scope from context, then search filter
+  const scopedBudgets = useMemo(() => {
+    return budgets.filter((b) => {
+      if (organizationId && String(b.organizationId) !== organizationId) return false
+      if (branchId && String(b.branchId) !== branchId) return false
+      return true
+    })
+  }, [budgets, organizationId, branchId])
+
   const filteredBudgets = useMemo(() => {
-    return budgets.filter(b =>
+    return scopedBudgets.filter((b) =>
       b.branchName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       b.branchId.toString().includes(searchQuery)
     )
-  }, [budgets, searchQuery])
+  }, [scopedBudgets, searchQuery])
 
-  const totalAllocated = budgets.reduce((sum, b) => sum + b.amountAllocatedCents, 0)
-  const totalSpent = budgets.reduce((sum, b) => sum + b.amountSpentCents, 0)
-  const totalHeld = budgets.reduce((sum, b) => sum + b.amountHeldCents, 0)
-  const totalRemaining = budgets.reduce((sum, b) => sum + b.remainingCents, 0)
-  const avgBudget = budgets.length > 0 ? totalAllocated / budgets.length : 0
+  const totalAllocated = scopedBudgets.reduce((sum, b) => sum + b.amountAllocatedCents, 0)
+  const totalSpent = scopedBudgets.reduce((sum, b) => sum + b.amountSpentCents, 0)
+  const totalHeld = scopedBudgets.reduce((sum, b) => sum + b.amountHeldCents, 0)
+  const totalRemaining = scopedBudgets.reduce((sum, b) => sum + b.remainingCents, 0)
+  const avgBudget = scopedBudgets.length > 0 ? totalAllocated / scopedBudgets.length : 0
 
   const handleEditBudget = (budget: BudgetAllocation) => {
     setEditingBudget(budget)
@@ -109,7 +128,8 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
 
     try {
       let successCount = 0
-      for (const budget of budgets) {
+      // Apply only to branches in current context scope
+      for (const budget of scopedBudgets) {
         const res = await fetch("/api/v1/budgets", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -123,7 +143,7 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
 
       toast({ 
         title: "Bulk Allocation Complete", 
-        description: `Allocated ${formatPKR(parseFloat(bulkAmount))} to ${successCount}/${budgets.length} branches` 
+        description: `Allocated ${formatPKR(parseFloat(bulkAmount))} to ${successCount}/${scopedBudgets.length} branches in view` 
       })
       setShowBulkDialog(false)
       setBulkAmount("")
@@ -189,7 +209,7 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
               Allocate all
             </Button> */}
             <div className="rounded-full bg-white/20 px-4 py-2 text-sm font-semibold">
-              {budgets.length} branches
+              {scopedBudgets.length} branches in view
             </div>
           </div>
         </div>
@@ -241,7 +261,7 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
         </Card>
         <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
           <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">Total Branches</p>
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{budgets.length}</p>
+          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{scopedBudgets.length}</p>
         </Card>
       </div>
 
@@ -358,10 +378,10 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
             <h3 className="font-bold text-lg">At-Risk Branches</h3>
           </div>
           <div className="space-y-2">
-            {budgets.filter(b => getSpendingPercentage(b) >= 70).length > 0 ? (
+            {scopedBudgets.filter(b => getSpendingPercentage(b) >= 70).length > 0 ? (
               <>
-                <p className="text-2xl font-bold text-red-600">{budgets.filter(b => getSpendingPercentage(b) >= 90).length}</p>
-                <p className="text-xs text-muted-foreground">Branches at/near budget limit ({budgets.filter(b => getSpendingPercentage(b) >= 90).length} at 90%+)</p>
+                <p className="text-2xl font-bold text-red-600">{scopedBudgets.filter(b => getSpendingPercentage(b) >= 90).length}</p>
+                <p className="text-xs text-muted-foreground">Branches at/near budget limit ({scopedBudgets.filter(b => getSpendingPercentage(b) >= 90).length} at 90%+)</p>
               </>
             ) : (
               <p className="text-sm text-green-600 font-medium">All branches within safe limits</p>
@@ -415,7 +435,9 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Allocate Budget to All Branches</DialogTitle>
-            <DialogDescription>Quickly allocate the same monthly budget to all {budgets.length} branches</DialogDescription>
+            <DialogDescription>
+              Quickly allocate the same monthly budget to all {scopedBudgets.length} branches in the current context
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
@@ -427,7 +449,9 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">PKR</span>
                 <Input type="number" value={bulkAmount} onChange={(e) => setBulkAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-12 text-lg font-bold h-11" />
               </div>
-              <p className="text-xs text-muted-foreground mt-2">This amount will be assigned to all {budgets.length} branches</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                This amount will be assigned to all {scopedBudgets.length} branches currently in view
+              </p>
             </div>
           </div>
           <DialogFooter>
