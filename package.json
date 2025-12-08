@@ -5,6 +5,7 @@
   "scripts": {
     "build": "next build",
     "db:check": "tsx lib/check-users.ts",
+    "db:export": "tsx scripts/export-db.ts",
     "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config=drizzle.config.ts",
     "db:seed": "tsx lib/seed.ts",

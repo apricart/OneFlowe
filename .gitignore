@@ -25,3 +25,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# database exports (uncomment to ignore, or keep specific files by not adding them)
+# database-export-*.sql
