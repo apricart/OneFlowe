@@ -9,6 +9,7 @@ import { formatPKR } from "@/lib/utils"
 import { Building2, GitBranch, Users, Package, Warehouse, Wallet, BarChart3, ShieldCheck } from "lucide-react"
 import { TrendAreaChart, ComparisonBarChart } from "@/components/dashboard/charts"
 import { useAppContext } from "@/components/context/app-context"
+import { startOfDay, subDays, endOfDay, eachDayOfInterval, format } from "date-fns"
 
 const navTiles = [
   {
@@ -60,10 +61,13 @@ const navTiles = [
     icon: ShieldCheck,
   },
 ]
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json())
   
 export function SuperAdminDashboard() {
   const { organizationId, branchId } = useAppContext()
-
+  console.log("Dashboard Context:", { organizationId, branchId })
+  
   // Scope org / branch data by context selector
   const { data: orgsData } = useOrganizations()
   const { data: usersData } = useUsers(organizationId || undefined)
@@ -87,7 +91,6 @@ export function SuperAdminDashboard() {
 
   const usersCount = usersInScope.length
   const branchesCount = branchesInScope.length
-  const activeBranches = branchesInScope.filter((b: any) => b.status === "active").length
 
   const selectedOrg = organizationId
     ? orgs.find((o: any) => o.id?.toString() === organizationId)
@@ -102,7 +105,65 @@ export function SuperAdminDashboard() {
     ? selectedOrg?.name || `Organization #${organizationId}`
     : "All organizations & branches"
 
-  const fetcher = (url: string) => fetch(url).then((r) => r.json())
+  // Getting weekly date range (last 7 days including today)
+  const today = new Date()
+  const startDate = startOfDay(subDays(today, 6))
+  const endDate = endOfDay(today)
+
+  // Build Weekly Sales URL - using the aggregated endpoint
+  const buildWeeklySalesUrl = () => {
+    const params = new URLSearchParams()
+    params.set("status", "FULFILLED") // Must be uppercase to match backend
+    params.set("startDate", startDate.toISOString())
+    params.set("endDate", endDate.toISOString())
+    
+    // ✅ Always include org/branch filters when selected
+    if (organizationId) params.set("organizationId", organizationId)
+    if (branchId) params.set("branchId", branchId)
+    
+    const url = `/api/v1/orders?${params.toString()}`
+    console.log("Weekly Sales URL:", url)
+    return url
+  }
+
+  // Fetch weekly sales data (aggregated by day from backend)
+  const { data: weeklySalesData, isLoading: isLoadingSales, error: salesError } = useSWR(
+    buildWeeklySalesUrl(),
+    fetcher,
+    {
+      refreshInterval: 60_000, // every 1 minute
+      revalidateOnFocus: true,
+      onSuccess: (data) => console.log("Weekly sales data received:", data),
+      onError: (err) => console.error("Weekly sales fetch error:", err),
+    }
+  )
+
+  // Map backend aggregated data to weekdays
+  const weekDays = eachDayOfInterval({
+    start: startDate,
+    end: endDate,
+  })
+
+  const weeklyData = weekDays.map(day => {
+    const dayKey = format(day, "yyyy-MM-dd")
+    
+    // Find matching aggregated data from backend
+    const dayData = Array.isArray(weeklySalesData) 
+      ? weeklySalesData.find((d: any) => d.day === dayKey)
+      : null
+
+    return {
+      day: format(day, "EEE"), // Mon, Tue, Wed
+      ordersCount: dayData?.ordersCount ?? 0,
+      totalSales: (dayData?.totalSales ?? 0) / 100, // Convert cents to PKR
+    }
+  })
+
+  console.log("Processed weekly data:", weeklyData)
+
+  // Calculate total week sales
+  const totalWeekSales = weeklyData.reduce((sum, day) => sum + day.totalSales, 0)
+  const totalWeekOrders = weeklyData.reduce((sum, day) => sum + day.ordersCount, 0)
 
   const buildOrdersUrl = (params: Record<string, string | undefined>) => {
     const search = new URLSearchParams()
@@ -111,7 +172,9 @@ export function SuperAdminDashboard() {
     if (organizationId) search.set("organizationId", organizationId)
     if (branchId) search.set("branchId", branchId)
     const qs = search.toString()
-    return `/api/v1/orders${qs ? `?${qs}` : ""}`
+    const url = `/api/v1/orders${qs ? `?${qs}` : ""}`
+    console.log("Orders URL:", url)
+    return url
   }
 
   const startOfToday = (() => {
@@ -122,15 +185,26 @@ export function SuperAdminDashboard() {
 
   const { data: todaysOrders } = useSWR<{ items: any[] }>(
     buildOrdersUrl({ from: startOfToday }),
-    fetcher
+    fetcher,
+    {
+      onSuccess: (data) => console.log("Today's orders:", data?.items?.length),
+    }
   )
+  
   const { data: pendingOrders } = useSWR<{ items: any[] }>(
-    buildOrdersUrl({ status: "pending" }),
-    fetcher
+    buildOrdersUrl({ status: "PENDING" }), // Uppercase
+    fetcher,
+    {
+      onSuccess: (data) => console.log("Pending orders:", data?.items?.length),
+    }
   )
+  
   const { data: todaysRefunded } = useSWR<{ items: any[] }>(
-    buildOrdersUrl({ status: "refunded", from: startOfToday }),
-    fetcher
+    buildOrdersUrl({ status: "REFUNDED", from: startOfToday }), // Uppercase
+    fetcher,
+    {
+      onSuccess: (data) => console.log("Today's refunds:", data?.items?.length),
+    }
   )
 
   const todaysGMVCents = (todaysOrders?.items || []).reduce((sum, o) => sum + (o.totalCents || 0), 0)
@@ -138,15 +212,13 @@ export function SuperAdminDashboard() {
   const pendingCount = pendingOrders?.items?.length || 0
   const todaysRefundCount = todaysRefunded?.items?.length || 0
 
-  const salesData = [
-    { label: "Mon", value: 120000 },
-    { label: "Tue", value: 180000 },
-    { label: "Wed", value: 90000 },
-    { label: "Thu", value: 160000 },
-    { label: "Fri", value: 210000 },
-    { label: "Sat", value: 140000 },
-    { label: "Sun", value: 170000 },
-  ]
+  // Convert weekly data to chart format (showing total sales in PKR)
+  const salesData = weeklyData.map(day => ({
+    label: day.day,
+    value: day.totalSales
+  }))
+
+  console.log("Chart data:", salesData)
 
   const gmvTaxData = [
     { label: "Jan", value: 120 },
@@ -232,21 +304,46 @@ export function SuperAdminDashboard() {
               </Card>
             )
           })}
-      </div>
+        </div>
       </section>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KpiCard title="Today's GMV" value={todaysGMV} colorClass="text-emerald-600" />
         <KpiCard title="Today's Orders" value={todaysOrders?.items?.length || 0} colorClass="text-indigo-600" />
-        <KpiCard title="Today's Refunds" value={todaysRefundCount} colorClass="text-rose-600" />
-        <KpiCard title="Total Branches" value={branchesCount} colorClass="text-slate-600" />
+        <KpiCard title="Week's Sales" value={formatPKR(totalWeekSales, { maximumFractionDigits: 0 })} colorClass="text-blue-600" />
+        <KpiCard title="Week's Orders" value={totalWeekOrders} colorClass="text-purple-600" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardContent className="p-4">
-            <div className="mb-2 text-sm font-medium">Sales by day (PKR)</div>
-            <TrendAreaChart data={salesData} />
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium">Sales by day (PKR)</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Last 7 days • {scopeText}
+                </div>
+              </div>
+              {!isLoadingSales && !salesError && (
+                <div className="text-right">
+                  <div className="text-xs text-muted-foreground">Total</div>
+                  <div className="text-lg font-semibold text-emerald-600">
+                    {formatPKR(totalWeekSales, { maximumFractionDigits: 0 })}
+                  </div>
+                </div>
+              )}
+            </div>
+            {isLoadingSales ? (
+              <div className="flex items-center justify-center h-64 text-sm text-muted-foreground">
+                Loading sales data...
+              </div>
+            ) : salesError ? (
+              <div className="flex items-center justify-center h-64 text-sm text-red-600">
+                Error loading sales data
+              </div>
+            ) : (
+              <TrendAreaChart data={salesData} />
+            )}
           </CardContent>
         </Card>
         <Card>

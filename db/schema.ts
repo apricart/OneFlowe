@@ -320,6 +320,7 @@ export const orders = pgTable(
       .references(() => users.id)
       .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (t) => ({

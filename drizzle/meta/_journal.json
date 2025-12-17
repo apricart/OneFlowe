@@ -22,6 +22,13 @@
       "when": 1764680439150,
       "tag": "20251202130039_tough_nightmare",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1765810896231,
+      "tag": "20251215150136_rich_shotgun",
+      "breakpoints": true
     }
   ]
 }

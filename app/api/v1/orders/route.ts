@@ -54,45 +54,83 @@ function generateTid(): string {
   return (ts + rand).slice(0, 26)
 }
 
+
+
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
     const role = (session.user as any).role
     const organizationIdRaw = (session.user as any).organizationId
     const branchIdFromUserRaw = (session.user as any).branchId
+
     const orgIdNum = organizationIdRaw && /^\d+$/.test(String(organizationIdRaw)) ? Number(organizationIdRaw) : undefined
     const branchIdFromUser = branchIdFromUserRaw && /^\d+$/.test(String(branchIdFromUserRaw)) ? Number(branchIdFromUserRaw) : undefined
 
     const { searchParams } = new URL(req.url)
-    const status = searchParams.get("status") || undefined
+    const rawStatus = searchParams.get("status") || undefined
+    const status = rawStatus?.toUpperCase()
     const branchId = searchParams.get("branchId") || undefined
     const q = searchParams.get("q") || undefined
     const from = searchParams.get("from") || undefined
     const to = searchParams.get("to") || undefined
+    const startDate = searchParams.get("startDate") || undefined
+    const endDate = searchParams.get("endDate") || undefined
     const organizationIdParam = searchParams.get("organizationId") || undefined
     const idParam = searchParams.get("id") || undefined
 
+    console.log("QUERY PARAMS", { status, startDate, endDate, organizationIdParam, branchId, role })
+
     const conditions: any[] = []
+
+    // Role based access
     if (role === "SUPER_ADMIN") {
       if (organizationIdParam && /^\d+$/.test(organizationIdParam)) {
         conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
       }
     } else if (role === "HEAD_OFFICE") {
-      if (typeof orgIdNum === 'number') conditions.push(eq(orders.organizationId, orgIdNum))
+      if (typeof orgIdNum === "number") conditions.push(eq(orders.organizationId, orgIdNum))
     } else {
-      if (typeof orgIdNum === 'number') conditions.push(eq(orders.organizationId, orgIdNum))
-      if (typeof branchIdFromUser === 'number') conditions.push(eq(orders.branchId, branchIdFromUser))
+      if (typeof orgIdNum === "number") conditions.push(eq(orders.organizationId, orgIdNum))
+      if (typeof branchIdFromUser === "number") conditions.push(eq(orders.branchId, branchIdFromUser))
     }
-    if (status) conditions.push(eq(orders.status, status))
+
+    // Common filters
+    if (status && status !== "FULFILLED") conditions.push(eq(orders.status, status))
     if (idParam && /^\d+$/.test(idParam)) conditions.push(eq(orders.id, Number(idParam)))
     if (branchId && /^\d+$/.test(branchId)) conditions.push(eq(orders.branchId, Number(branchId)))
-    if (from) conditions.push(gte(orders.createdAt, new Date(from)))
-    if (to) conditions.push(lte(orders.createdAt, new Date(to)))
+
+    // Created date (old behavior)
+    if (from && status !== "FULFILLED") conditions.push(gte(orders.createdAt, new Date(from)))
+    if (to && status !== "FULFILLED") conditions.push(lte(orders.createdAt, new Date(to)))
 
     await autoApproveStaleOrders()
 
+    // SALES MODE: FULFILLED only
+    if (status === "FULFILLED") {
+      conditions.push(sql`${orders.fulfilledAt} IS NOT NULL`)
+      if (startDate) conditions.push(gte(orders.fulfilledAt, new Date(startDate)))
+      if (endDate) conditions.push(lte(orders.fulfilledAt, new Date(endDate)))
+
+      // Aggregate by day
+      const salesData = await db
+        .select({
+          day: sql<string>`TO_CHAR(${orders.fulfilledAt}, 'YYYY-MM-DD')`,
+          ordersCount: sql<number>`COUNT(*)::int`,
+          totalSales: sql<number>`SUM(${orders.totalCents})::int`,
+        })
+        .from(orders)
+        .where(and(...conditions))
+        .groupBy(sql`1`)
+        .orderBy(sql`1`)
+
+      return NextResponse.json(salesData)
+    }
+
+    // Base query (non-sales)
     const selectBase = db
       .select({
         id: orders.id,
@@ -104,6 +142,7 @@ export async function GET(req: NextRequest) {
         taxCents: orders.taxCents,
         totalCents: orders.totalCents,
         createdAt: orders.createdAt,
+        fulfilledAt: orders.fulfilledAt,
         branchName: branches.name,
         hasRefundRequests: sql<number>`(
           SELECT COUNT(*)::int
@@ -114,18 +153,17 @@ export async function GET(req: NextRequest) {
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))
 
-    const items = await (conditions.length 
+    const items = await (conditions.length
       ? selectBase.where(and(...conditions)).orderBy(desc(orders.createdAt))
       : selectBase.orderBy(desc(orders.createdAt)))
 
     const filtered = q ? items.filter(o => o.tid.includes(q)) : items
-    
-    // If fetching a single order (idParam), include order items
+
+    // Single order with items
     if (idParam && /^\d+$/.test(idParam)) {
       const orderId = Number(idParam)
       const order = filtered[0]
       if (order) {
-        // Fetch order items with product details
         const itemsData = await db
           .select({
             id: orderItems.id,
@@ -140,13 +178,11 @@ export async function GET(req: NextRequest) {
           .from(orderItems)
           .leftJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
           .where(eq(orderItems.orderId, orderId))
-        
-        return NextResponse.json({ 
-          items: [{ ...order, orderItems: itemsData }] 
-        })
+
+        return NextResponse.json({ items: [{ ...order, orderItems: itemsData }] })
       }
     }
-    
+
     return NextResponse.json({ items: filtered })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
@@ -278,7 +314,7 @@ export async function POST(req: NextRequest) {
 
     const created = await db.transaction(async (tx) => {
       const [ord] = await tx.insert(orders).values({
-        tid,
+        tid,  
         organizationId: Number(organizationId),
         branchId: Number(branchId),
         status: 'pending',
@@ -371,11 +407,15 @@ export async function PUT(req: NextRequest) {
       } else if (action === 'approve') {
         await tx.update(orders).set({ status: 'approved' }).where(eq(orders.id, id))
       } else if (action === 'fulfill') {
-        await tx.update(orders).set({ status: 'fulfilled' }).where(eq(orders.id, id))
-        await tx.update(budgets).set({
-          amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,
-          amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
-        }).where(eq(budgets.id, (budget as any).id))
+  await tx.update(orders).set({ 
+    status: 'fulfilled',
+    fulfilledAt: new Date() // ✅ set the timestamp here
+  }).where(eq(orders.id, id))
+
+  await tx.update(budgets).set({
+    amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,
+    amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
+  }).where(eq(budgets.id, (budget as any).id))
         // Stock already deducted on order creation, no additional action needed
       }
       await tx.insert(auditLogs).values({ userId: (session.user as any).id, action: 'UPDATE', entity: 'Order', entityId: String(id), organizationId: ord.organizationId, branchId: ord.branchId, metadata: { action, tid: ord.tid } })

@@ -17,18 +17,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // Head Office approves/rejects; Super Admin can mark fulfilled
   const err = await requireApiRole(["HEAD_OFFICE", "SUPER_ADMIN"])
   if (err) return err
+
   const { id } = await params
   const body = await readJson<any>(req)
   if (!body) return error("Invalid body", 400)
+
   const allowedStatuses: OrderStatus[] = ["APPROVED", "REJECTED", "FULFILLED", "PENDING"]
   if (body.status && !allowedStatuses.includes(body.status)) {
     return error("Invalid status", 400)
   }
+
   const patch: any = {}
-  if (body.status) patch.status = String(body.status)
-  const [item] = await db.update(orders).set(patch).where(eq(orders.id, Number(id))).returning()
+
+  // ✅ Always update status if provided
+  if (body.status) {
+    patch.status = body.status
+  }
+console.log('body.status', body.status);
+  // ✅ VERY IMPORTANT PART
+  if (body.status === "FULFILLED") {
+    patch.fulfilledAt = new Date()
+  }
+
+  const [item] = await db
+    .update(orders)
+    .set(patch)
+    .where(eq(orders.id, Number(id)))
+    .returning()
+
   return ok({ item })
 }
+
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const err = await requireApiRole(["SUPER_ADMIN"])
