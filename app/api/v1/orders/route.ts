@@ -55,7 +55,6 @@ function generateTid(): string {
 }
 
 
-
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -67,8 +66,14 @@ export async function GET(req: NextRequest) {
     const organizationIdRaw = (session.user as any).organizationId
     const branchIdFromUserRaw = (session.user as any).branchId
 
-    const orgIdNum = organizationIdRaw && /^\d+$/.test(String(organizationIdRaw)) ? Number(organizationIdRaw) : undefined
-    const branchIdFromUser = branchIdFromUserRaw && /^\d+$/.test(String(branchIdFromUserRaw)) ? Number(branchIdFromUserRaw) : undefined
+    const orgIdNum =
+      organizationIdRaw && /^\d+$/.test(String(organizationIdRaw))
+        ? Number(organizationIdRaw)
+        : undefined
+    const branchIdFromUser =
+      branchIdFromUserRaw && /^\d+$/.test(String(branchIdFromUserRaw))
+        ? Number(branchIdFromUserRaw)
+        : undefined
 
     const { searchParams } = new URL(req.url)
     const rawStatus = searchParams.get("status") || undefined
@@ -81,16 +86,14 @@ export async function GET(req: NextRequest) {
     const endDate = searchParams.get("endDate") || undefined
     const organizationIdParam = searchParams.get("organizationId") || undefined
     const idParam = searchParams.get("id") || undefined
-
-    console.log("QUERY PARAMS", { status, startDate, endDate, organizationIdParam, branchId, role })
+    const mode = searchParams.get("mode") || undefined // weeklySales | monthlySales
 
     const conditions: any[] = []
 
-    // Role based access
+    // --- Role-based access ---
     if (role === "SUPER_ADMIN") {
-      if (organizationIdParam && /^\d+$/.test(organizationIdParam)) {
+      if (organizationIdParam && /^\d+$/.test(organizationIdParam))
         conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
-      }
     } else if (role === "HEAD_OFFICE") {
       if (typeof orgIdNum === "number") conditions.push(eq(orders.organizationId, orgIdNum))
     } else {
@@ -98,25 +101,45 @@ export async function GET(req: NextRequest) {
       if (typeof branchIdFromUser === "number") conditions.push(eq(orders.branchId, branchIdFromUser))
     }
 
-    // Common filters
     if (status && status !== "FULFILLED") conditions.push(eq(orders.status, status))
     if (idParam && /^\d+$/.test(idParam)) conditions.push(eq(orders.id, Number(idParam)))
     if (branchId && /^\d+$/.test(branchId)) conditions.push(eq(orders.branchId, Number(branchId)))
 
-    // Created date (old behavior)
     if (from && status !== "FULFILLED") conditions.push(gte(orders.createdAt, new Date(from)))
     if (to && status !== "FULFILLED") conditions.push(lte(orders.createdAt, new Date(to)))
 
     await autoApproveStaleOrders()
 
-    // SALES MODE: FULFILLED only
+    // --- SALES MODE: Weekly / Monthly ---
     if (status === "FULFILLED") {
       conditions.push(sql`${orders.fulfilledAt} IS NOT NULL`)
+
       if (startDate) conditions.push(gte(orders.fulfilledAt, new Date(startDate)))
       if (endDate) conditions.push(lte(orders.fulfilledAt, new Date(endDate)))
 
-      // Aggregate by day
-      const salesData = await db
+      // MONTHLY SALES
+      if (mode === "monthlySales") {
+        const monthlySales = await db
+          .select({
+            monthNum: sql<number>`EXTRACT(MONTH FROM ${orders.fulfilledAt})::int`,
+            month: sql<string>`TO_CHAR(${orders.fulfilledAt}, 'Mon')`,
+            sales: sql<number>`SUM(${orders.totalCents})::int`,
+          })
+          .from(orders)
+          .where(and(...conditions))
+          .groupBy(sql`1,2`)
+          .orderBy(sql`1`)
+
+        return NextResponse.json(
+          monthlySales.map((d) => ({
+            month: d.month,
+            sales: d.sales / 100, // cents → PKR
+          }))
+        )
+      }
+
+      // WEEKLY SALES
+      const weeklySales = await db
         .select({
           day: sql<string>`TO_CHAR(${orders.fulfilledAt}, 'YYYY-MM-DD')`,
           ordersCount: sql<number>`COUNT(*)::int`,
@@ -127,10 +150,10 @@ export async function GET(req: NextRequest) {
         .groupBy(sql`1`)
         .orderBy(sql`1`)
 
-      return NextResponse.json(salesData)
+      return NextResponse.json(weeklySales)
     }
 
-    // Base query (non-sales)
+    // --- Base query (non-sales) ---
     const selectBase = db
       .select({
         id: orders.id,
@@ -157,7 +180,7 @@ export async function GET(req: NextRequest) {
       ? selectBase.where(and(...conditions)).orderBy(desc(orders.createdAt))
       : selectBase.orderBy(desc(orders.createdAt)))
 
-    const filtered = q ? items.filter(o => o.tid.includes(q)) : items
+    const filtered = q ? items.filter((o) => o.tid.includes(q)) : items
 
     // Single order with items
     if (idParam && /^\d+$/.test(idParam)) {
