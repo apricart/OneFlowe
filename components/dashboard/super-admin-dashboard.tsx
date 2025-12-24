@@ -124,7 +124,7 @@ export function SuperAdminDashboard() {
       const orderYear = getYear(date).toString()
       
       // Only process orders from the selected year
-      if (orderYear !== selectedYear) return
+      // if (orderYear !== selectedYear) return
       
       const month = format(date, "MMM") 
       if (monthlySalesMap.hasOwnProperty(month)) {

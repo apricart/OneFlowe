@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Ec2Gyn7obY5zM5yzXFfHPlLL2FzSEwGnfQ6KoTe6Xeq3VxwVh1xgec3bAV4gsr5
+\restrict 7zQNonuiwcN4ezvsipnkuIj9hEbFXeABrO6orzIJ8fb25Zz3Pp8iPEZNGarmGcw
 
 -- Dumped from database version 13.22
 -- Dumped by pg_dump version 13.22
@@ -1722,6 +1722,24 @@ COPY public.audit_logs (id, user_id, organization_id, branch_id, action, entity,
 107	b3464267-3953-4f90-8e0a-503e8ec61f80	1	1	CREATE_ORDER	Order	16	{"tid": "mja2siq9gkmu2uoc", "items": 3, "total": 84000}	2025-12-17 18:57:06.132189+05
 108	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	16	{"tid": "mja2siq9gkmu2uoc", "action": "approve"}	2025-12-17 19:01:16.358045+05
 109	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	16	{"tid": "mja2siq9gkmu2uoc", "action": "fulfill"}	2025-12-17 19:01:23.984378+05
+110	b3464267-3953-4f90-8e0a-503e8ec61f80	1	1	CREATE_ORDER	Order	17	{"tid": "mjhdloxpqnedh4hm", "items": 2, "total": 80000}	2025-12-22 21:34:06.595972+05
+111	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	17	{"tid": "mjhdloxpqnedh4hm", "action": "approve"}	2025-12-22 21:34:54.013077+05
+112	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	17	{"tid": "mjhdloxpqnedh4hm", "action": "fulfill"}	2025-12-22 21:34:57.391641+05
+113	b3464267-3953-4f90-8e0a-503e8ec61f80	1	1	CREATE_ORDER	Order	20	{"tid": "mjhew8ysmslwedlv", "items": 3, "total": 84000}	2025-12-22 22:10:18.727333+05
+114	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	20	{"tid": "mjhew8ysmslwedlv", "action": "approve"}	2025-12-22 22:10:45.366635+05
+115	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	20	{"tid": "mjhew8ysmslwedlv", "action": "fulfill"}	2025-12-22 22:10:47.611709+05
+116	b3464267-3953-4f90-8e0a-503e8ec61f80	1	1	CREATE_ORDER	Order	21	{"tid": "mjigm4ytppdpth75", "items": 1, "total": 30000}	2025-12-23 15:46:12.392472+05
+117	b3464267-3953-4f90-8e0a-503e8ec61f80	1	1	CREATE_ORDER	Order	22	{"tid": "mjigm9qu6uk0ulga", "items": 1, "total": 50000}	2025-12-23 15:46:18.584129+05
+118	b3464267-3953-4f90-8e0a-503e8ec61f80	1	1	CREATE_ORDER	Order	23	{"tid": "mjign5a7ordb41f3", "items": 1, "total": 12000}	2025-12-23 15:46:59.457538+05
+119	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	21	{"tid": "mjigm4ytppdpth75", "action": "approve"}	2025-12-23 15:47:44.089904+05
+120	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	22	{"tid": "mjigm9qu6uk0ulga", "action": "approve"}	2025-12-23 15:47:48.801573+05
+121	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	23	{"tid": "mjign5a7ordb41f3", "action": "approve"}	2025-12-23 15:47:52.310218+05
+122	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	23	{"tid": "mjign5a7ordb41f3", "action": "fulfill"}	2025-12-23 15:47:58.645949+05
+123	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	22	{"tid": "mjigm9qu6uk0ulga", "action": "fulfill"}	2025-12-23 15:48:00.211148+05
+124	f81b18b1-0aa7-4614-9206-fe4afa81f061	1	1	UPDATE	Order	21	{"tid": "mjigm4ytppdpth75", "action": "fulfill"}	2025-12-23 15:48:01.088429+05
+125	f81b18b1-0aa7-4614-9206-fe4afa81f061	\N	\N	UPDATE_BUDGET_ALLOCATION	BUDGET	3	{"newAmount": 3000, "oldAmount": 3000, "branchName": "Malir Halt Branch"}	2025-12-23 16:04:51.494997+05
+126	f81b18b1-0aa7-4614-9206-fe4afa81f061	\N	\N	UPDATE_BUDGET_ALLOCATION	BUDGET	2	{"newAmount": 2000, "oldAmount": 6000, "branchName": "Gulberg Branch"}	2025-12-23 16:05:36.53872+05
+127	f81b18b1-0aa7-4614-9206-fe4afa81f061	\N	\N	UPDATE_BUDGET_ALLOCATION	BUDGET	1	{"newAmount": 2000, "oldAmount": 6000, "branchName": "Malir Halt Branch"}	2025-12-23 16:05:36.90849+05
 \.
 
 
@@ -1763,12 +1781,12 @@ COPY public.branches (id, organization_id, name, admin_user_id, code, status, cr
 
 COPY public.budgets (id, organization_id, branch_id, period, amount_allocated_cents, amount_spent_cents, amount_held_cents, amount_credited_cents, created_at, updated_at) FROM stdin;
 2	1	2	2025-11	200000	0	0	0	2025-11-20 17:34:34.242711+05	2025-12-05 21:48:57.383+05
-4	1	2	2025-12	600000	0	0	0	2025-12-05 22:25:45.939942+05	2025-12-05 22:26:11.433+05
-5	1	1	2025-12	600000	0	0	0	2025-12-05 22:26:01.708091+05	2025-12-05 22:26:11.629+05
 6	4	5	2025-12	450000	93000	0	0	2025-12-06 18:13:11.074897+05	2025-12-06 18:13:29.709+05
 3	2	3	2025-11	50000	40000	0	0	2025-11-20 19:27:35.418812+05	2025-11-20 19:27:35.418812+05
-7	2	3	2025-12	300000	0	0	0	2025-12-17 18:47:28.952049+05	2025-12-17 18:49:01.696+05
-1	1	1	2025-11	500000	516000	-30000	250000	2025-11-17 17:29:28.81067+05	2025-12-05 21:46:25.216+05
+1	1	1	2025-11	500000	772000	-30000	250000	2025-11-17 17:29:28.81067+05	2025-12-05 21:46:25.216+05
+7	2	3	2025-12	300000	0	0	0	2025-12-17 18:47:28.952049+05	2025-12-23 16:04:51.481+05
+4	1	2	2025-12	200000	0	0	0	2025-12-05 22:25:45.939942+05	2025-12-23 16:05:36.532+05
+5	1	1	2025-12	200000	0	0	0	2025-12-05 22:26:01.708091+05	2025-12-23 16:05:36.902+05
 \.
 
 
@@ -1798,9 +1816,9 @@ COPY public.employee_credentials (id, branch_id, organization_id, email, passwor
 --
 
 COPY public.global_products (id, product_code, name, description, category_id, image_url, base_price_cents, unit, status, metadata, created_by_user_id, created_at, updated_at, last_synced_at, discount_type, discount_value_cents, discount_start_at, discount_end_at, discount_active, stock_quantity) FROM stdin;
-2	PRD-001	Tang		2	/uploads/products/product_1763646296533_l9v5s4jjog.jpg	20000	box	active	{"subCategoryId": 3}	\N	2025-11-20 18:45:13.02965+05	2025-12-17 18:57:06.389+05	\N	\N	\N	\N	\N	f	41
-1	PRD-002	Olpers Milk		1	https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRHHvWtqG9OMjF08ITxD3_bY3IopURhJN6YTw&s	50000	ltr	active	{}	\N	2025-11-20 16:29:16.131975+05	2025-12-17 18:57:06.399+05	\N	percent	10	\N	\N	t	60
-3	PRD-004	ABC Juice 		2	https://media.naheed.pk/catalog/product/cache/2f2d0cb0c5f92580479e8350be94f387/1/2/1240061-1.jpg	4000	unit	active	{"subCategoryId": 3}	\N	2025-12-02 19:33:39.174849+05	2025-12-17 18:57:06.404+05	\N	\N	\N	\N	\N	f	16
+2	PRD-001	Tang		2	/uploads/products/product_1763646296533_l9v5s4jjog.jpg	20000	box	active	{"subCategoryId": 3}	\N	2025-11-20 18:45:13.02965+05	2025-12-23 15:46:12.415+05	\N	\N	\N	\N	\N	f	38
+1	PRD-002	Olpers Milk		1	https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRHHvWtqG9OMjF08ITxD3_bY3IopURhJN6YTw&s	50000	ltr	active	{}	\N	2025-11-20 16:29:16.131975+05	2025-12-23 15:46:18.597+05	\N	percent	10	\N	\N	t	57
+3	PRD-004	ABC Juice 		2	https://media.naheed.pk/catalog/product/cache/2f2d0cb0c5f92580479e8350be94f387/1/2/1240061-1.jpg	4000	unit	active	{"subCategoryId": 3}	\N	2025-12-02 19:33:39.174849+05	2025-12-23 15:46:59.487+05	\N	\N	\N	\N	\N	f	12
 \.
 
 
@@ -1873,6 +1891,9 @@ b6ce2578-912f-413b-b23f-d5a14d697917	b3464267-3953-4f90-8e0a-503e8ec61f80	129547
 6e132fda-bd50-4096-8ce3-d0b6594c2090	b3464267-3953-4f90-8e0a-503e8ec61f80	677406	LOGIN	2025-12-16 16:09:57.196+05	0	t	2025-12-16 16:07:57.256267+05
 74991e80-8b6f-45e9-9e6b-d5f6ff8a1ab7	b3464267-3953-4f90-8e0a-503e8ec61f80	776669	LOGIN	2025-12-17 18:18:56.783+05	0	t	2025-12-17 18:16:56.795576+05
 c6244e77-dcd0-4087-be48-7aefbb12f710	b3464267-3953-4f90-8e0a-503e8ec61f80	556349	LOGIN	2025-12-17 18:56:18.383+05	0	t	2025-12-17 18:54:18.384514+05
+39941a68-cb8c-462e-a2dc-e4cc4ca1c6b7	b3464267-3953-4f90-8e0a-503e8ec61f80	799686	LOGIN	2025-12-22 21:34:00.783+05	0	t	2025-12-22 21:32:00.994402+05
+cce80e40-beff-4b25-b8e3-34e4358206a6	b3464267-3953-4f90-8e0a-503e8ec61f80	461942	LOGIN	2025-12-22 22:11:17.431+05	0	t	2025-12-22 22:09:17.442767+05
+67feb7a1-96e8-473b-9a80-640f6954e8d6	b3464267-3953-4f90-8e0a-503e8ec61f80	899258	LOGIN	2025-12-23 15:46:33.052+05	0	t	2025-12-23 15:44:33.059462+05
 \.
 
 
@@ -1922,6 +1943,14 @@ COPY public.order_items (id, organization_id, order_id, global_product_id, produ
 23	1	16	2	Tang	PRD-001	box	1	30000	2025-12-17 18:57:06.132189+05
 24	1	16	1	Olpers Milk	PRD-002	ltr	1	50000	2025-12-17 18:57:06.132189+05
 25	1	16	3	ABC Juice 	PRD-004	unit	1	4000	2025-12-17 18:57:06.132189+05
+26	1	17	2	Tang	PRD-001	box	1	30000	2025-12-22 21:34:06.595972+05
+27	1	17	1	Olpers Milk	PRD-002	ltr	1	50000	2025-12-22 21:34:06.595972+05
+28	1	20	3	ABC Juice 	PRD-004	unit	1	4000	2025-12-22 22:10:18.727333+05
+29	1	20	1	Olpers Milk	PRD-002	ltr	1	50000	2025-12-22 22:10:18.727333+05
+30	1	20	2	Tang	PRD-001	box	1	30000	2025-12-22 22:10:18.727333+05
+31	1	21	2	Tang	PRD-001	box	1	30000	2025-12-23 15:46:12.392472+05
+32	1	22	1	Olpers Milk	PRD-002	ltr	1	50000	2025-12-23 15:46:18.584129+05
+33	1	23	3	ABC Juice 	PRD-004	unit	3	4000	2025-12-23 15:46:59.457538+05
 \.
 
 
@@ -1930,22 +1959,27 @@ COPY public.order_items (id, organization_id, order_id, global_product_id, produ
 --
 
 COPY public.orders (id, tid, organization_id, branch_id, status, subtotal_cents, tax_cents, total_cents, notes, created_by_user_id, created_at, updated_at, fulfilled_at) FROM stdin;
+23	mjign5a7ordb41f3	1	1	fulfilled	12000	0	12000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-23 15:46:59.457538+05	2025-12-23 15:46:59.457538+05	2025-12-23 15:47:58.645+05
 1	mi7hbpnlit8ie1ts	1	1	refunded	50000	0	50000	\N	218b4708-26b1-4a86-a6b3-b5483398eb42	2025-11-20 18:40:55.334907+05	2025-11-20 18:40:55.334907+05	\N
+22	mjigm9qu6uk0ulga	1	1	fulfilled	50000	0	50000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-23 15:46:18.584129+05	2025-12-23 15:46:18.584129+05	2025-12-23 15:48:00.21+05
 2	mi7it9uiym6rnzul	1	1	refunded	50000	0	50000	\N	218b4708-26b1-4a86-a6b3-b5483398eb42	2025-11-20 19:22:34.268003+05	2025-11-20 19:22:34.268003+05	\N
-3	mitjsplamqtvlcfn	1	1	fulfilled	54000	0	54000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-06 05:21:03.504726+05	2025-12-06 05:21:03.504726+05	2025-12-06 05:21:03.504726+05
-4	miubmcz5chzklkl1	1	1	fulfilled	154000	0	154000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-06 18:19:56.470797+05	2025-12-06 18:19:56.470797+05	2025-12-06 18:19:56.470797+05
-5	miubpgx2wcar3u8l	4	5	fulfilled	93000	0	93000	\N	f81b18b1-0aa7-4614-9206-fe4afa81f061	2025-12-06 18:22:21.543473+05	2025-12-06 18:22:21.543473+05	2025-12-06 18:22:21.543473+05
-16	mja2siq9gkmu2uoc	1	1	fulfilled	84000	0	84000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-17 18:57:06.132189+05	2025-12-17 18:57:06.132189+05	2025-12-17 19:01:23.985+05
-6	mj770wg02itu39xo	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-15 18:32:17.089787+05	2025-12-15 20:57:08.235+05	2025-12-15 20:57:08.235+05
-7	mj771jomq8jabybq	1	1	fulfilled	84000	0	84000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-15 18:32:47.207826+05	2025-12-15 18:32:47.207826+05	2025-12-15 18:32:00+05
+21	mjigm4ytppdpth75	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-23 15:46:12.392472+05	2025-12-23 15:46:12.392472+05	2025-12-23 15:48:01.087+05
 8	mj8h4pf6yxyd493l	1	1	cancelled	54000	0	54000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:02:56.95262+05	2025-12-16 16:02:56.95262+05	\N
-13	mj8ic2befdymshnr	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:36:39.867645+05	2025-12-16 16:36:39.867645+05	2025-12-16 16:47:33.615+05
-9	mj8hexlnxchda8po	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:10:54.120659+05	2025-12-16 16:10:54.120659+05	2025-12-16 16:10:54.120659+05
-10	mj8hexxe688i53tm	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:10:54.531594+05	2025-12-16 16:10:54.531594+05	2025-12-16 16:10:54.531594+05
-11	mj8hpe4i7q00bu09	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:19:02.083159+05	2025-12-16 16:19:02.083159+05	2025-12-16 16:19:02.083159+05
-12	mj8hxh140s5m3cmz	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:25:19.098634+05	2025-12-16 16:25:19.098634+05	2025-12-16 16:25:19.098634+05
-14	mja1h7l69r3ztah8	1	1	fulfilled	80000	0	80000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-17 18:20:18.86496+05	2025-12-17 18:20:18.86496+05	2025-12-17 18:22:25.477+05
-15	mja29k0hwg556wnt	2	3	fulfilled	40000	0	40000	\N	93e0c992-3a85-4b6e-8222-40d0792a9465	2025-12-17 18:42:21.330665+05	2025-12-17 18:42:21.330665+05	2025-12-17 18:45:01.256+05
+4	miubmcz5chzklkl1	1	1	fulfilled	154000	0	154000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-06 18:19:56.470797+05	2025-12-06 18:19:56.470797+05	2025-01-10 15:00:00+05
+3	mitjsplamqtvlcfn	1	1	fulfilled	54000	0	54000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-06 05:21:03.504726+05	2025-12-06 05:21:03.504726+05	2025-01-10 15:00:00+05
+5	miubpgx2wcar3u8l	4	5	fulfilled	93000	0	93000	\N	f81b18b1-0aa7-4614-9206-fe4afa81f061	2025-12-06 18:22:21.543473+05	2025-12-06 18:22:21.543473+05	2025-02-12 19:00:00+05
+6	mj770wg02itu39xo	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-15 18:32:17.089787+05	2025-12-15 20:57:08.235+05	2025-02-12 19:00:00+05
+7	mj771jomq8jabybq	1	1	fulfilled	84000	0	84000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-15 18:32:47.207826+05	2025-12-15 18:32:47.207826+05	2025-03-15 16:00:00+05
+9	mj8hexlnxchda8po	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:10:54.120659+05	2025-12-16 16:10:54.120659+05	2025-03-15 16:00:00+05
+10	mj8hexxe688i53tm	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:10:54.531594+05	2025-12-16 16:10:54.531594+05	2025-04-20 20:00:00+05
+11	mj8hpe4i7q00bu09	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:19:02.083159+05	2025-12-16 16:19:02.083159+05	2025-04-20 20:00:00+05
+13	mj8ic2befdymshnr	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:36:39.867645+05	2025-12-16 16:36:39.867645+05	2025-05-05 17:30:00+05
+12	mj8hxh140s5m3cmz	1	1	fulfilled	30000	0	30000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-16 16:25:19.098634+05	2025-12-16 16:25:19.098634+05	2025-05-05 17:30:00+05
+14	mja1h7l69r3ztah8	1	1	fulfilled	80000	0	80000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-17 18:20:18.86496+05	2025-12-17 18:20:18.86496+05	2025-06-18 21:45:00+05
+15	mja29k0hwg556wnt	2	3	fulfilled	40000	0	40000	\N	93e0c992-3a85-4b6e-8222-40d0792a9465	2025-12-17 18:42:21.330665+05	2025-12-17 18:42:21.330665+05	2025-06-18 21:45:00+05
+16	mja2siq9gkmu2uoc	1	1	fulfilled	84000	0	84000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-17 18:57:06.132189+05	2025-12-17 18:57:06.132189+05	2025-07-08 18:20:00+05
+17	mjhdloxpqnedh4hm	1	1	fulfilled	80000	0	80000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-22 21:34:06.595972+05	2025-12-22 21:34:06.595972+05	2025-07-08 18:20:00+05
+20	mjhew8ysmslwedlv	1	1	fulfilled	84000	0	84000	\N	b3464267-3953-4f90-8e0a-503e8ec61f80	2025-12-22 22:10:18.727333+05	2025-12-22 22:10:18.727333+05	2025-12-22 22:10:47.611+05
 \.
 
 
@@ -2223,7 +2257,7 @@ SELECT pg_catalog.setval('drizzle.__drizzle_migrations_id_seq', 12, true);
 -- Name: audit_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.audit_logs_id_seq', 109, true);
+SELECT pg_catalog.setval('public.audit_logs_id_seq', 127, true);
 
 
 --
@@ -2314,14 +2348,14 @@ SELECT pg_catalog.setval('public.notifications_id_seq', 1, false);
 -- Name: order_items_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.order_items_id_seq', 25, true);
+SELECT pg_catalog.setval('public.order_items_id_seq', 33, true);
 
 
 --
 -- Name: orders_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.orders_id_seq', 16, true);
+SELECT pg_catalog.setval('public.orders_id_seq', 23, true);
 
 
 --
@@ -4100,5 +4134,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Ec2Gyn7obY5zM5yzXFfHPlLL2FzSEwGnfQ6KoTe6Xeq3VxwVh1xgec3bAV4gsr5
+\unrestrict 7zQNonuiwcN4ezvsipnkuIj9hEbFXeABrO6orzIJ8fb25Zz3Pp8iPEZNGarmGcw
 
