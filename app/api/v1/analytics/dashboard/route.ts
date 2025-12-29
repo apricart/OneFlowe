@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { and, eq, gte, sql } from "drizzle-orm"
+import { and, eq, gte, sql, or, lt } from "drizzle-orm"
 import { requireApiRole, ok } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders, branches } from "@/db/schema"
@@ -58,13 +58,17 @@ export async function GET(req: NextRequest) {
     branchFilters.push(eq(branches.id, branchId))
   }
 
-  let branchQuery = db
-    .select({
-      id: branches.id,
-      name: branches.name,
-      orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
-    })
-    .from(branches)
+  const branchSelect = db.select({
+    id: branches.id,
+    name: branches.name,
+    orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
+  }).from(branches)
+
+  const branchSelectWithFilters = branchFilters.length
+    ? branchSelect.where(and(...(branchFilters as any)))
+    : branchSelect
+
+  const branchQuery = branchSelectWithFilters
     .leftJoin(
       orders,
       and(eq(orders.branchId, branches.id), ...(orderConditions as any)),
@@ -73,11 +77,63 @@ export async function GET(req: NextRequest) {
     .orderBy(sql`coalesce(count(${orders.id}), 0) desc`)
     .limit(role === "BRANCH_ADMIN" ? 1 : 5)
 
-  if (branchFilters.length) {
-    branchQuery = branchQuery.where(and(...(branchFilters as any)))
+  const branchRows = await branchQuery
+
+  // Count branches matching the same filters (or all branches for SUPER_ADMIN)
+  const countSelect = db.select({ count: sql<number>`coalesce(count(${branches.id}), 0)` }).from(branches)
+  const branchCountRows = branchFilters.length
+    ? await countSelect.where(and(...(branchFilters as any)))
+    : await countSelect
+
+  const branchCount = Number(((branchCountRows as any)[0]?.count) || 0)
+
+  // Pending approvals: count orders with status PENDING for the same scope (no date filter)
+  const pendingConditions: any[] = [or(eq(orders.status, "PENDING"), eq(orders.status, "pending"))]
+  if (role !== "SUPER_ADMIN" && organizationId) {
+    pendingConditions.push(eq(orders.organizationId, organizationId))
+  }
+  if (role === "BRANCH_ADMIN" && branchId) {
+    pendingConditions.push(eq(orders.branchId, branchId))
   }
 
-  const branchRows = await branchQuery
+  const pendingRow = await db
+    .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
+    .from(orders)
+    .where(and(...(pendingConditions as any)))
+
+  const pendingApprovals = Number(((pendingRow as any)[0]?.count) || 0)
+
+  // Orders this month: Only include APPROVED or FULFILLED orders (exclude PENDING, REJECTED, REFUNDED)
+  // Use explicit date range for current month to avoid timezone issues
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  startOfMonth.setHours(0, 0, 0, 0)
+  const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  startOfNextMonth.setHours(0, 0, 0, 0)
+
+  const monthConditions: any[] = [
+    gte(orders.createdAt, startOfMonth),
+    lt(orders.createdAt, startOfNextMonth),
+    or(
+      eq(orders.status, "APPROVED"),
+      eq(orders.status, "approved"),
+      eq(orders.status, "FULFILLED"),
+      eq(orders.status, "fulfilled")
+    ),
+  ]
+  if (role !== "SUPER_ADMIN" && organizationId) {
+    monthConditions.push(eq(orders.organizationId, organizationId))
+  }
+  if (role === "BRANCH_ADMIN" && branchId) {
+    monthConditions.push(eq(orders.branchId, branchId))
+  }
+
+  const ordersMonthRow = await db
+    .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
+    .from(orders)
+    .where(and(...(monthConditions as any)))
+
+  const ordersThisMonth = Number(((ordersMonthRow as any)[0]?.count) || 0)
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -109,6 +165,9 @@ export async function GET(req: NextRequest) {
   return ok({
     gmvSeries,
     branchSeries,
+    branchCount,
+    pendingApprovals,
+    ordersThisMonth,
   })
 }
 

@@ -325,98 +325,113 @@ export function TrendAreaChart({ data, className }: { data: TrendPoint[]; classN
 
   return (
     <div className={cn("w-full relative", className)}>
-      <div className="relative overflow-hidden rounded-3xl border border-emerald-200/50 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-6 shadow-xl hover:shadow-emerald-300/30 transition-all duration-700 group">
-        {/* Animated Background */}
-        <div className="absolute -top-20 -left-20 w-60 h-60 bg-gradient-to-br from-emerald-400/20 to-teal-400/20 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute -bottom-20 -right-20 w-60 h-60 bg-gradient-to-br from-teal-400/20 to-cyan-400/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
+      <div className="relative overflow-hidden rounded-3xl border border-white/20 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-8 shadow-2xl hover:shadow-purple-500/50 transition-all duration-700 group">
+        {/* Animated Background Orbs */}
+        <div className="absolute -top-32 -left-32 w-96 h-96 bg-gradient-to-br from-purple-500/30 to-pink-500/30 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute top-20 -right-32 w-80 h-80 bg-gradient-to-br from-cyan-500/30 to-blue-500/30 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute -bottom-32 left-1/3 w-96 h-96 bg-gradient-to-br from-violet-500/30 to-fuchsia-500/30 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
 
         {/* Mini Stats */}
-        <div className="relative grid grid-cols-2 gap-3 mb-4">
-          <div className="rounded-xl bg-gradient-to-br from-emerald-100/60 to-emerald-200/40 backdrop-blur-sm p-3 border border-emerald-300/30">
-            <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">Total</p>
-            <p className="text-lg font-extrabold bg-gradient-to-r from-emerald-700 to-emerald-900 bg-clip-text text-transparent">
+        <div className="relative grid grid-cols-2 gap-4 mb-6">
+          <div className="group/stat rounded-2xl bg-white/10 backdrop-blur-xl p-5 border border-white/20 hover:bg-white/15 hover:border-white/30 transition-all duration-500 hover:scale-105 hover:-translate-y-1 shadow-lg hover:shadow-purple-500/30">
+            <p className="text-xs font-bold text-purple-200 uppercase tracking-widest mb-2 flex items-center gap-2">
+              <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></span>
+              Total Value
+            </p>
+            <p className="text-3xl font-black bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300 bg-clip-text text-transparent animate-pulse">
               ₨{totalValue.toLocaleString()}
             </p>
+            <div className="mt-2 h-1 w-0 group-hover/stat:w-full bg-gradient-to-r from-purple-400 to-pink-400 rounded-full transition-all duration-700"></div>
           </div>
-          <div className="rounded-xl bg-gradient-to-br from-teal-100/60 to-teal-200/40 backdrop-blur-sm p-3 border border-teal-300/30">
-            <p className="text-xs font-bold text-teal-700 uppercase tracking-wide mb-1">Peak</p>
-            <p className="text-lg font-extrabold bg-gradient-to-r from-teal-700 to-teal-900 bg-clip-text text-transparent">
+          <div className="group/stat rounded-2xl bg-white/10 backdrop-blur-xl p-5 border border-white/20 hover:bg-white/15 hover:border-white/30 transition-all duration-500 hover:scale-105 hover:-translate-y-1 shadow-lg hover:shadow-cyan-500/30">
+            <p className="text-xs font-bold text-cyan-200 uppercase tracking-widest mb-2 flex items-center gap-2">
+              <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></span>
+              Peak Day
+            </p>
+            <p className="text-3xl font-black bg-gradient-to-r from-cyan-300 via-blue-300 to-cyan-300 bg-clip-text text-transparent">
               {peakDay.label}
             </p>
+            <div className="mt-2 h-1 w-0 group-hover/stat:w-full bg-gradient-to-r from-cyan-400 to-blue-400 rounded-full transition-all duration-700"></div>
           </div>
         </div>
 
         {/* Chart */}
-        <div className="relative h-64 rounded-2xl bg-white/50 backdrop-blur-sm p-3 border border-white/60 shadow-inner">
+        <div className="relative h-80 rounded-2xl bg-white/5 backdrop-blur-2xl p-6 border border-white/20 shadow-2xl overflow-hidden group-hover:bg-white/10 transition-all duration-700">
+          {/* Chart glow effect */}
+          <div className="absolute inset-0 bg-gradient-to-tr from-purple-500/10 via-transparent to-cyan-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
+          
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 16, right: 16, left: 0, bottom: 12 }}>
+            <AreaChart data={chartData} margin={{ top: 20, right: 20, left: 10, bottom: 20 }}>
               <defs>
                 <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10B981" stopOpacity={0.8} />
-                  <stop offset="40%" stopColor="#14B8A6" stopOpacity={0.5} />
-                  <stop offset="80%" stopColor="#06B6D4" stopOpacity={0.2} />
-                  <stop offset="100%" stopColor="#A7F3D0" stopOpacity={0.05} />
+                  <stop offset="0%" stopColor="#A78BFA" stopOpacity={0.9} />
+                  <stop offset="25%" stopColor="#C084FC" stopOpacity={0.7} />
+                  <stop offset="50%" stopColor="#E879F9" stopOpacity={0.5} />
+                  <stop offset="75%" stopColor="#22D3EE" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#06B6D4" stopOpacity={0.1} />
                 </linearGradient>
                 <linearGradient id="strokeGradient" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#10B981" />
-                  <stop offset="50%" stopColor="#14B8A6" />
-                  <stop offset="100%" stopColor="#06B6D4" />
+                  <stop offset="0%" stopColor="#A78BFA" />
+                  <stop offset="25%" stopColor="#C084FC" />
+                  <stop offset="50%" stopColor="#E879F9" />
+                  <stop offset="75%" stopColor="#F472B6" />
+                  <stop offset="100%" stopColor="#22D3EE" />
                 </linearGradient>
                 <filter id="areaGlow">
-                  <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                  <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
                   <feMerge>
                     <feMergeNode in="coloredBlur"/>
                     <feMergeNode in="SourceGraphic"/>
                   </feMerge>
                 </filter>
                 <filter id="areaShadow">
-                  <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#10B981" floodOpacity="0.3"/>
+                  <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#A78BFA" floodOpacity="0.6"/>
                 </filter>
               </defs>
               <CartesianGrid 
-                strokeDasharray="6 6" 
-                stroke="#A7F3D0" 
-                strokeOpacity={0.4}
+                strokeDasharray="3 3" 
+                stroke="#FFFFFF" 
+                strokeOpacity={0.1}
                 vertical={false} 
               />
               <XAxis 
                 dataKey="label" 
                 tickLine={false} 
-                axisLine={{ stroke: "#6EE7B7", strokeWidth: 2 }} 
-                tickMargin={8} 
-                tick={{ fill: "#047857", fontWeight: 700, fontSize: 12 }}
+                axisLine={{ stroke: "#A78BFA", strokeWidth: 2, strokeOpacity: 0.3 }} 
+                tickMargin={12} 
+                tick={{ fill: "#E9D5FF", fontWeight: 600, fontSize: 11 }}
               />
               <YAxis
                 tickFormatter={(value) => `₨${value/1000}k`}
-                width={70}
-                axisLine={{ stroke: "#6EE7B7", strokeWidth: 2 }}
+                width={75}
+                axisLine={{ stroke: "#A78BFA", strokeWidth: 2, strokeOpacity: 0.3 }}
                 tickLine={false}
-                tickMargin={8}
-                tick={{ fill: "#047857", fontWeight: 700, fontSize: 12 }}
+                tickMargin={12}
+                tick={{ fill: "#E9D5FF", fontWeight: 600, fontSize: 11 }}
               />
               <Tooltip content={<ChartTooltip prefix="currency" />} />
               <Area
                 type="monotone"
                 dataKey="value"
                 stroke="url(#strokeGradient)"
-                strokeWidth={5}
+                strokeWidth={4}
                 fillOpacity={1}
                 fill="url(#areaGradient)"
-                animationDuration={2200}
-                animationEasing="ease-out"
+                animationDuration={2500}
+                animationEasing="ease-in-out"
                 filter="url(#areaShadow)"
                 dot={{ 
-                  r: 6, 
+                  r: 7, 
                   fill: "#FFFFFF",
-                  stroke: "#10B981", 
-                  strokeWidth: 4,
+                  stroke: "#A78BFA", 
+                  strokeWidth: 3,
                   filter: "url(#areaGlow)"
                 }}
                 activeDot={{ 
-                  r: 9,
-                  fill: "#10B981",
+                  r: 11,
+                  fill: "#C084FC",
                   stroke: "#FFFFFF",
-                  strokeWidth: 4,
+                  strokeWidth: 3,
                   filter: "url(#areaGlow)"
                 }}
               />
@@ -427,7 +442,6 @@ export function TrendAreaChart({ data, className }: { data: TrendPoint[]; classN
     </div>
   )
 }
-
 // ----------------- MESMERIZING Comparison Bar Chart -----------------
 export function ComparisonBarChart({
   data,

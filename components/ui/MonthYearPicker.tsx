@@ -29,7 +29,7 @@ interface MonthYearPickerProps {
   onMonthsChange?: (months: string[]) => void
 }
 
-export default function MonthYearPicker({
+export function MonthYearPicker({
   selectedYear: controlledYear,
   selectedMonths: controlledMonths,
   onYearChange,
