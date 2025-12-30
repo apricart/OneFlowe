@@ -31,14 +31,14 @@ const monthNames: Record<string, string> = {
 }
 
 const navTiles = [
-  { title: "Organizations", description: "Configure groups and parent companies.", href: "/organizations", icon: Building2, gradient: "from-violet-500 to-purple-600" },
-  { title: "Branches", description: "Manage branches and assignments.", href: "/branches", icon: GitBranch, gradient: "from-blue-500 to-cyan-600" },
-  { title: "Users & Roles", description: "Administer users and access levels.", href: "/users", icon: Users, gradient: "from-emerald-500 to-teal-600" },
-  { title: "Global Inventory", description: "Master product catalog across orgs.", href: "/global-inventory", icon: Warehouse, gradient: "from-orange-500 to-red-600" },
-  { title: "Orders", description: "Monitor and override orders.", href: "/orders", icon: Package, gradient: "from-pink-500 to-rose-600" },
-  { title: "Budgets", description: "Control branch spending limits.", href: "/budgets", icon: Wallet, gradient: "from-amber-500 to-yellow-600" },
-  { title: "Reports", description: "Sales, refunds, and stock insights.", href: "/reports", icon: BarChart3, gradient: "from-indigo-500 to-blue-600" },
-  { title: "System Settings", description: "Permissions, audit, and advanced config.", href: "/admin", icon: ShieldCheck, gradient: "from-slate-500 to-gray-600" },
+  { title: "Organizations", description: "Configure groups and parent companies.", href: "/organizations", icon: Building2, gradient: "from-blue-600 to-blue-700" },
+  { title: "Branches", description: "Manage branches and assignments.", href: "/branches", icon: GitBranch, gradient: "from-indigo-600 to-indigo-700" },
+  { title: "Users & Roles", description: "Administer users and access levels.", href: "/users", icon: Users, gradient: "from-emerald-600 to-emerald-700" },
+  { title: "Global Inventory", description: "Master product catalog across orgs.", href: "/global-inventory", icon: Warehouse, gradient: "from-orange-600 to-orange-700" },
+  { title: "Orders", description: "Monitor and override orders.", href: "/orders", icon: Package, gradient: "from-purple-600 to-purple-700" },
+  { title: "Budgets", description: "Control branch spending limits.", href: "/budgets", icon: Wallet, gradient: "from-amber-600 to-amber-700" },
+  { title: "Reports", description: "Sales, refunds, and stock insights.", href: "/reports", icon: BarChart3, gradient: "from-blue-700 to-indigo-700" },
+  { title: "System Settings", description: "Permissions, audit, and advanced config.", href: "/admin", icon: ShieldCheck, gradient: "from-slate-700 to-slate-800" },
 ]
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -202,49 +202,59 @@ export function SuperAdminDashboard() {
 
   // ---------------- JSX ----------------
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 p-4 md:p-6 space-y-6">
-      {/* Header Section */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 p-6 md:p-8 shadow-2xl">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjA1IiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-20"></div>
-        
-        <div className="relative flex flex-col lg:flex-row items-start justify-between gap-6">
-          <div className="space-y-3 flex-1">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm ring-2 ring-white/30">
-                <Sparkles className="h-6 w-6 text-white animate-pulse" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold tracking-[0.2em] text-white/70 uppercase">Super Admin Portal</p>
-                <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">Command Center</h1>
-              </div>
-            </div>
-            <p className="text-sm md:text-base text-white/90 max-w-xl">
-              System-wide overview and controls for <span className="font-semibold">{scopeText}</span>
-            </p>
-          </div>
+    <main className="min-h-screen bg-slate-50 p-4 md:p-6 space-y-6">
+      <style>{`
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-down {
+          animation: slideDown 0.4s ease-out;
+        }
+      `}</style>
 
-          <div className="flex flex-col gap-3 w-full lg:w-auto">
-            <div className="inline-flex items-center gap-2 rounded-2xl bg-white/15 backdrop-blur-md px-5 py-2 ring-1 ring-white/20">
-              <span className="text-xs font-medium text-white/80 uppercase tracking-wider">Active Scope</span>
-              <span className="rounded-xl bg-white/25 px-3 py-1 text-xs font-bold text-white truncate max-w-[200px]">{scopeText}</span>
+      {/* Header Section */}
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-400 to-indigo-600 px-6 py-8 border-b border-blue-500/30">
+          <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
+            <div className="space-y-3 flex-1">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/20 backdrop-blur-sm border border-white/30">
+                  <BarChart3 className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold tracking-wider text-white/80 uppercase">Admin Portal</p>
+                  <h1 className="text-3xl md:text-4xl font-bold text-white">Dashboard</h1>
+                </div>
+              </div>
+              <p className="text-sm text-white/90">
+                System overview for <span className="font-semibold">{scopeText}</span>
+              </p>
             </div>
-            
-            <div className="grid grid-cols-2 gap-3">
-              <div className="group rounded-2xl bg-white/10 backdrop-blur-md px-4 py-3 ring-1 ring-white/20 hover:bg-white/20 transition-all duration-300">
-                <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Organizations</p>
-                <p className="text-2xl font-bold text-white mt-1">{orgsCount}</p>
+
+            <div className="flex flex-col gap-3 w-full lg:w-auto">
+              <div className="inline-flex items-center gap-2 rounded-lg bg-white/15 backdrop-blur-sm px-4 py-2 border border-white/20">
+                <span className="text-xs font-medium text-white/80 uppercase tracking-wider">Active Scope</span>
+                <span className="rounded-md bg-white/25 px-3 py-1 text-xs font-bold text-white truncate max-w-[200px]">{scopeText}</span>
               </div>
-              <div className="group rounded-2xl bg-white/10 backdrop-blur-md px-4 py-3 ring-1 ring-white/20 hover:bg-white/20 transition-all duration-300">
-                <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Branches</p>
-                <p className="text-2xl font-bold text-white mt-1">{branchesCount}</p>
-              </div>
-              <div className="group rounded-2xl bg-white/10 backdrop-blur-md px-4 py-3 ring-1 ring-white/20 hover:bg-white/20 transition-all duration-300">
-                <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Active Users</p>
-                <p className="text-2xl font-bold text-white mt-1">{usersCount}</p>
-              </div>
-              <div className="group rounded-2xl bg-white/10 backdrop-blur-md px-4 py-3 ring-1 ring-white/20 hover:bg-white/20 transition-all duration-300">
-                <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Pending</p>
-                <p className="text-2xl font-bold text-white mt-1">{pendingCount}</p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/20 hover:bg-white/15 transition-colors">
+                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Organizations</p>
+                  <p className="text-2xl font-bold text-white mt-1">{orgsCount}</p>
+                </div>
+                <div className="rounded-lg bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/20 hover:bg-white/15 transition-colors">
+                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Branches</p>
+                  <p className="text-2xl font-bold text-white mt-1">{branchesCount}</p>
+                </div>
+                <div className="rounded-lg bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/20 hover:bg-white/15 transition-colors">
+                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Active Users</p>
+                  <p className="text-2xl font-bold text-white mt-1">{usersCount}</p>
+                </div>
+                <div className="rounded-lg bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/20 hover:bg-white/15 transition-colors">
+                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Pending</p>
+                  <p className="text-2xl font-bold text-white mt-1">{pendingCount}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -254,19 +264,19 @@ export function SuperAdminDashboard() {
       <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
 
       {/* Month Picker & Bar Chart Section */}
-      <Card className="border-0 shadow-xl overflow-hidden bg-white/80 backdrop-blur-sm">
-        <CardContent className="p-4 md:p-6">
+      <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+        <CardContent className="p-6">
           <div className="space-y-6">
             {/* Header with Picker Toggle */}
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+                  <div className="h-10 w-10 rounded-lg bg-blue-600 flex items-center justify-center">
                     <BarChart3 className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl md:text-2xl font-bold text-slate-900">Monthly Sales Analytics</h3>
-                    <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
+                    <h3 className="text-xl font-semibold text-slate-900">Monthly Sales Analytics</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
                       {selectedMonths.length > 0 
                         ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} • ${selectedYear}`
                         : `Last 6 months (Jul-Dec) • ${selectedYear}`}
@@ -279,7 +289,7 @@ export function SuperAdminDashboard() {
               <div className="relative">
                 <button
                   onClick={() => setShowPicker(!showPicker)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold text-sm hover:from-indigo-600 hover:to-purple-600 transition-all shadow-lg hover:shadow-xl"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors border border-blue-700"
                 >
                   <Calendar className="h-4 w-4" />
                   <span>Select Period</span>
@@ -287,18 +297,18 @@ export function SuperAdminDashboard() {
                 
                 {/* Dropdown Picker */}
                 {showPicker && (
-                  <div className="absolute right-0 top-full mt-2 z-50 animate-in slide-in-from-top-2 duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl border-2 border-indigo-100 overflow-hidden">
+                  <div className="absolute right-0 top-full mt-2 z-50 animate-slide-down">
+                    <div className="bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden">
                       <MonthYearPicker 
                         selectedYear={selectedYear}
                         selectedMonths={selectedMonths}
                         onYearChange={setSelectedYear}
                         onMonthsChange={setSelectedMonths}
                       />
-                      <div className="p-3 bg-slate-50 border-t">
+                      <div className="p-3 bg-slate-50 border-t border-slate-200">
                         <button
                           onClick={() => setShowPicker(false)}
-                          className="w-full px-4 py-2 rounded-lg bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-600 transition-colors"
+                          className="w-full px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
                         >
                           Apply Selection
                         </button>
@@ -310,16 +320,16 @@ export function SuperAdminDashboard() {
             </div>
             
             {/* Chart */}
-            <div className="min-h-[350px] bg-white rounded-2xl p-4 shadow-inner">
+            <div className="min-h-[400px]">
               {isLoadingYearly ? (
-                <div className="flex items-center justify-center h-[350px]">
+                <div className="flex items-center justify-center h-[400px]">
                   <div className="text-center space-y-3">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="text-sm text-muted-foreground font-medium">Loading sales data...</p>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="text-sm text-slate-600 font-medium">Loading sales data...</p>
                   </div>
                 </div>
               ) : yearlyError ? (
-                <div className="flex items-center justify-center h-[350px]">
+                <div className="flex items-center justify-center h-[400px]">
                   <div className="text-center space-y-2">
                     <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
                       <span className="text-2xl">⚠️</span>
@@ -337,65 +347,53 @@ export function SuperAdminDashboard() {
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-600 p-5 md:p-6 shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/80">Today's GMV</p>
-              <TrendingUp className="h-5 w-5 text-white/80" />
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white mb-1">{todaysGMV}</p>
-            <p className="text-xs text-white/70">Gross Merchandise Value</p>
+        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-900">Today's GMV</p>
+            <TrendingUp className="h-5 w-5 text-emerald-600" />
           </div>
+          <p className="text-2xl md:text-3xl font-bold text-emerald-900 mb-1">{todaysGMV}</p>
+          <p className="text-xs text-emerald-700">Gross Merchandise Value</p>
         </div>
 
-        <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-500 to-indigo-600 p-5 md:p-6 shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/80">Today's Orders</p>
-              <Package className="h-5 w-5 text-white/80" />
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white mb-1">{todaysOrders?.items?.length || 0}</p>
-            <p className="text-xs text-white/70">Total orders today</p>
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-900">Today's Orders</p>
+            <Package className="h-5 w-5 text-blue-600" />
           </div>
+          <p className="text-2xl md:text-3xl font-bold text-blue-900 mb-1">{todaysOrders?.items?.length || 0}</p>
+          <p className="text-xs text-blue-700">Total orders today</p>
         </div>
 
-        <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-500 to-pink-600 p-5 md:p-6 shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/80">Week's Sales</p>
-              <BarChart3 className="h-5 w-5 text-white/80" />
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white mb-1">{formatPKR(totalWeekSales, { maximumFractionDigits: 0 })}</p>
-            <p className="text-xs text-white/70">Last 7 days revenue</p>
+        <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-purple-900">Week's Sales</p>
+            <BarChart3 className="h-5 w-5 text-purple-600" />
           </div>
+          <p className="text-2xl md:text-3xl font-bold text-purple-900 mb-1">{formatPKR(totalWeekSales, { maximumFractionDigits: 0 })}</p>
+          <p className="text-xs text-purple-700">Last 7 days revenue</p>
         </div>
 
-        <div className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-orange-500 to-red-600 p-5 md:p-6 shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-          <div className="relative">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/80">Week's Orders</p>
-              <TrendingUp className="h-5 w-5 text-white/80" />
-            </div>
-            <p className="text-2xl md:text-3xl font-bold text-white mb-1">{totalWeekOrders}</p>
-            <p className="text-xs text-white/70">Weekly order count</p>
+        <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-orange-900">Week's Orders</p>
+            <TrendingUp className="h-5 w-5 text-orange-600" />
           </div>
+          <p className="text-2xl md:text-3xl font-bold text-orange-900 mb-1">{totalWeekOrders}</p>
+          <p className="text-xs text-orange-700">Weekly order count</p>
         </div>
       </div>
        
       {/* Charts Section */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Yearly Sales */}
-        <Card className="lg:col-span-2 border-0 shadow-xl overflow-hidden bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-4 md:p-6">
+        <Card className="lg:col-span-2 border border-slate-200 shadow-sm overflow-hidden bg-white">
+          <CardContent className="p-6">
             {isLoadingYearly ? (
               <div className="flex items-center justify-center h-96">
                 <div className="text-center space-y-3">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
-                  <p className="text-sm text-muted-foreground">Loading yearly sales...</p>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-sm text-slate-600">Loading yearly sales...</p>
                 </div>
               </div>
             ) : yearlyError ? (
@@ -407,50 +405,38 @@ export function SuperAdminDashboard() {
         </Card>
 
         {/* Weekly Sales */}
-        <Card className="border-0 shadow-xl overflow-hidden bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-4 md:p-6">
-            <div className="mb-6 space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <div className="text-base md:text-lg font-bold text-slate-900">Weekly Sales Trend</div>
-              </div>
-              <div className="text-xs text-muted-foreground">Last 7 days • {scopeText}</div>
-              {!isLoadingSales && !salesError && (
-                <div className="flex items-baseline gap-2 pt-2">
-                  <div className="text-xl md:text-2xl font-bold text-emerald-600">{formatPKR(totalWeekSales, { maximumFractionDigits: 0 })}</div>
-                  <div className="text-xs text-muted-foreground">total revenue</div>
-                </div>
-              )}
-            </div>
+        <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+          <CardContent className="p-0">
             {isLoadingSales ? (
-              <div className="flex items-center justify-center h-64">
+              <div className="flex items-center justify-center h-full min-h-[500px]">
                 <div className="text-center space-y-3">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto"></div>
-                  <p className="text-sm text-muted-foreground">Loading sales data...</p>
+                  <p className="text-sm text-slate-600">Loading sales data...</p>
                 </div>
               </div>
             ) : salesError ? (
-              <div className="flex items-center justify-center h-64 text-sm text-red-600">Error loading sales data</div>
+              <div className="flex items-center justify-center h-full min-h-[500px] text-sm text-red-600">Error loading sales data</div>
             ) : (
               <TrendAreaChart data={salesData} />
             )}
           </CardContent>
         </Card>
       </div>
+
       {/* Navigation Tiles */}
       <section className="space-y-4">
         <div className="flex items-center gap-3">
-          <div className="h-1 w-12 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500"></div>
+          <div className="h-1 w-12 rounded-full bg-blue-600"></div>
           <h2 className="text-xl font-bold text-slate-900">Admin Control Areas</h2>
         </div>
-        <p className="text-sm text-muted-foreground">Quick access to configuration, users, inventory, orders, budgets, and system reports</p>
+        <p className="text-sm text-slate-600">Quick access to configuration, users, inventory, orders, budgets, and system reports</p>
         
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {navTiles.map(tile => {
             const Icon = tile.icon
             return (
               <Link key={tile.title} href={tile.href}>
-                <Card className="group relative overflow-hidden border-2 border-slate-100 hover:border-transparent hover:shadow-2xl transition-all duration-300 hover:scale-105 h-full">
+                <Card className="group relative overflow-hidden border border-slate-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300 h-full">
                   <div className={`absolute inset-0 bg-gradient-to-br ${tile.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
                   <CardContent className="relative p-6 flex flex-col gap-4 h-full">
                     <div className="flex items-start justify-between gap-3">
@@ -458,11 +444,11 @@ export function SuperAdminDashboard() {
                         <h3 className="text-base font-bold text-slate-900 group-hover:text-white transition-colors mb-2">
                           {tile.title}
                         </h3>
-                        <p className="text-xs text-muted-foreground group-hover:text-white/80 transition-colors leading-relaxed">
+                        <p className="text-xs text-slate-600 group-hover:text-white/90 transition-colors leading-relaxed">
                           {tile.description}
                         </p>
                       </div>
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${tile.gradient} text-white shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-all duration-300`}>
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br ${tile.gradient} text-white shadow-sm group-hover:scale-110 transition-transform duration-300`}>
                         <Icon className="h-6 w-6" />
                       </div>
                     </div>

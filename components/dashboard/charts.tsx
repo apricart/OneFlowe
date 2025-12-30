@@ -15,7 +15,7 @@ import {
   LabelList,
   Cell,
 } from "recharts"
-import { TrendingUp, BarChart3, FileText, DollarSign, Activity, PieChart, Award } from "lucide-react"
+import { TrendingUp, BarChart3, DollarSign, Activity, Award } from "lucide-react"
 
 type Props = {
   data: {
@@ -25,32 +25,22 @@ type Props = {
 }
 
 const barColors = [
-  { start: "#3B82F6", end: "#2563EB" },
-  { start: "#8B5CF6", end: "#7C3AED" },
-  { start: "#06B6D4", end: "#0891B2" },
-  { start: "#10B981", end: "#059669" },
-  { start: "#F59E0B", end: "#D97706" },
-  { start: "#EF4444", end: "#DC2626" },
-  { start: "#EC4899", end: "#DB2777" },
-  { start: "#6366F1", end: "#4F46E5" },
-  { start: "#14B8A6", end: "#0D9488" },
-  { start: "#F97316", end: "#EA580C" },
-  { start: "#A855F7", end: "#9333EA" },
-  { start: "#22C55E", end: "#16A34A" },
+  "#1e40af", "#1d4ed8", "#2563eb", "#3b82f6",
+  "#60a5fa", "#93c5fd", "#1e3a8a", "#1e40af",
+  "#2563eb", "#3b82f6", "#60a5fa", "#93c5fd"
 ]
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null
   
   return (
-    <div className="relative overflow-hidden rounded-xl border border-blue-200 bg-white/95 backdrop-blur-xl shadow-2xl">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-indigo-50/30 to-white/50"></div>
-      <div className="relative bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 border-b border-blue-500/30">
-        <p className="font-bold text-white text-xs uppercase tracking-wider">{payload[0].payload.month}</p>
+    <div className="bg-white border border-slate-200 rounded-lg shadow-xl">
+      <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+        <p className="font-semibold text-slate-700 text-xs">{payload[0].payload.month}</p>
       </div>
-      <div className="relative px-5 py-3">
-        <p className="text-xs text-slate-600 font-semibold mb-1 uppercase tracking-wide">Revenue</p>
-        <p className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+      <div className="px-4 py-3">
+        <p className="text-xs text-slate-500 mb-1">Revenue</p>
+        <p className="text-lg font-bold text-slate-900">
           ₨{payload[0].value.toLocaleString()}
         </p>
       </div>
@@ -79,211 +69,154 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
   const peakMonth = yearlySalesData.reduce((max, item) => item.sales > max.sales ? item : max, yearlySalesData[0])
   
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-indigo-200/60 bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/40 shadow-2xl hover:shadow-indigo-200/50 transition-all duration-500">
+    <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
       <style>{`
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-20px); }
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
         }
-        @keyframes slideRight {
-          from { opacity: 0; transform: translateX(-20px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes shimmer {
-          0% { background-position: -1000px 0; }
-          100% { background-position: 1000px 0; }
-        }
-        .animate-slide-down {
-          animation: slideDown 0.6s ease-out;
+        .animate-slide-in {
+          animation: slideIn 0.4s ease-out;
         }
         .animate-fade-in {
-          animation: fadeIn 0.8s ease-out;
-        }
-        .animate-slide-right {
-          animation: slideRight 0.6s ease-out;
-        }
-        .animate-shimmer {
-          animation: shimmer 3s infinite;
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-          background-size: 1000px 100%;
+          animation: fadeIn 0.5s ease-out;
         }
       `}</style>
 
-      {/* Decorative background elements */}
-      <div className="absolute -top-24 -right-24 w-72 h-72 bg-gradient-to-br from-blue-200/30 to-indigo-200/30 rounded-full blur-3xl"></div>
-      <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-gradient-to-br from-purple-200/30 to-pink-200/30 rounded-full blur-3xl"></div>
-
-      {/* Header Section */}
-      <div className="relative bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 px-8 py-6 border-b border-blue-500/30">
-        <div className="absolute inset-0 animate-shimmer"></div>
-        <div className="relative flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <div className="absolute inset-0 bg-blue-400 rounded-xl blur-lg opacity-60"></div>
-              <div className="relative bg-gradient-to-br from-blue-500 to-indigo-500 p-3 rounded-xl shadow-lg">
-                <TrendingUp className="h-7 w-7 text-white" strokeWidth={2.5} />
-              </div>
+      {/* Header */}
+      <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 p-2 rounded-lg">
+              <TrendingUp className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white tracking-tight mb-1 drop-shadow-sm">
+              <h2 className="text-lg font-semibold text-slate-900">
                 Annual Revenue Performance
               </h2>
-              <p className="text-sm text-blue-100 font-semibold uppercase tracking-wider">
-                Fiscal Year Analysis
+              <p className="text-xs text-slate-500 mt-0.5">
+                Fiscal Year Overview
               </p>
             </div>
           </div>
-          <div className="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/30">
-            <p className="text-xs text-blue-100 font-bold uppercase tracking-wider">Status</p>
-            <p className="text-sm text-white font-bold">Active</p>
+          <div className="bg-blue-50 px-3 py-1.5 rounded-md border border-blue-100">
+            <p className="text-xs text-blue-700 font-semibold">Active</p>
           </div>
         </div>
       </div>
 
-      <div className="relative p-8">
+      <div className="p-6">
         {/* Key Metrics */}
-        <div className="grid grid-cols-3 gap-5 mb-8 animate-slide-down">
-          <div className="relative group overflow-hidden rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300"></div>
-            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="bg-white/20 backdrop-blur-sm p-2 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-white" />
-                </div>
-                <p className="text-xs font-bold text-blue-100 uppercase tracking-wider">
-                  Total Revenue
-                </p>
+        <div className="grid grid-cols-3 gap-4 mb-6 animate-slide-in">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-blue-600 p-1.5 rounded">
+                <DollarSign className="h-3.5 w-3.5 text-white" />
               </div>
-              <p className="text-3xl font-bold text-white mb-2">
-                ₨{totalSales.toLocaleString()}
+              <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">
+                Total Revenue
               </p>
-              <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div className="w-full h-full bg-white rounded-full shadow-lg"></div>
-              </div>
+            </div>
+            <p className="text-2xl font-bold text-blue-900 mb-1">
+              ₨{totalSales.toLocaleString()}
+            </p>
+            <div className="w-full h-1 bg-blue-200 rounded-full overflow-hidden">
+              <div className="w-full h-full bg-blue-600 rounded-full"></div>
             </div>
           </div>
 
-          <div className="relative group overflow-hidden rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300"></div>
-            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="bg-white/20 backdrop-blur-sm p-2 rounded-lg">
-                  <Activity className="h-5 w-5 text-white" />
-                </div>
-                <p className="text-xs font-bold text-purple-100 uppercase tracking-wider">
-                  Average
-                </p>
+          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-indigo-600 p-1.5 rounded">
+                <Activity className="h-3.5 w-3.5 text-white" />
               </div>
-              <p className="text-3xl font-bold text-white mb-2">
-                ₨{Math.round(avgSales).toLocaleString()}
+              <p className="text-xs font-semibold text-indigo-900 uppercase tracking-wide">
+                Average
               </p>
-              <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div className="w-3/4 h-full bg-white rounded-full shadow-lg"></div>
-              </div>
+            </div>
+            <p className="text-2xl font-bold text-indigo-900 mb-1">
+              ₨{Math.round(avgSales).toLocaleString()}
+            </p>
+            <div className="w-full h-1 bg-indigo-200 rounded-full overflow-hidden">
+              <div className="w-3/4 h-full bg-indigo-600 rounded-full"></div>
             </div>
           </div>
 
-          <div className="relative group overflow-hidden rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-            <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300"></div>
-            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12"></div>
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="bg-white/20 backdrop-blur-sm p-2 rounded-lg">
-                  <Award className="h-5 w-5 text-white" />
-                </div>
-                <p className="text-xs font-bold text-emerald-100 uppercase tracking-wider">
-                  Peak Period
-                </p>
+          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-emerald-600 p-1.5 rounded">
+                <Award className="h-3.5 w-3.5 text-white" />
               </div>
-              <p className="text-3xl font-bold text-white mb-2">
-                {peakMonth.month}
-              </p>
-              <p className="text-sm text-emerald-100 font-semibold">
-                ₨{peakMonth.sales.toLocaleString()}
+              <p className="text-xs font-semibold text-emerald-900 uppercase tracking-wide">
+                Peak Period
               </p>
             </div>
+            <p className="text-2xl font-bold text-emerald-900 mb-1">
+              {peakMonth.month}
+            </p>
+            <p className="text-sm text-emerald-700 font-medium">
+              ₨{peakMonth.sales.toLocaleString()}
+            </p>
           </div>
         </div>
 
         {/* Chart Container */}
-        <div className="relative rounded-xl bg-white/60 backdrop-blur-sm border border-indigo-200/60 p-6 shadow-lg animate-fade-in">
-          <div className="absolute top-4 left-4 flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 rounded-lg shadow-md">
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-            <span className="text-xs font-bold text-white uppercase tracking-wider">Performance Trend</span>
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 animate-fade-in">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+            <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Performance Trend</span>
           </div>
           
-          <div className="h-[400px] pt-10">
+          <div className="h-[380px] bg-white rounded border border-slate-200 p-4">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={yearlySalesData}
-                margin={{ top: 20, right: 30, left: 10, bottom: 10 }}
+                margin={{ top: 10, right: 30, left: 10, bottom: 10 }}
               >
                 <defs>
                   <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.5} />
-                    <stop offset="50%" stopColor="#8B5CF6" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#EC4899" stopOpacity={0.1} />
+                    <stop offset="0%" stopColor="#2563eb" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#2563eb" stopOpacity={0.05} />
                   </linearGradient>
-                  <linearGradient id="strokeGradient" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#3B82F6" />
-                    <stop offset="50%" stopColor="#8B5CF6" />
-                    <stop offset="100%" stopColor="#EC4899" />
-                  </linearGradient>
-                  <filter id="shadow">
-                    <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#3B82F6" floodOpacity="0.4"/>
-                  </filter>
-                  <filter id="glow">
-                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-                    <feMerge>
-                      <feMergeNode in="coloredBlur"/>
-                      <feMergeNode in="SourceGraphic"/>
-                    </feMerge>
-                  </filter>
                 </defs>
 
                 <CartesianGrid 
-                  strokeDasharray="5 5" 
-                  stroke="#A5B4FC" 
-                  strokeOpacity={0.4}
+                  strokeDasharray="3 3" 
+                  stroke="#e2e8f0" 
                   vertical={false}
                 />
                 <XAxis 
                   dataKey="month" 
-                  tick={{ fill: "#4F46E5", fontWeight: 700, fontSize: 12 }}
-                  axisLine={{ stroke: "#A5B4FC", strokeWidth: 2 }}
+                  tick={{ fill: "#64748b", fontWeight: 600, fontSize: 11 }}
+                  axisLine={{ stroke: "#cbd5e1", strokeWidth: 1 }}
                   tickLine={false}
-                  dy={8}
+                  dy={5}
                 />
                 <YAxis
-                  tick={{ fill: "#4F46E5", fontWeight: 700, fontSize: 12 }}
+                  tick={{ fill: "#64748b", fontWeight: 600, fontSize: 11 }}
                   tickFormatter={(value) => `₨${value/1000}k`}
-                  axisLine={{ stroke: "#A5B4FC", strokeWidth: 2 }}
+                  axisLine={{ stroke: "#cbd5e1", strokeWidth: 1 }}
                   tickLine={false}
                   dx={-5}
                 />
 
                 <Tooltip 
                   contentStyle={{
-                    background: "rgba(255, 255, 255, 0.95)",
-                    borderRadius: "12px",
-                    border: "1px solid #A5B4FC",
-                    boxShadow: "0 10px 40px rgba(59, 130, 246, 0.3)",
-                    padding: "12px 16px",
-                    backdropFilter: "blur(12px)",
+                    background: "white",
+                    borderRadius: "8px",
+                    border: "1px solid #e2e8f0",
+                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                    padding: "8px 12px",
                   }}
                   labelStyle={{ 
-                    color: "#4F46E5", 
-                    fontWeight: "bold",
-                    fontSize: "13px",
-                    marginBottom: "4px",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em"
+                    color: "#334155", 
+                    fontWeight: "600",
+                    fontSize: "12px",
+                    marginBottom: "4px"
                   }}
                   formatter={(value: number) => [`₨${value.toLocaleString()}`, "Revenue"]}
                 />
@@ -291,41 +224,37 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
                 <ReferenceLine 
                   y={avgSales} 
                   label={{ 
-                    value: `Average: ₨${Math.round(avgSales).toLocaleString()}`, 
+                    value: `Avg: ₨${Math.round(avgSales).toLocaleString()}`, 
                     position: "right",
-                    fill: "#F59E0B",
-                    fontWeight: "bold",
-                    fontSize: 11
+                    fill: "#f59e0b",
+                    fontWeight: "600",
+                    fontSize: 10
                   }} 
-                  stroke="#F59E0B" 
-                  strokeWidth={2}
-                  strokeDasharray="8 4"
-                  opacity={0.8}
+                  stroke="#f59e0b" 
+                  strokeWidth={1.5}
+                  strokeDasharray="5 5"
                 />
 
                 <Area
                   type="monotone"
                   dataKey="sales"
-                  stroke="url(#strokeGradient)"
-                  strokeWidth={4}
+                  stroke="#2563eb"
+                  strokeWidth={2.5}
                   fill="url(#salesGradient)"
-                  filter="url(#shadow)"
                   dot={{ 
-                    r: 6, 
-                    fill: "#FFFFFF",
-                    stroke: "#3B82F6", 
-                    strokeWidth: 3,
-                    filter: "url(#glow)"
+                    r: 4, 
+                    fill: "#ffffff",
+                    stroke: "#2563eb", 
+                    strokeWidth: 2
                   }}
                   activeDot={{ 
-                    r: 9,
-                    fill: "#3B82F6",
-                    stroke: "#FFFFFF",
-                    strokeWidth: 3,
-                    filter: "url(#glow)"
+                    r: 6,
+                    fill: "#2563eb",
+                    stroke: "#ffffff",
+                    strokeWidth: 2
                   }}
-                  animationDuration={1800}
-                  animationEasing="ease-out"
+                  animationDuration={1200}
+                  animationEasing="ease-in-out"
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -358,13 +287,12 @@ export function ChartTooltip({
       : value.toLocaleString()
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-emerald-200 bg-white/95 backdrop-blur-xl shadow-2xl">
-      <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/50 via-teal-50/30 to-white/50"></div>
-      <div className="relative bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 border-b border-emerald-500/30">
-        <p className="font-bold text-white text-xs uppercase tracking-wider">{label}</p>
+    <div className="bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
+      <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+        <p className="font-semibold text-slate-700 text-xs">{label}</p>
       </div>
-      <div className="relative px-5 py-3">
-        <p className="text-2xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">{formatted}</p>
+      <div className="px-4 py-3">
+        <p className="text-lg font-bold text-slate-900">{formatted}</p>
       </div>
     </div>
   )
@@ -382,126 +310,110 @@ export function TrendAreaChart({ data, className }: { data: TrendPoint[]; classN
 
   return (
     <div className={className}>
-      <div className="relative overflow-hidden rounded-2xl border border-slate-700/30 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800 shadow-2xl">
-        {/* Subtle light orbs */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-blue-500/20 to-indigo-500/20 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-full blur-3xl"></div>
-
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="relative bg-gradient-to-r from-slate-700 via-slate-800 to-slate-700 px-8 py-6 border-b border-slate-600/50">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <div className="absolute inset-0 bg-blue-500 rounded-xl blur-lg opacity-50"></div>
-              <div className="relative bg-gradient-to-br from-blue-500 to-indigo-600 p-3 rounded-xl shadow-lg">
-                <Activity className="h-7 w-7 text-white" strokeWidth={2.5} />
-              </div>
+        <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-600 p-2 rounded-lg">
+              <Activity className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white tracking-tight mb-1">
-                Daily Performance Trend
+              <h2 className="text-lg font-semibold text-slate-900">
+                Weekly Performance
               </h2>
-              <p className="text-sm text-slate-300 font-semibold uppercase tracking-wider">
-                Week-over-Week Analysis
+              <p className="text-xs text-slate-500 mt-0.5">
+                Last 7 Days Analysis
               </p>
             </div>
           </div>
         </div>
 
-        <div className="relative p-8">
+        <div className="p-6">
           {/* Mini Stats */}
-          <div className="grid grid-cols-2 gap-5 mb-6 animate-slide-right">
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 p-6 border border-blue-500/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
-              <div className="relative">
-                <p className="text-xs font-bold text-blue-100 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="h-4 w-4 text-emerald-700" />
+                <p className="text-xs font-semibold text-emerald-900 uppercase tracking-wide">
                   Total Value
                 </p>
-                <p className="text-3xl font-bold text-white mb-2">
-                  ₨{totalValue.toLocaleString()}
-                </p>
-                <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                  <div className="w-full h-full bg-white rounded-full shadow-lg"></div>
-                </div>
+              </div>
+              <p className="text-2xl font-bold text-emerald-900 mb-1">
+                ₨{totalValue.toLocaleString()}
+              </p>
+              <div className="w-full h-1 bg-emerald-200 rounded-full overflow-hidden">
+                <div className="w-full h-full bg-emerald-600 rounded-full"></div>
               </div>
             </div>
 
-            <div className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-purple-600 to-pink-700 p-6 border border-purple-500/30 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
-              <div className="relative">
-                <p className="text-xs font-bold text-purple-100 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Award className="h-4 w-4" />
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-center gap-2 mb-2">
+                <Award className="h-4 w-4 text-blue-700" />
+                <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">
                   Peak Day
                 </p>
-                <p className="text-3xl font-bold text-white mb-2">
-                  {peakDay.label}
-                </p>
-                <p className="text-sm text-purple-100 font-semibold">
-                  ₨{peakDay.value.toLocaleString()}
-                </p>
               </div>
+              <p className="text-2xl font-bold text-blue-900 mb-1">
+                {peakDay.label}
+              </p>
+              <p className="text-sm text-blue-700 font-medium">
+                ₨{peakDay.value.toLocaleString()}
+              </p>
             </div>
           </div>
 
           {/* Chart */}
-          <div className="relative rounded-xl bg-slate-800/50 backdrop-blur-sm border border-slate-600/50 p-6 shadow-inner">
-            <div className="h-80">
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <div className="h-64 bg-white rounded border border-slate-200 p-3">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 20, right: 20, left: 10, bottom: 20 }}>
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 10 }}>
                   <defs>
-                    <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.6} />
-                      <stop offset="50%" stopColor="#EC4899" stopOpacity={0.4} />
-                      <stop offset="100%" stopColor="#F59E0B" stopOpacity={0.1} />
-                    </linearGradient>
-                    <linearGradient id="areaStroke" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#8B5CF6" />
-                      <stop offset="50%" stopColor="#EC4899" />
-                      <stop offset="100%" stopColor="#F59E0B" />
+                    <linearGradient id="weeklyGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid 
                     strokeDasharray="3 3" 
-                    stroke="#64748B" 
-                    strokeOpacity={0.3}
+                    stroke="#e2e8f0" 
                     vertical={false} 
                   />
                   <XAxis 
                     dataKey="label" 
                     tickLine={false} 
-                    axisLine={{ stroke: "#94A3B8", strokeWidth: 2 }} 
-                    tickMargin={12} 
-                    tick={{ fill: "#CBD5E1", fontWeight: 600, fontSize: 11 }}
+                    axisLine={{ stroke: "#cbd5e1", strokeWidth: 1 }} 
+                    tickMargin={8} 
+                    tick={{ fill: "#64748b", fontWeight: 600, fontSize: 10 }}
                   />
                   <YAxis
                     tickFormatter={(value) => `₨${value/1000}k`}
-                    width={75}
-                    axisLine={{ stroke: "#94A3B8", strokeWidth: 2 }}
+                    width={60}
+                    axisLine={{ stroke: "#cbd5e1", strokeWidth: 1 }}
                     tickLine={false}
-                    tickMargin={12}
-                    tick={{ fill: "#CBD5E1", fontWeight: 600, fontSize: 11 }}
+                    tickMargin={8}
+                    tick={{ fill: "#64748b", fontWeight: 600, fontSize: 10 }}
                   />
                   <Tooltip content={<ChartTooltip prefix="currency" />} />
                   <Area
                     type="monotone"
                     dataKey="value"
-                    stroke="url(#areaStroke)"
-                    strokeWidth={3}
+                    stroke="#10b981"
+                    strokeWidth={2.5}
                     fillOpacity={1}
-                    fill="url(#areaGradient)"
-                    animationDuration={1800}
-                    animationEasing="ease-out"
+                    fill="url(#weeklyGradient)"
+                    animationDuration={1200}
+                    animationEasing="ease-in-out"
                     dot={{ 
-                      r: 5, 
-                      fill: "#FFFFFF",
-                      stroke: "#8B5CF6", 
-                      strokeWidth: 3,
+                      r: 4, 
+                      fill: "#ffffff",
+                      stroke: "#10b981", 
+                      strokeWidth: 2
                     }}
                     activeDot={{ 
-                      r: 8,
-                      fill: "#8B5CF6",
-                      stroke: "#FFFFFF",
-                      strokeWidth: 3,
+                      r: 6,
+                      fill: "#10b981",
+                      stroke: "#ffffff",
+                      strokeWidth: 2
                     }}
                   />
                 </AreaChart>
@@ -531,79 +443,74 @@ export function ComparisonBarChart({
 
   return (
     <div className={className}>
-      <div className="overflow-hidden rounded-2xl border border-rose-200/60 bg-white shadow-2xl">
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
         {title && (
-          <div className="bg-gradient-to-r from-rose-600 to-pink-600 px-6 py-5 border-b border-rose-500/30">
+          <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
             <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="absolute inset-0 bg-rose-400 rounded-lg blur-lg opacity-60"></div>
-                <div className="relative bg-white/20 backdrop-blur-sm p-2 rounded-lg">
-                  <BarChart3 className="h-5 w-5 text-white" />
-                </div>
+              <div className="bg-blue-600 p-2 rounded-lg">
+                <BarChart3 className="h-5 w-5 text-white" />
               </div>
-              <p className="text-xl font-bold text-white uppercase tracking-wide">
+              <p className="text-lg font-semibold text-slate-900">
                 {title}
               </p>
             </div>
           </div>
         )}
-        <div className="h-72 bg-gradient-to-br from-rose-50/50 to-white p-6">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 12, right: 16, left: -8, bottom: 8 }}>
-              <defs>
-                <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#F43F5E" />
-                  <stop offset="100%" stopColor="#FB7185" />
-                </linearGradient>
-                <filter id="barShadow">
-                  <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#F43F5E" floodOpacity="0.3"/>
-                </filter>
-              </defs>
-              <CartesianGrid 
-                strokeDasharray="5 5" 
-                stroke="#FBCFE8" 
-                strokeOpacity={0.5}
-                vertical={false} 
-              />
-              <XAxis 
-                dataKey="label" 
-                tickLine={false} 
-                axisLine={{ stroke: "#FDA4AF", strokeWidth: 2 }} 
-                tickMargin={10} 
-                tick={{ fill: "#BE123C", fontWeight: 700, fontSize: 12 }}
-              />
-              <YAxis 
-                allowDecimals={false} 
-                axisLine={{ stroke: "#FDA4AF", strokeWidth: 2 }} 
-                tickLine={false} 
-                tick={{ fill: "#BE123C", fontWeight: 700, fontSize: 12 }}
-              />
-              <Tooltip 
-                content={<ChartTooltip prefix="count" />} 
-                cursor={{ fill: "rgba(251, 207, 232, 0.2)" }} 
-              />
-              <Bar
-                dataKey="value"
-                radius={[10, 10, 0, 0]}
-                fill="url(#barGradient)"
-                filter="url(#barShadow)"
-                animationDuration={1400}
-                animationEasing="ease-out"
-                label={{ 
-                  position: "top", 
-                  fill: "#BE123C", 
-                  fontSize: 12, 
-                  fontWeight: "bold",
-                  offset: 8
-                }}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="h-72 bg-slate-50 p-6">
+          <div className="h-full bg-white rounded border border-slate-200 p-3">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 10 }}>
+                <defs>
+                  <linearGradient id="comparisonBar" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#2563eb" />
+                    <stop offset="100%" stopColor="#3b82f6" />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid 
+                  strokeDasharray="3 3" 
+                  stroke="#e2e8f0" 
+                  vertical={false} 
+                />
+                <XAxis 
+                  dataKey="label" 
+                  tickLine={false} 
+                  axisLine={{ stroke: "#cbd5e1", strokeWidth: 1 }} 
+                  tickMargin={8} 
+                  tick={{ fill: "#64748b", fontWeight: 600, fontSize: 10 }}
+                />
+                <YAxis 
+                  allowDecimals={false} 
+                  axisLine={{ stroke: "#cbd5e1", strokeWidth: 1 }} 
+                  tickLine={false} 
+                  tick={{ fill: "#64748b", fontWeight: 600, fontSize: 10 }}
+                />
+                <Tooltip 
+                  content={<ChartTooltip prefix="count" />} 
+                  cursor={{ fill: "rgba(226, 232, 240, 0.3)" }} 
+                />
+                <Bar
+                  dataKey="value"
+                  radius={[6, 6, 0, 0]}
+                  fill="url(#comparisonBar)"
+                  animationDuration={1000}
+                  animationEasing="ease-in-out"
+                  label={{ 
+                    position: "top", 
+                    fill: "#334155", 
+                    fontSize: 10, 
+                    fontWeight: "600",
+                    offset: 8
+                  }}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
     </div>
   )
 }
+
 // ----------------- Sales Bar Chart -----------------
 export default function SalesBarChart({ data }: Props) {
   const totalRevenue = data.reduce((sum, item) => sum + item.value, 0)
@@ -611,125 +518,126 @@ export default function SalesBarChart({ data }: Props) {
   const peakMonth = data.reduce((max, item) => item.value > max.value ? item : max, data[0])
 
   return (
-    <div className="relative overflow-hidden rounded-xl border-2 border-slate-300 bg-white shadow-2xl">
+    <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 px-8 py-6 border-b-4 border-slate-700">
-        <div className="flex items-center justify-center gap-4">
-          <div className="bg-slate-700 p-3 rounded-lg shadow-lg">
-            <BarChart3 className="h-7 w-7 text-slate-100" strokeWidth={2.5} />
+      <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+        <div className="flex items-center justify-center gap-3">
+          <div className="bg-blue-600 p-2 rounded-lg">
+            <BarChart3 className="h-5 w-5 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-white tracking-tight">
-            Monthly Revenue Performance
-          </h2>
+          <div className="text-center">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Monthly Revenue Performance
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Financial Overview
+            </p>
+          </div>
         </div>
-        <p className="text-center text-sm text-slate-300 font-semibold mt-3 uppercase tracking-wider">
-          Comprehensive Financial Overview
-        </p>
       </div>
 
-      <div className="p-8">
+      <div className="p-6">
         {/* Chart */}
-        <div className="relative h-[420px] mb-6 rounded-xl bg-slate-50 border-2 border-slate-200 p-6">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart 
-              data={data} 
-              barSize={45}
-              margin={{ top: 30, right: 20, left: 20, bottom: 20 }}
-            >
-              <defs>
-                {barColors.map((color, index) => (
-                  <linearGradient key={index} id={`barGradient${index}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={color.start} />
-                    <stop offset="100%" stopColor={color.end} />
-                  </linearGradient>
-                ))}
-              </defs>
-
-              <CartesianGrid 
-                strokeDasharray="5 5" 
-                stroke="#CBD5E1" 
-                strokeOpacity={0.5}
-                vertical={false}
-              />
-              
-              <XAxis 
-                dataKey="month" 
-                tick={{ fill: "#475569", fontWeight: 700, fontSize: 12 }}
-                axisLine={{ stroke: "#94A3B8", strokeWidth: 2 }}
-                tickLine={false}
-                dy={10}
-              />
-              
-              <YAxis
-                tick={{ fill: "#475569", fontWeight: 700, fontSize: 12 }}
-                axisLine={{ stroke: "#94A3B8", strokeWidth: 2 }}
-                tickLine={false}
-                tickFormatter={(value) => `₨${value/1000}k`}
-              />
-
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(203, 213, 225, 0.15)" }} />
-
-              <Bar
-                dataKey="value"
-                radius={[8, 8, 0, 0]}
-                animationDuration={1200}
-                animationEasing="ease-out"
+        <div className="mb-6 bg-slate-50 border border-slate-200 rounded-lg p-6">
+          <div className="h-[380px] bg-white rounded border border-slate-200 p-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={data} 
+                barSize={40}
+                margin={{ top: 20, right: 20, left: 10, bottom: 10 }}
               >
-                {data.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={`url(#barGradient${index % barColors.length})`}
-                  />
-                ))}
-                <LabelList 
-                  dataKey="value" 
-                  position="top" 
-                  formatter={(value: number) => `₨${(value/1000).toFixed(1)}k`}
-                  style={{ 
-                    fill: "#1E293B", 
-                    fontWeight: "bold", 
-                    fontSize: 12,
-                  }}
+                <defs>
+                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#2563eb" />
+                    <stop offset="100%" stopColor="#3b82f6" />
+                  </linearGradient>
+                </defs>
+
+                <CartesianGrid 
+                  strokeDasharray="3 3" 
+                  stroke="#e2e8f0" 
+                  vertical={false}
                 />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+                
+                <XAxis 
+                  dataKey="month" 
+                  tick={{ fill: "#64748b", fontWeight: 600, fontSize: 11 }}
+                  axisLine={{ stroke: "#cbd5e1", strokeWidth: 1 }}
+                  tickLine={false}
+                  dy={8}
+                />
+                
+                <YAxis
+                  tick={{ fill: "#64748b", fontWeight: 600, fontSize: 11 }}
+                  axisLine={{ stroke: "#cbd5e1", strokeWidth: 1 }}
+                  tickLine={false}
+                  tickFormatter={(value) => `₨${value/1000}k`}
+                />
+
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(226, 232, 240, 0.3)" }} />
+
+                <Bar
+                  dataKey="value"
+                  radius={[6, 6, 0, 0]}
+                  animationDuration={1000}
+                  animationEasing="ease-in-out"
+                >
+                  {data.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={barColors[index % barColors.length]}
+                    />
+                  ))}
+                  <LabelList 
+                    dataKey="value" 
+                    position="top" 
+                    formatter={(value: number) => `₨${(value/1000).toFixed(1)}k`}
+                    style={{ 
+                      fill: "#334155", 
+                      fontWeight: "600", 
+                      fontSize: 10,
+                    }}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Summary Statistics */}
         <div className="grid grid-cols-3 gap-4">
-          <div className="rounded-xl bg-slate-50 border-2 border-slate-200 p-5 text-center hover:shadow-lg transition-all duration-300">
-            <div className="flex justify-center mb-2">
-              <div className="bg-slate-800 p-2 rounded-lg">
-                <DollarSign className="h-5 w-5 text-white" />
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-blue-600 p-1.5 rounded">
+                <DollarSign className="h-3.5 w-3.5 text-white" />
               </div>
+              <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">Total Revenue</p>
             </div>
-            <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Total Revenue</p>
-            <p className="text-2xl font-bold text-slate-900">
+            <p className="text-2xl font-bold text-blue-900">
               ₨{totalRevenue.toLocaleString()}
             </p>
           </div>
           
-          <div className="rounded-xl bg-slate-50 border-2 border-slate-200 p-5 text-center hover:shadow-lg transition-all duration-300">
-            <div className="flex justify-center mb-2">
-              <div className="bg-slate-800 p-2 rounded-lg">
-                <Activity className="h-5 w-5 text-white" />
+          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-indigo-600 p-1.5 rounded">
+                <Activity className="h-3.5 w-3.5 text-white" />
               </div>
+              <p className="text-xs font-semibold text-indigo-900 uppercase tracking-wide">Average</p>
             </div>
-            <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Average</p>
-            <p className="text-2xl font-bold text-slate-900">
+            <p className="text-2xl font-bold text-indigo-900">
               ₨{avgRevenue.toLocaleString()}
             </p>
           </div>
           
-          <div className="rounded-xl bg-slate-50 border-2 border-slate-200 p-5 text-center hover:shadow-lg transition-all duration-300">
-            <div className="flex justify-center mb-2">
-              <div className="bg-slate-800 p-2 rounded-lg">
-                <PieChart className="h-5 w-5 text-white" />
+          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-emerald-600 p-1.5 rounded">
+                <Award className="h-3.5 w-3.5 text-white" />
               </div>
+              <p className="text-xs font-semibold text-emerald-900 uppercase tracking-wide">Peak Month</p>
             </div>
-            <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Peak Month</p>
-            <p className="text-2xl font-bold text-slate-900">
+            <p className="text-2xl font-bold text-emerald-900">
               {peakMonth.month}
             </p>
           </div>
