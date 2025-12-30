@@ -202,7 +202,7 @@ export function SuperAdminDashboard() {
 
   // ---------------- JSX ----------------
   return (
-    <main className="min-h-screen bg-slate-50 p-4 md:p-6 space-y-6">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
       <style>{`
         @keyframes slideDown {
           from { opacity: 0; transform: translateY(-10px); }
@@ -214,8 +214,8 @@ export function SuperAdminDashboard() {
       `}</style>
 
       {/* Header Section */}
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-400 to-indigo-600 px-6 py-8 border-b border-blue-500/30">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm dark:shadow-slate-900/50 overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-400 to-indigo-600 dark:from-indigo-700 dark:via-purple-800 dark:to-pink-800 px-6 py-8 border-b border-blue-500/30 dark:border-indigo-700/30">
           <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
             <div className="space-y-3 flex-1">
               <div className="flex items-center gap-3">
@@ -264,7 +264,7 @@ export function SuperAdminDashboard() {
       <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
 
       {/* Month Picker & Bar Chart Section */}
-      <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 overflow-hidden bg-white dark:bg-slate-900">
         <CardContent className="p-6">
           <div className="space-y-6">
             {/* Header with Picker Toggle */}
@@ -275,8 +275,8 @@ export function SuperAdminDashboard() {
                     <BarChart3 className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-slate-900">Monthly Sales Analytics</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
+                    <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Monthly Sales Analytics</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       {selectedMonths.length > 0 
                         ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} • ${selectedYear}`
                         : `Last 6 months (Jul-Dec) • ${selectedYear}`}
@@ -289,7 +289,7 @@ export function SuperAdminDashboard() {
               <div className="relative">
                 <button
                   onClick={() => setShowPicker(!showPicker)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors border border-blue-700"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 dark:bg-blue-500 text-white font-semibold text-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors border border-blue-700 dark:border-blue-600"
                 >
                   <Calendar className="h-4 w-4" />
                   <span>Select Period</span>
@@ -298,14 +298,14 @@ export function SuperAdminDashboard() {
                 {/* Dropdown Picker */}
                 {showPicker && (
                   <div className="absolute right-0 top-full mt-2 z-50 animate-slide-down">
-                    <div className="bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden">
+                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                       <MonthYearPicker 
                         selectedYear={selectedYear}
                         selectedMonths={selectedMonths}
                         onYearChange={setSelectedYear}
                         onMonthsChange={setSelectedMonths}
                       />
-                      <div className="p-3 bg-slate-50 border-t border-slate-200">
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
                         <button
                           onClick={() => setShowPicker(false)}
                           className="w-full px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
@@ -324,17 +324,17 @@ export function SuperAdminDashboard() {
               {isLoadingYearly ? (
                 <div className="flex items-center justify-center h-[400px]">
                   <div className="text-center space-y-3">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="text-sm text-slate-600 font-medium">Loading sales data...</p>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-500 mx-auto"></div>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">Loading sales data...</p>
                   </div>
                 </div>
               ) : yearlyError ? (
                 <div className="flex items-center justify-center h-[400px]">
                   <div className="text-center space-y-2">
-                    <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mx-auto">
+                    <div className="h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto">
                       <span className="text-2xl">⚠️</span>
                     </div>
-                    <p className="text-sm text-red-600 font-medium">Error loading sales data</p>
+                    <p className="text-sm text-red-600 dark:text-red-400 font-medium">Error loading sales data</p>
                   </div>
                 </div>
               ) : (
@@ -347,47 +347,47 @@ export function SuperAdminDashboard() {
 
       {/* KPI Cards */}
       <div className="grid gap-4 md:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-lg p-5 hover:shadow-md transition-shadow">
+        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-900">Today's GMV</p>
-            <TrendingUp className="h-5 w-5 text-emerald-600" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-900 dark:text-emerald-300">Today's GMV</p>
+            <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <p className="text-2xl md:text-3xl font-bold text-emerald-900 mb-1">{todaysGMV}</p>
-          <p className="text-xs text-emerald-700">Gross Merchandise Value</p>
+          <p className="text-2xl md:text-3xl font-bold text-emerald-900 dark:text-emerald-200 mb-1">{todaysGMV}</p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-400">Gross Merchandise Value</p>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-5 hover:shadow-md transition-shadow">
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-blue-900">Today's Orders</p>
-            <Package className="h-5 w-5 text-blue-600" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-900 dark:text-blue-300">Today's Orders</p>
+            <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           </div>
-          <p className="text-2xl md:text-3xl font-bold text-blue-900 mb-1">{todaysOrders?.items?.length || 0}</p>
-          <p className="text-xs text-blue-700">Total orders today</p>
+          <p className="text-2xl md:text-3xl font-bold text-blue-900 dark:text-blue-200 mb-1">{todaysOrders?.items?.length || 0}</p>
+          <p className="text-xs text-blue-700 dark:text-blue-400">Total orders today</p>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-5 hover:shadow-md transition-shadow">
+        <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 border border-purple-200 dark:border-purple-800 rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-purple-900">Week's Sales</p>
-            <BarChart3 className="h-5 w-5 text-purple-600" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-purple-900 dark:text-purple-300">Week's Sales</p>
+            <BarChart3 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
           </div>
-          <p className="text-2xl md:text-3xl font-bold text-purple-900 mb-1">{formatPKR(totalWeekSales, { maximumFractionDigits: 0 })}</p>
-          <p className="text-xs text-purple-700">Last 7 days revenue</p>
+          <p className="text-2xl md:text-3xl font-bold text-purple-900 dark:text-purple-200 mb-1">{formatPKR(totalWeekSales, { maximumFractionDigits: 0 })}</p>
+          <p className="text-xs text-purple-700 dark:text-purple-400">Last 7 days revenue</p>
         </div>
 
-        <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-lg p-5 hover:shadow-md transition-shadow">
+        <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/20 border border-orange-200 dark:border-orange-800 rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-orange-900">Week's Orders</p>
-            <TrendingUp className="h-5 w-5 text-orange-600" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-orange-900 dark:text-orange-300">Week's Orders</p>
+            <TrendingUp className="h-5 w-5 text-orange-600 dark:text-orange-400" />
           </div>
-          <p className="text-2xl md:text-3xl font-bold text-orange-900 mb-1">{totalWeekOrders}</p>
-          <p className="text-xs text-orange-700">Weekly order count</p>
+          <p className="text-2xl md:text-3xl font-bold text-orange-900 dark:text-orange-200 mb-1">{totalWeekOrders}</p>
+          <p className="text-xs text-orange-700 dark:text-orange-400">Weekly order count</p>
         </div>
       </div>
        
       {/* Charts Section */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Yearly Sales */}
-        <Card className="lg:col-span-2 border border-slate-200 shadow-sm overflow-hidden bg-white">
+        <Card className="lg:col-span-2 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 overflow-hidden bg-white dark:bg-slate-900">
           <CardContent className="p-6">
             {isLoadingYearly ? (
               <div className="flex items-center justify-center h-96">
@@ -405,7 +405,7 @@ export function SuperAdminDashboard() {
         </Card>
 
         {/* Weekly Sales */}
-        <Card className="border border-slate-200 shadow-sm overflow-hidden bg-white">
+        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 overflow-hidden bg-white dark:bg-slate-900">
           <CardContent className="p-0">
             {isLoadingSales ? (
               <div className="flex items-center justify-center h-full min-h-[500px]">
@@ -427,7 +427,7 @@ export function SuperAdminDashboard() {
       <section className="space-y-4">
         <div className="flex items-center gap-3">
           <div className="h-1 w-12 rounded-full bg-blue-600"></div>
-          <h2 className="text-xl font-bold text-slate-900">Admin Control Areas</h2>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Admin Control Areas</h2>
         </div>
         <p className="text-sm text-slate-600">Quick access to configuration, users, inventory, orders, budgets, and system reports</p>
         
@@ -436,12 +436,12 @@ export function SuperAdminDashboard() {
             const Icon = tile.icon
             return (
               <Link key={tile.title} href={tile.href}>
-                <Card className="group relative overflow-hidden border border-slate-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300 h-full">
+                <Card className="group relative overflow-hidden border border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-lg dark:hover:shadow-slate-900/50 transition-all duration-300 h-full bg-white dark:bg-slate-900">
                   <div className={`absolute inset-0 bg-gradient-to-br ${tile.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
                   <CardContent className="relative p-6 flex flex-col gap-4 h-full">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
-                        <h3 className="text-base font-bold text-slate-900 group-hover:text-white transition-colors mb-2">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-white transition-colors mb-2">
                           {tile.title}
                         </h3>
                         <p className="text-xs text-slate-600 group-hover:text-white/90 transition-colors leading-relaxed">

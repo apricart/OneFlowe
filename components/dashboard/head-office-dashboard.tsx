@@ -20,7 +20,7 @@ const BankingTooltip = ({ active, payload, label }: any) => {
     <div className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-lg">
       <p className="text-slate-600 text-xs font-semibold uppercase tracking-wide mb-1.5">{label}</p>
       <div className="flex items-baseline gap-2">
-        <span className="text-xl font-bold text-slate-900">
+        <span className="text-xl font-bold text-slate-900 dark:text-slate-100">
           ₨{payload[0].value.toLocaleString()}
         </span>
       </div>
@@ -30,6 +30,8 @@ const BankingTooltip = ({ active, payload, label }: any) => {
 
 // Weekly Sales Bar Chart - Banking Style
 const WeeklySalesBarChart = ({ data }: { data: { label: string; value: number }[] }) => {
+  const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+  
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -39,35 +41,39 @@ const WeeklySalesBarChart = ({ data }: { data: { label: string; value: number }[
               <stop offset="0%" stopColor="#1e40af" stopOpacity={1} />
               <stop offset="100%" stopColor="#1e3a8a" stopOpacity={0.95} />
             </linearGradient>
+            <linearGradient id="bankingBarDark" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#60a5fa" stopOpacity={1} />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.95} />
+            </linearGradient>
           </defs>
           <CartesianGrid 
             strokeDasharray="3 3" 
-            stroke="#cbd5e1" 
+            stroke={isDark ? "#475569" : "#cbd5e1"} 
             strokeOpacity={0.5}
             vertical={false} 
           />
           <XAxis 
             dataKey="label" 
             tickLine={false} 
-            axisLine={{ stroke: "#94a3b8", strokeWidth: 1 }} 
+            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }} 
             tickMargin={12} 
-            tick={{ fill: "#475569", fontWeight: 600, fontSize: 12 }}
+            tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
           />
           <YAxis 
             allowDecimals={false} 
             axisLine={false}
             tickLine={false} 
-            tick={{ fill: "#475569", fontWeight: 600, fontSize: 12 }}
+            tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
             tickFormatter={(value) => `₨${(value / 1000).toFixed(0)}k`}
           />
           <Tooltip 
             content={<BankingTooltip />} 
-            cursor={{ fill: "rgba(30, 64, 175, 0.08)" }} 
+            cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(30, 64, 175, 0.08)" }} 
           />
           <Bar
             dataKey="value"
             radius={[6, 6, 0, 0]}
-            fill="url(#bankingBar)"
+            fill={isDark ? "url(#bankingBarDark)" : "url(#bankingBar)"}
             animationDuration={1200}
             animationEasing="ease-in-out"
             maxBarSize={50}
@@ -80,6 +86,8 @@ const WeeklySalesBarChart = ({ data }: { data: { label: string; value: number }[
 
 // Yearly Sales Line Chart - Banking Style
 const YearlySalesLineChart = ({ data }: { data: { month: string; sales: number }[] }) => {
+  const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+  
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -89,37 +97,41 @@ const YearlySalesLineChart = ({ data }: { data: { month: string; sales: number }
               <stop offset="0%" stopColor="#059669" stopOpacity={0.3} />
               <stop offset="95%" stopColor="#059669" stopOpacity={0.05} />
             </linearGradient>
+            <linearGradient id="yearlyBankingGradientDark" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#34d399" stopOpacity={0.4} />
+              <stop offset="95%" stopColor="#34d399" stopOpacity={0.1} />
+            </linearGradient>
           </defs>
           <CartesianGrid 
             strokeDasharray="3 3" 
-            stroke="#cbd5e1" 
+            stroke={isDark ? "#475569" : "#cbd5e1"} 
             strokeOpacity={0.5}
             vertical={false} 
           />
           <XAxis 
             dataKey="month" 
             tickLine={false} 
-            axisLine={{ stroke: "#94a3b8", strokeWidth: 1 }} 
+            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }} 
             tickMargin={12} 
-            tick={{ fill: "#475569", fontWeight: 600, fontSize: 11 }}
+            tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 11 }}
           />
           <YAxis 
             allowDecimals={false} 
             axisLine={false}
             tickLine={false} 
-            tick={{ fill: "#475569", fontWeight: 600, fontSize: 12 }}
+            tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
             tickFormatter={(value) => `₨${(value / 1000).toFixed(0)}k`}
           />
           <Tooltip 
             content={<BankingTooltip />} 
-            cursor={{ stroke: "#059669", strokeWidth: 2, strokeDasharray: "4 4" }} 
+            cursor={{ stroke: isDark ? "#34d399" : "#059669", strokeWidth: 2, strokeDasharray: "4 4" }} 
           />
           <Area
             type="monotone"
             dataKey="sales"
-            stroke="#059669"
+            stroke={isDark ? "#34d399" : "#059669"}
             strokeWidth={2.5}
-            fill="url(#yearlyBankingGradient)"
+            fill={isDark ? "url(#yearlyBankingGradientDark)" : "url(#yearlyBankingGradient)"}
             animationDuration={1200}
             animationEasing="ease-in-out"
           />
@@ -207,29 +219,29 @@ export function HeadOfficeDashboard() {
   }, [selectedMonths, monthlySalesData])
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 space-y-6">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 space-y-6">
       <div className="space-y-6">
         {/* Header - Banking Style */}
-        <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+        <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-900/50">
           <SectionHeader
             title="Head Office Dashboard"
             subtitle="Overview of branches, approvals, budgets and orders"
           />
         </div>
 
-        <NotificationRail className="bg-white border border-slate-200 rounded-lg shadow-sm px-4" />
+        <NotificationRail className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm dark:shadow-slate-900/50 px-4" />
 
         {/* KPI Cards - Professional Banking Design */}
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           {/* Branches Card */}
-          <div className="group bg-white rounded-lg border-2 border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-300">
+          <div className="group bg-white dark:bg-slate-900 rounded-lg border-2 border-slate-200 dark:border-slate-800 p-5 shadow-sm dark:shadow-slate-900/50 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300">
             <div className="flex items-start justify-between mb-4">
               <div className="w-11 h-11 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center">
                 <Building2 className="w-5 h-5 text-blue-700" strokeWidth={2} />
               </div>
             </div>
             <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">My Branches</p>
-            <p className="text-4xl font-bold text-slate-900 mb-1">{branchesCount}</p>
+            <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">{branchesCount}</p>
             <div className="h-0.5 w-12 bg-blue-600 mt-3"></div>
           </div>
 
@@ -241,7 +253,7 @@ export function HeadOfficeDashboard() {
               </div>
             </div>
             <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Pending Approvals</p>
-            <p className="text-4xl font-bold text-slate-900 mb-1">{pendingApprovals}</p>
+            <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">{pendingApprovals}</p>
             <div className="h-0.5 w-12 bg-amber-600 mt-3"></div>
           </div>
 
@@ -253,7 +265,7 @@ export function HeadOfficeDashboard() {
               </div>
             </div>
             <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Monthly Budget</p>
-            <p className="text-4xl font-bold text-slate-900 mb-1">PKR 45K</p>
+            <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">PKR 45K</p>
             <div className="h-0.5 w-12 bg-emerald-600 mt-3"></div>
           </div>
 
@@ -265,7 +277,7 @@ export function HeadOfficeDashboard() {
               </div>
             </div>
             <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Orders This Month</p>
-            <p className="text-4xl font-bold text-slate-900 mb-1">{ordersThisMonth}</p>
+            <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">{ordersThisMonth}</p>
             <div className="h-0.5 w-12 bg-violet-600 mt-3"></div>
           </div>
         </div>
@@ -273,14 +285,14 @@ export function HeadOfficeDashboard() {
         {/* Charts Grid - Weekly and Yearly Sales */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Yearly Sales Chart */}
-          <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300">
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
                   <Calendar className="w-5 h-5 text-emerald-700" strokeWidth={2} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Yearly Sales Performance</h3>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Yearly Sales Performance</h3>
                   {yearlySalesData && (
                     <p className="text-xs text-slate-500 font-medium mt-0.5">
                       Complete year overview for {yearlySalesData.year}
@@ -292,15 +304,15 @@ export function HeadOfficeDashboard() {
             
             {yearlySalesData && (
               <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                   <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Total Sales</p>
-                  <p className="text-xl font-bold text-slate-900">
+                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
                     ₨{yearlySalesData.totalSales.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </p>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                   <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Total Orders</p>
-                  <p className="text-xl font-bold text-slate-900">{yearlySalesData.totalOrders.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{yearlySalesData.totalOrders.toLocaleString()}</p>
                 </div>
               </div>
             )}
@@ -308,9 +320,9 @@ export function HeadOfficeDashboard() {
             {yearlySalesChartData.length > 0 ? (
               <YearlySalesLineChart data={yearlySalesChartData} />
             ) : (
-              <div className="h-80 flex items-center justify-center text-slate-400">
+              <div className="h-80 flex items-center justify-center text-slate-400 dark:text-slate-500">
                 <div className="text-center">
-                  <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3 border border-slate-200">
+                  <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center mx-auto mb-3 border border-slate-200 dark:border-slate-700">
                     <Calendar className="w-7 h-7 text-slate-400" />
                   </div>
                   <p className="font-medium text-sm">Loading yearly sales data...</p>
@@ -320,14 +332,14 @@ export function HeadOfficeDashboard() {
           </div>
 
           {/* Weekly Sales Chart */}
-          <div className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300">
             <div className="mb-6">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-blue-700" strokeWidth={2} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Weekly Sales Performance</h3>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Weekly Sales Performance</h3>
                   {weeklySalesData && (
                     <p className="text-xs text-slate-500 font-medium mt-0.5">
                       {new Date(weeklySalesData.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })} - {new Date(weeklySalesData.weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
@@ -339,15 +351,15 @@ export function HeadOfficeDashboard() {
             
             {weeklySalesData && (
               <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                   <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Total Sales</p>
-                  <p className="text-xl font-bold text-slate-900">
+                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
                     ₨{weeklySalesData.totalSales.toLocaleString()}
                   </p>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                   <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Total Orders</p>
-                  <p className="text-xl font-bold text-slate-900">{weeklySalesData.totalOrders}</p>
+                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{weeklySalesData.totalOrders}</p>
                 </div>
               </div>
             )}
@@ -355,9 +367,9 @@ export function HeadOfficeDashboard() {
             {weeklySalesChartData.length > 0 ? (
               <WeeklySalesBarChart data={weeklySalesChartData} />
             ) : (
-              <div className="h-80 flex items-center justify-center text-slate-400">
+              <div className="h-80 flex items-center justify-center text-slate-400 dark:text-slate-500">
                 <div className="text-center">
-                  <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center mx-auto mb-3 border border-slate-200">
+                  <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center mx-auto mb-3 border border-slate-200 dark:border-slate-700">
                     <TrendingUp className="w-7 h-7 text-slate-400" />
                   </div>
                   <p className="font-medium text-sm">Loading sales data...</p>
@@ -375,12 +387,12 @@ export function HeadOfficeDashboard() {
               <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-indigo-50 border border-indigo-200 flex items-center justify-center">
-                      <BarChart3 className="w-5 h-5 text-indigo-700" strokeWidth={2} />
+                    <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center">
+                      <BarChart3 className="w-5 h-5 text-indigo-700 dark:text-indigo-400" strokeWidth={2} />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-slate-900">Monthly Sales Analytics</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Monthly Sales Analytics</h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         {selectedMonths.length > 0 
                           ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} selected • ${selectedYear}`
                           : `All months • ${selectedYear}`}
@@ -393,7 +405,7 @@ export function HeadOfficeDashboard() {
                 <div className="relative">
                   <button
                     onClick={() => setShowPicker(!showPicker)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700 transition-colors border border-indigo-700 shadow-sm"
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white font-semibold text-sm hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors border border-indigo-700 dark:border-indigo-600 shadow-sm"
                   >
                     <Calendar className="h-4 w-4" />
                     <span>Select Period</span>
@@ -402,17 +414,17 @@ export function HeadOfficeDashboard() {
                   {/* Dropdown Picker */}
                   {showPicker && (
                     <div className="absolute right-0 top-full mt-2 z-50">
-                      <div className="bg-white rounded-lg shadow-xl border-2 border-slate-200 overflow-hidden">
+                      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border-2 border-slate-200 dark:border-slate-700 overflow-hidden">
                         <MonthYearPicker 
                           selectedYear={selectedYear}
                           selectedMonths={selectedMonths}
                           onYearChange={setSelectedYear}
                           onMonthsChange={setSelectedMonths}
                         />
-                        <div className="p-3 bg-slate-50 border-t border-slate-200">
+                        <div className="p-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
                           <button
                             onClick={() => setShowPicker(false)}
-                            className="w-full px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
+                            className="w-full px-4 py-2 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors"
                           >
                             Apply Selection
                           </button>
@@ -433,7 +445,7 @@ export function HeadOfficeDashboard() {
                       <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center mx-auto border border-slate-200">
                         <BarChart3 className="w-7 h-7 text-slate-400" />
                       </div>
-                      <p className="text-sm text-slate-500 font-medium">Loading monthly sales data...</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Loading monthly sales data...</p>
                     </div>
                   </div>
                 )}

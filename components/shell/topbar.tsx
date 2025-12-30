@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { signOut, useSession } from "next-auth/react"
 import Image from "next/image"
@@ -13,7 +13,12 @@ import { NotificationBell } from "@/components/notifications/notification-center
 export function Topbar() {
   const { data: session } = useSession()
   const [open, setOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   
   const userRole = (session?.user as any)?.role
 
@@ -54,15 +59,31 @@ export function Topbar() {
         <NotificationBell />
 
         {/* Theme Toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-        >
-          <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
+        {mounted ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              // Get resolved theme (if system, check actual preference)
+              let resolvedTheme = theme
+              if (theme === "system" || !theme) {
+                resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+              }
+              // Toggle to opposite
+              const newTheme = resolvedTheme === "dark" ? "light" : "dark"
+              setTheme(newTheme)
+            }}
+            className="relative"
+            aria-label="Toggle theme"
+            title={mounted && theme ? `Current: ${theme === "system" ? "System" : theme === "dark" ? "Dark" : "Light"}` : "Toggle theme"}
+          >
+            <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <span className="sr-only">Toggle theme</span>
+          </Button>
+        ) : (
+          <div className="h-10 w-10" />
+        )}
 
         {/* Profile Menu */}
         <div className="relative">
