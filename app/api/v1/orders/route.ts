@@ -432,7 +432,7 @@ export async function PUT(req: NextRequest) {
       } else if (action === 'fulfill') {
   await tx.update(orders).set({ 
     status: 'fulfilled',
-    fulfilledAt: new Date() // ✅ set the timestamp here
+    fulfilledAt: sql`NOW()` // ✅ Stores in UTC (standard practice)
   }).where(eq(orders.id, id))
 
   await tx.update(budgets).set({

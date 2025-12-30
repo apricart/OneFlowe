@@ -51,18 +51,13 @@ export async function GET(req: NextRequest) {
   // Convert to UTC for database (subtract 5 hours)
   const yearStart = new Date(yearStartPK.getTime() - pakistanOffset)
   
-  // Year end in Pakistan timezone (December 31st, 23:59:59 PK time)
-  const yearEndPK = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999))
-  // Convert to UTC for database
-  const yearEnd = new Date(yearEndPK.getTime() - pakistanOffset)
-  
   // Next year start in Pakistan timezone
   const nextYearStartPK = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0, 0))
   const nextYearStart = new Date(nextYearStartPK.getTime() - pakistanOffset)
 
-  // Build conditions for yearly sales
+  // Build conditions for monthly sales
   // ONLY include FULFILLED orders with fulfilledAt date (exclude PENDING, REJECTED, REFUNDED, APPROVED)
-  const yearConditions: any[] = [
+  const monthConditions: any[] = [
     sql`${orders.fulfilledAt} IS NOT NULL`,
     gte(orders.fulfilledAt, yearStart),
     lt(orders.fulfilledAt, nextYearStart),
@@ -74,12 +69,12 @@ export async function GET(req: NextRequest) {
 
   // Apply organization filter (if not SUPER_ADMIN or if explicitly selected)
   if (organizationId) {
-    yearConditions.push(eq(orders.organizationId, organizationId))
+    monthConditions.push(eq(orders.organizationId, organizationId))
   }
 
   // Apply branch filter (if explicitly selected)
   if (branchId) {
-    yearConditions.push(eq(orders.branchId, branchId))
+    monthConditions.push(eq(orders.branchId, branchId))
   }
 
   // Query monthly sales for the year based on fulfilledAt date
@@ -93,7 +88,7 @@ export async function GET(req: NextRequest) {
       orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
     })
     .from(orders)
-    .where(and(...(yearConditions as any)))
+    .where(and(...(monthConditions as any)))
     .groupBy(sql`1,2`)
     .orderBy(sql`1`)
 

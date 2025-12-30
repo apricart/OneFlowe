@@ -1,7 +1,7 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders } from "@/db/schema"
-import { eq } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 type OrderStatus = "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED"
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -35,8 +35,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 console.log('body.status', body.status);
   // ✅ VERY IMPORTANT PART
+  // Store in UTC (PostgreSQL NOW() returns UTC by default)
   if (body.status === "FULFILLED") {
-    patch.fulfilledAt = new Date()
+    patch.fulfilledAt = sql`NOW()`
   }
 
   const [item] = await db

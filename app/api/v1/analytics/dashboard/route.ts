@@ -33,8 +33,27 @@ export async function GET(req: NextRequest) {
 
   const scope = await getRequestScope()
   const role = scope?.role
-  const organizationId = scope?.organizationId ?? null
-  const branchId = scope?.branchId ?? null
+  
+  // Get filter parameters from query string (for UI context selection)
+  const { searchParams } = new URL(req.url)
+  const orgIdParam = searchParams.get("organizationId")
+  const branchIdParam = searchParams.get("branchId")
+  
+  // Use query params if provided, otherwise fall back to auth scope
+  let organizationId: number | null = null
+  let branchId: number | null = null
+  
+  if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") {
+    organizationId = Number(orgIdParam)
+  } else if (role !== "SUPER_ADMIN" && scope?.organizationId) {
+    organizationId = scope.organizationId
+  }
+  
+  if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
+    branchId = Number(branchIdParam)
+  } else if (role === "BRANCH_ADMIN" && scope?.branchId) {
+    branchId = scope.branchId
+  }
 
   const orderConditions = getOrderConditions(role, organizationId, branchId)
   const whereClause = and(...(orderConditions as any))

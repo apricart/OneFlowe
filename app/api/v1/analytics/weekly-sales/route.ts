@@ -10,26 +10,48 @@ const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 type Role = typeof allowedRoles[number]
 
 /**
- * Get the start of the current week (Monday) and end of the week (Sunday)
+ * Get the start of the current week (Monday) and end of the week (Sunday) in Pakistan timezone
+ * Returns UTC timestamps for database comparison
  */
 function getCurrentWeekRange() {
+  // Get current time in Pakistan (Asia/Karachi is UTC+5)
+  // Create a date representing current Pakistan time
   const now = new Date()
-  const dayOfWeek = now.getDay() // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Convert Sunday (0) to 6 days back
   
-  const monday = new Date(now)
-  monday.setDate(now.getDate() - daysToMonday)
-  monday.setHours(0, 0, 0, 0)
+  // Convert current UTC time to Pakistan time to determine the day
+  // Pakistan is UTC+5, so add 5 hours to get Pakistan time
+  const pakistanOffset = 5 * 60 * 60 * 1000 // UTC+5 in milliseconds
+  const nowInPakistan = new Date(now.getTime() + pakistanOffset)
   
-  const nextMonday = new Date(monday)
-  nextMonday.setDate(monday.getDate() + 7)
-  nextMonday.setHours(0, 0, 0, 0)
+  // Get day of week in Pakistan (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+  const dayOfWeek = nowInPakistan.getUTCDay()
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
   
-  const sunday = new Date(monday)
-  sunday.setDate(monday.getDate() + 6)
-  sunday.setHours(23, 59, 59, 999)
+  // Calculate Monday 00:00:00 in Pakistan timezone
+  const mondayInPakistan = new Date(nowInPakistan)
+  mondayInPakistan.setUTCDate(nowInPakistan.getUTCDate() - daysToMonday)
+  mondayInPakistan.setUTCHours(0, 0, 0, 0)
   
-  return { monday, sunday, nextMonday }
+  // Convert back to UTC for database comparison
+  const mondayUTC = new Date(mondayInPakistan.getTime() - pakistanOffset)
+  
+  // Calculate next Monday in UTC
+  const nextMondayInPakistan = new Date(mondayInPakistan)
+  nextMondayInPakistan.setUTCDate(mondayInPakistan.getUTCDate() + 7)
+  const nextMondayUTC = new Date(nextMondayInPakistan.getTime() - pakistanOffset)
+  
+  // Calculate Sunday 23:59:59 in Pakistan timezone
+  const sundayInPakistan = new Date(mondayInPakistan)
+  sundayInPakistan.setUTCDate(mondayInPakistan.getUTCDate() + 6)
+  sundayInPakistan.setUTCHours(23, 59, 59, 999)
+  const sundayUTC = new Date(sundayInPakistan.getTime() - pakistanOffset)
+  
+  return { 
+    monday: mondayUTC, 
+    sunday: sundayUTC, 
+    nextMonday: nextMondayUTC,
+    mondayInPakistan // For generating day keys
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -60,10 +82,11 @@ export async function GET(req: NextRequest) {
     branchId = scope.branchId
   }
 
-  const { monday, sunday, nextMonday } = getCurrentWeekRange()
+  const { monday, sunday, nextMonday, mondayInPakistan } = getCurrentWeekRange()
 
   // Build conditions for weekly sales
   // Only include APPROVED or FULFILLED orders (exclude PENDING, REJECTED, REFUNDED)
+  // Database stores in UTC, so we compare with UTC timestamps
   const weekConditions: any[] = [
     gte(orders.createdAt, monday),
     lt(orders.createdAt, nextMonday),
@@ -86,7 +109,9 @@ export async function GET(req: NextRequest) {
   }
 
   // Query daily sales for the current week
-  const dayExpr = sql`date_trunc('day', ${orders.createdAt})`
+  // Convert UTC timestamps to Pakistan timezone (Asia/Karachi, UTC+5) before extracting date
+  // This ensures orders created on Tuesday in Pakistan are grouped under Tuesday, not Monday
+  const dayExpr = sql`DATE((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')`
   const weeklySalesRows = await db
     .select({
       day: dayExpr,
@@ -99,22 +124,38 @@ export async function GET(req: NextRequest) {
     .orderBy(dayExpr)
 
   // Create a map of day -> sales
+  // PostgreSQL DATE returns as string in format YYYY-MM-DD (already in Pakistan timezone)
   const salesMap: Record<string, { sales: number; orderCount: number }> = {}
   for (const row of weeklySalesRows) {
-    const dayKey = new Date(row.day as any).toISOString().slice(0, 10)
+    const dateValue = row.day as any
+    // PostgreSQL DATE type returns as string in format YYYY-MM-DD
+    const dayKey = typeof dateValue === 'string' 
+      ? dateValue 
+      : new Date(dateValue).toISOString().slice(0, 10)
+    
     salesMap[dayKey] = {
       sales: (row.totalCents || 0) / 100, // Convert cents to PKR
       orderCount: Number(row.orderCount || 0),
     }
   }
 
-  // Generate all days of the week (Monday to Sunday)
+  // Generate all days of the week (Monday to Sunday) in Pakistan timezone
+  // Format dates to match the database date format (YYYY-MM-DD)
   const weekDays = []
   for (let i = 0; i < 7; i++) {
-    const day = new Date(monday)
-    day.setDate(monday.getDate() + i)
-    const dayKey = day.toISOString().slice(0, 10)
-    const dayName = day.toLocaleDateString("en-US", { weekday: "short" })
+    const dayInPakistan = new Date(mondayInPakistan)
+    dayInPakistan.setUTCDate(mondayInPakistan.getUTCDate() + i)
+    
+    // Format as YYYY-MM-DD from Pakistan timezone to match database grouping
+    const year = dayInPakistan.getUTCFullYear()
+    const month = String(dayInPakistan.getUTCMonth() + 1).padStart(2, '0')
+    const date = String(dayInPakistan.getUTCDate()).padStart(2, '0')
+    const dayKey = `${year}-${month}-${date}`
+    
+    // Get day name for display (Monday, Tuesday, etc.)
+    // dayInPakistan is already in Pakistan timezone (UTC representation)
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    const dayName = dayNames[dayInPakistan.getUTCDay()]
     
     weekDays.push({
       day: dayName,

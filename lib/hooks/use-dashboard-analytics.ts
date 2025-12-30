@@ -13,9 +13,6 @@ export type DashboardAnalyticsResponse = {
   ordersThisMonth: number
 }
 
-
-
-
 export function useDashboardAnalytics() {
   return useSWR<DashboardAnalyticsResponse>("/api/v1/analytics/dashboard", fetcher, {
     revalidateOnFocus: false,
@@ -100,6 +97,47 @@ export function useYearlySales(organizationId?: string | null, branchId?: string
     revalidateOnFocus: false,
     revalidateOnReconnect: true,
     refreshInterval: 300000, // Refresh every 5 minutes
+  })
+}
+
+export type MonthlySalesMonth = {
+  month: string // "Jan", "Feb", etc.
+  sales: number // Sales in PKR
+  orderCount: number
+}
+
+export type MonthlySalesResponse = {
+  year: number
+  monthlySales: MonthlySalesMonth[]
+  totalSales: number
+  totalOrders: number
+}
+
+export function useMonthlySales(organizationId?: string | null, branchId?: string | null, year?: number) {
+  const url = useMemo(() => {
+    const baseUrl = "/api/v1/analytics/monthly-sales"
+    const params = new URLSearchParams()
+    
+    if (organizationId && organizationId !== "null" && organizationId !== "0") {
+      params.set("organizationId", organizationId)
+    }
+    
+    if (branchId && branchId !== "null" && branchId !== "0") {
+      params.set("branchId", branchId)
+    }
+    
+    if (year) {
+      params.set("year", year.toString())
+    }
+    
+    const queryString = params.toString()
+    return queryString ? `${baseUrl}?${queryString}` : baseUrl
+  }, [organizationId, branchId, year])
+
+  return useSWR<MonthlySalesResponse>(url, fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: true,
+    refreshInterval: 60000, // Refresh every minute
   })
 }
 
