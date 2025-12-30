@@ -96,23 +96,23 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
       `}</style>
 
       {/* Header */}
-      <div className="bg-slate-50 border-b border-slate-200 px-6 py-4">
+      <div className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
+            <div className="bg-blue-600 dark:bg-blue-500 p-2 rounded-lg">
               <TrendingUp className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 Annual Revenue Performance
               </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 Fiscal Year Overview
               </p>
             </div>
           </div>
-          <div className="bg-blue-50 px-3 py-1.5 rounded-md border border-blue-100">
-            <p className="text-xs text-blue-700 font-semibold">Active</p>
+          <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-md border border-blue-100 dark:border-blue-800">
+            <p className="text-xs text-blue-700 dark:text-blue-300 font-semibold">Active</p>
           </div>
         </div>
       </div>

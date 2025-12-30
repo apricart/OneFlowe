@@ -1,5 +1,5 @@
 "use client"
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect, useRef } from "react"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area } from "recharts"
 import { KpiCard } from "@/components/ui/kpi-card"
 import { SectionHeader } from "@/components/ui/section-header"
@@ -173,7 +173,25 @@ export function HeadOfficeDashboard() {
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString())
   const [showPicker, setShowPicker] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const { data: monthlySalesData } = useMonthlySales(organizationId, branchId, Number(selectedYear))
+
+  // Close picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setShowPicker(false)
+      }
+    }
+
+    if (showPicker) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showPicker])
 
   const weeklySalesChartData = useMemo(() => {
     if (!weeklySalesData?.dailySales) return []
@@ -402,7 +420,7 @@ export function HeadOfficeDashboard() {
                 </div>
                 
                 {/* Picker Toggle Button */}
-                <div className="relative">
+                <div className="relative" ref={pickerRef}>
                   <button
                     onClick={() => setShowPicker(!showPicker)}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white font-semibold text-sm hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors border border-indigo-700 dark:border-indigo-600 shadow-sm"

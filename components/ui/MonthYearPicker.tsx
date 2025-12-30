@@ -80,22 +80,22 @@ export function MonthYearPicker({
   }
 
   return (
-    <div className="space-y-4 rounded-xl border-0 p-5 w-80 bg-white">
+    <div className="space-y-4 rounded-xl border-0 p-5 w-80 bg-white dark:bg-slate-800">
       {/* Year Select */}
       <div>
-        <label className="block mb-2 text-sm font-semibold text-slate-700">Year</label>
+        <label className="block mb-2 text-sm font-semibold text-slate-700 dark:text-slate-300">Year</label>
 
         <Select.Root value={year} onValueChange={handleYearChange}>
-          <Select.Trigger className="inline-flex w-full items-center justify-between rounded-lg border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-medium hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">
-            <Select.Value />
+          <Select.Trigger className="inline-flex w-full items-center justify-between rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium hover:border-indigo-300 dark:hover:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-slate-800 transition-colors">
+            <Select.Value className="text-slate-900 dark:text-slate-100" />
             <Select.Icon>
-              <ChevronDownIcon className="h-4 w-4 text-slate-500" />
+              <ChevronDownIcon className="h-4 w-4 text-slate-500 dark:text-slate-400" />
             </Select.Icon>
           </Select.Trigger>
 
           <Select.Portal>
             <Select.Content 
-              className="bg-white border-2 border-slate-200 rounded-lg shadow-xl z-[100] overflow-hidden"
+              className="bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg shadow-xl dark:shadow-slate-900/50 z-[100] overflow-hidden"
               position="popper"
               sideOffset={4}
             >
@@ -104,12 +104,12 @@ export function MonthYearPicker({
                   <Select.Item
                     key={y}
                     value={y}
-                    className="relative flex items-center px-8 py-2.5 text-sm rounded-md cursor-pointer hover:bg-indigo-50 focus:bg-indigo-50 outline-none data-[highlighted]:bg-indigo-50 transition-colors"
+                    className="relative flex items-center px-8 py-2.5 text-sm rounded-md cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/30 focus:bg-indigo-50 dark:focus:bg-indigo-900/30 outline-none data-[highlighted]:bg-indigo-50 dark:data-[highlighted]:bg-indigo-900/30 transition-colors"
                   >
                     <Select.ItemIndicator className="absolute left-2 inline-flex items-center">
-                      <CheckIcon className="h-4 w-4 text-indigo-600" />
+                      <CheckIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                     </Select.ItemIndicator>
-                    <Select.ItemText className="font-medium text-slate-900">{y}</Select.ItemText>
+                    <Select.ItemText className="font-medium text-slate-900 dark:text-slate-100">{y}</Select.ItemText>
                   </Select.Item>
                 ))}
               </Select.Viewport>
@@ -121,20 +121,20 @@ export function MonthYearPicker({
       {/* Month Checkboxes */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <label className="block text-sm font-semibold text-slate-700">
+          <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
             Months
           </label>
           <div className="flex gap-2">
             <button
               onClick={selectAllMonths}
-              className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+              className="text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
             >
               Select All
             </button>
-            <span className="text-slate-300">|</span>
+            <span className="text-slate-300 dark:text-slate-600">|</span>
             <button
               onClick={clearAllMonths}
-              className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+              className="text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
             >
               Clear
             </button>
@@ -145,19 +145,19 @@ export function MonthYearPicker({
           {months.map((month) => (
             <label
               key={month.value}
-              className="flex items-center gap-2.5 text-sm cursor-pointer group py-1.5 px-2 rounded-lg hover:bg-slate-50 transition-colors"
+              className="flex items-center gap-2.5 text-sm cursor-pointer group py-1.5 px-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
             >
               <Checkbox.Root
                 checked={selectedMonths.includes(month.value)}
                 onCheckedChange={() => toggleMonth(month.value)}
-                className="h-5 w-5 rounded-md border-2 border-slate-300 flex items-center justify-center data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 hover:border-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                className="h-5 w-5 rounded-md border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center data-[state=checked]:bg-indigo-600 dark:data-[state=checked]:bg-indigo-500 data-[state=checked]:border-indigo-600 dark:data-[state=checked]:border-indigo-500 hover:border-indigo-400 dark:hover:border-indigo-500 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:ring-offset-2 dark:focus:ring-offset-slate-800"
               >
                 <Checkbox.Indicator>
                   <CheckIcon className="h-3.5 w-3.5 text-white" />
                 </Checkbox.Indicator>
               </Checkbox.Root>
 
-              <span className="font-medium text-slate-700 group-hover:text-slate-900 transition-colors">
+              <span className="font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100 transition-colors">
                 {month.label}
               </span>
             </label>
@@ -166,12 +166,12 @@ export function MonthYearPicker({
       </div>
 
       {/* Summary */}
-      <div className="text-xs bg-gradient-to-br from-indigo-50 to-purple-50 p-3 rounded-lg border border-indigo-100">
-        <div className="font-semibold text-indigo-900 mb-1">Selection Summary</div>
-        <div className="text-slate-600">
+      <div className="text-xs bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 p-3 rounded-lg border border-indigo-100 dark:border-indigo-800">
+        <div className="font-semibold text-indigo-900 dark:text-indigo-300 mb-1">Selection Summary</div>
+        <div className="text-slate-600 dark:text-slate-400">
           <span className="font-medium">Year:</span> {year}
         </div>
-        <div className="text-slate-600">
+        <div className="text-slate-600 dark:text-slate-400">
           <span className="font-medium">Months:</span> {selectedMonths.length > 0 ? `${selectedMonths.length} selected` : "None"}
         </div>
       </div>

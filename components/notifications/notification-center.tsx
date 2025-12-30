@@ -19,9 +19,9 @@ const severityIcon: Record<DashboardNotification["severity"], React.ReactNode> =
 }
 
 const severityTone: Record<DashboardNotification["severity"], string> = {
-  critical: "border-red-200 bg-red-50 text-red-900",
-  warning: "border-amber-200 bg-amber-50 text-amber-900",
-  info: "border-slate-200 bg-slate-50 text-slate-900",
+  critical: "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 text-red-900 dark:text-red-200",
+  warning: "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200",
+  info: "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100",
 }
 
 export function NotificationBell() {
@@ -125,7 +125,7 @@ export function NotificationRail({ limit = 4, className }: { limit?: number; cla
   }
 
   return (
-    <div className={cn("rounded-2xl border bg-white/70 px-2 py-2 shadow-sm", className)}>
+    <div className={cn("rounded-2xl border bg-white/70 dark:bg-slate-800/70 px-2 py-2 shadow-sm dark:shadow-slate-900/50", className)}>
       <ScrollArea className="w-full whitespace-nowrap">
         <div className="flex gap-3 pr-4">
           {visible.map((notification) => (
@@ -140,10 +140,10 @@ export function NotificationRail({ limit = 4, className }: { limit?: number; cla
 function RailChip({ notification }: { notification: DashboardNotification }) {
   const tone =
     notification.severity === "critical"
-      ? "bg-red-50 border-red-100 text-red-900"
+      ? "bg-red-50 dark:bg-red-900/30 border-red-100 dark:border-red-800 text-red-900 dark:text-red-200"
       : notification.severity === "warning"
-        ? "bg-amber-50 border-amber-100 text-amber-900"
-        : "bg-slate-50 border-slate-100 text-slate-900"
+        ? "bg-amber-50 dark:bg-amber-900/30 border-amber-100 dark:border-amber-800 text-amber-900 dark:text-amber-200"
+        : "bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-900 dark:text-slate-100"
   return (
     <div className={cn("flex min-w-[220px] flex-col gap-1 rounded-xl border px-4 py-3", tone)}>
       <div className="flex items-center gap-2">
@@ -151,7 +151,7 @@ function RailChip({ notification }: { notification: DashboardNotification }) {
         <p className="text-sm font-semibold leading-none">{notification.title}</p>
         {notification.tag && <Badge variant="secondary">{notification.tag}</Badge>}
       </div>
-      <p className="text-xs text-muted-foreground">{notification.message}</p>
+      <p className="text-xs text-muted-foreground dark:text-slate-400">{notification.message}</p>
       {notification.cta && (
         <Button asChild size="sm" variant="ghost" className="h-7 self-start px-2 text-xs">
           <Link href={notification.cta.href}>{notification.cta.label}</Link>
@@ -178,7 +178,7 @@ function NotificationRow({ notification, compact }: { notification: DashboardNot
           <div className="flex items-center gap-2">
             <p className="font-medium leading-none">{notification.title}</p>
             {notification.tag && (
-              <span className="rounded-full bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-black/60">
+              <span className="rounded-full bg-black/10 dark:bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-black/60 dark:text-white/70">
                 {notification.tag}
               </span>
             )}

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useRef } from "react"
 import { useOrganizations, useBranches, useUsers } from "@/lib/hooks/use-api"
 import { KpiCard } from "@/components/ui/kpi-card"
 import { Card, CardContent } from "@/components/ui/card"
@@ -47,7 +47,25 @@ export function SuperAdminDashboard() {
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
   const [showPicker, setShowPicker] = useState(false)
+  const pickerRef = useRef<HTMLDivElement>(null)
   const { organizationId, branchId } = useAppContext()
+
+  // Close picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setShowPicker(false)
+      }
+    }
+
+    if (showPicker) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showPicker])
 
   // ---------------- Scope Data ----------------
   const { data: orgsData } = useOrganizations()
@@ -286,7 +304,7 @@ export function SuperAdminDashboard() {
               </div>
               
               {/* Picker Toggle Button */}
-              <div className="relative">
+              <div className="relative" ref={pickerRef}>
                 <button
                   onClick={() => setShowPicker(!showPicker)}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 dark:bg-blue-500 text-white font-semibold text-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors border border-blue-700 dark:border-blue-600"
