@@ -48,20 +48,20 @@ const fetcher = async (url: string) => {
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
-    
+
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
       },
     })
-    
+
     clearTimeout(timeoutId)
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
-    
+
     return response.json()
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -128,8 +128,9 @@ function SummaryTile({
   accent: string
 }) {
   return (
-    <Card className="border-none shadow-md">
-      <CardContent className="p-5 space-y-2">
+    <Card className="relative border border-slate-200 dark:border-slate-700 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900 hover:shadow-md transition-shadow overflow-hidden">
+      <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${accent}`} />
+      <CardContent className="p-5 space-y-2 relative">
         <div className="flex items-center gap-3">
           <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r ${accent}`}>
             <Package className="h-5 w-5 text-white" />
@@ -183,7 +184,7 @@ export default function GlobalInventoryPage() {
   const [isUploadingCsv, setIsUploadingCsv] = useState(false)
   const [csvResult, setCsvResult] = useState<{ message: string; imported: number; skippedExisting: number } | null>(null)
   const [csvErrors, setCsvErrors] = useState<string[]>([])
-  
+
   // Product import state
   const [showProductImportDialog, setShowProductImportDialog] = useState(false)
   const [showProductImportConfirm, setShowProductImportConfirm] = useState(false)
@@ -263,14 +264,14 @@ export default function GlobalInventoryPage() {
       }
     }
   })
-  
+
   const organizations = orgsData?.items || []
-  
+
   // Debug logging
   console.log("Organizations data:", orgsData)
   console.log("Organizations error:", orgsError)
   console.log("Organizations loading:", orgsLoading)
-  
+
   // Show error in UI if there's an issue
   if (orgsError) {
     console.error("Failed to fetch organizations:", orgsError)
@@ -287,7 +288,7 @@ export default function GlobalInventoryPage() {
   const filteredProducts = useMemo(() => {
     if (!products?.items) return []
     let filtered = products.items
-    
+
     // Apply stock filter
     if (stockFilter === "in-stock") {
       filtered = filtered.filter(p => (p.stockQuantity || 0) > 10)
@@ -299,7 +300,7 @@ export default function GlobalInventoryPage() {
     } else if (stockFilter === "out-of-stock") {
       filtered = filtered.filter(p => (p.stockQuantity || 0) === 0)
     }
-    
+
     return filtered
   }, [products?.items, stockFilter])
 
@@ -352,24 +353,24 @@ export default function GlobalInventoryPage() {
   // Filter products based on assignment status and search
   const getFilteredProducts = useMemo(() => {
     if (!products?.items) return []
-    
+
     let filtered = products.items
-    
+
     // Filter by assignment status
     if (showOnlyUnassigned && assignmentData.organizationId) {
       const assignedIds = getAssignedProductIds
       filtered = filtered.filter(product => !assignedIds.has(product.id))
     }
-    
+
     // Filter by search query
     if (productSearchQuery.trim()) {
       const query = productSearchQuery.toLowerCase()
-      filtered = filtered.filter(product => 
+      filtered = filtered.filter(product =>
         product.name.toLowerCase().includes(query) ||
         product.productCode.toLowerCase().includes(query)
       )
     }
-    
+
     return filtered
   }, [products?.items, showOnlyUnassigned, assignmentData.organizationId, getAssignedProductIds, productSearchQuery])
 
@@ -711,8 +712,8 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
           override && override.customPrice !== undefined && override.customPrice !== ""
             ? parseFloat(override.customPrice)
             : assignmentData.customPrice
-            ? parseFloat(assignmentData.customPrice)
-            : null
+              ? parseFloat(assignmentData.customPrice)
+              : null
         return {
           productId,
           customPrice: priceInput,
@@ -730,9 +731,9 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
         customDescription: assignmentData.customDescription || null,
         customImageUrl: assignmentData.customImageUrl || null,
       }
-      
+
       console.log("Sending assignment request:", requestBody)
-      
+
       const response = await fetch("/api/v1/admin/organization-assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -751,10 +752,10 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
             variant: "default",
           })
         } else {
-        toast({
-          title: "Success",
-          description: result.message,
-        })
+          toast({
+            title: "Success",
+            description: result.message,
+          })
         }
         setShowAssignmentDialog(false)
         setAssignmentData({
@@ -767,14 +768,14 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
           customImageUrl: "",
         })
         setPerProductOverrides({})
-      mutateAssignments()
+        mutateAssignments()
         mutateProducts()
       } else {
         console.error("Assignment failed:", result)
-        
+
         // Handle specific error cases
         if (result.error === "All selected products are already assigned to this organization") {
-        toast({
+          toast({
             title: "Products Already Assigned",
             description: "All selected products are already assigned to this organization. Please select different products or choose a different organization.",
             variant: "destructive",
@@ -783,8 +784,8 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
           toast({
             title: "Assignment Failed",
             description: result.error || "Failed to assign products. Please try again.",
-          variant: "destructive",
-        })
+            variant: "destructive",
+          })
         }
       }
     } catch (error) {
@@ -798,8 +799,8 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
   }
 
   const toggleProductSelection = (productId: number) => {
-    setSelectedProducts(prev => 
-      prev.includes(productId) 
+    setSelectedProducts(prev =>
+      prev.includes(productId)
         ? prev.filter(id => id !== productId)
         : [...prev, productId]
     )
@@ -807,14 +808,14 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
 
   const selectAllProducts = () => {
     setSelectedProducts(
-      selectedProducts.length === filteredProducts.length 
-        ? [] 
+      selectedProducts.length === filteredProducts.length
+        ? []
         : filteredProducts.map(p => p.id)
     )
   }
 
   return (
-    <div className="space-y-8">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-8">
       <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-purple-900 to-indigo-800 text-white shadow-xl">
         <div className="pointer-events-none absolute inset-0 opacity-30">
           <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
@@ -845,10 +846,10 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
         <SummaryTile label="Active assignments" value={activeAssignments} helper="Currently live" accent="from-rose-500 to-orange-500" />
       </div>
 
-      <Card className="border-none shadow-md">
+      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
         <CardHeader>
-          <CardTitle className="text-xl">Assignment workspace</CardTitle>
-          <p className="text-sm text-muted-foreground">
+          <CardTitle className="text-xl dark:text-white">Assignment workspace</CardTitle>
+          <p className="text-sm text-muted-foreground dark:text-slate-300">
             Use the context selector in the top bar to focus on an organization, then bulk assign via quick actions or CSV upload.
           </p>
         </CardHeader>
@@ -942,7 +943,7 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
@@ -951,7 +952,7 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
               <select
                 value={stockFilter}
                 onChange={(e) => setStockFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All Stock</option>
                 <option value="in-stock">In Stock</option>
@@ -975,11 +976,11 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
             </div>
           </div>
 
-          <Card>
+          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
             <Table>
               <thead>
-                <tr>
-                  <th className="text-left p-4 font-medium w-12">
+                <tr className="dark:border-slate-700">
+                  <th className="text-left p-4 font-medium w-12 dark:text-slate-200">
                     <input
                       type="checkbox"
                       checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
@@ -987,34 +988,34 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                       className="rounded"
                     />
                   </th>
-                  <th className="text-left p-4 font-medium">Code</th>
-                  <th className="text-left p-4 font-medium">Name</th>
-                  <th className="text-left p-4 font-medium">Image</th>
-                  <th className="text-left p-4 font-medium">Category</th>
-                  <th className="text-left p-4 font-medium">Price</th>
-                  <th className="text-left p-4 font-medium">Unit</th>
-                  <th className="text-left p-4 font-medium">Stock</th>
-                  <th className="text-left p-4 font-medium">Status</th>
-                  <th className="text-left p-4 font-medium">Assignments</th>
-                  <th className="text-right p-4 font-medium">Actions</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Code</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Name</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Image</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Category</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Price</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Unit</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Stock</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Status</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Assignments</th>
+                  <th className="text-right p-4 font-medium dark:text-slate-200">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {productsLoading ? (
                   <tr>
-                    <td colSpan={11} className="p-8 text-center text-gray-500">
+                    <td colSpan={11} className="p-8 text-center text-gray-500 dark:text-slate-400">
                       Loading products...
                     </td>
                   </tr>
                 ) : filteredProducts.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="p-8 text-center text-gray-500">
+                    <td colSpan={11} className="p-8 text-center text-gray-500 dark:text-slate-400">
                       No products found
                     </td>
                   </tr>
                 ) : (
                   filteredProducts.map(product => (
-                    <tr key={product.id} className="hover:bg-gray-50">
+                    <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-slate-900/50 dark:border-slate-700">
                       <td className="p-4">
                         <input
                           type="checkbox"
@@ -1024,10 +1025,10 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                         />
                       </td>
                       <td className="p-4">
-                        <div className="font-mono text-sm">{product.productCode}</div>
+                        <div className="font-mono text-sm dark:text-white">{product.productCode}</div>
                       </td>
                       <td className="p-4">
-                        <div className="font-medium">{product.name}</div>
+                        <div className="font-medium dark:text-white">{product.name}</div>
                         {product.description && (
                           <div className="text-xs text-muted-foreground line-clamp-1">
                             {product.description}
@@ -1039,11 +1040,11 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                           <img
                             src={product.imageUrl}
                             alt={product.name}
-                            className="w-12 h-12 object-cover rounded-lg border"
+                            className="w-12 h-12 object-cover rounded-lg border dark:border-slate-600"
                           />
                         ) : (
-                          <div className="w-12 h-12 bg-gray-100 rounded-lg border flex items-center justify-center">
-                            <Package className="w-6 h-6 text-gray-400" />
+                          <div className="w-12 h-12 bg-gray-100 dark:bg-slate-700 rounded-lg border dark:border-slate-600 flex items-center justify-center">
+                            <Package className="w-6 h-6 text-gray-400 dark:text-slate-400" />
                           </div>
                         )}
                       </td>
@@ -1052,24 +1053,24 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                           {product.categoryName || "No Category"}
                         </Badge>
                       </td>
-                      <td className="p-4 text-sm">{formatPKR(product.basePrice / 100)}</td>
-                      <td className="p-4 text-sm">{product.unit}</td>
+                      <td className="p-4 text-sm dark:text-white">{formatPKR(product.basePrice / 100)}</td>
+                      <td className="p-4 text-sm dark:text-white">{product.unit}</td>
                       <td className="p-4">
-                        <StockStatusBadge 
-                          quantity={product.stockQuantity || 0} 
+                        <StockStatusBadge
+                          quantity={product.stockQuantity || 0}
                           threshold={10}
                         />
                       </td>
                       <td className="p-4">
                         <Badge
                           variant={product.status === "active" ? "default" : "secondary"}
-                          className={product.status === "active" ? "bg-green-100 text-green-800" : ""}
+                          className={product.status === "active" ? "bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-300" : ""}
                         >
                           {product.status}
                         </Badge>
                       </td>
                       <td className="p-4">
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-gray-600 dark:text-slate-300">
                           {product.assignedOrganizations} orgs
                         </div>
                       </td>
@@ -1080,8 +1081,8 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                             size="sm"
                             onClick={() => handleEditProductNavigation(product.id)}
                           >
-                              <Edit size={14} />
-                            </Button>
+                            <Edit size={14} />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1119,29 +1120,29 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
             </div>
           </div>
 
-          <Card>
+          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
             <Table>
               <thead>
-                <tr>
-                  <th className="text-left p-4 font-medium">Product</th>
-                  <th className="text-left p-4 font-medium">Organization</th>
-                  <th className="text-left p-4 font-medium">Status</th>
-                  <th className="text-left p-4 font-medium">Custom Name</th>
-                  <th className="text-left p-4 font-medium">Custom Price</th>
-                  <th className="text-left p-4 font-medium">Assigned</th>
-                  <th className="text-right p-4 font-medium">Actions</th>
+                <tr className="dark:border-slate-700">
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Product</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Organization</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Status</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Custom Name</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Custom Price</th>
+                  <th className="text-left p-4 font-medium dark:text-slate-200">Assigned</th>
+                  <th className="text-right p-4 font-medium dark:text-slate-200">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {assignmentsLoading ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-gray-500">
+                    <td colSpan={7} className="p-8 text-center text-gray-500 dark:text-slate-400">
                       Loading assignments...
                     </td>
                   </tr>
                 ) : visibleAssignments.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-gray-500">
+                    <td colSpan={7} className="p-8 text-center text-gray-500 dark:text-slate-400">
                       {assignmentData.organizationId
                         ? "No products assigned to this organization yet."
                         : "No assignments found."}
@@ -1149,7 +1150,7 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                   </tr>
                 ) : (
                   visibleAssignments.map((assignment) => (
-                    <tr key={assignment.id} className="hover:bg-gray-50">
+                    <tr key={assignment.id} className="hover:bg-gray-50 dark:hover:bg-slate-900/50 dark:border-slate-700">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           {assignment.productImageUrl ? (
@@ -1159,37 +1160,37 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                               className="w-12 h-12 object-cover rounded-lg border"
                             />
                           ) : (
-                            <div className="w-12 h-12 bg-gray-100 rounded-lg border flex items-center justify-center">
-                              <Package className="w-6 h-6 text-gray-400" />
+                            <div className="w-12 h-12 bg-gray-100 dark:bg-slate-700 rounded-lg border dark:border-slate-600 flex items-center justify-center">
+                              <Package className="w-6 h-6 text-gray-400 dark:text-slate-400" />
                             </div>
                           )}
                           <div>
-                            <div className="font-medium">{assignment.productName}</div>
-                            <div className="text-xs text-gray-500">{assignment.productCode}</div>
+                            <div className="font-medium dark:text-white">{assignment.productName}</div>
+                            <div className="text-xs text-gray-500 dark:text-slate-400">{assignment.productCode}</div>
                           </div>
                         </div>
                       </td>
                       <td className="p-4">
-                        <div className="font-medium">{assignment.organizationName}</div>
+                        <div className="font-medium dark:text-white">{assignment.organizationName}</div>
                       </td>
                       <td className="p-4">
                         <Badge
                           variant={assignment.isActive ? "default" : "secondary"}
-                          className={assignment.isActive ? "bg-green-100 text-green-800" : ""}
+                          className={assignment.isActive ? "bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-300" : ""}
                         >
                           {assignment.isActive ? "Active" : "Inactive"}
                         </Badge>
                       </td>
                       <td className="p-4">
-                        <div className="text-sm">{assignment.customName || "-"}</div>
+                        <div className="text-sm dark:text-white">{assignment.customName || "-"}</div>
                       </td>
                       <td className="p-4">
-                        <div className="text-sm">
+                        <div className="text-sm dark:text-white">
                           {assignment.customPrice ? formatPKR(assignment.customPrice / 100) : "-"}
                         </div>
                       </td>
                       <td className="p-4">
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-gray-600 dark:text-slate-300">
                           {new Date(assignment.assignedAt).toLocaleDateString()}
                         </div>
                       </td>
@@ -1238,7 +1239,7 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
           }
         }}
       >
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
@@ -1309,7 +1310,7 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
           }
         }}
       >
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Upload className="h-5 w-5" />
@@ -1393,26 +1394,26 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
           }
         }}
       >
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <DialogHeader>
-             <DialogTitle className="flex items-center gap-2">
-               <Package className="w-5 h-5" />
-               Assign Products to Organization
-             </DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Assign Products to Organization
+            </DialogTitle>
             <DialogDescription>
-               Select an organization and configure product assignments with custom overrides.
-               {organizationId && (
-                 <span className="block mt-1 text-xs text-blue-600">
-                   💡 Organization pre-filled from context selector
-                 </span>
-               )}
+              Select an organization and configure product assignments with custom overrides.
+              {organizationId && (
+                <span className="block mt-1 text-xs text-blue-600">
+                  💡 Organization pre-filled from context selector
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="flex-1 overflow-hidden">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
               {/* Left Column - Organization & Product Selection */}
-          <div className="space-y-4">
+              <div className="space-y-4">
                 {/* Organization Selection */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -1431,29 +1432,29 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                         Retry
                       </button>
                     )}
-                    </div>
-              <select
-                value={assignmentData.organizationId}
-                onChange={(e) => setAssignmentData({ ...assignmentData, organizationId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Select organization</option>
+                  </div>
+                  <select
+                    value={assignmentData.organizationId}
+                    onChange={(e) => setAssignmentData({ ...assignmentData, organizationId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="">Select organization</option>
                     {orgsLoading ? (
                       <option value="" disabled>Loading organizations...</option>
                     ) : orgsError ? (
                       <option value="" disabled>Error loading organizations - Retrying...</option>
                     ) : organizations && organizations.length > 0 ? (
                       organizations.map(org => (
-                  <option key={org.id} value={org.id}>
-                    {org.name}
-                  </option>
+                        <option key={org.id} value={org.id}>
+                          {org.name}
+                        </option>
                       ))
                     ) : (
                       <option value="" disabled>No organizations found - Create one first</option>
-                )}
-              </select>
-            </div>
+                    )}
+                  </select>
+                </div>
 
                 {/* Product Selection */}
                 {assignmentData.organizationId && (
@@ -1497,7 +1498,7 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                         className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
-                    
+
                     <div className="border rounded-lg bg-gray-50">
                       {/* Product List */}
                       <div className="p-3 max-h-64 overflow-y-auto">
@@ -1505,10 +1506,10 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                           <div className="text-center text-gray-500 py-8">
                             <Package className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                             <p className="text-sm">
-                              {productSearchQuery.trim() 
+                              {productSearchQuery.trim()
                                 ? "No products match your search"
-                                : showOnlyUnassigned 
-                                  ? "All products are already assigned to this organization" 
+                                : showOnlyUnassigned
+                                  ? "All products are already assigned to this organization"
                                   : "No products available"
                               }
                             </p>
@@ -1518,21 +1519,20 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                             {getPaginatedProducts.map(product => {
                               const isSelected = assignmentData.productIds.includes(product.id)
                               const isAssigned = getAssignedProductIds.has(product.id)
-                              
+
                               return (
                                 <div
                                   key={product.id}
-                                  className={`flex items-center space-x-3 p-2 rounded border cursor-pointer transition-all ${
-                                    isSelected 
-                                      ? 'bg-blue-100 border-blue-300 shadow-sm' 
-                                      : 'hover:bg-white hover:shadow-sm'
-                                  } ${isAssigned ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  className={`flex items-center space-x-3 p-2 rounded border cursor-pointer transition-all ${isSelected
+                                    ? 'bg-blue-100 border-blue-300 shadow-sm'
+                                    : 'hover:bg-white hover:shadow-sm'
+                                    } ${isAssigned ? 'opacity-50 cursor-not-allowed' : ''}`}
                                   onClick={() => {
                                     if (isAssigned) return
-                                    
+
                                     setAssignmentData(prev => ({
                                       ...prev,
-                                      productIds: isSelected 
+                                      productIds: isSelected
                                         ? prev.productIds.filter(id => id !== product.id)
                                         : [...prev.productIds, product.id]
                                     }))
@@ -1541,7 +1541,7 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                                   <input
                                     type="checkbox"
                                     checked={isSelected}
-                                    onChange={() => {}}
+                                    onChange={() => { }}
                                     className="rounded"
                                     disabled={isAssigned}
                                   />
@@ -1590,7 +1590,7 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                         </div>
                       )}
                     </div>
-                    
+
                     {assignmentData.productIds.length > 0 && (
                       <div className="text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded">
                         ✓ {assignmentData.productIds.length} product{assignmentData.productIds.length !== 1 ? 's' : ''} selected
@@ -1643,11 +1643,11 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                                 <Input
                                   type="number"
                                   step="0.01"
-                                value={perProductOverrides[productId]?.customPrice ?? ""}
-                                onChange={(e) => handlePerProductPriceChange(productId, e.target.value)}
-                                placeholder={isAssigned ? "Overrides managed per organization" : "Custom price (PKR)"}
-                                className="text-sm"
-                                disabled={isAssigned}
+                                  value={perProductOverrides[productId]?.customPrice ?? ""}
+                                  onChange={(e) => handlePerProductPriceChange(productId, e.target.value)}
+                                  placeholder={isAssigned ? "Overrides managed per organization" : "Custom price (PKR)"}
+                                  className="text-sm"
+                                  disabled={isAssigned}
                                 />
                                 <span className="text-xs text-gray-500">
                                   Default {formatPKR(product.basePrice / 100)}
@@ -1664,58 +1664,58 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
                 {/* Customization Options */}
                 <div className="space-y-3">
                   <h4 className="text-sm font-medium text-gray-700">Custom Overrides (Optional)</h4>
-                  
-                  <div className="space-y-3">
-              <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Custom Name</label>
-                <Input
-                  value={assignmentData.customName}
-                  onChange={(e) => setAssignmentData({ ...assignmentData, customName: e.target.value })}
-                  placeholder="Override product name"
-                        className="text-sm"
-                />
-                </div>
-                    
-              <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Custom Price</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={assignmentData.customPrice}
-                  onChange={(e) => setAssignmentData({ ...assignmentData, customPrice: e.target.value })}
-                  placeholder="Override price"
-                        className="text-sm"
-                />
-            </div>
 
-            <div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Custom Name</label>
+                      <Input
+                        value={assignmentData.customName}
+                        onChange={(e) => setAssignmentData({ ...assignmentData, customName: e.target.value })}
+                        placeholder="Override product name"
+                        className="text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Custom Price</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={assignmentData.customPrice}
+                        onChange={(e) => setAssignmentData({ ...assignmentData, customPrice: e.target.value })}
+                        placeholder="Override price"
+                        className="text-sm"
+                      />
+                    </div>
+
+                    <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Custom Description</label>
-              <textarea
-                value={assignmentData.customDescription}
-                onChange={(e) => setAssignmentData({ ...assignmentData, customDescription: e.target.value })}
+                      <textarea
+                        value={assignmentData.customDescription}
+                        onChange={(e) => setAssignmentData({ ...assignmentData, customDescription: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                         rows={2}
-                placeholder="Override product description"
-              />
+                        placeholder="Override product description"
+                      />
                     </div>
                   </div>
-            </div>
+                </div>
 
                 {/* Assignment Settings */}
                 <div className="pt-3 border-t">
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="isActive"
-                checked={assignmentData.isActive}
-                onChange={(e) => setAssignmentData({ ...assignmentData, isActive: e.target.checked })}
-                className="rounded"
-              />
-              <label htmlFor="isActive" className="text-sm font-medium">
-                Enable this assignment
-              </label>
-            </div>
-          </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="isActive"
+                      checked={assignmentData.isActive}
+                      onChange={(e) => setAssignmentData({ ...assignmentData, isActive: e.target.checked })}
+                      className="rounded"
+                    />
+                    <label htmlFor="isActive" className="text-sm font-medium">
+                      Enable this assignment
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1724,7 +1724,7 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
             <Button variant="outline" onClick={() => setShowAssignmentDialog(false)}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleSubmitAssignment}
               disabled={!assignmentData.organizationId || assignmentData.productIds.length === 0}
             >
@@ -1784,6 +1784,6 @@ PRD-001,Product Name,Product description,Category Name,100.00,unit,active,https:
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </main>
   )
 }

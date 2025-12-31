@@ -15,10 +15,10 @@ import { Calendar, BarChart3, TrendingUp, Building2, FileCheck, Wallet, Shopping
 // Professional Banking Tooltip
 const BankingTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || !payload.length) return null
-  
+
   return (
-    <div className="bg-white border-2 border-slate-200 rounded-lg p-3 shadow-lg">
-      <p className="text-slate-600 text-xs font-semibold uppercase tracking-wide mb-1.5">{label}</p>
+    <div className="bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg p-3 shadow-lg">
+      <p className="text-slate-600 dark:text-slate-400 text-xs font-semibold uppercase tracking-wide mb-1.5">{label}</p>
       <div className="flex items-baseline gap-2">
         <span className="text-xl font-bold text-slate-900 dark:text-slate-100">
           ₨{payload[0].value.toLocaleString()}
@@ -31,7 +31,7 @@ const BankingTooltip = ({ active, payload, label }: any) => {
 // Weekly Sales Bar Chart - Banking Style
 const WeeklySalesBarChart = ({ data }: { data: { label: string; value: number }[] }) => {
   const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
-  
+
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -46,29 +46,29 @@ const WeeklySalesBarChart = ({ data }: { data: { label: string; value: number }[
               <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.95} />
             </linearGradient>
           </defs>
-          <CartesianGrid 
-            strokeDasharray="3 3" 
-            stroke={isDark ? "#475569" : "#cbd5e1"} 
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke={isDark ? "#475569" : "#cbd5e1"}
             strokeOpacity={0.5}
-            vertical={false} 
+            vertical={false}
           />
-          <XAxis 
-            dataKey="label" 
-            tickLine={false} 
-            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }} 
-            tickMargin={12} 
+          <XAxis
+            dataKey="label"
+            tickLine={false}
+            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }}
+            tickMargin={12}
             tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
           />
-          <YAxis 
-            allowDecimals={false} 
+          <YAxis
+            allowDecimals={false}
             axisLine={false}
-            tickLine={false} 
+            tickLine={false}
             tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
             tickFormatter={(value) => `₨${(value / 1000).toFixed(0)}k`}
           />
-          <Tooltip 
-            content={<BankingTooltip />} 
-            cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(30, 64, 175, 0.08)" }} 
+          <Tooltip
+            content={<BankingTooltip />}
+            cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(30, 64, 175, 0.08)" }}
           />
           <Bar
             dataKey="value"
@@ -87,7 +87,7 @@ const WeeklySalesBarChart = ({ data }: { data: { label: string; value: number }[
 // Yearly Sales Line Chart - Banking Style
 const YearlySalesLineChart = ({ data }: { data: { month: string; sales: number }[] }) => {
   const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
-  
+
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -102,29 +102,29 @@ const YearlySalesLineChart = ({ data }: { data: { month: string; sales: number }
               <stop offset="95%" stopColor="#34d399" stopOpacity={0.1} />
             </linearGradient>
           </defs>
-          <CartesianGrid 
-            strokeDasharray="3 3" 
-            stroke={isDark ? "#475569" : "#cbd5e1"} 
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke={isDark ? "#475569" : "#cbd5e1"}
             strokeOpacity={0.5}
-            vertical={false} 
+            vertical={false}
           />
-          <XAxis 
-            dataKey="month" 
-            tickLine={false} 
-            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }} 
-            tickMargin={12} 
+          <XAxis
+            dataKey="month"
+            tickLine={false}
+            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }}
+            tickMargin={12}
             tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 11 }}
           />
-          <YAxis 
-            allowDecimals={false} 
+          <YAxis
+            allowDecimals={false}
             axisLine={false}
-            tickLine={false} 
+            tickLine={false}
             tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
             tickFormatter={(value) => `₨${(value / 1000).toFixed(0)}k`}
           />
-          <Tooltip 
-            content={<BankingTooltip />} 
-            cursor={{ stroke: isDark ? "#34d399" : "#059669", strokeWidth: 2, strokeDasharray: "4 4" }} 
+          <Tooltip
+            content={<BankingTooltip />}
+            cursor={{ stroke: isDark ? "#34d399" : "#059669", strokeWidth: 2, strokeDasharray: "4 4" }}
           />
           <Area
             type="monotone"
@@ -162,13 +162,13 @@ export function HeadOfficeDashboard() {
   const { data: weeklySalesData } = useWeeklySales(organizationId, branchId)
   const currentYear = new Date().getFullYear()
   const { data: yearlySalesData } = useYearlySales(organizationId, branchId, currentYear)
-  
+
   const trendData = data?.gmvSeries ?? []
   const branchData = data?.branchSeries ?? []
   const branchesCount = data?.branchCount ?? 0
   const pendingApprovals = data?.pendingApprovals ?? 0
   const ordersThisMonth = data?.ordersThisMonth ?? 0
-  
+
   // Monthly sales state
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString())
@@ -208,27 +208,27 @@ export function HeadOfficeDashboard() {
       sales: month.sales,
     }))
   }, [yearlySalesData])
-  
+
   // Monthly sales bar chart data filtered by selected months
   const monthlyBarChartData = useMemo(() => {
     if (!monthlySalesData?.monthlySales) return []
-    
+
     const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     const monthlySalesMap: Record<string, number> = {}
-    
+
     // Initialize all months to 0
     monthsOrder.forEach(m => monthlySalesMap[m] = 0)
-    
+
     // Populate from API data
     monthlySalesData.monthlySales.forEach((month: { month: string; sales: number }) => {
       monthlySalesMap[month.month] = month.sales
     })
-    
+
     // If no months selected, show all months
-    const monthsToShow = selectedMonths.length > 0 
+    const monthsToShow = selectedMonths.length > 0
       ? selectedMonths.map(m => monthNames[m])
       : monthsOrder
-    
+
     // Filter and format data for selected months
     return monthsToShow.map(month => ({
       month,
@@ -264,37 +264,37 @@ export function HeadOfficeDashboard() {
           </div>
 
           {/* Pending Approvals Card */}
-          <div className="group bg-white rounded-lg border-2 border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-amber-300 transition-all duration-300">
+          <div className="group bg-white dark:bg-slate-900 rounded-lg border-2 border-slate-200 dark:border-slate-800 p-5 shadow-sm dark:shadow-slate-900/50 hover:shadow-md hover:border-amber-300 dark:hover:border-amber-600 transition-all duration-300">
             <div className="flex items-start justify-between mb-4">
-              <div className="w-11 h-11 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center">
-                <FileCheck className="w-5 h-5 text-amber-700" strokeWidth={2} />
+              <div className="w-11 h-11 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 flex items-center justify-center">
+                <FileCheck className="w-5 h-5 text-amber-700 dark:text-amber-400" strokeWidth={2} />
               </div>
             </div>
-            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Pending Approvals</p>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Pending Approvals</p>
             <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">{pendingApprovals}</p>
             <div className="h-0.5 w-12 bg-amber-600 mt-3"></div>
           </div>
 
           {/* Monthly Budget Card */}
-          <div className="group bg-white rounded-lg border-2 border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-emerald-300 transition-all duration-300">
+          <div className="group bg-white dark:bg-slate-900 rounded-lg border-2 border-slate-200 dark:border-slate-800 p-5 shadow-sm dark:shadow-slate-900/50 hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-600 transition-all duration-300">
             <div className="flex items-start justify-between mb-4">
-              <div className="w-11 h-11 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
-                <Wallet className="w-5 h-5 text-emerald-700" strokeWidth={2} />
+              <div className="w-11 h-11 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center">
+                <Wallet className="w-5 h-5 text-emerald-700 dark:text-emerald-400" strokeWidth={2} />
               </div>
             </div>
-            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Monthly Budget</p>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Monthly Budget</p>
             <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">PKR 45K</p>
             <div className="h-0.5 w-12 bg-emerald-600 mt-3"></div>
           </div>
 
           {/* Orders This Month Card */}
-          <div className="group bg-white rounded-lg border-2 border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-violet-300 transition-all duration-300">
+          <div className="group bg-white dark:bg-slate-900 rounded-lg border-2 border-slate-200 dark:border-slate-800 p-5 shadow-sm dark:shadow-slate-900/50 hover:shadow-md hover:border-violet-300 dark:hover:border-violet-600 transition-all duration-300">
             <div className="flex items-start justify-between mb-4">
-              <div className="w-11 h-11 rounded-lg bg-violet-50 border border-violet-200 flex items-center justify-center">
-                <ShoppingCart className="w-5 h-5 text-violet-700" strokeWidth={2} />
+              <div className="w-11 h-11 rounded-lg bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800 flex items-center justify-center">
+                <ShoppingCart className="w-5 h-5 text-violet-700 dark:text-violet-400" strokeWidth={2} />
               </div>
             </div>
-            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">Orders This Month</p>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Orders This Month</p>
             <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">{ordersThisMonth}</p>
             <div className="h-0.5 w-12 bg-violet-600 mt-3"></div>
           </div>
@@ -319,7 +319,7 @@ export function HeadOfficeDashboard() {
                 </div>
               </div>
             </div>
-            
+
             {yearlySalesData && (
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -334,7 +334,7 @@ export function HeadOfficeDashboard() {
                 </div>
               </div>
             )}
-            
+
             {yearlySalesChartData.length > 0 ? (
               <YearlySalesLineChart data={yearlySalesChartData} />
             ) : (
@@ -366,7 +366,7 @@ export function HeadOfficeDashboard() {
                 </div>
               </div>
             </div>
-            
+
             {weeklySalesData && (
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -381,7 +381,7 @@ export function HeadOfficeDashboard() {
                 </div>
               </div>
             )}
-            
+
             {weeklySalesChartData.length > 0 ? (
               <WeeklySalesBarChart data={weeklySalesChartData} />
             ) : (
@@ -398,7 +398,7 @@ export function HeadOfficeDashboard() {
         </div>
 
         {/* Monthly Sales Bar Chart with Month Picker */}
-        <Card className="border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-300 bg-white">
+        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900">
           <CardContent className="p-6">
             <div className="space-y-6">
               {/* Header with Picker Toggle */}
@@ -411,14 +411,14 @@ export function HeadOfficeDashboard() {
                     <div>
                       <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Monthly Sales Analytics</h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {selectedMonths.length > 0 
+                        {selectedMonths.length > 0
                           ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} selected • ${selectedYear}`
                           : `All months • ${selectedYear}`}
                       </p>
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Picker Toggle Button */}
                 <div className="relative" ref={pickerRef}>
                   <button
@@ -428,12 +428,12 @@ export function HeadOfficeDashboard() {
                     <Calendar className="h-4 w-4" />
                     <span>Select Period</span>
                   </button>
-                  
+
                   {/* Dropdown Picker */}
                   {showPicker && (
                     <div className="absolute right-0 top-full mt-2 z-50">
                       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border-2 border-slate-200 dark:border-slate-700 overflow-hidden">
-                        <MonthYearPicker 
+                        <MonthYearPicker
                           selectedYear={selectedYear}
                           selectedMonths={selectedMonths}
                           onYearChange={setSelectedYear}
@@ -452,9 +452,9 @@ export function HeadOfficeDashboard() {
                   )}
                 </div>
               </div>
-              
+
               {/* Chart */}
-              <div className="min-h-[350px] bg-slate-50 rounded-lg p-4 border border-slate-200">
+              <div className="min-h-[350px] bg-slate-50 dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
                 {monthlyBarChartData.length > 0 ? (
                   <SalesBarChart data={monthlyBarChartData} />
                 ) : (

@@ -17,12 +17,12 @@ export default function SettingsPage() {
   // Prefer active context (from header selector); fall back to user's assigned org/branch
   const organizationId =
     (contextOrgId ? Number(contextOrgId) : (session?.user as any)?.organizationId) as
-      | number
-      | undefined
+    | number
+    | undefined
   const branchId =
     (contextBranchId ? Number(contextBranchId) : (session?.user as any)?.branchId) as
-      | number
-      | undefined
+    | number
+    | undefined
   const [lastLoginDate, setLastLoginDate] = useState<string>("—")
   const [lastLoginTime, setLastLoginTime] = useState<string>("")
 
@@ -86,7 +86,7 @@ export default function SettingsPage() {
   ]
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-6 bg-slate-50 dark:bg-slate-950 min-h-screen">
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#121F6F] via-[#2C3AD1] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -107,12 +107,12 @@ export default function SettingsPage() {
         {heroStats.map((stat) => {
           const Icon = stat.icon
           return (
-            <Card key={stat.label} className="rounded-2xl border-0 p-4 shadow-md">
+            <Card key={stat.label} className="rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
               <div className={`mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${stat.gradient} text-white shadow-inner`}>
                 <Icon className="h-5 w-5" />
               </div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{stat.label}</p>
-              <p className="text-2xl font-semibold text-slate-900 capitalize">{stat.value}</p>
+              <p className="text-2xl font-semibold text-slate-900 dark:text-white capitalize">{stat.value}</p>
               <p className="text-sm text-muted-foreground">{stat.sub}</p>
             </Card>
           )
@@ -122,9 +122,9 @@ export default function SettingsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Profile Settings */}
-        <Card>
+        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
               <User className="h-5 w-5" />
               Profile Information
             </CardTitle>
@@ -135,20 +135,20 @@ export default function SettingsPage() {
           <CardContent>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Full Name</label>
+                <label className="text-sm font-medium text-slate-900 dark:text-slate-100">Full Name</label>
                 <p className="text-sm text-muted-foreground">
                   {(session?.user as any)?.fullName || "N/A"}
                 </p>
               </div>
               <div>
-                <label className="text-sm font-medium">Email Address</label>
+                <label className="text-sm font-medium text-slate-900 dark:text-slate-100">Email Address</label>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Mail className="h-4 w-4" />
                   <span>{userEmail || "N/A"}</span>
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium">Role</label>
+                <label className="text-sm font-medium text-slate-900 dark:text-slate-100">Role</label>
                 <p className="text-sm text-muted-foreground">
                   {(session?.user as any)?.role || "N/A"}
                 </p>
@@ -158,9 +158,9 @@ export default function SettingsPage() {
         </Card>
 
         {/* Security Settings */}
-        <Card>
+        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-slate-900 dark:text-white">
               <Shield className="h-5 w-5" />
               Security Settings
             </CardTitle>

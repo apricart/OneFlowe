@@ -1,15 +1,159 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth-options"
+"use client"
 
-export default async function ReportsPage() {
-  const session = await getServerSession(authOptions)
-  if (!session) return null
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import {
+  BarChart3,
+  Package,
+  FileText,
+  TrendingUp,
+  RotateCcw,
+  ClipboardList,
+  Warehouse,
+  Sparkles,
+  ArrowRight
+} from "lucide-react"
+
+const reportCards = [
+  {
+    title: "Sales Summary",
+    description: "View complete sales analytics and revenue trends across branches",
+    href: "/reports/sales-summary",
+    icon: TrendingUp,
+    gradient: "from-indigo-500 to-purple-500",
+  },
+  {
+    title: "Product Summary",
+    description: "Analyze product performance and category-wise breakdown",
+    href: "/reports/product-summary",
+    icon: Package,
+    gradient: "from-blue-500 to-cyan-500",
+  },
+  {
+    title: "Product Summary Details",
+    description: "Detailed product-level insights and metrics",
+    href: "/reports/product-summary-details",
+    icon: BarChart3,
+    gradient: "from-sky-500 to-blue-500",
+  },
+  {
+    title: "Stock Reports",
+    description: "Current stock levels and inventory status",
+    href: "/reports/stock-reports",
+    icon: ClipboardList,
+    gradient: "from-emerald-500 to-teal-500",
+  },
+  {
+    title: "Stock Logs",
+    description: "Track all stock movements and adjustments",
+    href: "/reports/stock-logs",
+    icon: FileText,
+    gradient: "from-amber-500 to-orange-500",
+  },
+  {
+    title: "Stock Store Summary",
+    description: "Store-wise inventory overview and distribution",
+    href: "/reports/stock-store-summary",
+    icon: Warehouse,
+    gradient: "from-violet-500 to-purple-500",
+  },
+  {
+    title: "Refund Orders",
+    description: "Review refunded orders and return analytics",
+    href: "/reports/refund-orders",
+    icon: RotateCcw,
+    gradient: "from-rose-500 to-pink-500",
+  },
+]
+
+export default function ReportsPage() {
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-semibold">Reports</h1>
-      <p className="text-sm text-muted-foreground">Analytics and trends across branches and orders.</p>
-    </div>
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
+      {/* Hero Header */}
+      <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-xl">
+        <div className="pointer-events-none absolute inset-0 opacity-30">
+          <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-indigo-400/40 blur-3xl" />
+        </div>
+        <CardHeader className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-3">
+            <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-white/70">
+              <Sparkles className="h-4 w-4" />
+              Analytics Hub
+            </p>
+            <CardTitle className="text-3xl font-semibold text-white">Reports & Insights</CardTitle>
+            <p className="text-sm text-white/80">
+              Explore comprehensive analytics, track performance, and make data-driven decisions across your organization.
+            </p>
+          </div>
+          <div className="rounded-full bg-white/15 px-4 py-2 text-xs uppercase tracking-wide text-white">
+            {reportCards.length} report types
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Report Cards Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {reportCards.map((report) => {
+          const Icon = report.icon
+          return (
+            <Link key={report.title} href={report.href} className="group">
+              <Card className="h-full border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900 hover:shadow-lg hover:border-indigo-300 dark:hover:border-indigo-700 transition-all duration-300">
+                <CardContent className="p-5 flex flex-col h-full">
+                  <div className={`mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r ${report.gradient} text-white shadow-md`}>
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    {report.title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground flex-1">
+                    {report.description}
+                  </p>
+                  <div className="mt-4 flex items-center gap-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 group-hover:gap-3 transition-all">
+                    <span>View Report</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )
+        })}
+      </div>
+
+      {/* Quick Stats Overview */}
+      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg text-slate-900 dark:text-white">
+            <BarChart3 className="h-5 w-5 text-indigo-600" />
+            Quick Overview
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Sales Reports</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">3</p>
+              <p className="text-xs text-muted-foreground">Analytics types</p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Stock Reports</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">3</p>
+              <p className="text-xs text-muted-foreground">Inventory insights</p>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Order Reports</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">1</p>
+              <p className="text-xs text-muted-foreground">Refund tracking</p>
+            </div>
+            <div className="p-4 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800">
+              <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide mb-1">Total Reports</p>
+              <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">7</p>
+              <p className="text-xs text-muted-foreground">Available types</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </main>
   )
 }
-
-

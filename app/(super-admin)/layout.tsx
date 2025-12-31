@@ -16,12 +16,12 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   return (
     <AppContextProvider>
       <OrgBranchProvider initialRole="SUPER_ADMIN">
-        <div className="min-h-svh w-full flex bg-[oklch(0.98_0.01_250)]">
+        <div className="min-h-svh w-full flex bg-background dark:bg-slate-950">
           <PreloadData />
           <Sidebar />
-          <div className="flex-1 grid grid-rows-[auto_1fr]">
+          <div className="flex-1 grid grid-rows-[auto_1fr] bg-background dark:bg-slate-950">
             <Topbar />
-            <main className="p-4">{children}</main>
+            <main className="p-4 bg-background dark:bg-slate-950">{children}</main>
           </div>
         </div>
         <Toaster />

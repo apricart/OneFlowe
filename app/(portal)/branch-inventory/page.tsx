@@ -58,7 +58,7 @@ export default function BranchInventoryPage() {
     [inventory]
   )
   return (
-    <div className="space-y-8 p-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 space-y-8 p-6">
       <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-purple-900 to-indigo-800 text-white shadow-xl">
         <div className="pointer-events-none absolute inset-0 opacity-30">
           <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
@@ -82,10 +82,10 @@ export default function BranchInventoryPage() {
         <SummaryCard label="Visible to customers" value={visibleProducts} helper={`${totalProducts - visibleProducts} hidden`} accent="from-emerald-500 to-lime-500" />
       </div>
 
-      <Card className="border-none shadow-md">
+      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
         <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <CardTitle className="text-xl">Branch product list</CardTitle>
+            <CardTitle className="text-xl text-slate-900 dark:text-white">Branch product list</CardTitle>
             <p className="text-sm text-muted-foreground">Real-time view of branch-ready SKUs, including stock alerts.</p>
           </div>
           <div className="flex flex-col gap-3 w-full lg:flex-row lg:items-center lg:justify-end">
@@ -150,7 +150,7 @@ export default function BranchInventoryPage() {
                             </div>
                           )}
                           <div>
-                            <p className="font-medium">{item.customName || item.productName}</p>
+                            <p className="font-medium text-slate-900 dark:text-white">{item.customName || item.productName}</p>
                             <p className="text-xs text-muted-foreground">{item.productCode}</p>
                             {item.customDescription && (
                               <p className="text-xs text-muted-foreground line-clamp-1">{item.customDescription}</p>
@@ -199,10 +199,10 @@ function SummaryCard({
   accent: string
 }) {
   return (
-    <Card className="border-none shadow-md">
+    <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
       <CardContent className="p-5 space-y-2">
         <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="text-2xl font-semibold text-foreground">{value}</p>
+        <p className="text-2xl font-semibold text-slate-900 dark:text-white">{value}</p>
         <p className="text-xs text-muted-foreground">{helper}</p>
         <div className={`h-1 rounded-full bg-gradient-to-r ${accent}`} />
       </CardContent>

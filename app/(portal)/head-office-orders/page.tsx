@@ -183,8 +183,8 @@ export default function HeadOfficeOrdersPage() {
   const scopeText = branchId
     ? selectedBranch?.name || `Branch #${branchId}`
     : organizationId
-    ? selectedOrg?.name || "Selected organization"
-    : "All organizations"
+      ? selectedOrg?.name || "Selected organization"
+      : "All organizations"
 
   const statCards = [
     {
@@ -249,20 +249,20 @@ export default function HeadOfficeOrdersPage() {
         {statCards.map((card) => {
           const Icon = card.icon
           return (
-            <Card key={card.label} className="rounded-2xl border-0 p-4 shadow-md">
+            <Card key={card.label} className="rounded-2xl border-0 p-4 shadow-md dark:bg-slate-900 dark:shadow-slate-900/50">
               <div className={`mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${card.gradient} text-white shadow-inner`}>
                 <Icon className="h-5 w-5" />
               </div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{card.label}</p>
-              <p className="text-3xl font-semibold text-slate-900">{card.value}</p>
+              <p className="text-3xl font-semibold text-slate-900 dark:text-white">{card.value}</p>
               <p className="text-sm text-muted-foreground">{card.sub}</p>
             </Card>
           )
         })}
       </div>
 
-      <Card className="flex flex-col gap-3 border-dashed border-slate-300/70 bg-gradient-to-r from-slate-50 to-white p-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+      <Card className="flex flex-col gap-3 border-dashed border-slate-300/70 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-800 p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
           <Clock className="h-4 w-4 text-amber-600" />
           Auto-approval safety net
         </div>
@@ -273,10 +273,10 @@ export default function HeadOfficeOrdersPage() {
       </Card>
 
       {/* Filters */}
-      <Card className="p-4 space-y-4">
+      <Card className="p-4 space-y-4 dark:bg-slate-900 dark:border-slate-800">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <h3 className="font-semibold">Filters</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white">Filters</h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -307,7 +307,7 @@ export default function HeadOfficeOrdersPage() {
       </Card>
 
       {/* Orders Table */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden dark:bg-slate-900 dark:border-slate-800">
         {filteredOrders.length === 0 ? (
           <div className="p-8 text-center">
             <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />

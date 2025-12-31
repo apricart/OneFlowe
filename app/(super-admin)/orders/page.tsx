@@ -198,7 +198,7 @@ export default function OrdersManagementPage() {
   const getStatusColor = (status: string) => {
     const colors: Record<string, { bg: string; text: string; icon: any }> = {
       pending: { bg: "bg-yellow-50 dark:bg-yellow-950", text: "text-yellow-700 dark:text-yellow-300", icon: Clock },
-      approved: { bg: "bg-blue-50 dark:bg-blue-950", text: "text-blue-700 dark:text-blue-300", icon: CheckCircle },
+      approved: { bg: "bg-blue-50 dark:bg-slate-800", text: "text-blue-700 dark:text-slate-200", icon: CheckCircle },
       fulfilled: { bg: "bg-green-50 dark:bg-green-950", text: "text-green-700 dark:text-green-300", icon: CheckCircle },
       rejected: { bg: "bg-red-50 dark:bg-red-950", text: "text-red-700 dark:text-red-300", icon: AlertTriangle },
       refunded: { bg: "bg-slate-50 dark:bg-slate-950", text: "text-slate-700 dark:text-slate-300", icon: TrendingDown },
@@ -240,7 +240,7 @@ export default function OrdersManagementPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
       {/* Gradient Header */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#141EAE] via-[#4427CA] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -277,22 +277,58 @@ export default function OrdersManagementPage() {
       {/* Stats & Filters – shown for all roles; data is branch-scoped for branch admins */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Total Orders", count: statusCounts.all, color: "text-slate-600" },
-          { label: "Pending", count: statusCounts.pending, color: "text-yellow-600" },
-          { label: "Approved", count: statusCounts.approved, color: "text-blue-600" },
-          { label: "Fulfilled", count: statusCounts.fulfilled, color: "text-green-600" },
+          { 
+            label: "Total Orders", 
+            count: statusCounts.all, 
+            gradient: "from-slate-50 to-slate-100 dark:from-slate-900/30 dark:to-slate-800/20",
+            border: "border-slate-200 dark:border-slate-800",
+            textColor: "text-slate-900 dark:text-slate-200",
+            textSecondary: "text-slate-700 dark:text-slate-400",
+            iconColor: "text-slate-600 dark:text-slate-400"
+          },
+          { 
+            label: "Pending", 
+            count: statusCounts.pending,
+            gradient: "from-yellow-50 to-yellow-100 dark:from-yellow-900/30 dark:to-yellow-800/20",
+            border: "border-yellow-200 dark:border-yellow-800",
+            textColor: "text-yellow-900 dark:text-yellow-200",
+            textSecondary: "text-yellow-700 dark:text-yellow-400",
+            iconColor: "text-yellow-600 dark:text-yellow-400"
+          },
+          { 
+            label: "Approved", 
+            count: statusCounts.approved,
+            gradient: "from-blue-50 to-blue-100 dark:from-slate-900/30 dark:to-slate-800/20",
+            border: "border-blue-200 dark:border-slate-800",
+            textColor: "text-blue-900 dark:text-slate-200",
+            textSecondary: "text-blue-700 dark:text-slate-400",
+            iconColor: "text-blue-600 dark:text-slate-400"
+          },
+          { 
+            label: "Fulfilled", 
+            count: statusCounts.fulfilled,
+            gradient: "from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20",
+            border: "border-emerald-200 dark:border-emerald-800",
+            textColor: "text-emerald-900 dark:text-emerald-200",
+            textSecondary: "text-emerald-700 dark:text-emerald-400",
+            iconColor: "text-emerald-600 dark:text-emerald-400"
+          },
         ].map((stat) => (
-          <Card key={stat.label} className="p-4">
-            <p className="text-sm text-muted-foreground mb-1">{stat.label}</p>
-            <p className={`text-3xl font-bold ${stat.color}`}>{stat.count}</p>
-          </Card>
+          <div 
+            key={stat.label} 
+            className={`bg-gradient-to-br ${stat.gradient} ${stat.border} rounded-lg p-5 hover:shadow-md transition-shadow`}
+          >
+            <p className={`text-xs font-semibold uppercase tracking-wider ${stat.textColor} mb-1`}>{stat.label}</p>
+            <p className={`text-3xl font-bold ${stat.textColor} mb-1`}>{stat.count}</p>
+            <p className={`text-xs ${stat.textSecondary}`}>Order count</p>
+          </div>
         ))}
       </div>
 
-      <Card className="p-4 space-y-4">
+      <Card className="p-4 space-y-4 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <h3 className="font-semibold">Filters</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-slate-100">Filters</h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -323,55 +359,55 @@ export default function OrdersManagementPage() {
       </Card>
 
       {/* Orders Table */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
         {filteredOrders.length === 0 ? (
-          <div className="p-8 text-center">
+          <div className="p-8 text-center bg-white dark:bg-slate-900">
             <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
             <p className="text-muted-foreground">No orders found</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b bg-slate-50 dark:bg-slate-900">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">TID</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Status</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Amount</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
+          <div className="overflow-x-auto bg-white dark:bg-slate-900">
+            <table className="w-full bg-white dark:bg-slate-900">
+              <thead className="border-b bg-slate-50 dark:bg-slate-900 dark:border-slate-800">
+                <tr className="bg-slate-50 dark:bg-slate-900">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">TID</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Amount</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Date</th>
                   {!isBranchAdmin && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Actions</th>
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-900">
                 {filteredOrders.map((order: OrderItem) => {
                   const statusInfo = getStatusColor(order.status)
                   const StatusIcon = statusInfo.icon
 
                   return (
-                    <tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
-                      <td className="px-4 py-3">
+                    <tr key={order.id} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="px-4 py-3 bg-white dark:bg-slate-900">
                           <div>
                             <p className="font-semibold text-slate-900 dark:text-white">{order.tid}</p>
                             <p className="text-xs text-muted-foreground">ID: {order.id}</p>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 bg-white dark:bg-slate-900">
                         <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
                           <StatusIcon className="h-3 w-3 mr-1" />
                           {order.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 bg-white dark:bg-slate-900">
                         <p className="font-bold text-slate-900 dark:text-white">
                           {formatPKR(order.totalCents / 100)}
                         </p>
                       </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                      <td className="px-4 py-3 text-sm text-muted-foreground bg-white dark:bg-slate-900">
                         {new Date(order.createdAt).toLocaleDateString()}
                       </td>
                       {!isBranchAdmin && (
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 bg-white dark:bg-slate-900">
                           <div className="flex items-center gap-2">
                             <Button
                               asChild
@@ -428,7 +464,7 @@ export default function OrdersManagementPage() {
                               <Button
                                 onClick={() => handleFulfillOrder(order.id)}
                                 size="sm"
-                                className="gap-1 bg-blue-600 hover:bg-blue-700"
+                                className="gap-1 bg-blue-600 hover:bg-blue-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-white"
                               >
                                 <CheckCircle className="h-4 w-4" />
                                 Fulfill
@@ -448,21 +484,21 @@ export default function OrdersManagementPage() {
 
       {/* Approval Dialog */}
       <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
           <DialogHeader>
-            <DialogTitle>Approve Order</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-slate-900 dark:text-slate-100">Approve Order</DialogTitle>
+            <DialogDescription className="text-slate-600 dark:text-slate-400">
               Are you sure you want to approve this order? (Super Admin Override)
             </DialogDescription>
           </DialogHeader>
 
           {selectedOrder && (
             <div className="space-y-3">
-              <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-1">Order TID</p>
-                <p className="font-mono text-blue-700 dark:text-blue-400">{selectedOrder.tid}</p>
+              <div className="p-3 bg-blue-50 dark:bg-slate-800 rounded-lg border border-blue-200 dark:border-slate-700">
+                <p className="text-sm font-semibold text-blue-900 dark:text-slate-200 mb-1">Order TID</p>
+                <p className="font-mono text-blue-700 dark:text-slate-300">{selectedOrder.tid}</p>
               </div>
-              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                 <p className="text-sm text-muted-foreground mb-1">Total Amount</p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
                   {formatPKR(selectedOrder.totalCents / 100)}
@@ -492,28 +528,28 @@ export default function OrdersManagementPage() {
 
       {/* Rejection Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
           <DialogHeader>
-            <DialogTitle>Reject Order</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-slate-900 dark:text-slate-100">Reject Order</DialogTitle>
+            <DialogDescription className="text-slate-600 dark:text-slate-400">
               Provide a reason for rejecting this order
             </DialogDescription>
           </DialogHeader>
 
           {selectedOrder && (
             <div className="space-y-4">
-              <div className="p-3 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="p-3 bg-red-50 dark:bg-red-950/50 rounded-lg border border-red-200 dark:border-red-800">
                 <p className="text-sm font-semibold text-red-900 dark:text-red-300 mb-1">Order TID</p>
                 <p className="font-mono text-red-700 dark:text-red-400">{selectedOrder.tid}</p>
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-2 block">Rejection Reason</label>
+                <label className="text-sm font-medium mb-2 block text-slate-900 dark:text-slate-200">Rejection Reason</label>
                 <textarea
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
                   placeholder="Explain why this order is being rejected..."
-                  className="w-full p-3 border rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white min-h-24"
+                  className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white min-h-24 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                 />
               </div>
             </div>
@@ -540,6 +576,6 @@ export default function OrdersManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </main>
   )
 }

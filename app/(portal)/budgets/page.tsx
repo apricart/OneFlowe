@@ -55,7 +55,7 @@ export default function BudgetsPage() {
 
   const budgets: BudgetAllocation[] = budgetsData?.budgets || []
 
-const formatAmount = (cents: number) => formatPKR(cents / 100)
+  const formatAmount = (cents: number) => formatPKR(cents / 100)
 
   // First apply org/branch scope from context, then search filter
   const scopedBudgets = useMemo(() => {
@@ -141,9 +141,9 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
         if (res.ok) successCount++
       }
 
-      toast({ 
-        title: "Bulk Allocation Complete", 
-        description: `Allocated ${formatPKR(parseFloat(bulkAmount))} to ${successCount}/${scopedBudgets.length} branches in view` 
+      toast({
+        title: "Bulk Allocation Complete",
+        description: `Allocated ${formatPKR(parseFloat(bulkAmount))} to ${successCount}/${scopedBudgets.length} branches in view`
       })
       setShowBulkDialog(false)
       setBulkAmount("")
@@ -178,7 +178,7 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
   const currentMonth = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-slate-50 dark:bg-slate-950 min-h-screen p-4 md:p-6">
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0A1C92] via-[#2F2CC9] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -225,12 +225,12 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
         ].map((metric) => {
           const Icon = metric.icon
           return (
-            <Card key={metric.label} className="p-4 rounded-2xl border-0 shadow-md">
+            <Card key={metric.label} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
               <div className={`mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${metric.gradient} text-white shadow-inner`}>
                 <Icon className="h-5 w-5" />
               </div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{metric.label}</p>
-              <p className="text-2xl font-bold text-slate-900">{metric.value}</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white">{metric.value}</p>
               <p className="text-xs text-muted-foreground">{metric.sub}</p>
             </Card>
           )
@@ -238,19 +238,19 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4">
-          <label className="text-sm font-medium mb-2 block">Search Branches</label>
+        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
+          <label className="text-sm font-medium mb-2 block text-slate-900 dark:text-slate-100">Search Branches</label>
           <input
             type="text"
             placeholder="Search by name or ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
           />
         </Card>
-        <Card className="p-4">
-          <label className="text-sm font-medium mb-2 block">Quick Actions</label>
-          <Button 
+        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
+          <label className="text-sm font-medium mb-2 block text-slate-900 dark:text-slate-100">Quick Actions</label>
+          <Button
             onClick={() => setShowBulkDialog(true)}
             className="w-full gap-2"
             variant="outline"
@@ -265,19 +265,19 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
         </Card>
       </div>
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-50 dark:bg-slate-800">
-                <TableHead className="font-semibold">Branch</TableHead>
-                <TableHead className="text-right font-semibold">Monthly Budget</TableHead>
-                <TableHead className="text-right font-semibold">Spent</TableHead>
-                <TableHead className="text-right font-semibold">Pending</TableHead>
-                <TableHead className="text-right font-semibold">Remaining</TableHead>
-                <TableHead className="text-center font-semibold">Usage</TableHead>
-                <TableHead className="text-center font-semibold">Status</TableHead>
-                <TableHead className="text-right font-semibold">Action</TableHead>
+              <TableRow className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
+                <TableHead className="font-semibold text-slate-900 dark:text-slate-200">Branch</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Monthly Budget</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Spent</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Pending</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Remaining</TableHead>
+                <TableHead className="text-center font-semibold text-slate-900 dark:text-slate-200">Usage</TableHead>
+                <TableHead className="text-center font-semibold text-slate-900 dark:text-slate-200">Status</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -318,7 +318,7 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1 w-24">
-                          <div className="text-xs font-semibold text-center">{spendingPercent.toFixed(0)}%</div>
+                          <div className="text-xs font-semibold text-center text-slate-900 dark:text-white">{spendingPercent.toFixed(0)}%</div>
                           <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                             <div className={`h-full transition-all ${getStatusColor(spendingPercent)}`} style={{ width: `${Math.min(100, spendingPercent)}%` }} />
                           </div>
@@ -351,31 +351,31 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="p-6">
+        <Card className="p-6 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
           <div className="flex items-center gap-3 mb-4">
             <PieChart className="h-5 w-5 text-blue-600" />
-            <h3 className="font-bold text-lg">Budget Overview</h3>
+            <h3 className="font-bold text-lg text-slate-900 dark:text-white">Budget Overview</h3>
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm">Spent</span>
-              <span className="font-bold">{totalAllocated > 0 ? ((totalSpent / totalAllocated) * 100).toFixed(1) : 0}%</span>
+              <span className="text-sm text-slate-700 dark:text-slate-300">Spent</span>
+              <span className="font-bold text-slate-900 dark:text-white">{totalAllocated > 0 ? ((totalSpent / totalAllocated) * 100).toFixed(1) : 0}%</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm">Pending (On Hold)</span>
-              <span className="font-bold">{totalAllocated > 0 ? ((totalHeld / totalAllocated) * 100).toFixed(1) : 0}%</span>
+              <span className="text-sm text-slate-700 dark:text-slate-300">Pending (On Hold)</span>
+              <span className="font-bold text-slate-900 dark:text-white">{totalAllocated > 0 ? ((totalHeld / totalAllocated) * 100).toFixed(1) : 0}%</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm">Available</span>
+              <span className="text-sm text-slate-700 dark:text-slate-300">Available</span>
               <span className="font-bold text-green-600">{totalAllocated > 0 ? ((totalRemaining / totalAllocated) * 100).toFixed(1) : 0}%</span>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950">
+        <Card className="p-6 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-900">
           <div className="flex items-center gap-3 mb-4">
             <Wallet className="h-5 w-5 text-blue-600" />
-            <h3 className="font-bold text-lg">At-Risk Branches</h3>
+            <h3 className="font-bold text-lg text-slate-900 dark:text-white">At-Risk Branches</h3>
           </div>
           <div className="space-y-2">
             {scopedBudgets.filter(b => getSpendingPercentage(b) >= 70).length > 0 ? (
@@ -391,10 +391,10 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
       </div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <DialogHeader>
-            <DialogTitle>Set Monthly Budget</DialogTitle>
-            <DialogDescription>Allocate the monthly budget for {editingBudget?.branchName}</DialogDescription>
+            <DialogTitle className="text-slate-900 dark:text-white">Set Monthly Budget</DialogTitle>
+            <DialogDescription className="text-slate-600 dark:text-slate-400">Allocate the monthly budget for {editingBudget?.branchName}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-lg space-y-2 text-sm">
@@ -413,7 +413,7 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
               </div>
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-2">New Monthly Budget (PKR)</label>
+              <label className="block text-sm font-semibold mb-2 text-slate-900 dark:text-white">New Monthly Budget (PKR)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">PKR</span>
                 <Input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-12 text-lg font-bold h-11" />
@@ -432,9 +432,9 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
       </Dialog>
 
       <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <DialogHeader>
-            <DialogTitle>Allocate Budget to All Branches</DialogTitle>
+            <DialogTitle className="text-slate-900 dark:text-white">Allocate Budget to All Branches</DialogTitle>
             <DialogDescription>
               Quickly allocate the same monthly budget to all {scopedBudgets.length} branches in the current context
             </DialogDescription>
@@ -444,7 +444,7 @@ const formatAmount = (cents: number) => formatPKR(cents / 100)
               <p className="text-sm font-medium text-blue-900 dark:text-blue-100">This will update ALL branches to the same amount</p>
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-2">Monthly Budget Amount (PKR)</label>
+              <label className="block text-sm font-semibold mb-2 text-slate-900 dark:text-white">Monthly Budget Amount (PKR)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">PKR</span>
                 <Input type="number" value={bulkAmount} onChange={(e) => setBulkAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-12 text-lg font-bold h-11" />

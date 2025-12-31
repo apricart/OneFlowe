@@ -114,17 +114,17 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 shrink-0 h-svh border-r flex flex-col" style={{ borderColor: "var(--color-border)" }}>
-      <div className="px-4 py-4 flex items-center gap-3" style={{ color: "white", background: "var(--color-brand-primary)" }}>
-        <div className="bg-white rounded-lg p-1.5 flex items-center justify-center">
+    <aside className="w-64 shrink-0 h-svh border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900">
+      <div className="px-4 py-4 flex items-center gap-3 bg-gradient-to-r from-blue-400 to-indigo-600 dark:from-indigo-700 dark:via-purple-800 dark:to-pink-800">
+        <div className="bg-white dark:bg-white/20 rounded-lg p-1.5 flex items-center justify-center">
           <Image src="/logo-pos.png" alt="OneFlowe" width={32} height={32} />
         </div>
         <div className="leading-tight">
-          <div className="text-base font-semibold tracking-tight">OneFlowe</div>
-          <div className="text-xs opacity-90">{role === "SUPER_ADMIN" ? "Admin" : role === "HEAD_OFFICE" ? "Head Office" : "Branch"}</div>
+          <div className="text-base font-semibold tracking-tight text-white">OneFlowe</div>
+          <div className="text-xs opacity-90 text-white/90">{role === "SUPER_ADMIN" ? "Admin" : role === "HEAD_OFFICE" ? "Head Office" : "Branch"}</div>
         </div>
       </div>
-      <nav className="p-2 grid gap-1 overflow-y-auto flex-1 min-h-0" aria-busy={!session} aria-live="polite">
+      <nav className="p-2 grid gap-1 overflow-y-auto flex-1 min-h-0 bg-white dark:bg-slate-900" aria-busy={!session} aria-live="polite">
         {nav.map((item) => {
           const active = isItemActive(item)
           const hasSubItems = 'subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0;
@@ -137,13 +137,11 @@ export function Sidebar() {
                 <button
                   onClick={() => toggleExpanded(item.href)}
                   className={cn(
-                    "w-full rounded-md px-3 py-2 text-sm flex items-center gap-2 text-left",
-                    active ? "font-semibold" : "opacity-80 hover:opacity-100"
+                    "w-full rounded-md px-3 py-2 text-sm flex items-center gap-2 text-left transition-colors",
+                    active 
+                      ? "font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300" 
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   )}
-                  style={{
-                    color: active ? "var(--color-brand-primary)" : "inherit",
-                    background: active ? "color-mix(in oklab, var(--color-brand-accent), transparent 80%)" : "transparent",
-                  }}
                 >
                   {item.icon ? <item.icon size={16} /> : null}
                   <span className="flex-1">{item.label}</span>
@@ -158,13 +156,11 @@ export function Sidebar() {
                           key={subItem.href}
                           href={subItem.href}
                           className={cn(
-                            "block rounded-md px-3 py-2 text-sm flex items-center gap-2",
-                            subActive ? "font-semibold" : "opacity-80 hover:opacity-100"
+                            "block rounded-md px-3 py-2 text-sm flex items-center gap-2 transition-colors",
+                            subActive 
+                              ? "font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300" 
+                              : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                           )}
-                          style={{
-                            color: subActive ? "var(--color-brand-primary)" : "inherit",
-                            background: subActive ? "color-mix(in oklab, var(--color-brand-accent), transparent 80%)" : "transparent",
-                          }}
                         >
                           {subItem.icon ? <subItem.icon size={14} /> : null}
                           <span>{subItem.label}</span>
@@ -181,11 +177,12 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={cn("rounded-md px-3 py-2 text-sm flex items-center gap-2", active ? "font-semibold" : "opacity-80 hover:opacity-100")}
-              style={{
-                color: active ? "var(--color-brand-primary)" : "inherit",
-                background: active ? "color-mix(in oklab, var(--color-brand-accent), transparent 80%)" : "transparent",
-              }}
+              className={cn(
+                "rounded-md px-3 py-2 text-sm flex items-center gap-2 transition-colors",
+                active 
+                  ? "font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300" 
+                  : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              )}
             >
               {item.icon ? <item.icon size={16} /> : null}
               <span>{item.label}</span>

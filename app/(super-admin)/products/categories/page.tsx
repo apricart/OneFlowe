@@ -202,7 +202,7 @@ export default function CategoriesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
       {/* Blue gradient header, aligned with Orders styling */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#141EAE] via-[#4427CA] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -236,38 +236,38 @@ export default function CategoriesPage() {
       </div>
 
       {/* Categories Table */}
-      <Card>
+      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
         <Table>
           <thead>
-            <tr className="border-b">
-              <th className="text-left p-4 font-medium">Name</th>
-              <th className="text-left p-4 font-medium">Type</th>
-              <th className="text-left p-4 font-medium">Sub Categories</th>
-              <th className="text-left p-4 font-medium">Products</th>
-              <th className="text-left p-4 font-medium">Created</th>
-              <th className="text-right p-4 font-medium">Actions</th>
+            <tr className="border-b dark:border-slate-700">
+              <th className="text-left p-4 font-medium dark:text-slate-200">Name</th>
+              <th className="text-left p-4 font-medium dark:text-slate-200">Type</th>
+              <th className="text-left p-4 font-medium dark:text-slate-200">Sub Categories</th>
+              <th className="text-left p-4 font-medium dark:text-slate-200">Products</th>
+              <th className="text-left p-4 font-medium dark:text-slate-200">Created</th>
+              <th className="text-right p-4 font-medium dark:text-slate-200">Actions</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-gray-500">
+                <td colSpan={6} className="p-8 text-center text-gray-500 dark:text-slate-400">
                   Loading categories...
                 </td>
               </tr>
             ) : filteredCategories.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-gray-500">
+                <td colSpan={6} className="p-8 text-center text-gray-500 dark:text-slate-400">
                   No categories found
                 </td>
               </tr>
             ) : (
               filteredCategories.map((category) => (
-                <tr key={category.id} className="border-b hover:bg-muted/30 transition-colors">
+                <tr key={category.id} className="border-b dark:border-slate-700 hover:bg-muted/30 dark:hover:bg-slate-900/50 transition-colors">
                   <td className="p-4">
                     <div className="flex items-center gap-2">
-                      <FolderTree size={16} className="text-blue-500" />
-                      <span className="font-medium">{category.name}</span>
+                      <FolderTree size={16} className="text-blue-500 dark:text-blue-400" />
+                      <span className="font-medium dark:text-white">{category.name}</span>
                     </div>
                   </td>
                   <td className="p-4">
@@ -277,21 +277,21 @@ export default function CategoriesPage() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-1">
-                      <Package size={14} className="text-gray-400" />
-                      <span>{subCategoriesByParent.get(category.id) ?? 0}</span>
+                      <Package size={14} className="text-gray-400 dark:text-slate-400" />
+                      <span className="dark:text-slate-300">{subCategoriesByParent.get(category.id) ?? 0}</span>
                     </div>
                   </td>
                   <td className="p-4">
                     {productsByParentCategory.get(category.id) ? (
                       <div className="flex items-center gap-1">
-                        <Package size={14} className="text-gray-400" />
-                        <span>{productsByParentCategory.get(category.id)}</span>
+                        <Package size={14} className="text-gray-400 dark:text-slate-400" />
+                        <span className="dark:text-slate-300">{productsByParentCategory.get(category.id)}</span>
                       </div>
                     ) : (
-                      <span className="text-sm text-gray-400">—</span>
+                      <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
                     )}
                   </td>
-                  <td className="p-4 text-sm text-gray-500">
+                  <td className="p-4 text-sm text-gray-500 dark:text-slate-400">
                     {new Date(category.createdAt).toLocaleDateString()}
                   </td>
                   <td className="p-4 text-right">
@@ -300,6 +300,7 @@ export default function CategoriesPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEdit(category)}
+                        className="dark:hover:bg-slate-700"
                       >
                         <Edit size={14} />
                       </Button>
@@ -307,7 +308,7 @@ export default function CategoriesPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(category.id)}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                       >
                         <Trash2 size={14} />
                       </Button>
@@ -322,19 +323,19 @@ export default function CategoriesPage() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={showAddDialog} onOpenChange={resetForm}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
           <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">
+            <DialogTitle className="text-lg font-semibold dark:text-white">
               {editingCategory ? "Edit category" : "Create new category"}
             </DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
+            <DialogDescription className="text-sm text-muted-foreground dark:text-slate-300">
               Categories group your products into high-level buckets. Subcategories are managed on the{" "}
-              <span className="font-medium text-foreground">Subcategories</span> screen.
+              <span className="font-medium text-foreground dark:text-white">Subcategories</span> screen.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium">
+              <label className="block text-sm font-medium dark:text-slate-200">
                 Category name <span className="text-red-500">*</span>
               </label>
               <Input
@@ -342,15 +343,16 @@ export default function CategoriesPage() {
                 autoFocus
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g. Beverages, Personal Care, Stationery"
+                className="dark:bg-slate-700 dark:border-slate-600 dark:text-white"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground dark:text-slate-400">
                 Use a clear, business-friendly name. This will be visible everywhere products are categorized.
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium">
-                Parent category <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+              <label className="block text-sm font-medium dark:text-slate-200">
+                Parent category <span className="text-xs font-normal text-muted-foreground dark:text-slate-400">(optional)</span>
               </label>
               <select
                 value={formData.parentId || ""}
@@ -360,7 +362,7 @@ export default function CategoriesPage() {
                     parentId: e.target.value ? parseInt(e.target.value) : null,
                   })
                 }
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring"
+                className="w-full rounded-md border border-input bg-background dark:bg-slate-700 dark:border-slate-600 dark:text-white px-3 py-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring"
               >
                 <option value="">No parent (top-level category)</option>
                 {categories
@@ -371,7 +373,7 @@ export default function CategoriesPage() {
                     </option>
                   ))}
               </select>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground dark:text-slate-400">
                 Only use a parent if you need a two-level hierarchy. Otherwise leave this empty.
               </p>
             </div>
@@ -387,6 +389,6 @@ export default function CategoriesPage() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </main>
   )
 }

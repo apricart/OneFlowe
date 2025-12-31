@@ -66,12 +66,12 @@ export default function OrderPortalPage() {
     if (status === "loading") {
       return
     }
-    
+
     if (status === "unauthenticated") {
       router.push("/shop/login")
       return
     }
-    
+
     if (status === "authenticated") {
       const userRole = (session?.user as any)?.role
       const isEmployee = (session?.user as any)?.isEmployee
@@ -81,7 +81,7 @@ export default function OrderPortalPage() {
       if (isAdmin || isEmployee) {
         return // User is authorized, allow access
       }
-      
+
       // Redirect unauthorized users
       router.push("/")
     }
@@ -103,10 +103,10 @@ export default function OrderPortalPage() {
   const needsContextParams = (isAdmin && !((session?.user as any)?.branchId)) || isEmployee
 
   // Build API URLs using context
-  const branchInventoryUrl = activeBranchId 
+  const branchInventoryUrl = activeBranchId
     ? `/api/v1/branch/inventory?visibility=visible${needsContextParams ? `&branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
     : null
-  const budgetsUrl = activeBranchId 
+  const budgetsUrl = activeBranchId
     ? `/api/v1/budgets${needsContextParams ? `?branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
     : null
 
@@ -187,30 +187,30 @@ export default function OrderPortalPage() {
   const addToCart = (product: Product, qty: number = 1) => {
     const availableStock = product.stock || 0
     if (availableStock === 0) {
-      toast({ 
-        title: "Out of stock", 
+      toast({
+        title: "Out of stock",
         description: `${product.name} is currently out of stock.`,
         variant: "destructive"
       })
       return
     }
-    
+
     if (qty > availableStock) {
-      toast({ 
-        title: "Insufficient stock", 
+      toast({
+        title: "Insufficient stock",
         description: `Only ${availableStock} available for ${product.name}.`,
         variant: "destructive"
       })
       return
     }
-    
+
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id)
       if (existing) {
         const newQuantity = existing.quantity + qty
         if (newQuantity > availableStock) {
-          toast({ 
-            title: "Insufficient stock", 
+          toast({
+            title: "Insufficient stock",
             description: `Only ${availableStock} available for ${product.name}.`,
             variant: "destructive"
           })
@@ -232,17 +232,17 @@ export default function OrderPortalPage() {
       setCart(prev => {
         const item = prev.find(i => i.id === id)
         if (!item) return prev
-        
+
         const availableStock = item.stock || 0
         if (qty > availableStock) {
-          toast({ 
-            title: "Insufficient stock", 
+          toast({
+            title: "Insufficient stock",
             description: `Only ${availableStock} available for ${item.name}.`,
             variant: "destructive"
           })
           return prev.map(i => i.id === id ? { ...i, quantity: availableStock } : i)
         }
-        
+
         return prev.map(i => i.id === id ? { ...i, quantity: qty } : i)
       })
     }
@@ -295,30 +295,33 @@ export default function OrderPortalPage() {
       </div>
     )
   }
-  
+
   // If not authenticated, redirect happens in useEffect
   if (status === "unauthenticated") {
     return null // useEffect will handle redirect
   }
-  
+
   // If still no user data despite being authenticated, show loading
   if (!session?.user) {
     return null
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
+    <div className="min-h-screen relative overflow-hidden bg-slate-50 dark:bg-slate-950">
       {/* Branded background layer */}
       <div
-        className="pointer-events-none absolute inset-0 -z-10"
+        className="pointer-events-none absolute inset-0 -z-10 dark:hidden"
         style={{
-          // Soft branded gradients only – no grid texture
           backgroundImage:
             "radial-gradient(48rem 48rem at 0% 0%, color-mix(in oklab, var(--color-brand-accent), transparent 75%), transparent 60%), radial-gradient(48rem 48rem at 100% 0%, color-mix(in oklab, var(--color-primary), transparent 78%), transparent 60%)",
           backgroundColor: "oklch(0.97 0 0)",
-          backgroundSize: "auto, auto",
-          backgroundAttachment: "fixed, fixed",
-          backgroundRepeat: "no-repeat, no-repeat",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0 -z-10 hidden dark:block"
+        style={{
+          backgroundImage:
+            "radial-gradient(48rem 48rem at 0% 0%, color-mix(in oklab, var(--color-brand-accent), transparent 90%), transparent 60%), radial-gradient(48rem 48rem at 100% 0%, color-mix(in oklab, var(--color-primary), transparent 92%), transparent 60%)",
         }}
       />
 
@@ -373,13 +376,12 @@ export default function OrderPortalPage() {
                 </div>
                 <div className="mt-1 h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                   <div
-                    className={`h-full rounded-full ${
-                      budgetPercent < 60
+                    className={`h-full rounded-full ${budgetPercent < 60
                         ? "bg-[color:var(--color-brand-primary)]"
                         : budgetPercent < 85
-                        ? "bg-amber-500"
-                        : "bg-red-500"
-                    }`}
+                          ? "bg-amber-500"
+                          : "bg-red-500"
+                      }`}
                     style={{ width: `${budgetPercent}%` }}
                   />
                 </div>
@@ -575,7 +577,7 @@ export default function OrderPortalPage() {
             {!ordersData ? (
               <div className="space-y-3">
                 {Array.from({ length: 3 }).map((_, idx) => (
-                  <Card key={idx} className="p-4">
+                  <Card key={idx} className="p-4 dark:bg-slate-900 dark:border-slate-800">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1 space-y-2">
                         <Skeleton className="h-4 w-40" />
@@ -606,7 +608,7 @@ export default function OrderPortalPage() {
                   const StatusIcon = statusInfo.icon
 
                   return (
-                    <Card key={order.id} className="p-4 hover:shadow-md transition-shadow">
+                    <Card key={order.id} className="p-4 hover:shadow-md transition-shadow dark:bg-slate-900 dark:border-slate-800">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
@@ -625,11 +627,11 @@ export default function OrderPortalPage() {
                           <p className="font-bold text-lg text-slate-900 dark:text-white">PKR {(order.totalCents / 100).toFixed(2)}</p>
                           <p className="text-xs text-muted-foreground">
                             {order.status === "pending" ? "Awaiting Approval" :
-                             order.status === "approved" ? "Approved" :
-                             order.status === "fulfilled" ? "Completed" :
-                             order.status === "rejected" ? "Cancelled" :
-                             order.status === "refunded" ? "Refunded" :
-                             "In Progress"}
+                              order.status === "approved" ? "Approved" :
+                                order.status === "fulfilled" ? "Completed" :
+                                  order.status === "rejected" ? "Cancelled" :
+                                    order.status === "refunded" ? "Refunded" :
+                                      "In Progress"}
                           </p>
                         </div>
                       </div>
@@ -747,7 +749,7 @@ export default function OrderPortalPage() {
             {isLoadingInventory ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {Array.from({ length: pageSize }).map((_, idx) => (
-                  <Card key={idx} className="overflow-hidden h-full flex flex-col">
+                  <Card key={idx} className="overflow-hidden h-full flex flex-col dark:bg-slate-900 dark:border-slate-800">
                     <Skeleton className="h-40 w-full" />
                     <div className="p-4 space-y-3 flex-1 flex flex-col">
                       <Skeleton className="h-4 w-3/4" />
@@ -771,14 +773,9 @@ export default function OrderPortalPage() {
                     onClick={() => openProductDetail(product)}
                     className="group cursor-pointer"
                   >
-                    <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 h-full flex flex-col bg-white dark:bg-slate-800">
+                    <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 h-full flex flex-col bg-white dark:bg-slate-900 dark:border-slate-800">
                       {/* Product Image */}
-                      <div className="relative h-48 overflow-hidden group-hover:bg-gradient-to-tl transition-all"
-                        style={{
-                          background:
-                            "radial-gradient(circle at 0% 0%, color-mix(in oklab, var(--color-brand-accent), transparent 25%), transparent 55%), radial-gradient(circle at 100% 0%, color-mix(in oklab, var(--color-primary), transparent 40%), transparent 60%), oklch(0.93 0 0)",
-                        }}
-                      >
+                      <div className="relative h-48 overflow-hidden group-hover:bg-gradient-to-tl transition-all bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
                         {product.imageUrl ? (
                           <img
                             src={product.imageUrl}
@@ -794,13 +791,12 @@ export default function OrderPortalPage() {
                         {/* Stock Badge */}
                         {product.stock !== undefined && (
                           <Badge
-                            className={`absolute top-2 right-2 ${
-                              product.stock > 10
+                            className={`absolute top-2 right-2 ${product.stock > 10
                                 ? "bg-green-500"
                                 : product.stock > 0
-                                ? "bg-yellow-500"
-                                : "bg-red-500"
-                            }`}
+                                  ? "bg-yellow-500"
+                                  : "bg-red-500"
+                              }`}
                           >
                             {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
                           </Badge>
@@ -835,11 +831,10 @@ export default function OrderPortalPage() {
                           {[...Array(5)].map((_, i) => (
                             <Star
                               key={i}
-                              className={`h-3 w-3 ${
-                                i < Math.floor(product.rating || 0)
+                              className={`h-3 w-3 ${i < Math.floor(product.rating || 0)
                                   ? "fill-yellow-400 text-yellow-400"
                                   : "text-slate-300"
-                              }`}
+                                }`}
                             />
                           ))}
                           <span className="text-xs text-muted-foreground ml-1">
@@ -986,11 +981,10 @@ export default function OrderPortalPage() {
                   {[...Array(5)].map((_, i) => (
                     <Star
                       key={i}
-                      className={`h-4 w-4 ${
-                        i < Math.floor(selectedProduct.rating || 0)
+                      className={`h-4 w-4 ${i < Math.floor(selectedProduct.rating || 0)
                           ? "fill-yellow-400 text-yellow-400"
                           : "text-slate-300"
-                      }`}
+                        }`}
                     />
                   ))}
                   <span className="text-sm text-muted-foreground">
@@ -1035,8 +1029,8 @@ export default function OrderPortalPage() {
                   </div>
                   {selectedProduct.stock !== undefined && selectedProduct.stock < 10 && (
                     <p className="text-xs text-yellow-600 dark:text-yellow-400">
-                      {selectedProduct.stock === 0 
-                        ? "Out of stock" 
+                      {selectedProduct.stock === 0
+                        ? "Out of stock"
                         : `Only ${selectedProduct.stock} available`}
                     </p>
                   )}

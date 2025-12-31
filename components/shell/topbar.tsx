@@ -15,21 +15,22 @@ export function Topbar() {
   const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
-  
+
   useEffect(() => {
     setMounted(true)
   }, [])
-  
+
   const userRole = (session?.user as any)?.role
 
   async function logout() {
+    // Clear theme preference so next login starts with light theme
+    localStorage.removeItem('theme')
     await signOut({ callbackUrl: "/login", redirect: true })
   }
-  
+
   return (
     <header
-      className="sticky top-0 z-40 w-full h-14 flex items-center justify-between px-4 border-b backdrop-blur supports-[backdrop-filter]:bg-background/80"
-      style={{ borderColor: "var(--color-border)" }}
+      className="sticky top-0 z-40 w-full h-14 flex items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:supports-[backdrop-filter]:bg-slate-950/80 bg-white dark:bg-slate-950"
     >
       {/* Left Side - Context Selector & Command Palette */}
       <div className="flex items-center gap-3">
@@ -42,12 +43,12 @@ export function Topbar() {
       {/* Right Side - Actions & Profile */}
       <div className="flex items-center gap-3">
         {/* Order Portal link */}
-        <Link 
+        <Link
           href={
             userRole === "BRANCH_ADMIN" || userRole === "HEAD_OFFICE" || userRole === "SUPER_ADMIN"
               ? "/shop"
               : "/shop/login"
-          } 
+          }
           className="hidden sm:block"
         >
           <Button variant="outline" size="sm" className="gap-2">
@@ -87,37 +88,37 @@ export function Topbar() {
 
         {/* Profile Menu */}
         <div className="relative">
-          <button 
-            onClick={() => setOpen((v) => !v)} 
-            className="flex items-center gap-2 rounded-full px-2 py-1 hover:bg-accent transition-colors"
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-full px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            <Image 
-              src="/placeholder-user.jpg" 
-              alt="avatar" 
-              width={32} 
-              height={32} 
-              className="rounded-full ring-2 ring-background" 
+            <Image
+              src="/placeholder-user.jpg"
+              alt="avatar"
+              width={32}
+              height={32}
+              className="rounded-full ring-2 ring-slate-200 dark:ring-slate-700"
             />
-            <span className="text-sm hidden md:inline font-medium">
+            <span className="text-sm hidden md:inline font-medium text-slate-900 dark:text-white">
               {(session?.user as any)?.email?.split("@")[0] || "Account"}
             </span>
           </button>
           {open && (
-            <div className="absolute right-0 top-12 z-50 min-w-56 rounded-lg border bg-card p-2 shadow-lg">
+            <div className="absolute right-0 top-12 z-50 min-w-56 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-lg dark:shadow-slate-900/50">
               <div className="px-3 py-2 text-sm">
-                <p className="font-medium">{(session?.user as any)?.fullName || "User"}</p>
+                <p className="font-medium text-slate-900 dark:text-white">{(session?.user as any)?.fullName || "User"}</p>
                 <p className="text-xs text-muted-foreground">{(session?.user as any)?.email || "user@example.com"}</p>
                 <p className="text-xs text-muted-foreground mt-1 capitalize">{userRole?.toLowerCase().replace("_", " ")}</p>
               </div>
-              <div className="h-px my-1 bg-border" />
-              <button 
-                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors" 
+              <div className="h-px my-1 bg-slate-200 dark:bg-slate-700" />
+              <button
+                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-900 dark:text-white transition-colors"
                 onClick={() => (window.location.href = "/settings")}
               >
                 Settings
               </button>
-              <button 
-                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent text-destructive transition-colors" 
+              <button
+                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-red-600 dark:text-red-400 transition-colors"
                 onClick={logout}
               >
                 Logout

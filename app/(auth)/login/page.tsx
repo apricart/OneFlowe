@@ -24,16 +24,21 @@ function LoginForm() {
   const [pendingUser, setPendingUser] = useState<{ email: string; password: string } | null>(null)
   const [isProcessingMFA, setIsProcessingMFA] = useState(false)
 
+  // Clear theme preference on mount to ensure light theme
+  useEffect(() => {
+    localStorage.removeItem("theme")
+  }, [])
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError(null)
     setMfaRequired(false)
     setPendingUser(null)
-    
+
     try {
       const result = await signIn("credentials", { redirect: false, email, password })
-      
+
       if (result?.error) {
         if (result.error === "MFA_REQUIRED") {
           console.log("Login: MFA required for", email)
@@ -43,7 +48,7 @@ function LoginForm() {
         }
         throw new Error(result.error)
       }
-      
+
       const cb = searchParams.get("callbackUrl")
       router.replace(cb || "/dashboard")
     } catch (err: any) {
@@ -79,7 +84,7 @@ function LoginForm() {
           </div>
         </div>
       )}
-      
+
       <Card className="w-full border-0 shadow-2xl bg-white/95 backdrop-blur-sm">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -97,12 +102,12 @@ function LoginForm() {
               <label htmlFor="email" className="text-sm font-medium text-slate-700">
                 Email
               </label>
-              <Input 
-                id="email" 
-                type="email" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                required 
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
                 className="bg-white/80 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
@@ -149,9 +154,9 @@ function LoginForm() {
 
       {/* Order Portal Button */}
       <div className="mt-6">
-        <Button 
-          variant="outline" 
-          onClick={() => router.push("/shop/login")} 
+        <Button
+          variant="outline"
+          onClick={() => router.push("/shop/login")}
           className="w-full gap-2 bg-white/90 hover:bg-white border-slate-300 text-slate-700 shadow-lg backdrop-blur-sm"
         >
           🛒 Order Portal Login

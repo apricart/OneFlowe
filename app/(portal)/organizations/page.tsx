@@ -76,7 +76,7 @@ export default function OrganizationsPage() {
   const branchCount = branches?.items.length ?? 0
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
       <header className="flex items-center justify-between">
         <h1 className={cn("text-2xl font-semibold text-balance")}>Companies</h1>
         <div className="flex gap-2">
@@ -124,7 +124,7 @@ export default function OrganizationsPage() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[320px,1fr]">
-        <Card className="h-full">
+        <Card className="h-full border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               Company List
@@ -183,7 +183,7 @@ export default function OrganizationsPage() {
         </Card>
 
         <div className="space-y-6">
-          <Card>
+          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
             <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>{selectedOrg ? selectedOrg.name : "All Companies"}</CardTitle>
@@ -233,7 +233,7 @@ export default function OrganizationsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>Branches {selectedOrg ? `for ${selectedOrg.name}` : ""}</CardTitle>
@@ -453,7 +453,7 @@ function HeroStat({ label, value, helper }: { label: string; value: string | num
 
 function SummaryStat({ label, value, icon, helper }: { label: string; value: string | number; icon?: ReactNode; helper?: string }) {
   return (
-    <div className="rounded-lg border bg-card p-4">
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
         {icon}
         <span>{label}</span>

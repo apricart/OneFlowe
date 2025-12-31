@@ -14,12 +14,12 @@ const fetcher = (url: string) => fetch(url).then(res => res.json())
 export default function UsersPage() {
   const { organizationId, branchId, userRole } = useAppContext()
   const [mfaView, setMfaView] = useState<"enabled" | "disabled">("enabled")
-  
+
   const { data: usersData, mutate: mutateUsers } = useSWR(
     "/api/v1/users",
     fetcher
   )
-  
+
   const { data: branchesData } = useSWR(
     organizationId ? `/api/v1/branches?organizationId=${organizationId}` : "/api/v1/branches",
     fetcher
@@ -67,7 +67,7 @@ export default function UsersPage() {
   const mfaColorClass = mfaView === "enabled" ? "text-purple-600" : "text-orange-500"
 
   return (
-    <div className="space-y-8 p-6">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-8">
       <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-xl">
         <div className="pointer-events-none absolute inset-0 opacity-30">
           <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
@@ -116,7 +116,7 @@ export default function UsersPage() {
           accent="from-emerald-500 to-lime-500"
           icon={<ShieldCheck className="h-5 w-5 text-white" />}
         />
-        <Card className="p-4 border-none shadow-md">
+        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm text-muted-foreground">{mfaLabel}</p>
@@ -145,7 +145,7 @@ export default function UsersPage() {
         </Card>
       </div>
 
-      <Card className="border-none shadow-lg">
+      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle className="flex items-center gap-2 text-xl">
@@ -166,7 +166,7 @@ export default function UsersPage() {
           />
         </CardContent>
       </Card>
-    </div>
+    </main>
   )
 }
 
@@ -184,7 +184,7 @@ function SummaryCard({
   accent: string
 }) {
   return (
-    <Card className="border-none shadow-md">
+    <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
       <CardContent className="p-5 space-y-3">
         <div className="flex items-center gap-3">
           <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r ${accent}`}>

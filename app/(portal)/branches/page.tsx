@@ -156,7 +156,7 @@ export default function BranchesPage() {
   }
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 space-y-6">
       <section className="space-y-6">
         <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-xl">
           <div className="pointer-events-none absolute inset-0 opacity-30">
@@ -218,10 +218,10 @@ export default function BranchesPage() {
         </div>
       </section>
 
-      <Card>
+      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
         <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <CardTitle className="text-xl">Branch control center</CardTitle>
+            <CardTitle className="text-xl text-slate-900 dark:text-white">Branch control center</CardTitle>
             <p className="text-sm text-muted-foreground">Search, filter, and act on any branch instantly.</p>
           </div>
           <div className="flex flex-col gap-3 w-full lg:flex-row lg:items-center lg:justify-end">
@@ -299,83 +299,83 @@ export default function BranchesPage() {
               </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {paginatedBranches.map((branch) => {
-                const admin = adminByBranch[String(branch.id)]
-                const isActive = (branch.status || "active").toLowerCase() === "active"
-                return (
-                  <div
-                    key={branch.id}
-                    className="group rounded-2xl border bg-card p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm text-muted-foreground">Branch</p>
-                        <h3 className="text-lg font-semibold">{branch.name}</h3>
-                      </div>
-                      <Badge variant={isActive ? "default" : "secondary"} className="text-xs">
-                        {isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </div>
-                    <div className="mt-4 grid gap-2 text-sm text-muted-foreground">
-                      <div className="flex items-center justify-between">
-                        <span>Code</span>
-                        <span className="font-medium text-foreground">{branch.code || "—"}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Created</span>
-                        <span className="font-medium text-foreground">
-                          {branch.createdAt ? new Date(branch.createdAt).toLocaleDateString() : "—"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-4 rounded-xl bg-muted/40 p-3 text-sm">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">Branch admin</p>
-                      {admin ? (
-                        <div className="mt-1">
-                          <p className="font-medium">
-                            {[admin.firstName, admin.lastName].filter(Boolean).join(" ") || admin.email}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{admin.email}</p>
+                  const admin = adminByBranch[String(branch.id)]
+                  const isActive = (branch.status || "active").toLowerCase() === "active"
+                  return (
+                    <div
+                      key={branch.id}
+                      className="group rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm dark:shadow-slate-900/50 transition hover:-translate-y-0.5 hover:shadow-lg"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm text-muted-foreground">Branch</p>
+                          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{branch.name}</h3>
                         </div>
-                      ) : (
-                        <p className="mt-1 text-xs text-muted-foreground">No admin assigned</p>
-                      )}
-                    </div>
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      <Button
-                        variant={isActive ? "outline" : "default"}
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => handleStatusToggle(branch.id, branch.status)}
-                        disabled={updatingBranchId === branch.id}
-                      >
-                        {updatingBranchId === branch.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                        <Badge variant={isActive ? "default" : "secondary"} className="text-xs">
+                          {isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+                      <div className="mt-4 grid gap-2 text-sm text-muted-foreground">
+                        <div className="flex items-center justify-between">
+                          <span>Code</span>
+                          <span className="font-medium text-foreground">{branch.code || "—"}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Created</span>
+                          <span className="font-medium text-foreground">
+                            {branch.createdAt ? new Date(branch.createdAt).toLocaleDateString() : "—"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-4 rounded-xl bg-slate-100 dark:bg-slate-800 p-3 text-sm">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Branch admin</p>
+                        {admin ? (
+                          <div className="mt-1">
+                            <p className="font-medium text-slate-900 dark:text-white">
+                              {[admin.firstName, admin.lastName].filter(Boolean).join(" ") || admin.email}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{admin.email}</p>
+                          </div>
                         ) : (
-                          <RefreshCcw className="h-4 w-4" />
+                          <p className="mt-1 text-xs text-muted-foreground">No admin assigned</p>
                         )}
-                        Mark {isActive ? "Inactive" : "Active"}
-                      </Button>
-                      <Button asChild variant="secondary" size="sm" className="gap-2">
-                        <Link href={`/inventory?branchId=${branch.id}`}>
-                          <Boxes className="h-4 w-4" />
-                          Inventory
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => {
-                          setBranchId(String(branch.id))
-                          router.push("/users")
-                        }}
-                      >
-                        <UserCog className="h-4 w-4" />
-                        {admin ? "Manage team" : "Assign admin"}
-                      </Button>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <Button
+                          variant={isActive ? "outline" : "default"}
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => handleStatusToggle(branch.id, branch.status)}
+                          disabled={updatingBranchId === branch.id}
+                        >
+                          {updatingBranchId === branch.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCcw className="h-4 w-4" />
+                          )}
+                          Mark {isActive ? "Inactive" : "Active"}
+                        </Button>
+                        <Button asChild variant="secondary" size="sm" className="gap-2">
+                          <Link href={`/inventory?branchId=${branch.id}`}>
+                            <Boxes className="h-4 w-4" />
+                            Inventory
+                          </Link>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => {
+                            setBranchId(String(branch.id))
+                            router.push("/users")
+                          }}
+                        >
+                          <UserCog className="h-4 w-4" />
+                          {admin ? "Manage team" : "Assign admin"}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                )
+                  )
                 })}
               </div>
             </>
@@ -400,7 +400,7 @@ function SummaryCard({
   accent?: string
 }) {
   return (
-    <Card className="border-none shadow-md">
+    <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
       <CardContent className="p-5 space-y-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <div
@@ -411,9 +411,9 @@ function SummaryCard({
           >
             {icon}
           </div>
-          <span className="font-medium text-foreground">{title}</span>
+          <span className="font-medium text-slate-900 dark:text-white">{title}</span>
         </div>
-        <div className="text-3xl font-semibold text-foreground">{value}</div>
+        <div className="text-3xl font-semibold text-slate-900 dark:text-white">{value}</div>
         <p className="text-xs text-muted-foreground">{description}</p>
       </CardContent>
     </Card>

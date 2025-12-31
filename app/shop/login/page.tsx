@@ -1,5 +1,5 @@
 "use client"
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,11 @@ export default function ShopLoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+
+  // Reset theme to light on mount
+  useEffect(() => {
+    localStorage.removeItem("theme")
+  }, [])
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

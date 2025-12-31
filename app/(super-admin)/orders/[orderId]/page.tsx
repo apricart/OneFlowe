@@ -106,36 +106,36 @@ export default function SuperAdminOrderDetailsPage() {
 
       {order && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="rounded-2xl border-0 bg-white p-4 shadow-md">
+          <Card className="rounded-2xl border-0 bg-white dark:bg-slate-800 dark:border-slate-700 p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Order total</p>
-            <p className="text-2xl font-semibold text-slate-900">
+            <p className="text-2xl font-semibold text-slate-900 dark:text-white">
               {formatPKR(order.totalCents / 100)}
             </p>
             <p className="text-xs text-muted-foreground">
               Subtotal {formatPKR(order.subtotalCents / 100)} · Tax {formatPKR(order.taxCents / 100)}
             </p>
           </Card>
-          <Card className="rounded-2xl border-0 bg-white p-4 shadow-md">
+          <Card className="rounded-2xl border-0 bg-white dark:bg-slate-800 dark:border-slate-700 p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Current status</p>
-            <p className="text-2xl font-semibold capitalize text-slate-900">
+            <p className="text-2xl font-semibold capitalize text-slate-900 dark:text-white">
               {order.status.toLowerCase()}
             </p>
             <p className="text-xs text-muted-foreground">
               Auto-approval safety applies while pending
             </p>
           </Card>
-          <Card className="rounded-2xl border-0 bg-white p-4 shadow-md">
+          <Card className="rounded-2xl border-0 bg-white dark:bg-slate-800 dark:border-slate-700 p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Auto approval</p>
-            <p className="text-2xl font-semibold text-slate-900">
+            <p className="text-2xl font-semibold text-slate-900 dark:text-white">
               {autoMeta ? autoMeta.title.replace("Auto approval in ", "") : "—"}
             </p>
             <p className="text-xs text-muted-foreground">
               {autoMeta ? "Review before the timer elapses" : "No countdown for this status"}
             </p>
           </Card>
-          <Card className="rounded-2xl border-0 bg-white p-4 shadow-md">
+          <Card className="rounded-2xl border-0 bg-white dark:bg-slate-800 dark:border-slate-700 p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Branch</p>
-            <p className="text-2xl font-semibold text-slate-900">
+            <p className="text-2xl font-semibold text-slate-900 dark:text-white">
               {order.branchName || `Branch ${order.branchId}`}
             </p>
             <p className="text-xs text-muted-foreground">Order ID #{order.id}</p>
@@ -169,57 +169,57 @@ export default function SuperAdminOrderDetailsPage() {
 
           {order && (
             <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-              <Card className="space-y-4 border">
-                <div className="grid gap-4 border-b px-6 py-5 md:grid-cols-3">
+              <Card className="space-y-4 border dark:bg-slate-800 dark:border-slate-700">
+                <div className="grid gap-4 border-b dark:border-slate-700 px-6 py-5 md:grid-cols-3">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
                       Transaction ID
                     </p>
-                    <p className="font-mono text-sm font-semibold">{order.tid}</p>
+                    <p className="font-mono text-sm font-semibold dark:text-white">{order.tid}</p>
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
                       Order ID
                     </p>
-                    <p className="font-semibold">{order.id}</p>
+                    <p className="font-semibold dark:text-white">{order.id}</p>
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
                       Branch
                     </p>
-                    <p className="font-semibold">
+                    <p className="font-semibold dark:text-white">
                       {order.branchName || `Branch ${order.branchId}`}
                     </p>
                   </div>
                 </div>
 
                 <div className="grid gap-3 px-6 pb-6 md:grid-cols-3">
-                  <div className="rounded-2xl bg-white/80 p-4 shadow-sm">
+                  <div className="rounded-2xl bg-white/80 dark:bg-slate-700/80 p-4 shadow-sm">
                     <p className="text-xs uppercase text-muted-foreground">Subtotal</p>
-                    <p className="text-lg font-semibold">
+                    <p className="text-lg font-semibold dark:text-white">
                       {formatPKR(order.subtotalCents / 100)}
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-white/80 p-4 shadow-sm">
+                  <div className="rounded-2xl bg-white/80 dark:bg-slate-700/80 p-4 shadow-sm">
                     <p className="text-xs uppercase text-muted-foreground">Tax</p>
-                    <p className="text-lg font-semibold">
+                    <p className="text-lg font-semibold dark:text-white">
                       {formatPKR(order.taxCents / 100)}
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-indigo-50 p-4 shadow-sm">
-                    <p className="text-xs uppercase text-indigo-700">Total</p>
-                    <p className="text-xl font-bold text-indigo-700">
+                  <div className="rounded-2xl bg-indigo-50 dark:bg-indigo-950 p-4 shadow-sm">
+                    <p className="text-xs uppercase text-indigo-700 dark:text-indigo-300">Total</p>
+                    <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">
                       {formatPKR(order.totalCents / 100)}
                     </p>
                   </div>
                 </div>
 
                 {autoMeta && (
-                  <div className="mx-6 mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
-                    <Clock className="h-5 w-5 text-amber-600" />
+                  <div className="mx-6 mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-950/70 p-4">
+                    <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                     <div>
-                      <p className="font-semibold text-amber-800">{autoMeta.title}</p>
-                      <p className="text-sm text-amber-700">{autoMeta.detail}</p>
+                      <p className="font-semibold text-amber-800 dark:text-amber-300">{autoMeta.title}</p>
+                      <p className="text-sm text-amber-700 dark:text-amber-400">{autoMeta.detail}</p>
                     </div>
                   </div>
                 )}
@@ -227,14 +227,14 @@ export default function SuperAdminOrderDetailsPage() {
                 {/* Order Items */}
                 {order.orderItems && order.orderItems.length > 0 && (
                   <div className="mx-6 mb-6 space-y-4">
-                    <h3 className="text-sm font-semibold text-slate-900">Order Items</h3>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Order Items</h3>
                     <div className="space-y-3">
                       {order.orderItems.map((item) => (
                         <div
                           key={item.id}
-                          className="flex items-center gap-4 rounded-lg border bg-white p-4"
+                          className="flex items-center gap-4 rounded-lg border bg-white dark:bg-slate-700 dark:border-slate-600 p-4"
                         >
-                          <div className="flex h-16 w-16 items-center justify-center rounded-lg border bg-slate-50">
+                          <div className="flex h-16 w-16 items-center justify-center rounded-lg border bg-slate-50 dark:bg-slate-600 dark:border-slate-500">
                             {item.imageUrl ? (
                               <img
                                 src={item.imageUrl}
@@ -242,11 +242,11 @@ export default function SuperAdminOrderDetailsPage() {
                                 className="h-full w-full rounded-lg object-cover"
                               />
                             ) : (
-                              <Package className="h-8 w-8 text-slate-400" />
+                              <Package className="h-8 w-8 text-slate-400 dark:text-slate-300" />
                             )}
                           </div>
                           <div className="flex-1">
-                            <p className="font-semibold text-slate-900">{item.productName}</p>
+                            <p className="font-semibold text-slate-900 dark:text-white">{item.productName}</p>
                             {item.productCode && (
                               <p className="text-xs text-muted-foreground font-mono">{item.productCode}</p>
                             )}
@@ -255,8 +255,8 @@ export default function SuperAdminOrderDetailsPage() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-semibold text-slate-900">Qty: {item.quantity}</p>
-                            <p className="text-sm font-bold text-indigo-600">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white">Qty: {item.quantity}</p>
+                            <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
                               {formatPKR((item.priceCents * item.quantity) / 100)}
                             </p>
                           </div>
@@ -267,10 +267,10 @@ export default function SuperAdminOrderDetailsPage() {
                 )}
               </Card>
 
-              <Card className="p-5">
+              <Card className="p-5 dark:bg-slate-800 dark:border-slate-700">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Status timeline</p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Status timeline</p>
                     <p className="text-xs text-muted-foreground">Track key lifecycle events.</p>
                   </div>
                   <Badge variant="outline" className="capitalize">
@@ -288,10 +288,10 @@ export default function SuperAdminOrderDetailsPage() {
                           <div
                             className={`flex h-8 w-8 items-center justify-center rounded-full border ${
                               isComplete
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
                                 : isCurrent
-                                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                                : "border-slate-200 bg-white text-slate-400"
+                                ? "border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                                : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-400"
                             }`}
                           >
                             {isComplete ? <CheckCircle className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
@@ -299,13 +299,13 @@ export default function SuperAdminOrderDetailsPage() {
                           {!isLast && (
                             <div
                               className={`mt-1 w-px flex-1 ${
-                                isComplete ? "bg-emerald-100" : "bg-slate-200"
+                                isComplete ? "bg-emerald-100 dark:bg-emerald-900" : "bg-slate-200 dark:bg-slate-600"
                               }`}
                             />
                           )}
                         </div>
-                        <div className="flex-1 rounded-xl border p-3 shadow-sm">
-                          <p className="text-sm font-semibold">{step.label}</p>
+                        <div className="flex-1 rounded-xl border dark:border-slate-600 bg-white dark:bg-slate-700 p-3 shadow-sm">
+                          <p className="text-sm font-semibold dark:text-white">{step.label}</p>
                           <p className="text-xs text-muted-foreground">{step.description}</p>
                         </div>
                       </li>

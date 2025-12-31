@@ -35,9 +35,8 @@ export default function HeadOfficeInventoryPage() {
   const PAGE_SIZE = 20
 
   const encodedSearch = encodeURIComponent(searchQuery)
-  const query = `/api/v1/head-office/organization-inventory?search=${encodedSearch}&status=${statusFilter}${
-    organizationId ? `&organizationId=${organizationId}` : ""
-  }`
+  const query = `/api/v1/head-office/organization-inventory?search=${encodedSearch}&status=${statusFilter}${organizationId ? `&organizationId=${organizationId}` : ""
+    }`
 
   const { data, isLoading } = useSWR<{ items: OrganizationInventoryItem[]; total: number }>(query, fetcher, {
     fallbackData: { items: [], total: 0 },
@@ -116,7 +115,7 @@ export default function HeadOfficeInventoryPage() {
           icon={<Building2 className="h-5 w-5 text-white" />}
           accent="from-blue-500 to-cyan-500"
         />
-        <Card className="border-none shadow-md">
+        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
           <CardContent className="p-4 space-y-2 text-sm text-muted-foreground">
             <p className="font-semibold text-foreground">Read-only</p>
             <p>Inventory is centrally managed. Reach out to Super Admins for pricing or visibility changes.</p>
@@ -124,7 +123,7 @@ export default function HeadOfficeInventoryPage() {
         </Card>
       </div>
 
-      <Card className="border-none shadow-md">
+      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
         <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <CardTitle className="text-xl">Assigned products</CardTitle>
@@ -267,7 +266,7 @@ function SummaryCard({
   accent: string
 }) {
   return (
-    <Card className="border-none shadow-md">
+    <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
       <CardContent className="p-5 space-y-3">
         <div className="flex items-center gap-3">
           <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r ${accent}`}>{icon}</div>
