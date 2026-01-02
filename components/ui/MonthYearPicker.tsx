@@ -20,7 +20,8 @@ const months = [
   { label: "December", value: "12" },
 ]
 
-const years = ["2022", "2023", "2024", "2025"]
+// Years will be generated dynamically inside the component
+
 
 interface MonthYearPickerProps {
   selectedYear?: string
@@ -35,7 +36,18 @@ export function MonthYearPicker({
   onYearChange,
   onMonthsChange,
 }: MonthYearPickerProps) {
-  const [internalYear, setInternalYear] = React.useState("2025")
+  const years = React.useMemo(() => {
+    const currentYear = new Date().getFullYear()
+    const startYear = 2022
+    const endYear = currentYear + 1
+    const yearsList = []
+    for (let y = startYear; y <= endYear; y++) {
+      yearsList.push(y.toString())
+    }
+    return yearsList.reverse()
+  }, [])
+
+  const [internalYear, setInternalYear] = React.useState(new Date().getFullYear().toString())
   const [internalMonths, setInternalMonths] = React.useState<string[]>([])
 
   // Use controlled values if provided, otherwise use internal state
@@ -94,7 +106,7 @@ export function MonthYearPicker({
           </Select.Trigger>
 
           <Select.Portal>
-            <Select.Content 
+            <Select.Content
               className="bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg shadow-xl dark:shadow-slate-900/50 z-[100] overflow-hidden"
               position="popper"
               sideOffset={4}

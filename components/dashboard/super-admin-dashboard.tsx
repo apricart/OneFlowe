@@ -3,9 +3,11 @@
 import Link from "next/link"
 import { useEffect, useMemo, useState, useRef } from "react"
 import { useOrganizations, useBranches, useUsers } from "@/lib/hooks/use-api"
+import { useMonthlySales, useYearlySales } from "@/lib/hooks/use-dashboard-analytics"
 import { KpiCard } from "@/components/ui/kpi-card"
 import { Card, CardContent } from "@/components/ui/card"
-import  {MonthYearPicker } from "@/components/ui/MonthYearPicker"
+import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
+import { YearPicker } from "@/components/ui/YearPicker"
 import useSWR from "swr"
 import { NotificationRail } from "@/components/notifications/notification-center"
 import { formatPKR } from "@/lib/utils"
@@ -46,6 +48,7 @@ const fetcher = (url: string) => fetch(url).then(r => r.json())
 export function SuperAdminDashboard() {
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
+  const [yearlyChartYear, setYearlyChartYear] = useState<string>(new Date().getFullYear().toString())
   const [showPicker, setShowPicker] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
   const { organizationId, branchId } = useAppContext()
@@ -53,7 +56,12 @@ export function SuperAdminDashboard() {
   // Close picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement
+      // Check if click is inside picker reference OR inside a Radix Select/Portal content (Year/Month pickers)
+      const isInsidePicker = pickerRef.current && pickerRef.current.contains(target)
+      const isInsideRadixPortal = target.closest('[data-radix-portal]') || target.closest('[role="listbox"]') || target.closest('[data-radix-popper-content-wrapper]')
+
+      if (!isInsidePicker && !isInsideRadixPortal) {
         setShowPicker(false)
       }
     }
@@ -86,76 +94,91 @@ export function SuperAdminDashboard() {
   const selectedOrg = organizationId ? orgs.find(o => o.id?.toString() === organizationId) : null
   const selectedBranch = branchId ? branchesRaw.find(b => b.id?.toString() === branchId) : null
 
-  // ---------------- Bar Chart Data (Based on Selected Months AND Year) ----------------
-  const yearlyUrl = `/api/v1/orders?mode=monthlySales${organizationId ? `&organizationId=${organizationId}` : ""}${branchId ? `&branchId=${branchId}` : ""}`
-  const { data: yearlySalesRaw, isLoading: isLoadingYearly, error: yearlyError } = useSWR(yearlyUrl, fetcher, { refreshInterval: 60_000 })
+  // ---------------- Bar Chart Data (from useMonthlySales with selectedYear) ----------------
+  // Convert selectedYear string to number for the hook
+  const { data: monthlySalesData, isLoading: isLoadingMonthly } = useMonthlySales(organizationId, branchId, Number(selectedYear))
 
-  // Create bar chart data based on selected months AND year
   const barChartData = useMemo(() => {
-    const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const monthlySalesMap: Record<string, number> = {};
-    
-    // Initialize all months to 0
-    monthsOrder.forEach(m => monthlySalesMap[m] = 0);
+    // If no months selected, show last 6 months (Jul-Dec) or all if preference
+    // Logic: If user selects specific months, show them. Else show all available in data or specific default?
+    // The previous logic defaulted to Jul-Dec if empty. Let's keep it similar but based on data.
 
-    // Calculate sales for each month from API data - FILTER BY SELECTED YEAR
-    (yearlySalesRaw?.items || []).forEach((order: any) => {
-      if (!order.fulfilledAt || order.status !== "fulfilled") return
-      
-      const date = parseISO(order.fulfilledAt)
-      const orderYear = getYear(date).toString()
-      
-      // Only process orders from the selected year
-      if (orderYear !== selectedYear) return
-      
-      const month = format(date, "MMM") 
-      if (monthlySalesMap.hasOwnProperty(month)) {
-        monthlySalesMap[month] += order.totalCents || 0
-      }
+    const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    if (!monthlySalesData?.monthlySales) return []
+
+    // Create map
+    const monthlySalesMap: Record<string, number> = {}
+    monthsOrder.forEach(m => monthlySalesMap[m] = 0)
+    monthlySalesData.monthlySales.forEach(item => {
+      monthlySalesMap[item.month] = item.sales
     })
 
-    // If no months selected, show last 6 months (Jul-Dec)
-    const defaultMonths = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    const monthsToShow = selectedMonths.length > 0 
+    const currentYear = new Date().getFullYear().toString()
+    const currentMonth = new Date().getMonth() // 0-11
+
+    let defaultMonths: string[]
+
+    if (selectedYear === currentYear) {
+      if (currentMonth < 6) {
+        // Jan-Jun
+        defaultMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+      } else {
+        // Jul-Dec
+        defaultMonths = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+      }
+    } else {
+      // Past/Future years: Show All Months
+      defaultMonths = monthsOrder
+    }
+
+    const monthsToShow = selectedMonths.length > 0
       ? selectedMonths.map(m => monthNames[m])
       : defaultMonths
 
-    // Filter and format data for selected months
     return monthsToShow.map(month => ({
       month,
-      value: monthlySalesMap[month] / 100
+      value: (monthlySalesMap[month] || 0) // Convert cents/PKR scaling? Verify if hook returns cents or units. 
+      // The hook types say "sales: number // Sales in PKR". 
+      // The previous code divided by 100: "value: monthlySalesMap[month] / 100".
+      // Let's check hook implementation. The hook API usually returns standard units or cents.
+      // If previous code was dividing by 100, "totalCents" was likely the source.
+      // useMonthlySales hook returns "sales". Usually in analytics APIs "sales" is already in main currency unit or cents?
+      // Let's assume the hook returns what we need. 
+      // WAIT! The previous code: "monthlySalesMap[month] += order.totalCents || 0 ... value: monthlySalesMap[month] / 100"
+      // So previous code expected Cents and converted to PKR.
+      // The Hook useMonthlySales: "sales: number // Sales in PKR".
+      // So if hook returns PKR, we DO NOT divide by 100.
+      // Let's check BranchAdminDashboard: "value: monthlySalesMap[month] || 0" (NO DIVISION).
+      // So for hook data, we DO NOT divide by 100.
     }))
-  }, [selectedMonths, selectedYear, yearlySalesRaw])
+  }, [selectedMonths, monthlySalesData])
 
-  // ---------------- Yearly Sales Chart Data (ALSO FILTERED BY YEAR) ----------------
-  const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  
+
+  // ---------------- Yearly Sales Chart Data (from useYearlySales with yearlyChartYear) ----------------
+  const { data: yearlySalesHookData, isLoading: isLoadingYearly } = useYearlySales(organizationId, branchId, Number(yearlyChartYear))
+
   const yearlySalesData = useMemo(() => {
-    const monthlySalesMap: Record<string, number> = {};
-    monthsOrder.forEach(m => monthlySalesMap[m] = 0);
+    const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    if (!yearlySalesHookData?.monthlySales) return []
 
-    // Filter by selected year
-    (yearlySalesRaw?.items || []).forEach((order: any) => {
-      if (!order.fulfilledAt || order.status !== "fulfilled") return
-      
-      const date = parseISO(order.fulfilledAt)
-      const orderYear = getYear(date).toString()
-      
-      // Only process orders from the selected year
-      // if (orderYear !== selectedYear) return
-      
-      const month = format(date, "MMM") 
-      if (monthlySalesMap.hasOwnProperty(month)) {
-        monthlySalesMap[month] += order.totalCents || 0
-      }
+    // Map hook data to chart format
+    // yearlySalesHookData.monthlySales has { month, sales }
+    // We just need to ensure all months are present or just map what we have?
+    // Spline chart usually expects ordered months.
+
+    const monthlySalesMap: Record<string, number> = {}
+    monthsOrder.forEach(m => monthlySalesMap[m] = 0)
+    yearlySalesHookData.monthlySales.forEach(item => {
+      monthlySalesMap[item.month] = item.sales
     })
 
     return monthsOrder.map(month => ({
       month,
-      sales: monthlySalesMap[month] / 100
+      sales: monthlySalesMap[month] // Again, assume PKR
     }))
-  }, [selectedYear, yearlySalesRaw])
-  
+  }, [yearlySalesHookData])
+
   const average =
     yearlySalesData.filter(d => d.sales > 0).length > 0
       ? yearlySalesData.reduce((sum, item) => sum + item.sales, 0) / yearlySalesData.filter(d => d.sales > 0).length
@@ -255,7 +278,7 @@ export function SuperAdminDashboard() {
                 <span className="text-xs font-medium text-white/80 uppercase tracking-wider">Active Scope</span>
                 <span className="rounded-md bg-white/25 px-3 py-1 text-xs font-bold text-white truncate max-w-[200px]">{scopeText}</span>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/20 hover:bg-white/15 transition-colors">
                   <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Organizations</p>
@@ -295,14 +318,16 @@ export function SuperAdminDashboard() {
                   <div>
                     <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Monthly Sales Analytics</h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {selectedMonths.length > 0 
+                      {selectedMonths.length > 0
                         ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} • ${selectedYear}`
-                        : `Last 6 months (Jul-Dec) • ${selectedYear}`}
+                        : selectedYear === new Date().getFullYear().toString()
+                          ? (new Date().getMonth() < 6 ? `First Half (Jan-Jun) • ${selectedYear}` : `Second Half (Jul-Dec) • ${selectedYear}`)
+                          : `All Months • ${selectedYear}`}
                     </p>
                   </div>
                 </div>
               </div>
-              
+
               {/* Picker Toggle Button */}
               <div className="relative" ref={pickerRef}>
                 <button
@@ -312,12 +337,12 @@ export function SuperAdminDashboard() {
                   <Calendar className="h-4 w-4" />
                   <span>Select Period</span>
                 </button>
-                
+
                 {/* Dropdown Picker */}
                 {showPicker && (
                   <div className="absolute right-0 top-full mt-2 z-50 animate-slide-down">
                     <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                      <MonthYearPicker 
+                      <MonthYearPicker
                         selectedYear={selectedYear}
                         selectedMonths={selectedMonths}
                         onYearChange={setSelectedYear}
@@ -336,23 +361,14 @@ export function SuperAdminDashboard() {
                 )}
               </div>
             </div>
-            
+
             {/* Chart */}
             <div className="min-h-[400px]">
-              {isLoadingYearly ? (
+              {isLoadingMonthly ? (
                 <div className="flex items-center justify-center h-[400px]">
                   <div className="text-center space-y-3">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-500 mx-auto"></div>
                     <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">Loading sales data...</p>
-                  </div>
-                </div>
-              ) : yearlyError ? (
-                <div className="flex items-center justify-center h-[400px]">
-                  <div className="text-center space-y-2">
-                    <div className="h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto">
-                      <span className="text-2xl">⚠️</span>
-                    </div>
-                    <p className="text-sm text-red-600 dark:text-red-400 font-medium">Error loading sales data</p>
                   </div>
                 </div>
               ) : (
@@ -401,12 +417,22 @@ export function SuperAdminDashboard() {
           <p className="text-xs text-orange-700 dark:text-orange-400">Weekly order count</p>
         </div>
       </div>
-       
+
       {/* Charts Section */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Yearly Sales */}
         <Card className="lg:col-span-2 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 overflow-hidden bg-white dark:bg-slate-900">
           <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Yearly Sales Trends</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">Revenue overview for {yearlyChartYear}</p>
+              </div>
+              <YearPicker
+                selectedYear={yearlyChartYear}
+                onYearChange={setYearlyChartYear}
+              />
+            </div>
             {isLoadingYearly ? (
               <div className="flex items-center justify-center h-96">
                 <div className="text-center space-y-3">
@@ -414,8 +440,6 @@ export function SuperAdminDashboard() {
                   <p className="text-sm text-slate-600">Loading yearly sales...</p>
                 </div>
               </div>
-            ) : yearlyError ? (
-              <div className="flex items-center justify-center h-96 text-sm text-red-600">Error loading yearly sales</div>
             ) : (
               <YearlySalesSplineChart yearlySalesData={yearlySalesData} avgSales={average} />
             )}
@@ -448,7 +472,7 @@ export function SuperAdminDashboard() {
           <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Admin Control Areas</h2>
         </div>
         <p className="text-sm text-slate-600">Quick access to configuration, users, inventory, orders, budgets, and system reports</p>
-        
+
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {navTiles.map(tile => {
             const Icon = tile.icon

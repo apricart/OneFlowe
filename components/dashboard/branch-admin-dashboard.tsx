@@ -6,13 +6,14 @@ import { NotificationRail } from "@/components/notifications/notification-center
 import { useDashboardAnalytics, useWeeklySales, useYearlySales, useMonthlySales } from "@/lib/hooks/use-dashboard-analytics"
 import { useAppContext } from "@/components/context/app-context"
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
+import { YearPicker } from "@/components/ui/YearPicker"
 import SalesBarChart from "@/components/dashboard/charts"
 import { Card, CardContent } from "@/components/ui/card"
 
 // Professional Banking Tooltip
 const BankingTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || !payload.length) return null
-  
+
   return (
     <div className="bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg p-3 shadow-lg">
       <p className="text-slate-600 dark:text-slate-400 text-xs font-semibold uppercase tracking-wide mb-1.5">{label}</p>
@@ -28,7 +29,7 @@ const BankingTooltip = ({ active, payload, label }: any) => {
 // Weekly Sales Bar Chart - Banking Style
 const WeeklySalesBarChart = ({ data }: { data: { label: string; value: number }[] }) => {
   const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
-  
+
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -43,29 +44,29 @@ const WeeklySalesBarChart = ({ data }: { data: { label: string; value: number }[
               <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.95} />
             </linearGradient>
           </defs>
-          <CartesianGrid 
-            strokeDasharray="3 3" 
-            stroke={isDark ? "#475569" : "#cbd5e1"} 
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke={isDark ? "#475569" : "#cbd5e1"}
             strokeOpacity={0.5}
-            vertical={false} 
+            vertical={false}
           />
-          <XAxis 
-            dataKey="label" 
-            tickLine={false} 
-            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }} 
-            tickMargin={12} 
+          <XAxis
+            dataKey="label"
+            tickLine={false}
+            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }}
+            tickMargin={12}
             tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
           />
-          <YAxis 
-            allowDecimals={false} 
+          <YAxis
+            allowDecimals={false}
             axisLine={false}
-            tickLine={false} 
+            tickLine={false}
             tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
             tickFormatter={(value) => `₨${(value / 1000).toFixed(0)}k`}
           />
-          <Tooltip 
-            content={<BankingTooltip />} 
-            cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(30, 64, 175, 0.08)" }} 
+          <Tooltip
+            content={<BankingTooltip />}
+            cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(30, 64, 175, 0.08)" }}
           />
           <Bar
             dataKey="value"
@@ -84,7 +85,7 @@ const WeeklySalesBarChart = ({ data }: { data: { label: string; value: number }[
 // Yearly Sales Line Chart - Banking Style
 const YearlySalesLineChart = ({ data }: { data: { month: string; sales: number }[] }) => {
   const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
-  
+
   return (
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -99,29 +100,29 @@ const YearlySalesLineChart = ({ data }: { data: { month: string; sales: number }
               <stop offset="95%" stopColor="#34d399" stopOpacity={0.1} />
             </linearGradient>
           </defs>
-          <CartesianGrid 
-            strokeDasharray="3 3" 
-            stroke={isDark ? "#475569" : "#cbd5e1"} 
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke={isDark ? "#475569" : "#cbd5e1"}
             strokeOpacity={0.5}
-            vertical={false} 
+            vertical={false}
           />
-          <XAxis 
-            dataKey="month" 
-            tickLine={false} 
-            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }} 
-            tickMargin={12} 
+          <XAxis
+            dataKey="month"
+            tickLine={false}
+            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }}
+            tickMargin={12}
             tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 11 }}
           />
-          <YAxis 
-            allowDecimals={false} 
+          <YAxis
+            allowDecimals={false}
             axisLine={false}
-            tickLine={false} 
+            tickLine={false}
             tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
             tickFormatter={(value) => `₨${(value / 1000).toFixed(0)}k`}
           />
-          <Tooltip 
-            content={<BankingTooltip />} 
-            cursor={{ stroke: isDark ? "#34d399" : "#059669", strokeWidth: 2, strokeDasharray: "4 4" }} 
+          <Tooltip
+            content={<BankingTooltip />}
+            cursor={{ stroke: isDark ? "#34d399" : "#059669", strokeWidth: 2, strokeDasharray: "4 4" }}
           />
           <Area
             type="monotone"
@@ -139,24 +140,24 @@ const YearlySalesLineChart = ({ data }: { data: { month: string; sales: number }
 }
 
 // Professional Banking KPI Card
-const BankingKPICard = ({ 
-  icon: Icon, 
-  title, 
-  value, 
-  trend, 
+const BankingKPICard = ({
+  icon: Icon,
+  title,
+  value,
+  trend,
   trendValue,
   borderColor,
   iconBg
 }: any) => {
   const isPositive = trend === "up"
-  
+
   return (
     <div className="group bg-white dark:bg-slate-900 rounded-lg border-2 border-slate-200 dark:border-slate-800 p-5 shadow-sm dark:shadow-slate-900/50 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-300">
       <div className="flex items-start justify-between mb-4">
         <div className={`w-12 h-12 rounded-lg ${iconBg} border border-slate-200 dark:border-slate-700 flex items-center justify-center`}>
           <Icon className="w-6 h-6 text-white" strokeWidth={2} />
         </div>
-        
+
         {trend && (
           <div className={`flex items-center gap-1 px-2.5 py-1 rounded-md border ${isPositive ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
             {isPositive ? (
@@ -170,7 +171,7 @@ const BankingKPICard = ({
           </div>
         )}
       </div>
-      
+
       <div className="space-y-2">
         <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
           {title}
@@ -179,7 +180,7 @@ const BankingKPICard = ({
           {value}
         </p>
       </div>
-      
+
       <div className={`mt-4 h-0.5 w-12 ${borderColor}`}></div>
     </div>
   )
@@ -205,18 +206,25 @@ export function BranchAdminDashboard() {
   const { data } = useDashboardAnalytics()
   const { data: weeklySalesData } = useWeeklySales(organizationId, branchId)
   const currentYear = new Date().getFullYear()
-  const { data: yearlySalesData } = useYearlySales(organizationId, branchId, currentYear)
-  
+
+
   // Monthly sales state
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString())
+  const [yearlyChartYear, setYearlyChartYear] = useState<string>(currentYear.toString())
   const [showPicker, setShowPicker] = useState(false)
+  const { data: yearlySalesData } = useYearlySales(organizationId, branchId, Number(yearlyChartYear))
   const pickerRef = useRef<HTMLDivElement>(null)
 
   // Close picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement
+      // Check if click is inside picker reference OR inside a Radix Select/Portal content
+      const isInsidePicker = pickerRef.current && pickerRef.current.contains(target)
+      const isInsideRadixPortal = target.closest('[data-radix-portal]') || target.closest('[role="listbox"]') || target.closest('[data-radix-popper-content-wrapper]')
+
+      if (!isInsidePicker && !isInsideRadixPortal) {
         setShowPicker(false)
       }
     }
@@ -230,7 +238,7 @@ export function BranchAdminDashboard() {
     }
   }, [showPicker])
   const { data: monthlySalesData } = useMonthlySales(organizationId, branchId, Number(selectedYear))
-  
+
   const trendData = data?.gmvSeries ?? []
   const pendingApprovals = data?.pendingApprovals ?? 0
   const ordersThisMonth = data?.ordersThisMonth ?? 0
@@ -254,23 +262,23 @@ export function BranchAdminDashboard() {
   // Monthly sales bar chart data filtered by selected months
   const monthlyBarChartData = useMemo(() => {
     if (!monthlySalesData?.monthlySales) return []
-    
+
     const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     const monthlySalesMap: Record<string, number> = {}
-    
+
     // Initialize all months to 0
     monthsOrder.forEach(m => monthlySalesMap[m] = 0)
-    
+
     // Populate from API data
     monthlySalesData.monthlySales.forEach((month: { month: string; sales: number }) => {
       monthlySalesMap[month.month] = month.sales
     })
-    
+
     // If no months selected, show all months
-    const monthsToShow = selectedMonths.length > 0 
+    const monthsToShow = selectedMonths.length > 0
       ? selectedMonths.map(m => monthNames[m])
       : monthsOrder
-    
+
     // Filter and format data for selected months
     return monthsToShow.map(month => ({
       month,
@@ -304,7 +312,7 @@ export function BranchAdminDashboard() {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-slate-50 border border-slate-200">
               <Calendar className="w-4 h-4 text-slate-600 dark:text-slate-400" />
               <span className="text-sm font-semibold text-slate-700">
@@ -326,7 +334,7 @@ export function BranchAdminDashboard() {
             borderColor="bg-amber-600"
             iconBg="bg-amber-600"
           />
-          
+
           <BankingKPICard
             icon={ShoppingCart}
             title="Orders This Month"
@@ -334,7 +342,7 @@ export function BranchAdminDashboard() {
             borderColor="bg-violet-600"
             iconBg="bg-violet-600"
           />
-          
+
           <BankingKPICard
             icon={TrendingUp}
             title="Average Revenue"
@@ -349,21 +357,27 @@ export function BranchAdminDashboard() {
           {/* Yearly Sales Chart */}
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300">
             <div className="mb-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-emerald-700" strokeWidth={2} />
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-emerald-700" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Yearly Sales Performance</h3>
+                    {yearlySalesData && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                        Complete year overview for {yearlySalesData.year}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Yearly Sales Performance</h3>
-                  {yearlySalesData && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                      Complete year overview for {yearlySalesData.year}
-                    </p>
-                  )}
-                </div>
+                <YearPicker
+                  selectedYear={yearlyChartYear}
+                  onYearChange={setYearlyChartYear}
+                />
               </div>
             </div>
-            
+
             {yearlySalesData && (
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -378,7 +392,7 @@ export function BranchAdminDashboard() {
                 </div>
               </div>
             )}
-            
+
             {yearlySalesChartData.length > 0 ? (
               <YearlySalesLineChart data={yearlySalesChartData} />
             ) : (
@@ -410,7 +424,7 @@ export function BranchAdminDashboard() {
                 </div>
               </div>
             </div>
-            
+
             {weeklySalesData && (
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -425,7 +439,7 @@ export function BranchAdminDashboard() {
                 </div>
               </div>
             )}
-            
+
             {weeklySalesChartData.length > 0 ? (
               <WeeklySalesBarChart data={weeklySalesChartData} />
             ) : (
@@ -455,14 +469,14 @@ export function BranchAdminDashboard() {
                     <div>
                       <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Monthly Sales Analytics</h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {selectedMonths.length > 0 
+                        {selectedMonths.length > 0
                           ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} selected • ${selectedYear}`
                           : `All months • ${selectedYear}`}
                       </p>
                     </div>
                   </div>
                 </div>
-                
+
                 {/* Picker Toggle Button */}
                 <div className="relative" ref={pickerRef}>
                   <button
@@ -472,12 +486,12 @@ export function BranchAdminDashboard() {
                     <Calendar className="h-4 w-4" />
                     <span>Select Period</span>
                   </button>
-                  
+
                   {/* Dropdown Picker */}
                   {showPicker && (
                     <div className="absolute right-0 top-full mt-2 z-50">
                       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border-2 border-slate-200 dark:border-slate-700 overflow-hidden">
-                        <MonthYearPicker 
+                        <MonthYearPicker
                           selectedYear={selectedYear}
                           selectedMonths={selectedMonths}
                           onYearChange={setSelectedYear}
@@ -495,7 +509,7 @@ export function BranchAdminDashboard() {
                     </div>
                   )}
                 </div>
-      </div>
+              </div>
 
               {/* Chart */}
               <div className="min-h-[350px] bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-800">

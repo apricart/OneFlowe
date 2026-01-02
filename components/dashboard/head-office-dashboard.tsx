@@ -9,6 +9,7 @@ import { TrendAreaChart, ComparisonBarChart } from "@/components/dashboard/chart
 import { useDashboardAnalytics, useWeeklySales, useYearlySales, useMonthlySales } from "@/lib/hooks/use-dashboard-analytics"
 import { useAppContext } from "@/components/context/app-context"
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
+import { YearPicker } from "@/components/ui/YearPicker"
 import SalesBarChart from "@/components/dashboard/charts"
 import { Calendar, BarChart3, TrendingUp, Building2, FileCheck, Wallet, ShoppingCart } from "lucide-react"
 
@@ -161,7 +162,7 @@ export function HeadOfficeDashboard() {
   const { data } = useDashboardAnalytics()
   const { data: weeklySalesData } = useWeeklySales(organizationId, branchId)
   const currentYear = new Date().getFullYear()
-  const { data: yearlySalesData } = useYearlySales(organizationId, branchId, currentYear)
+
 
   const trendData = data?.gmvSeries ?? []
   const branchData = data?.branchSeries ?? []
@@ -172,6 +173,8 @@ export function HeadOfficeDashboard() {
   // Monthly sales state
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString())
+  const [yearlyChartYear, setYearlyChartYear] = useState<string>(currentYear.toString())
+  const { data: yearlySalesData } = useYearlySales(organizationId, branchId, Number(yearlyChartYear))
   const [showPicker, setShowPicker] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
   const { data: monthlySalesData } = useMonthlySales(organizationId, branchId, Number(selectedYear))
@@ -179,7 +182,12 @@ export function HeadOfficeDashboard() {
   // Close picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+      const target = event.target as HTMLElement
+      // Check if click is inside picker reference OR inside a Radix Select/Portal content
+      const isInsidePicker = pickerRef.current && pickerRef.current.contains(target)
+      const isInsideRadixPortal = target.closest('[data-radix-portal]') || target.closest('[role="listbox"]') || target.closest('[data-radix-popper-content-wrapper]')
+
+      if (!isInsidePicker && !isInsideRadixPortal) {
         setShowPicker(false)
       }
     }
@@ -305,18 +313,24 @@ export function HeadOfficeDashboard() {
           {/* Yearly Sales Chart */}
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300">
             <div className="mb-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-emerald-700" strokeWidth={2} />
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-emerald-700" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Yearly Sales Performance</h3>
+                    {yearlySalesData && (
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        Complete year overview for {yearlySalesData.year}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Yearly Sales Performance</h3>
-                  {yearlySalesData && (
-                    <p className="text-xs text-slate-500 font-medium mt-0.5">
-                      Complete year overview for {yearlySalesData.year}
-                    </p>
-                  )}
-                </div>
+                <YearPicker
+                  selectedYear={yearlyChartYear}
+                  onYearChange={setYearlyChartYear}
+                />
               </div>
             </div>
 
