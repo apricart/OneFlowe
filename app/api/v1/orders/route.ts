@@ -248,10 +248,10 @@ export async function POST(req: NextRequest) {
         eq(organizationInventory.organizationId, organizationId),
         inArray(organizationInventory.id, orgInvIds as any)
       ))
-    
-    const invRows = allInvRows.map(r => ({ 
-      id: r.id, 
-      globalProductId: r.globalProductId, 
+
+    const invRows = allInvRows.map(r => ({
+      id: r.id,
+      globalProductId: r.globalProductId,
       customPrice: r.customPrice // Use customPrice not customPriceCents
     }))
 
@@ -264,18 +264,18 @@ export async function POST(req: NextRequest) {
     // join to global products for base price and unit
     const gpIds = invRows.map(r => r.globalProductId)
     const allGpRows = await db.select().from(globalProducts).where(inArray(globalProducts.id, gpIds as any))
-    
+
     console.log("Global product rows:", allGpRows.map(r => ({ id: r.id, unit: r.unit, name: r.name })))
-    
-    const gpRows = allGpRows.map(r => ({ 
-      id: r.id, 
+
+    const gpRows = allGpRows.map(r => ({
+      id: r.id,
       basePrice: r.basePrice, // Use basePrice not basePriceCents
-      name: r.name, 
-      productCode: r.productCode, 
+      name: r.name,
+      productCode: r.productCode,
       unit: r.unit,
       stockQuantity: r.stockQuantity
     }))
-    
+
     console.log("Mapped gp rows:", gpRows)
 
     const gpById = new Map(gpRows.map(r => [r.id, r]))
@@ -287,11 +287,11 @@ export async function POST(req: NextRequest) {
       if (!inv) throw new Error(`Inventory item ${i.organizationInventoryId} not found`)
       const gp = gpById.get(inv.globalProductId)
       if (!gp) throw new Error(`Global product for inventory ${inv.globalProductId} not found`)
-      
+
       const availableStock = gp.stockQuantity || 0
       if (availableStock < i.quantity) {
-        return NextResponse.json({ 
-          error: `Insufficient stock for ${gp.name} (${gp.productCode}). Available: ${availableStock}, Requested: ${i.quantity}` 
+        return NextResponse.json({
+          error: `Insufficient stock for ${gp.name} (${gp.productCode}). Available: ${availableStock}, Requested: ${i.quantity}`
         }, { status: 400 })
       }
     }
@@ -302,13 +302,13 @@ export async function POST(req: NextRequest) {
       if (!inv) throw new Error(`Inventory item ${i.organizationInventoryId} not found`)
       const gp = gpById.get(inv.globalProductId)
       if (!gp) throw new Error(`Global product for inventory ${inv.globalProductId} not found`)
-      
+
       console.log(`Item ${i.organizationInventoryId}:`, {
         customPriceCents: inv.customPrice,
         basePriceCents: gp.basePrice,
         gpId: gp.id,
       })
-      
+
       const unitPrice = inv.customPrice ?? gp.basePrice
       if (unitPrice === null || unitPrice === undefined) throw new Error(`Price not found for item ${i.organizationInventoryId}. Custom: ${inv.customPrice}, Base: ${gp.basePrice}`)
       const line = unitPrice * (i.quantity || 0)
@@ -325,19 +325,42 @@ export async function POST(req: NextRequest) {
     const tax = 0
     const total = subtotal + tax
 
-    // budget check and hold
-    const budgetRows = await db.select().from(budgets).where(eq(budgets.branchId, branchId)).limit(1)
+    // budget check and hold - must be for current month period
+    const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
+    const budgetRows = await db.select().from(budgets).where(
+      and(
+        eq(budgets.branchId, branchId),
+        eq(budgets.period, currentMonth)
+      )
+    ).limit(1)
     const budget = budgetRows[0]
-    if (!budget) return NextResponse.json({ error: "Budget not configured for branch" }, { status: 400 })
+
+    if (!budget) {
+      return NextResponse.json({
+        error: `Budget not configured for current month (${currentMonth}). Please contact head office to allocate budget.`
+      }, { status: 400 })
+    }
 
     const remaining = (budget.amountAllocatedCents + budget.amountCreditedCents) - (budget.amountSpentCents + budget.amountHeldCents)
-    if (total > remaining) return NextResponse.json({ error: "Insufficient remaining budget" }, { status: 400 })
+
+    // Prevent negative budgets
+    if (remaining < 0) {
+      return NextResponse.json({
+        error: "Budget is in negative state. Please contact head office."
+      }, { status: 400 })
+    }
+
+    if (total > remaining) {
+      return NextResponse.json({
+        error: `Insufficient budget. Required: ${(total / 100).toFixed(2)} PKR, Available: ${(remaining / 100).toFixed(2)} PKR`
+      }, { status: 400 })
+    }
 
     const tid = generateTid()
 
     const created = await db.transaction(async (tx) => {
       const [ord] = await tx.insert(orders).values({
-        tid,  
+        tid,
         organizationId: Number(organizationId),
         branchId: Number(branchId),
         status: 'pending',
@@ -346,12 +369,12 @@ export async function POST(req: NextRequest) {
         totalCents: total,
         notes: notes || null,
         createdByUserId: userId,
-  }).returning()
+      }).returning()
 
       await tx.insert(orderItems).values(calculatedItems.map(ci => {
         console.log("Inserting order item:", ci)
         return {
-          ...ci, 
+          ...ci,
           orderId: ord.id,
           organizationId: Number(organizationId),
         }
@@ -360,7 +383,7 @@ export async function POST(req: NextRequest) {
       // Deduct stock for each item
       for (const ci of calculatedItems) {
         await tx.update(globalProducts)
-          .set({ 
+          .set({
             stockQuantity: sql`${globalProducts.stockQuantity} - ${ci.quantity}`,
             updatedAt: new Date()
           })
@@ -369,17 +392,17 @@ export async function POST(req: NextRequest) {
 
       const budgetId = budget?.id
       if (!budgetId) throw new Error("Budget ID missing")
-      
+
       await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} + ${total}` }).where(eq(budgets.id, budgetId))
 
-      await tx.insert(auditLogs).values({ 
-        userId, 
-        action: 'CREATE_ORDER', 
-        entity: 'Order', 
-        entityId: String(ord.id), 
-        organizationId: Number(organizationId), 
-        branchId: Number(branchId), 
-        metadata: { tid, total, items: items.length } 
+      await tx.insert(auditLogs).values({
+        userId,
+        action: 'CREATE_ORDER',
+        entity: 'Order',
+        entityId: String(ord.id),
+        organizationId: Number(organizationId),
+        branchId: Number(branchId),
+        metadata: { tid, total, items: items.length }
       })
 
       return ord
@@ -409,19 +432,31 @@ export async function PUT(req: NextRequest) {
     const [ord] = await db.select().from(orders).where(eq(orders.id, id)).limit(1)
     if (!ord) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
-    const [budget] = await db.select().from(budgets).where(eq(budgets.branchId, ord.branchId)).limit(1)
-    if (!budget) return NextResponse.json({ error: 'Budget missing' }, { status: 400 })
+    // Fetch budget for the current month period
+    const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
+    const [budget] = await db.select().from(budgets).where(
+      and(
+        eq(budgets.branchId, ord.branchId),
+        eq(budgets.period, currentMonth)
+      )
+    ).limit(1)
+
+    if (!budget) {
+      return NextResponse.json({
+        error: `Budget not configured for current month (${currentMonth})`
+      }, { status: 400 })
+    }
 
     await db.transaction(async (tx) => {
       if (action === 'cancel') {
         await tx.update(orders).set({ status: 'cancelled' }).where(eq(orders.id, id))
         await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}` }).where(eq(budgets.id, (budget as any).id))
-        
+
         // Restore stock for cancelled orders
         const orderItemsList = await tx.select().from(orderItems).where(eq(orderItems.orderId, id))
         for (const item of orderItemsList) {
           await tx.update(globalProducts)
-            .set({ 
+            .set({
               stockQuantity: sql`${globalProducts.stockQuantity} + ${item.quantity}`,
               updatedAt: new Date()
             })
@@ -430,15 +465,15 @@ export async function PUT(req: NextRequest) {
       } else if (action === 'approve') {
         await tx.update(orders).set({ status: 'approved' }).where(eq(orders.id, id))
       } else if (action === 'fulfill') {
-  await tx.update(orders).set({ 
-    status: 'fulfilled',
-    fulfilledAt: sql`NOW()` // ✅ Stores in UTC (standard practice)
-  }).where(eq(orders.id, id))
+        await tx.update(orders).set({
+          status: 'fulfilled',
+          fulfilledAt: sql`NOW()` // ✅ Stores in UTC (standard practice)
+        }).where(eq(orders.id, id))
 
-  await tx.update(budgets).set({
-    amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,
-    amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
-  }).where(eq(budgets.id, (budget as any).id))
+        await tx.update(budgets).set({
+          amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,
+          amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
+        }).where(eq(budgets.id, (budget as any).id))
         // Stock already deducted on order creation, no additional action needed
       }
       await tx.insert(auditLogs).values({ userId: (session.user as any).id, action: 'UPDATE', entity: 'Order', entityId: String(id), organizationId: ord.organizationId, branchId: ord.branchId, metadata: { action, tid: ord.tid } })

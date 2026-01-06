@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     if (allParam && (role === "HEAD_OFFICE" || role === "SUPER_ADMIN")) {
       try {
         const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
-        
+
         // Use LEFT JOIN to get all branches, even if they don't have budgets for current period yet
         const allBranches = await db
           .select({
@@ -74,15 +74,28 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Single branch budget query
+    // Single branch budget query - must be for current month period
     const branchId = (role === "HEAD_OFFICE" || role === "SUPER_ADMIN") && branchIdParam
       ? parseInt(branchIdParam)
       : parseInt(userBranchId)
 
     if (!branchId) return NextResponse.json({ error: "Branch ID required" }, { status: 400 })
 
-    const [b] = await db.select().from(budgets).where(eq(budgets.branchId, branchId)).limit(1)
-    if (!b) return NextResponse.json({ error: "Budget not configured" }, { status: 404 })
+    const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
+    const [b] = await db.select().from(budgets).where(
+      and(
+        eq(budgets.branchId, branchId),
+        eq(budgets.period, currentMonth)
+      )
+    ).limit(1)
+
+    if (!b) {
+      return NextResponse.json({
+        error: `Budget not configured for current month (${currentMonth})`,
+        branchId,
+        period: currentMonth
+      }, { status: 404 })
+    }
 
     const remainingCents = (b.amountAllocatedCents + b.amountCreditedCents) - (b.amountSpentCents + b.amountHeldCents)
     return NextResponse.json({
@@ -92,6 +105,7 @@ export async function GET(req: NextRequest) {
       amountHeldCents: b.amountHeldCents,
       amountCreditedCents: b.amountCreditedCents,
       remainingCents,
+      period: b.period,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
@@ -148,8 +162,10 @@ export async function PUT(req: NextRequest) {
 
     if (budget) {
       const oldAmount = budget.amountAllocatedCents
+      const newAmount = oldAmount + amountAllocatedCents // ADD to existing budget
+
       await db.update(budgets).set({
-        amountAllocatedCents,
+        amountAllocatedCents: newAmount,
         updatedAt: new Date(),
       }).where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
 
@@ -163,7 +179,8 @@ export async function PUT(req: NextRequest) {
         metadata: {
           branchName: branch.name,
           oldAmount: oldAmount / 100,
-          newAmount: amountAllocatedCents / 100,
+          addedAmount: amountAllocatedCents / 100,
+          newAmount: newAmount / 100,
         },
       })
     } else {

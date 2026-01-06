@@ -81,7 +81,7 @@ export default function BudgetsPage() {
 
   const handleEditBudget = (budget: BudgetAllocation) => {
     setEditingBudget(budget)
-    setNewAmount((budget.amountAllocatedCents / 100).toFixed(2))
+    setNewAmount("") // Start with empty field since we're adding, not replacing
     setShowDialog(true)
   }
 
@@ -107,9 +107,10 @@ export default function BudgetsPage() {
         return toast({ title: "Failed", description: json.error, variant: "destructive" })
       }
 
+      const newTotal = (editingBudget.amountAllocatedCents / 100) + parseFloat(newAmount)
       toast({
         title: "Budget Updated",
-        description: `${editingBudget.branchName} monthly budget set to ${formatPKR(parseFloat(newAmount))}`,
+        description: `Added ${formatPKR(parseFloat(newAmount))} to ${editingBudget.branchName}. New total: ${formatPKR(newTotal)}`,
       })
       setShowDialog(false)
       setEditingBudget(null)
@@ -393,8 +394,8 @@ export default function BudgetsPage() {
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <DialogHeader>
-            <DialogTitle className="text-slate-900 dark:text-white">Set Monthly Budget</DialogTitle>
-            <DialogDescription className="text-slate-600 dark:text-slate-400">Allocate the monthly budget for {editingBudget?.branchName}</DialogDescription>
+            <DialogTitle className="text-slate-900 dark:text-white">Add to Monthly Budget</DialogTitle>
+            <DialogDescription className="text-slate-600 dark:text-slate-400">Add budget allocation for {editingBudget?.branchName}. The amount will be ADDED to the existing budget.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-lg space-y-2 text-sm">
@@ -413,12 +414,15 @@ export default function BudgetsPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-900 dark:text-white">New Monthly Budget (PKR)</label>
+              <label className="block text-sm font-semibold mb-2 text-slate-900 dark:text-white">Amount to Add (PKR)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">PKR</span>
                 <Input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-12 text-lg font-bold h-11" />
               </div>
-              <p className="text-xs text-muted-foreground mt-2">Set the total budget this branch can spend this month</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 font-medium">
+                New total will be: {formatPKR((editingBudget?.amountAllocatedCents || 0) / 100 + parseFloat(newAmount || "0"))}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">This amount will be added to the current budget allocation</p>
             </div>
           </div>
           <DialogFooter>
