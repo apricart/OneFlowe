@@ -110,8 +110,8 @@ export default function OrderPortalPage() {
     ? `/api/v1/budgets${needsContextParams ? `?branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
     : null
 
-  const { data: branchInventory } = useSWR<any>(branchInventoryUrl, fetcher)
-  const { data: budget } = useSWR<any>(budgetsUrl, fetcher)
+  const { data: branchInventory, mutate: mutateBranchInventory } = useSWR<any>(branchInventoryUrl, fetcher)
+  const { data: budget, mutate: mutateBudget } = useSWR<any>(budgetsUrl, fetcher)
   const { data: ordersData, mutate: mutateOrders } = useSWR<any>("/api/v1/orders", fetcher)
 
   const products: Product[] = useMemo(() => {
@@ -269,7 +269,11 @@ export default function OrderPortalPage() {
       toast({ title: "Order placed!", description: `TID: ${json.order?.tid}` })
       setCart([])
       setShowCheckout(false)
+
+      // Revalidate all data so UI updates immediately without refresh
       mutateOrders()
+      mutateBudget() // Update budget display (remaining, on hold amounts)
+      mutateBranchInventory() // Update stock quantities
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" })
     }
@@ -377,10 +381,10 @@ export default function OrderPortalPage() {
                 <div className="mt-1 h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                   <div
                     className={`h-full rounded-full ${budgetPercent < 60
-                        ? "bg-[color:var(--color-brand-primary)]"
-                        : budgetPercent < 85
-                          ? "bg-amber-500"
-                          : "bg-red-500"
+                      ? "bg-[color:var(--color-brand-primary)]"
+                      : budgetPercent < 85
+                        ? "bg-amber-500"
+                        : "bg-red-500"
                       }`}
                     style={{ width: `${budgetPercent}%` }}
                   />
@@ -792,10 +796,10 @@ export default function OrderPortalPage() {
                         {product.stock !== undefined && (
                           <Badge
                             className={`absolute top-2 right-2 ${product.stock > 10
-                                ? "bg-green-500"
-                                : product.stock > 0
-                                  ? "bg-yellow-500"
-                                  : "bg-red-500"
+                              ? "bg-green-500"
+                              : product.stock > 0
+                                ? "bg-yellow-500"
+                                : "bg-red-500"
                               }`}
                           >
                             {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
@@ -832,8 +836,8 @@ export default function OrderPortalPage() {
                             <Star
                               key={i}
                               className={`h-3 w-3 ${i < Math.floor(product.rating || 0)
-                                  ? "fill-yellow-400 text-yellow-400"
-                                  : "text-slate-300"
+                                ? "fill-yellow-400 text-yellow-400"
+                                : "text-slate-300"
                                 }`}
                             />
                           ))}
@@ -982,8 +986,8 @@ export default function OrderPortalPage() {
                     <Star
                       key={i}
                       className={`h-4 w-4 ${i < Math.floor(selectedProduct.rating || 0)
-                          ? "fill-yellow-400 text-yellow-400"
-                          : "text-slate-300"
+                        ? "fill-yellow-400 text-yellow-400"
+                        : "text-slate-300"
                         }`}
                     />
                   ))}

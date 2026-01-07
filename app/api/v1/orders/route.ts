@@ -447,8 +447,20 @@ export async function PUT(req: NextRequest) {
       }, { status: 400 })
     }
 
+    // Validate state transitions to prevent budget corruption
+    const currentStatus = ord.status.toLowerCase()
+    const isTerminal = ["cancelled", "fulfilled", "refunded", "rejected"].includes(currentStatus)
+
+    if (isTerminal) {
+      return NextResponse.json({
+        error: `Cannot ${action} order that is already ${currentStatus}`
+      }, { status: 400 })
+    }
+
     await db.transaction(async (tx) => {
       if (action === 'cancel') {
+        // Only release budget if it was reserved (pending or approved)
+        // We already checked it's not terminal, so it must be pending/approved.
         await tx.update(orders).set({ status: 'cancelled' }).where(eq(orders.id, id))
         await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}` }).where(eq(budgets.id, (budget as any).id))
 
@@ -463,8 +475,12 @@ export async function PUT(req: NextRequest) {
             .where(eq(globalProducts.id, item.globalProductId))
         }
       } else if (action === 'approve') {
+        if (currentStatus !== 'pending') {
+          throw new Error(`Cannot approve order in ${currentStatus} state`)
+        }
         await tx.update(orders).set({ status: 'approved' }).where(eq(orders.id, id))
       } else if (action === 'fulfill') {
+        // Move budget from Held -> Spent
         await tx.update(orders).set({
           status: 'fulfilled',
           fulfilledAt: sql`NOW()` // ✅ Stores in UTC (standard practice)

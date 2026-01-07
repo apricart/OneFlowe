@@ -107,10 +107,10 @@ export default function BudgetsPage() {
         return toast({ title: "Failed", description: json.error, variant: "destructive" })
       }
 
-      const newTotal = (editingBudget.amountAllocatedCents / 100) + parseFloat(newAmount)
+      const newRemaining = (editingBudget.remainingCents / 100) + parseFloat(newAmount)
       toast({
         title: "Budget Updated",
-        description: `Added ${formatPKR(parseFloat(newAmount))} to ${editingBudget.branchName}. New total: ${formatPKR(newTotal)}`,
+        description: `Added ${formatPKR(parseFloat(newAmount))} to ${editingBudget.branchName}. New remaining: ${formatPKR(newRemaining)}`,
       })
       setShowDialog(false)
       setEditingBudget(null)
@@ -216,13 +216,12 @@ export default function BudgetsPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Total allocated", value: formatAmount(totalAllocated), icon: Wallet, gradient: "from-indigo-500 to-purple-500", sub: currentMonth },
           { label: "Total spent", value: formatAmount(totalSpent), icon: PieChart, gradient: "from-orange-400 to-pink-500", sub: "Across branches" },
           { label: "On hold", value: formatAmount(totalHeld), icon: AlertTriangle, gradient: "from-amber-400 to-yellow-500", sub: "Pending fulfillment" },
           { label: "Remaining", value: formatAmount(totalRemaining), icon: CheckCircle2, gradient: "from-emerald-400 to-teal-500", sub: "Available balance" },
-          { label: "Avg per branch", value: formatAmount(avgBudget), icon: Zap, gradient: "from-slate-400 to-slate-600", sub: `${budgets.length || 0} branches` },
         ].map((metric) => {
           const Icon = metric.icon
           return (
@@ -420,7 +419,7 @@ export default function BudgetsPage() {
                 <Input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-12 text-lg font-bold h-11" />
               </div>
               <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 font-medium">
-                New total will be: {formatPKR((editingBudget?.amountAllocatedCents || 0) / 100 + parseFloat(newAmount || "0"))}
+                New remaining will be: {formatPKR((editingBudget?.remainingCents || 0) / 100 + parseFloat(newAmount || "0"))}
               </p>
               <p className="text-xs text-muted-foreground mt-1">This amount will be added to the current budget allocation</p>
             </div>
