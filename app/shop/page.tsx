@@ -209,11 +209,7 @@ export default function OrderPortalPage() {
       if (existing) {
         const newQuantity = existing.quantity + qty
         if (newQuantity > availableStock) {
-          toast({
-            title: "Insufficient stock",
-            description: `Only ${availableStock} available for ${product.name}.`,
-            variant: "destructive"
-          })
+          // Toast moved outside state updater below
           return prev
         }
         return prev.map(item =>
@@ -222,6 +218,18 @@ export default function OrderPortalPage() {
       }
       return [...prev, { ...product, quantity: qty }]
     })
+
+    // Handle toast after state update starts (or outside the updater)
+    const existingInCart = cart.find(item => item.id === product.id)
+    if (existingInCart && (existingInCart.quantity + qty) > availableStock) {
+      toast({
+        title: "Insufficient stock",
+        description: `Only ${availableStock} available for ${product.name}.`,
+        variant: "destructive"
+      })
+      return
+    }
+
     toast({ title: `${product.name} added to cart` })
   }
 
@@ -229,22 +237,22 @@ export default function OrderPortalPage() {
     if (qty <= 0) {
       removeFromCart(id)
     } else {
-      setCart(prev => {
-        const item = prev.find(i => i.id === id)
-        if (!item) return prev
+      const itemInCart = cart.find(i => i.id === id)
+      if (!itemInCart) return
 
-        const availableStock = item.stock || 0
-        if (qty > availableStock) {
-          toast({
-            title: "Insufficient stock",
-            description: `Only ${availableStock} available for ${item.name}.`,
-            variant: "destructive"
-          })
-          return prev.map(i => i.id === id ? { ...i, quantity: availableStock } : i)
-        }
+      const availableStock = itemInCart.stock || 0
+      if (qty > availableStock) {
+        toast({
+          title: "Insufficient stock",
+          description: `Only ${availableStock} available for ${itemInCart.name}.`,
+          variant: "destructive"
+        })
+        // If qty exceeds stock, cap it to available stock
+        setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: availableStock } : i))
+        return
+      }
 
-        return prev.map(i => i.id === id ? { ...i, quantity: qty } : i)
-      })
+      setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: qty } : i))
     }
   }
 

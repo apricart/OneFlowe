@@ -90,9 +90,8 @@ export function useDashboardNotifications() {
         items.push({
           id: "inactive-branches",
           title: "Branches offline",
-          message: `${inactiveBranches.length} branch${
-            inactiveBranches.length === 1 ? " is" : "es are"
-          } marked inactive.`,
+          message: `${inactiveBranches.length} branch${inactiveBranches.length === 1 ? " is" : "es are"
+            } marked inactive.`,
           severity: "warning",
           cta: { label: "View branches", href: "/branches" },
           tag: "ops",
@@ -103,9 +102,8 @@ export function useDashboardNotifications() {
         items.push({
           id: "orphan-branches",
           title: "Assign branch admins",
-          message: `${orphanBranches.length} branch${
-            orphanBranches.length === 1 ? "" : "es"
-          } do not have an assigned admin.`,
+          message: `${orphanBranches.length} branch${orphanBranches.length === 1 ? "" : "es"
+            } do not have an assigned admin.`,
           severity: "critical",
           cta: { label: "Assign owners", href: "/users" },
           tag: "staffing",
@@ -113,14 +111,6 @@ export function useDashboardNotifications() {
       }
     }
 
-    if (items.length === 0) {
-      items.push({
-        id: "all-clear",
-        title: "All caught up",
-        message: "Nothing urgent right now. Keep an eye on this panel for new activity.",
-        severity: "info",
-      })
-    }
 
     return items
   }, [

@@ -12,16 +12,16 @@ const getNavigationByRole = (role: string) => {
   const baseNav = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
   ]
-  
+
   if (role === "SUPER_ADMIN") {
     return [
       ...baseNav,
       { href: "/organizations", label: "Organizations", icon: Building2 },
       { href: "/users", label: "Users", icon: Users },
       { href: "/orders", label: "Orders", icon: Package },
-      { 
-        href: "/products", 
-        label: "Product Management", 
+      {
+        href: "/products",
+        label: "Product Management",
         icon: ShoppingBag,
         subItems: [
           { href: "/products/categories", label: "Categories", icon: FolderTree },
@@ -30,9 +30,9 @@ const getNavigationByRole = (role: string) => {
       },
       { href: "/global-inventory", label: "Global Inventory", icon: Boxes },
       { href: "/budgets", label: "Budgets", icon: Wallet },
-      { 
-        href: "/reports", 
-        label: "Reports", 
+      {
+        href: "/reports",
+        label: "Reports",
         icon: BarChart3,
         subItems: [
           { href: "/reports/sales-summary", label: "Summary Report" },
@@ -47,7 +47,7 @@ const getNavigationByRole = (role: string) => {
       { href: "/settings", label: "Settings", icon: Settings },
     ]
   }
-  
+
   if (role === "HEAD_OFFICE") {
     return [
       ...baseNav,
@@ -56,9 +56,9 @@ const getNavigationByRole = (role: string) => {
       { href: "/head-office-orders", label: "Orders", icon: Package },
       { href: "/inventory", label: "Inventory", icon: Boxes },
       { href: "/budgets", label: "Budgets", icon: Wallet },
-      { 
-        href: "/reports", 
-        label: "Reports", 
+      {
+        href: "/reports",
+        label: "Reports",
         icon: BarChart3,
         subItems: [
           { href: "/reports/sales-summary", label: "Summary Report" },
@@ -73,17 +73,17 @@ const getNavigationByRole = (role: string) => {
       { href: "/settings", label: "Settings", icon: Settings },
     ]
   }
-  
+
   if (role === "BRANCH_ADMIN") {
     return [
       ...baseNav,
       { href: "/orders", label: "Orders", icon: Package },
       { href: "/branch-inventory", label: "Inventory", icon: Boxes },
-      { href: "/employee-management", label: "Employee Management", icon: Users },
+      // { href: "/employee-management", label: "Employee Management", icon: Users },
       { href: "/settings", label: "Settings", icon: Settings },
     ]
   }
-  
+
   return baseNav
 }
 
@@ -95,8 +95,8 @@ export function Sidebar() {
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
   const toggleExpanded = (href: string) => {
-    setExpandedItems(prev => 
-      prev.includes(href) 
+    setExpandedItems(prev =>
+      prev.includes(href)
         ? prev.filter(item => item !== href)
         : [...prev, href]
     )
@@ -114,41 +114,49 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 shrink-0 h-svh border-r border-slate-200 dark:border-slate-800 flex flex-col bg-white dark:bg-slate-900">
-      <div className="px-4 py-4 flex items-center gap-3 bg-gradient-to-r from-blue-400 to-indigo-600 dark:from-indigo-700 dark:via-purple-800 dark:to-pink-800">
-        <div className="bg-white dark:bg-white/20 rounded-lg p-1.5 flex items-center justify-center">
-          <Image src="/logo-pos.png" alt="OneFlowe" width={32} height={32} />
+    <aside className="w-64 shrink-0 h-svh border-r border-slate-200 dark:border-slate-800 flex flex-col bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur-xl">
+      <div className="px-6 py-6 flex items-center gap-3 bg-gradient-to-br from-blue-600 via-indigo-700 to-violet-800 dark:from-sky-900 dark:via-blue-900 dark:to-indigo-950 shadow-lg relative overflow-hidden group">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.1),transparent)] group-hover:opacity-100 transition-opacity duration-700"></div>
+        <div className="relative z-10 bg-white/10 backdrop-blur-md rounded-xl p-2 flex items-center justify-center ring-1 ring-white/20 shadow-inner">
+          <Image src="/logo-pos.png" alt="OneFlowe" width={32} height={32} className="drop-shadow-sm" />
         </div>
-        <div className="leading-tight">
-          <div className="text-base font-semibold tracking-tight text-white">OneFlowe</div>
-          <div className="text-xs opacity-90 text-white/90">{role === "SUPER_ADMIN" ? "Admin" : role === "HEAD_OFFICE" ? "Head Office" : "Branch"}</div>
+        <div className="relative z-10 leading-tight">
+          <div className="text-lg font-bold tracking-tight text-white drop-shadow-sm">OneFlowe</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-blue-100/80 group-hover:text-white transition-colors duration-300">
+            {role === "SUPER_ADMIN" ? "Administrator" : role === "HEAD_OFFICE" ? "Head Office" : "Branch Admin"}
+          </div>
         </div>
       </div>
-      <nav className="p-2 grid gap-1 overflow-y-auto flex-1 min-h-0 bg-white dark:bg-slate-900" aria-busy={!session} aria-live="polite">
+
+      <nav className="p-4 flex flex-col gap-1.5 overflow-y-auto flex-1 min-h-0 bg-transparent custom-scrollbar" aria-busy={!session} aria-live="polite">
         {nav.map((item) => {
           const active = isItemActive(item)
           const hasSubItems = 'subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0;
           const isExpanded = expandedItems.includes(item.href)
-          
+
           if (hasSubItems) {
-            const subItems = item.subItems;
             return (
-              <div key={item.href}>
+              <div key={item.href} className="space-y-1">
                 <button
                   onClick={() => toggleExpanded(item.href)}
                   className={cn(
-                    "w-full rounded-md px-3 py-2 text-sm flex items-center gap-2 text-left transition-colors",
-                    active 
-                      ? "font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300" 
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    "w-full rounded-xl px-4 py-2.5 text-sm flex items-center gap-3 text-left transition-all duration-300 relative group",
+                    active
+                      ? "font-bold bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-100 hover:shadow-sm"
                   )}
                 >
-                  {item.icon ? <item.icon size={16} /> : null}
+                  {active && <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-blue-600 dark:bg-blue-400 rounded-r-full" />}
+                  {item.icon ? (
+                    <item.icon size={18} className={cn("transition-transform duration-300 group-hover:scale-110", active ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-500 group-hover:text-blue-500")} />
+                  ) : null}
                   <span className="flex-1">{item.label}</span>
-                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  <div className={cn("transition-transform duration-300", isExpanded ? "rotate-180" : "rotate-0")}>
+                    <ChevronDown size={14} className="opacity-50" />
+                  </div>
                 </button>
-                {isExpanded && Array.isArray(item.subItems) && (
-                  <div className="ml-4 mt-1 space-y-1">
+                {isExpanded && (
+                  <div className="ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1 mt-1 animate-in fade-in slide-in-from-left-2 duration-300">
                     {item.subItems.map((subItem: any) => {
                       const subActive = isSubItemActive(subItem)
                       return (
@@ -156,14 +164,16 @@ export function Sidebar() {
                           key={subItem.href}
                           href={subItem.href}
                           className={cn(
-                            "block rounded-md px-3 py-2 text-sm flex items-center gap-2 transition-colors",
-                            subActive 
-                              ? "font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300" 
-                              : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            "block rounded-lg px-4 py-2 text-xs font-medium transition-all duration-300",
+                            subActive
+                              ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm"
+                              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
                           )}
                         >
-                          {subItem.icon ? <subItem.icon size={14} /> : null}
-                          <span>{subItem.label}</span>
+                          <div className="flex items-center gap-2">
+                            {subItem.icon ? <subItem.icon size={14} /> : <div className="w-1 h-1 rounded-full bg-current opacity-30" />}
+                            <span>{subItem.label}</span>
+                          </div>
                         </Link>
                       )
                     })}
@@ -178,13 +188,16 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "rounded-md px-3 py-2 text-sm flex items-center gap-2 transition-colors",
-                active 
-                  ? "font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300" 
-                  : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                "rounded-xl px-4 py-2.5 text-sm flex items-center gap-3 transition-all duration-300 relative group",
+                active
+                  ? "font-bold bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-100 hover:shadow-sm"
               )}
             >
-              {item.icon ? <item.icon size={16} /> : null}
+              {active && <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-blue-600 dark:bg-blue-400 rounded-r-full" />}
+              {item.icon ? (
+                <item.icon size={18} className={cn("transition-transform duration-300 group-hover:scale-110", active ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-500 group-hover:text-blue-500")} />
+              ) : null}
               <span>{item.label}</span>
             </Link>
           )

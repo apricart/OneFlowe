@@ -39,14 +39,14 @@ const barColorsDark = [
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null
-  
+
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl">
       <div className="bg-slate-50 dark:bg-slate-900 px-4 py-2 border-b border-slate-200 dark:border-slate-700">
         <p className="font-semibold text-slate-700 dark:text-slate-300 text-xs">{payload[0].payload.month}</p>
       </div>
       <div className="px-4 py-3">
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Revenue</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Purchase</p>
         <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
           ₨{payload[0].value.toLocaleString()}
         </p>
@@ -75,9 +75,9 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
   const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
   const totalSales = yearlySalesData.reduce((sum, item) => sum + item.sales, 0)
   const peakMonth = yearlySalesData.reduce((max, item) => item.sales > max.sales ? item : max, yearlySalesData[0])
-  
+
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm dark:shadow-slate-900/50 overflow-hidden">
+    <div className="animate-fade-in space-y-6">
       <style>{`
         @keyframes slideIn {
           from { opacity: 0; transform: translateY(10px); }
@@ -95,29 +95,7 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
         }
       `}</style>
 
-      {/* Header */}
-      <div className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-600 dark:bg-blue-500 p-2 rounded-lg">
-              <TrendingUp className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                Annual Revenue Performance
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Fiscal Year Overview
-              </p>
-            </div>
-          </div>
-          <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-md border border-blue-100 dark:border-blue-800">
-            <p className="text-xs text-blue-700 dark:text-blue-300 font-semibold">Active</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-6">
+      <div className="px-1">
         {/* Key Metrics */}
         <div className="grid grid-cols-3 gap-4 mb-6 animate-slide-in">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -126,7 +104,7 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
                 <DollarSign className="h-3.5 w-3.5 text-white" />
               </div>
               <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 uppercase tracking-wide">
-                Total Revenue
+                Total Purchase
               </p>
             </div>
             <p className="text-2xl font-bold text-blue-900 dark:text-blue-200 mb-1">
@@ -178,8 +156,8 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
             <div className="w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full"></div>
             <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Performance Trend</span>
           </div>
-          
-          <div className="h-[380px] bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800 p-4">
+
+          <div className="h-[320px] bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800 p-4">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={yearlySalesData}
@@ -196,13 +174,13 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
                   </linearGradient>
                 </defs>
 
-                <CartesianGrid 
-                  strokeDasharray="3 3" 
-                  stroke={isDark ? "#475569" : "#e2e8f0"} 
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={isDark ? "#475569" : "#e2e8f0"}
                   vertical={false}
                 />
-                <XAxis 
-                  dataKey="month" 
+                <XAxis
+                  dataKey="month"
                   tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontWeight: 600, fontSize: 11 }}
                   axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }}
                   tickLine={false}
@@ -210,13 +188,13 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
                 />
                 <YAxis
                   tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontWeight: 600, fontSize: 11 }}
-                  tickFormatter={(value) => `₨${value/1000}k`}
+                  tickFormatter={(value) => `₨${value / 1000}k`}
                   axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }}
                   tickLine={false}
                   dx={-5}
                 />
 
-                <Tooltip 
+                <Tooltip
                   contentStyle={{
                     background: isDark ? "#1e293b" : "white",
                     borderRadius: "8px",
@@ -224,25 +202,25 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
                     boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
                     padding: "8px 12px",
                   }}
-                  labelStyle={{ 
-                    color: isDark ? "#cbd5e1" : "#334155", 
+                  labelStyle={{
+                    color: isDark ? "#cbd5e1" : "#334155",
                     fontWeight: "600",
                     fontSize: "12px",
                     marginBottom: "4px"
                   }}
-                  formatter={(value: number) => [`₨${value.toLocaleString()}`, "Revenue"]}
+                  formatter={(value: number) => [`₨${value.toLocaleString()}`, "Purchase"]}
                 />
 
-                <ReferenceLine 
-                  y={avgSales} 
-                  label={{ 
-                    value: `Avg: ₨${Math.round(avgSales).toLocaleString()}`, 
+                <ReferenceLine
+                  y={avgSales}
+                  label={{
+                    value: `Avg: ₨${Math.round(avgSales).toLocaleString()}`,
                     position: "right",
                     fill: isDark ? "#fbbf24" : "#f59e0b",
                     fontWeight: "600",
                     fontSize: 10
-                  }} 
-                  stroke={isDark ? "#fbbf24" : "#f59e0b"} 
+                  }}
+                  stroke={isDark ? "#fbbf24" : "#f59e0b"}
                   strokeWidth={1.5}
                   strokeDasharray="5 5"
                 />
@@ -253,13 +231,13 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
                   stroke={isDark ? "#60a5fa" : "#2563eb"}
                   strokeWidth={2.5}
                   fill={isDark ? "url(#salesGradientDark)" : "url(#salesGradient)"}
-                  dot={{ 
-                    r: 4, 
+                  dot={{
+                    r: 4,
                     fill: isDark ? "#1e293b" : "#ffffff",
-                    stroke: isDark ? "#60a5fa" : "#2563eb", 
+                    stroke: isDark ? "#60a5fa" : "#2563eb",
                     strokeWidth: 2
                   }}
-                  activeDot={{ 
+                  activeDot={{
                     r: 6,
                     fill: isDark ? "#60a5fa" : "#2563eb",
                     stroke: "#ffffff",
@@ -295,11 +273,11 @@ export function ChartTooltip({
     prefix === "currency"
       ? currencyFormatter.format(value)
       : prefix === "count"
-      ? `${value.toLocaleString()} orders`
-      : value.toLocaleString()
+        ? `${value.toLocaleString()} orders`
+        : value.toLocaleString()
 
   const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
-  
+
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden">
       <div className="bg-slate-50 dark:bg-slate-900 px-4 py-2 border-b border-slate-200 dark:border-slate-700">
@@ -325,34 +303,20 @@ export function TrendAreaChart({ data, className }: { data: TrendPoint[]; classN
 
   return (
     <div className={className}>
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm dark:shadow-slate-900/50 overflow-hidden">
-        {/* Header */}
-        <div className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-emerald-600 dark:bg-emerald-500 p-2 rounded-lg">
-              <Activity className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                Weekly Performance
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Last 7 Days Analysis
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6">
+      <div className="space-y-6">
+        <div className="px-1">
           {/* Mini Stats */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-2 mb-2">
-                <DollarSign className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
-                <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-300 uppercase tracking-wide">
-                  Total Value
-                </p>
+              <div className="relative flex items-center justify-center mb-3">
+                <div className="absolute inset-0 bg-emerald-500 opacity-20 blur-lg rounded-full"></div>
+                <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-700 shadow-sm flex items-center justify-center">
+                  <DollarSign className="h-5 w-5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+                </div>
               </div>
+              <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider mb-1">
+                Total Value
+              </p>
               <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-200 mb-1">
                 ₨{totalValue.toLocaleString()}
               </p>
@@ -362,12 +326,15 @@ export function TrendAreaChart({ data, className }: { data: TrendPoint[]; classN
             </div>
 
             <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-center gap-2 mb-2">
-                <Award className="h-4 w-4 text-blue-700 dark:text-blue-400" />
-                <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 uppercase tracking-wide">
-                  Peak Day
-                </p>
+              <div className="relative flex items-center justify-center mb-3">
+                <div className="absolute inset-0 bg-blue-500 opacity-20 blur-lg rounded-full"></div>
+                <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 shadow-sm flex items-center justify-center">
+                  <Award className="h-5 w-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
+                </div>
               </div>
+              <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider mb-1">
+                Peak Day
+              </p>
               <p className="text-2xl font-bold text-blue-900 dark:text-blue-200 mb-1">
                 {peakDay.label}
               </p>
@@ -375,11 +342,29 @@ export function TrendAreaChart({ data, className }: { data: TrendPoint[]; classN
                 ₨{peakDay.value.toLocaleString()}
               </p>
             </div>
+
+            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div className="relative flex items-center justify-center mb-3">
+                <div className="absolute inset-0 bg-indigo-500 opacity-20 blur-lg rounded-full"></div>
+                <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 shadow-sm flex items-center justify-center">
+                  <Activity className="h-5 w-5 text-indigo-600 dark:text-indigo-400" strokeWidth={2.5} />
+                </div>
+              </div>
+              <p className="text-xs font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider mb-1">
+                Average
+              </p>
+              <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-200 mb-1">
+                ₨{Math.round(totalValue / (chartData.length || 1)).toLocaleString()}
+              </p>
+              <div className="w-full h-1 bg-indigo-200 dark:bg-indigo-900/50 rounded-full overflow-hidden">
+                <div className="w-2/3 h-full bg-indigo-600 dark:bg-indigo-500 rounded-full"></div>
+              </div>
+            </div>
           </div>
 
           {/* Chart */}
           <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4">
-            <div className="h-64 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800 p-3">
+            <div className="h-[320px] bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800 p-3">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 10 }}>
                   <defs>
@@ -392,20 +377,20 @@ export function TrendAreaChart({ data, className }: { data: TrendPoint[]; classN
                       <stop offset="100%" stopColor="#34d399" stopOpacity={0.1} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid 
-                    strokeDasharray="3 3" 
-                    stroke={isDark ? "#475569" : "#e2e8f0"} 
-                    vertical={false} 
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={isDark ? "#475569" : "#e2e8f0"}
+                    vertical={false}
                   />
-                  <XAxis 
-                    dataKey="label" 
-                    tickLine={false} 
-                    axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }} 
-                    tickMargin={8} 
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }}
+                    tickMargin={8}
                     tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontWeight: 600, fontSize: 10 }}
                   />
                   <YAxis
-                    tickFormatter={(value) => `₨${value/1000}k`}
+                    tickFormatter={(value) => `₨${value / 1000}k`}
                     width={60}
                     axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }}
                     tickLine={false}
@@ -422,13 +407,13 @@ export function TrendAreaChart({ data, className }: { data: TrendPoint[]; classN
                     fill={isDark ? "url(#weeklyGradientDark)" : "url(#weeklyGradient)"}
                     animationDuration={1200}
                     animationEasing="ease-in-out"
-                    dot={{ 
-                      r: 4, 
+                    dot={{
+                      r: 4,
                       fill: isDark ? "#1e293b" : "#ffffff",
-                      stroke: isDark ? "#34d399" : "#10b981", 
+                      stroke: isDark ? "#34d399" : "#10b981",
                       strokeWidth: 2
                     }}
-                    activeDot={{ 
+                    activeDot={{
                       r: 6,
                       fill: isDark ? "#34d399" : "#10b981",
                       stroke: "#ffffff",
@@ -490,27 +475,27 @@ export function ComparisonBarChart({
                     <stop offset="100%" stopColor="#3b82f6" />
                   </linearGradient>
                 </defs>
-                <CartesianGrid 
-                  strokeDasharray="3 3" 
-                  stroke={isDark ? "#475569" : "#e2e8f0"} 
-                  vertical={false} 
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={isDark ? "#475569" : "#e2e8f0"}
+                  vertical={false}
                 />
-                <XAxis 
-                  dataKey="label" 
-                  tickLine={false} 
-                  axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }} 
-                  tickMargin={8} 
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }}
+                  tickMargin={8}
                   tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontWeight: 600, fontSize: 10 }}
                 />
-                <YAxis 
-                  allowDecimals={false} 
-                  axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }} 
-                  tickLine={false} 
+                <YAxis
+                  allowDecimals={false}
+                  axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }}
+                  tickLine={false}
                   tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontWeight: 600, fontSize: 10 }}
                 />
-                <Tooltip 
-                  content={<ChartTooltip prefix="count" />} 
-                  cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(226, 232, 240, 0.3)" }} 
+                <Tooltip
+                  content={<ChartTooltip prefix="count" />}
+                  cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(226, 232, 240, 0.3)" }}
                 />
                 <Bar
                   dataKey="value"
@@ -518,10 +503,10 @@ export function ComparisonBarChart({
                   fill={isDark ? "url(#comparisonBarDark)" : "url(#comparisonBar)"}
                   animationDuration={1000}
                   animationEasing="ease-in-out"
-                  label={{ 
-                    position: "top", 
-                    fill: isDark ? "#cbd5e1" : "#334155", 
-                    fontSize: 10, 
+                  label={{
+                    position: "top",
+                    fill: isDark ? "#cbd5e1" : "#334155",
+                    fontSize: 10,
                     fontWeight: "600",
                     offset: 8
                   }}
@@ -539,42 +524,25 @@ export function ComparisonBarChart({
 export default function SalesBarChart({ data }: Props) {
   const { theme } = useTheme()
   const [mounted, setMounted] = useState(false)
-  
+
   useEffect(() => {
     setMounted(true)
   }, [])
-  
+
   const isDark = mounted && theme === "dark"
   const totalRevenue = data.reduce((sum, item) => sum + item.value, 0)
   const avgRevenue = Math.round(totalRevenue / data.length)
   const peakMonth = data.reduce((max, item) => item.value > max.value ? item : max, data[0])
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm dark:shadow-slate-900/50 overflow-hidden">
-      {/* Header */}
-      <div className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4">
-        <div className="flex items-center justify-center gap-3">
-          <div className="bg-blue-600 dark:bg-blue-500 p-2 rounded-lg">
-            <BarChart3 className="h-5 w-5 text-white" />
-          </div>
-          <div className="text-center">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Monthly Revenue Performance
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Financial Overview
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-6">
+    <div className="space-y-6">
+      <div className="px-1">
         {/* Chart */}
         <div className="mb-6 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6">
-          <div className="h-[380px] bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800 p-4">
+          <div className="h-[320px] bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800 p-4">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart 
-                data={data} 
+              <BarChart
+                data={data}
                 barSize={40}
                 margin={{ top: 20, right: 20, left: 10, bottom: 10 }}
               >
@@ -585,25 +553,25 @@ export default function SalesBarChart({ data }: Props) {
                   </linearGradient>
                 </defs>
 
-                <CartesianGrid 
-                  strokeDasharray="3 3" 
-                  stroke={isDark ? "#475569" : "#e2e8f0"} 
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={isDark ? "#475569" : "#e2e8f0"}
                   vertical={false}
                 />
-                
-                <XAxis 
-                  dataKey="month" 
+
+                <XAxis
+                  dataKey="month"
                   tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontWeight: 600, fontSize: 11 }}
                   axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }}
                   tickLine={false}
                   dy={8}
                 />
-                
+
                 <YAxis
                   tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontWeight: 600, fontSize: 11 }}
                   axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1 }}
                   tickLine={false}
-                  tickFormatter={(value) => `₨${value/1000}k`}
+                  tickFormatter={(value) => `₨${value / 1000}k`}
                 />
 
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(226, 232, 240, 0.3)" }} />
@@ -615,18 +583,18 @@ export default function SalesBarChart({ data }: Props) {
                   animationEasing="ease-in-out"
                 >
                   {data.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
+                    <Cell
+                      key={`cell-${index}`}
                       fill={isDark ? barColorsDark[index % barColorsDark.length] : barColors[index % barColors.length]}
                     />
                   ))}
-                  <LabelList 
-                    dataKey="value" 
-                    position="top" 
-                    formatter={(value: number) => `₨${(value/1000).toFixed(1)}k`}
-                    style={{ 
-                      fill: isDark ? "#cbd5e1" : "#334155", 
-                      fontWeight: "600", 
+                  <LabelList
+                    dataKey="value"
+                    position="top"
+                    formatter={(value: number) => `₨${(value / 1000).toFixed(1)}k`}
+                    style={{
+                      fill: isDark ? "#cbd5e1" : "#334155",
+                      fontWeight: "600",
                       fontSize: 10,
                     }}
                   />
@@ -639,36 +607,39 @@ export default function SalesBarChart({ data }: Props) {
         {/* Summary Statistics */}
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="bg-blue-600 dark:bg-blue-500 p-1.5 rounded">
-                <DollarSign className="h-3.5 w-3.5 text-white" />
+            <div className="relative flex items-center justify-center mb-3">
+              <div className="absolute inset-0 bg-blue-500 opacity-20 blur-lg rounded-full"></div>
+              <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 shadow-sm flex items-center justify-center">
+                <DollarSign className="h-5 w-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
               </div>
-              <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 uppercase tracking-wide">Total Revenue</p>
             </div>
+            <p className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider mb-1">Total Purchase</p>
             <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">
               ₨{totalRevenue.toLocaleString()}
             </p>
           </div>
-          
+
           <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="bg-indigo-600 dark:bg-indigo-500 p-1.5 rounded">
-                <Activity className="h-3.5 w-3.5 text-white" />
+            <div className="relative flex items-center justify-center mb-3">
+              <div className="absolute inset-0 bg-indigo-500 opacity-20 blur-lg rounded-full"></div>
+              <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 shadow-sm flex items-center justify-center">
+                <Activity className="h-5 w-5 text-indigo-600 dark:text-indigo-400" strokeWidth={2.5} />
               </div>
-              <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-300 uppercase tracking-wide">Average</p>
             </div>
+            <p className="text-[10px] font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider mb-1">Average</p>
             <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-200">
               ₨{avgRevenue.toLocaleString()}
             </p>
           </div>
-          
+
           <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="bg-emerald-600 dark:bg-emerald-500 p-1.5 rounded">
-                <Award className="h-3.5 w-3.5 text-white" />
+            <div className="relative flex items-center justify-center mb-3">
+              <div className="absolute inset-0 bg-emerald-500 opacity-20 blur-lg rounded-full"></div>
+              <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-700 shadow-sm flex items-center justify-center">
+                <Award className="h-5 w-5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
               </div>
-              <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-300 uppercase tracking-wide">Peak Month</p>
             </div>
+            <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider mb-1">Peak Month</p>
             <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-200">
               {peakMonth.month}
             </p>

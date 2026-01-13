@@ -227,6 +227,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Items required" }, { status: 400 })
     }
 
+    // Validate quantities are positive
+    if (items.some(i => i.quantity <= 0)) {
+      return NextResponse.json({ error: "Quantities must be greater than zero" }, { status: 400 })
+    }
+
     // For admin users, accept organizationId and branchId from request body (from context selector)
     if (role === "HEAD_OFFICE" || role === "SUPER_ADMIN") {
       if (orgIdInput && Number.isFinite(orgIdInput)) {
@@ -281,20 +286,8 @@ export async function POST(req: NextRequest) {
     const gpById = new Map(gpRows.map(r => [r.id, r]))
     const invById = new Map(invRows.map(r => [r.id, r]))
 
-    // Check stock availability before processing
-    for (const i of items) {
-      const inv = invById.get(i.organizationInventoryId)
-      if (!inv) throw new Error(`Inventory item ${i.organizationInventoryId} not found`)
-      const gp = gpById.get(inv.globalProductId)
-      if (!gp) throw new Error(`Global product for inventory ${inv.globalProductId} not found`)
-
-      const availableStock = gp.stockQuantity || 0
-      if (availableStock < i.quantity) {
-        return NextResponse.json({
-          error: `Insufficient stock for ${gp.name} (${gp.productCode}). Available: ${availableStock}, Requested: ${i.quantity}`
-        }, { status: 400 })
-      }
-    }
+    // We will do the stock check inside the transaction with FOR UPDATE locking
+    // to prevent race conditions that lead to negative stock.
 
     let subtotal = 0
     const calculatedItems = items.map(i => {
@@ -359,6 +352,27 @@ export async function POST(req: NextRequest) {
     const tid = generateTid()
 
     const created = await db.transaction(async (tx) => {
+      // 1. Lock global products to update stock safely
+      const gpIdsForLock = calculatedItems.map(i => i.globalProductId)
+      const lockedGps = await tx.select()
+        .from(globalProducts)
+        .where(inArray(globalProducts.id, gpIdsForLock))
+        .for('update')
+
+      const lockedGpMap = new Map(lockedGps.map(g => [g.id, g]))
+
+      // 2. Perform FINAL stock check inside the lock
+      for (const ci of calculatedItems) {
+        const gp = lockedGpMap.get(ci.globalProductId)
+        if (!gp) throw new Error(`Product not found: ${ci.productName}`)
+
+        if (gp.stockQuantity < ci.quantity) {
+          // Inside transaction, throwing error will rollback
+          throw new Error(`Insufficient stock for ${gp.name}. Available: ${gp.stockQuantity}, Requested: ${ci.quantity}`)
+        }
+      }
+
+      // 3. Create Order
       const [ord] = await tx.insert(orders).values({
         tid,
         organizationId: Number(organizationId),
@@ -371,16 +385,14 @@ export async function POST(req: NextRequest) {
         createdByUserId: userId,
       }).returning()
 
-      await tx.insert(orderItems).values(calculatedItems.map(ci => {
-        console.log("Inserting order item:", ci)
-        return {
-          ...ci,
-          orderId: ord.id,
-          organizationId: Number(organizationId),
-        }
-      }))
+      // 4. Create Order Items
+      await tx.insert(orderItems).values(calculatedItems.map(ci => ({
+        ...ci,
+        orderId: ord.id,
+        organizationId: Number(organizationId),
+      })))
 
-      // Deduct stock for each item
+      // 5. Deduct stock using the lock
       for (const ci of calculatedItems) {
         await tx.update(globalProducts)
           .set({

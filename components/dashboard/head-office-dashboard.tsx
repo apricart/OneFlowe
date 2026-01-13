@@ -1,146 +1,19 @@
 "use client"
 import { useMemo, useState, useEffect, useRef } from "react"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area } from "recharts"
-import { KpiCard } from "@/components/ui/kpi-card"
-import { SectionHeader } from "@/components/ui/section-header"
+// KpiCard is still imported but may be used elsewhere
+
 import { Card, CardContent } from "@/components/ui/card"
-import { NotificationRail } from "@/components/notifications/notification-center"
-import { TrendAreaChart, ComparisonBarChart } from "@/components/dashboard/charts"
+
 import { useDashboardAnalytics, useWeeklySales, useYearlySales, useMonthlySales } from "@/lib/hooks/use-dashboard-analytics"
 import { useAppContext } from "@/components/context/app-context"
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
 import { YearPicker } from "@/components/ui/YearPicker"
-import SalesBarChart from "@/components/dashboard/charts"
-import { Calendar, BarChart3, TrendingUp, Building2, FileCheck, Wallet, ShoppingCart } from "lucide-react"
-
-// Professional Banking Tooltip
-const BankingTooltip = ({ active, payload, label }: any) => {
-  if (!active || !payload || !payload.length) return null
-
-  return (
-    <div className="bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg p-3 shadow-lg">
-      <p className="text-slate-600 dark:text-slate-400 text-xs font-semibold uppercase tracking-wide mb-1.5">{label}</p>
-      <div className="flex items-baseline gap-2">
-        <span className="text-xl font-bold text-slate-900 dark:text-slate-100">
-          ₨{payload[0].value.toLocaleString()}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-// Weekly Sales Bar Chart - Banking Style
-const WeeklySalesBarChart = ({ data }: { data: { label: string; value: number }[] }) => {
-  const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
-
-  return (
-    <div className="h-80 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 10 }}>
-          <defs>
-            <linearGradient id="bankingBar" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#1e40af" stopOpacity={1} />
-              <stop offset="100%" stopColor="#1e3a8a" stopOpacity={0.95} />
-            </linearGradient>
-            <linearGradient id="bankingBarDark" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#60a5fa" stopOpacity={1} />
-              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.95} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke={isDark ? "#475569" : "#cbd5e1"}
-            strokeOpacity={0.5}
-            vertical={false}
-          />
-          <XAxis
-            dataKey="label"
-            tickLine={false}
-            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }}
-            tickMargin={12}
-            tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
-          />
-          <YAxis
-            allowDecimals={false}
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
-            tickFormatter={(value) => `₨${(value / 1000).toFixed(0)}k`}
-          />
-          <Tooltip
-            content={<BankingTooltip />}
-            cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(30, 64, 175, 0.08)" }}
-          />
-          <Bar
-            dataKey="value"
-            radius={[6, 6, 0, 0]}
-            fill={isDark ? "url(#bankingBarDark)" : "url(#bankingBar)"}
-            animationDuration={1200}
-            animationEasing="ease-in-out"
-            maxBarSize={50}
-          />
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-// Yearly Sales Line Chart - Banking Style
-const YearlySalesLineChart = ({ data }: { data: { month: string; sales: number }[] }) => {
-  const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
-
-  return (
-    <div className="h-80 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 10 }}>
-          <defs>
-            <linearGradient id="yearlyBankingGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#059669" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#059669" stopOpacity={0.05} />
-            </linearGradient>
-            <linearGradient id="yearlyBankingGradientDark" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#34d399" stopOpacity={0.4} />
-              <stop offset="95%" stopColor="#34d399" stopOpacity={0.1} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke={isDark ? "#475569" : "#cbd5e1"}
-            strokeOpacity={0.5}
-            vertical={false}
-          />
-          <XAxis
-            dataKey="month"
-            tickLine={false}
-            axisLine={{ stroke: isDark ? "#475569" : "#94a3b8", strokeWidth: 1 }}
-            tickMargin={12}
-            tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 11 }}
-          />
-          <YAxis
-            allowDecimals={false}
-            axisLine={false}
-            tickLine={false}
-            tick={{ fill: isDark ? "#94a3b8" : "#475569", fontWeight: 600, fontSize: 12 }}
-            tickFormatter={(value) => `₨${(value / 1000).toFixed(0)}k`}
-          />
-          <Tooltip
-            content={<BankingTooltip />}
-            cursor={{ stroke: isDark ? "#34d399" : "#059669", strokeWidth: 2, strokeDasharray: "4 4" }}
-          />
-          <Area
-            type="monotone"
-            dataKey="sales"
-            stroke={isDark ? "#34d399" : "#059669"}
-            strokeWidth={2.5}
-            fill={isDark ? "url(#yearlyBankingGradientDark)" : "url(#yearlyBankingGradient)"}
-            animationDuration={1200}
-            animationEasing="ease-in-out"
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
+import SalesBarChart, { YearlySalesSplineChart, TrendAreaChart, ComparisonBarChart } from "@/components/dashboard/charts"
+import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
+import { Building2, AlertCircle, ShoppingCart, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3, Activity, FileCheck, Wallet, Sparkles } from "lucide-react"
+import { useOrganizations } from "@/lib/hooks/use-api"
+import { NotificationRail } from "@/components/notifications/notification-center"
 
 const monthNames: Record<string, string> = {
   "01": "Jan",
@@ -159,6 +32,10 @@ const monthNames: Record<string, string> = {
 
 export function HeadOfficeDashboard() {
   const { organizationId, branchId } = useAppContext()
+  const { data: orgsData } = useOrganizations()
+  const orgs = orgsData?.items || []
+  const selectedOrg = organizationId ? orgs.find(o => o.id?.toString() === organizationId) : null
+
   const { data } = useDashboardAnalytics()
   const { data: weeklySalesData } = useWeeklySales(organizationId, branchId)
   const currentYear = new Date().getFullYear()
@@ -217,6 +94,15 @@ export function HeadOfficeDashboard() {
     }))
   }, [yearlySalesData])
 
+  // Calculate average for YearlySalesSplineChart
+  const averageYearlySales = useMemo(() => {
+    if (!yearlySalesChartData.length) return 0
+    const filtered = yearlySalesChartData.filter(d => d.sales > 0)
+    if (filtered.length === 0) return 0
+    const sum = filtered.reduce((acc, curr) => acc + curr.sales, 0)
+    return sum / filtered.length
+  }, [yearlySalesChartData])
+
   // Monthly sales bar chart data filtered by selected months
   const monthlyBarChartData = useMemo(() => {
     if (!monthlySalesData?.monthlySales) return []
@@ -244,87 +130,100 @@ export function HeadOfficeDashboard() {
     }))
   }, [selectedMonths, monthlySalesData])
 
+  // Check if all branches are selected (branchId is null)
+  const allBranchesSelected = !branchId
+  const scopeText = organizationId ? selectedOrg?.name || `Organization #${organizationId}` : "All Organizations"
+
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 space-y-6">
-      <div className="space-y-6">
-        {/* Header - Banking Style */}
-        <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-900/50">
-          <SectionHeader
-            title="Head Office Dashboard"
-            subtitle="Overview of branches, approvals, budgets and orders"
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
+      <style>{`
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-down {
+          animation: slideDown 0.4s ease-out;
+        }
+      `}</style>
+
+      {/* Slim Premium Header */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm dark:shadow-slate-900/50 overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-indigo-900 dark:to-slate-900 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 bg-white opacity-20 blur-lg rounded-full animate-pulse"></div>
+              <div className="relative w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 shadow-sm flex items-center justify-center group-hover:scale-110 transition-all duration-500">
+                <Sparkles className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">Head Office Portal</h1>
+              <p className="text-xs text-white/70 font-medium">Enterprise Overview • <span className="text-white">{scopeText}</span></p>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-3">
+            <div className="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></div>
+              <span className="text-xs font-bold text-white uppercase tracking-wider">System Live</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
+
+      {/* KPI Cards - Professional Banking Design */}
+      {allBranchesSelected && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-slide-down">
+          <BankingKPICard
+            icon={Building2}
+            title={allBranchesSelected ? "All Branches" : "My Branches"}
+            value={branchesCount}
+            gradient="from-blue-500 to-indigo-600"
+            iconBg="text-blue-600 bg-blue-600"
+          />
+
+          <BankingKPICard
+            icon={ShoppingCart}
+            title="Orders This Month"
+            value={ordersThisMonth}
+            gradient="from-violet-500 to-purple-600"
+            iconBg="text-violet-600 bg-violet-600"
+          />
+
+          <BankingKPICard
+            icon={FileCheck}
+            title="Total Orders"
+            value={yearlySalesData?.totalOrders?.toLocaleString() ?? "—"}
+            gradient="from-emerald-500 to-teal-600"
+            iconBg="text-emerald-600 bg-emerald-600"
+          />
+
+          <BankingKPICard
+            icon={Wallet}
+            title="Total Purchase Cost"
+            value={yearlySalesData?.totalSales ? `₨${(yearlySalesData.totalSales / 1000).toFixed(0)}K` : "—"}
+            gradient="from-amber-500 to-orange-600"
+            iconBg="text-amber-600 bg-amber-600"
           />
         </div>
+      )}
 
-        <NotificationRail className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm dark:shadow-slate-900/50 px-4" />
-
-        {/* KPI Cards - Professional Banking Design */}
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-          {/* Branches Card */}
-          <div className="group bg-white dark:bg-slate-900 rounded-lg border-2 border-slate-200 dark:border-slate-800 p-5 shadow-sm dark:shadow-slate-900/50 hover:shadow-md hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-300">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-11 h-11 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center">
-                <Building2 className="w-5 h-5 text-blue-700" strokeWidth={2} />
-              </div>
-            </div>
-            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">My Branches</p>
-            <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">{branchesCount}</p>
-            <div className="h-0.5 w-12 bg-blue-600 mt-3"></div>
-          </div>
-
-          {/* Pending Approvals Card */}
-          <div className="group bg-white dark:bg-slate-900 rounded-lg border-2 border-slate-200 dark:border-slate-800 p-5 shadow-sm dark:shadow-slate-900/50 hover:shadow-md hover:border-amber-300 dark:hover:border-amber-600 transition-all duration-300">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-11 h-11 rounded-lg bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 flex items-center justify-center">
-                <FileCheck className="w-5 h-5 text-amber-700 dark:text-amber-400" strokeWidth={2} />
-              </div>
-            </div>
-            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Pending Approvals</p>
-            <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">{pendingApprovals}</p>
-            <div className="h-0.5 w-12 bg-amber-600 mt-3"></div>
-          </div>
-
-          {/* Monthly Budget Card */}
-          <div className="group bg-white dark:bg-slate-900 rounded-lg border-2 border-slate-200 dark:border-slate-800 p-5 shadow-sm dark:shadow-slate-900/50 hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-600 transition-all duration-300">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-11 h-11 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center">
-                <Wallet className="w-5 h-5 text-emerald-700 dark:text-emerald-400" strokeWidth={2} />
-              </div>
-            </div>
-            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Monthly Budget</p>
-            <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">PKR 45K</p>
-            <div className="h-0.5 w-12 bg-emerald-600 mt-3"></div>
-          </div>
-
-          {/* Orders This Month Card */}
-          <div className="group bg-white dark:bg-slate-900 rounded-lg border-2 border-slate-200 dark:border-slate-800 p-5 shadow-sm dark:shadow-slate-900/50 hover:shadow-md hover:border-violet-300 dark:hover:border-violet-600 transition-all duration-300">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-11 h-11 rounded-lg bg-violet-50 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800 flex items-center justify-center">
-                <ShoppingCart className="w-5 h-5 text-violet-700 dark:text-violet-400" strokeWidth={2} />
-              </div>
-            </div>
-            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">Orders This Month</p>
-            <p className="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-1">{ordersThisMonth}</p>
-            <div className="h-0.5 w-12 bg-violet-600 mt-3"></div>
-          </div>
-        </div>
-
-        {/* Charts Grid - Weekly and Yearly Sales */}
+      <div className="space-y-6">
+        {/* Charts Grid - Weekly and Yearly Sales (Moved to top) */}
+        {/* Charts Grid - Sync with Branch Admin */}
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Yearly Sales Chart */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300">
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
+          {/* Yearly Purchase Chart */}
+          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 overflow-hidden">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
-                    <Calendar className="w-5 h-5 text-emerald-700" strokeWidth={2} />
+                  <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Yearly Sales Performance</h3>
-                    {yearlySalesData && (
-                      <p className="text-xs text-slate-500 font-medium mt-0.5">
-                        Complete year overview for {yearlySalesData.year}
-                      </p>
-                    )}
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Annual Performance</h3>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Yearly Analytics Overview</p>
                   </div>
                 </div>
                 <YearPicker
@@ -332,84 +231,48 @@ export function HeadOfficeDashboard() {
                   onYearChange={setYearlyChartYear}
                 />
               </div>
-            </div>
-
-            {yearlySalesData && (
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Total Sales</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    ₨{yearlySalesData.totalSales.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Total Orders</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{yearlySalesData.totalOrders.toLocaleString()}</p>
-                </div>
-              </div>
-            )}
-
-            {yearlySalesChartData.length > 0 ? (
-              <YearlySalesLineChart data={yearlySalesChartData} />
-            ) : (
-              <div className="h-80 flex items-center justify-center text-slate-400 dark:text-slate-500">
-                <div className="text-center">
-                  <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center mx-auto mb-3 border border-slate-200 dark:border-slate-700">
-                    <Calendar className="w-7 h-7 text-slate-400" />
+              {yearlySalesChartData.length > 0 ? (
+                <YearlySalesSplineChart yearlySalesData={yearlySalesChartData} avgSales={averageYearlySales} />
+              ) : (
+                <div className="h-[500px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                    <p className="text-sm text-slate-500 font-medium">Loading yearly charts...</p>
                   </div>
-                  <p className="font-medium text-sm">Loading yearly sales data...</p>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Weekly Sales Chart */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300">
-            <div className="mb-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-blue-700" strokeWidth={2} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Weekly Sales Performance</h3>
-                  {weeklySalesData && (
-                    <p className="text-xs text-slate-500 font-medium mt-0.5">
-                      {new Date(weeklySalesData.weekStart).toLocaleDateString("en-US", { month: "short", day: "numeric" })} - {new Date(weeklySalesData.weekEnd).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {weeklySalesData && (
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Total Sales</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    ₨{weeklySalesData.totalSales.toLocaleString()}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Total Orders</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{weeklySalesData.totalOrders}</p>
-                </div>
-              </div>
-            )}
-
-            {weeklySalesChartData.length > 0 ? (
-              <WeeklySalesBarChart data={weeklySalesChartData} />
-            ) : (
-              <div className="h-80 flex items-center justify-center text-slate-400 dark:text-slate-500">
-                <div className="text-center">
-                  <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center mx-auto mb-3 border border-slate-200 dark:border-slate-700">
-                    <TrendingUp className="w-7 h-7 text-slate-400" />
+          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 overflow-hidden">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center">
+                    <Activity className="w-5 h-5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
                   </div>
-                  <p className="font-medium text-sm">Loading sales data...</p>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Weekly Performance</h3>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">7-Day Sales Trend</p>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+              {weeklySalesChartData.length > 0 ? (
+                <TrendAreaChart data={weeklySalesChartData} />
+              ) : (
+                <div className="h-[500px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-3"></div>
+                    <p className="text-sm text-slate-500 font-medium">Loading weekly trends...</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
+
+
 
         {/* Monthly Sales Bar Chart with Month Picker */}
         <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900">
@@ -423,7 +286,7 @@ export function HeadOfficeDashboard() {
                       <BarChart3 className="w-5 h-5 text-indigo-700 dark:text-indigo-400" strokeWidth={2} />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Monthly Sales Analytics</h3>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Monthly Purchase Analytics</h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                         {selectedMonths.length > 0
                           ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} selected • ${selectedYear}`
@@ -477,7 +340,7 @@ export function HeadOfficeDashboard() {
                       <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center mx-auto border border-slate-200">
                         <BarChart3 className="w-7 h-7 text-slate-400" />
                       </div>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Loading monthly sales data...</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Loading monthly purchase data...</p>
                     </div>
                   </div>
                 )}

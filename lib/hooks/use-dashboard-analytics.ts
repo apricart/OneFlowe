@@ -39,15 +39,15 @@ export function useWeeklySales(organizationId?: string | null, branchId?: string
   const url = useMemo(() => {
     const baseUrl = "/api/v1/analytics/weekly-sales"
     const params = new URLSearchParams()
-    
+
     if (organizationId && organizationId !== "null" && organizationId !== "0") {
       params.set("organizationId", organizationId)
     }
-    
+
     if (branchId && branchId !== "null" && branchId !== "0") {
       params.set("branchId", branchId)
     }
-    
+
     const queryString = params.toString()
     return queryString ? `${baseUrl}?${queryString}` : baseUrl
   }, [organizationId, branchId])
@@ -76,19 +76,19 @@ export function useYearlySales(organizationId?: string | null, branchId?: string
   const url = useMemo(() => {
     const baseUrl = "/api/v1/analytics/yearly-sales"
     const params = new URLSearchParams()
-    
+
     if (organizationId && organizationId !== "null" && organizationId !== "0") {
       params.set("organizationId", organizationId)
     }
-    
+
     if (branchId && branchId !== "null" && branchId !== "0") {
       params.set("branchId", branchId)
     }
-    
+
     if (year) {
       params.set("year", year.toString())
     }
-    
+
     const queryString = params.toString()
     return queryString ? `${baseUrl}?${queryString}` : baseUrl
   }, [organizationId, branchId, year])
@@ -117,19 +117,19 @@ export function useMonthlySales(organizationId?: string | null, branchId?: strin
   const url = useMemo(() => {
     const baseUrl = "/api/v1/analytics/monthly-sales"
     const params = new URLSearchParams()
-    
+
     if (organizationId && organizationId !== "null" && organizationId !== "0") {
       params.set("organizationId", organizationId)
     }
-    
+
     if (branchId && branchId !== "null" && branchId !== "0") {
       params.set("branchId", branchId)
     }
-    
+
     if (year) {
       params.set("year", year.toString())
     }
-    
+
     const queryString = params.toString()
     return queryString ? `${baseUrl}?${queryString}` : baseUrl
   }, [organizationId, branchId, year])

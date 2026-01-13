@@ -11,9 +11,9 @@ import { YearPicker } from "@/components/ui/YearPicker"
 import useSWR from "swr"
 import { NotificationRail } from "@/components/notifications/notification-center"
 import { formatPKR } from "@/lib/utils"
-import { Building2, GitBranch, Users, Package, Warehouse, Wallet, BarChart3, ShieldCheck, TrendingUp, ArrowUpRight, Sparkles, Calendar } from "lucide-react"
-import { TrendAreaChart, YearlySalesSplineChart } from "@/components/dashboard/charts"
-import SalesBarChart from "@/components/dashboard/charts"
+import { Building2, GitBranch, Users, Package, Warehouse, Wallet, BarChart3, ShieldCheck, TrendingUp, ArrowUpRight, ArrowDownRight, Sparkles, Calendar, Activity, AlertCircle } from "lucide-react"
+import SalesBarChart, { TrendAreaChart, YearlySalesSplineChart } from "@/components/dashboard/charts"
+import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
 import { useAppContext } from "@/components/context/app-context"
 import { startOfDay, subDays, endOfDay, eachDayOfInterval, format, parseISO, getYear } from "date-fns"
 
@@ -240,6 +240,7 @@ export function SuperAdminDashboard() {
   const pendingCount = pendingOrders?.items?.length || 0
 
   const scopeText = branchId ? selectedBranch?.name || `Branch #${branchId}` : organizationId ? selectedOrg?.name || `Organization #${organizationId}` : "All organizations & branches"
+  const allBranchesSelected = !branchId
 
   // ---------------- JSX ----------------
   return (
@@ -254,55 +255,131 @@ export function SuperAdminDashboard() {
         }
       `}</style>
 
-      {/* Header Section */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm dark:shadow-slate-900/50 overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-400 to-indigo-600 dark:from-indigo-700 dark:via-purple-800 dark:to-pink-800 px-6 py-8 border-b border-blue-500/30 dark:border-indigo-700/30">
-          <div className="flex flex-col lg:flex-row items-start justify-between gap-6">
-            <div className="space-y-3 flex-1">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/20 backdrop-blur-sm border border-white/30">
-                  <BarChart3 className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold tracking-wider text-white/80 uppercase">Admin Portal</p>
-                  <h1 className="text-3xl md:text-4xl font-bold text-white">Dashboard</h1>
-                </div>
+      {/* Slim Premium Header */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm dark:shadow-slate-900/50 overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-indigo-900 dark:to-slate-900 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="relative flex items-center justify-center">
+              <div className="absolute inset-0 bg-white opacity-20 blur-lg rounded-full animate-pulse"></div>
+              <div className="relative w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 shadow-sm flex items-center justify-center group-hover:scale-110 transition-all duration-500">
+                <Sparkles className="h-6 w-6 text-white" strokeWidth={2.5} />
               </div>
-              <p className="text-sm text-white/90">
-                System overview for <span className="font-semibold">{scopeText}</span>
-              </p>
             </div>
-
-            <div className="flex flex-col gap-3 w-full lg:w-auto">
-              <div className="inline-flex items-center gap-2 rounded-lg bg-white/15 backdrop-blur-sm px-4 py-2 border border-white/20">
-                <span className="text-xs font-medium text-white/80 uppercase tracking-wider">Active Scope</span>
-                <span className="rounded-md bg-white/25 px-3 py-1 text-xs font-bold text-white truncate max-w-[200px]">{scopeText}</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/20 hover:bg-white/15 transition-colors">
-                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Organizations</p>
-                  <p className="text-2xl font-bold text-white mt-1">{orgsCount}</p>
-                </div>
-                <div className="rounded-lg bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/20 hover:bg-white/15 transition-colors">
-                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Branches</p>
-                  <p className="text-2xl font-bold text-white mt-1">{branchesCount}</p>
-                </div>
-                <div className="rounded-lg bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/20 hover:bg-white/15 transition-colors">
-                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Active Users</p>
-                  <p className="text-2xl font-bold text-white mt-1">{usersCount}</p>
-                </div>
-                <div className="rounded-lg bg-white/10 backdrop-blur-sm px-4 py-3 border border-white/20 hover:bg-white/15 transition-colors">
-                  <p className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">Pending</p>
-                  <p className="text-2xl font-bold text-white mt-1">{pendingCount}</p>
-                </div>
-              </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">Super Admin Portal</h1>
+              <p className="text-xs text-white/70 font-medium">Enterprise Overview • <span className="text-white">{scopeText}</span></p>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-3">
+            <div className="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></div>
+              <span className="text-xs font-bold text-white uppercase tracking-wider">System Live</span>
             </div>
           </div>
         </div>
       </div>
 
       <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
+
+      {/* Top 4-Column KPI Grid - Only shown when all branches are selected */}
+      {allBranchesSelected && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-slide-down">
+          <BankingKPICard
+            icon={TrendingUp}
+            title="Today's GMV"
+            value={todaysGMV}
+            gradient="from-emerald-500 to-teal-600"
+            iconBg="text-emerald-600 bg-emerald-600"
+            trend="up"
+            trendValue="12.5%"
+          />
+
+          <BankingKPICard
+            icon={Package}
+            title="Today's Orders"
+            value={todaysOrders?.items?.length || 0}
+            gradient="from-blue-500 to-indigo-600"
+            iconBg="text-blue-600 bg-blue-600"
+          />
+
+          <BankingKPICard
+            icon={AlertCircle}
+            title="Pending Approvals"
+            value={pendingCount}
+            gradient="from-amber-500 to-orange-600"
+            iconBg="text-amber-600 bg-amber-600"
+          />
+
+          <BankingKPICard
+            icon={Sparkles}
+            title="System Health"
+            value="99.9%"
+            gradient="from-violet-500 to-purple-600"
+            iconBg="text-violet-600 bg-violet-600"
+          />
+        </div>
+      )}
+
+      {/* Main Analytics Grid - Yearly & Weekly */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Yearly Purchase Chart */}
+        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 overflow-hidden">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Annual Purchase Performance</h3>
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Revenue Trends • {yearlyChartYear}</p>
+                </div>
+              </div>
+              <YearPicker
+                selectedYear={yearlyChartYear}
+                onYearChange={setYearlyChartYear}
+              />
+            </div>
+            {isLoadingYearly ? (
+              <div className="h-[450px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                  <p className="text-sm text-slate-500 font-medium">Loading annual analytics...</p>
+                </div>
+              </div>
+            ) : (
+              <YearlySalesSplineChart yearlySalesData={yearlySalesData} avgSales={average} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Weekly Purchase Chart */}
+        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 overflow-hidden">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center">
+                  <Activity className="w-5 h-5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Weekly Analytics</h3>
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Last 7 Days Revenue</p>
+                </div>
+              </div>
+            </div>
+            {isLoadingSales ? (
+              <div className="h-[450px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-3"></div>
+                  <p className="text-sm text-slate-500 font-medium">Loading weekly data...</p>
+                </div>
+              </div>
+            ) : (
+              <TrendAreaChart data={salesData} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Month Picker & Bar Chart Section */}
       <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 overflow-hidden bg-white dark:bg-slate-900">
@@ -316,7 +393,7 @@ export function SuperAdminDashboard() {
                     <BarChart3 className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Monthly Sales Analytics</h3>
+                    <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Monthly Purchase Analytics</h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       {selectedMonths.length > 0
                         ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} • ${selectedYear}`
@@ -368,7 +445,7 @@ export function SuperAdminDashboard() {
                 <div className="flex items-center justify-center h-[400px]">
                   <div className="text-center space-y-3">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-500 mx-auto"></div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">Loading sales data...</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">Loading purchase data...</p>
                   </div>
                 </div>
               ) : (
@@ -378,92 +455,6 @@ export function SuperAdminDashboard() {
           </div>
         </CardContent>
       </Card>
-
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-900 dark:text-emerald-300">Today's GMV</p>
-            <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-emerald-900 dark:text-emerald-200 mb-1">{todaysGMV}</p>
-          <p className="text-xs text-emerald-700 dark:text-emerald-400">Gross Merchandise Value</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-blue-900 dark:text-blue-300">Today's Orders</p>
-            <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-blue-900 dark:text-blue-200 mb-1">{todaysOrders?.items?.length || 0}</p>
-          <p className="text-xs text-blue-700 dark:text-blue-400">Total orders today</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 border border-purple-200 dark:border-purple-800 rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-purple-900 dark:text-purple-300">Week's Sales</p>
-            <BarChart3 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-purple-900 dark:text-purple-200 mb-1">{formatPKR(totalWeekSales, { maximumFractionDigits: 0 })}</p>
-          <p className="text-xs text-purple-700 dark:text-purple-400">Last 7 days revenue</p>
-        </div>
-
-        <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/20 border border-orange-200 dark:border-orange-800 rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-orange-900 dark:text-orange-300">Week's Orders</p>
-            <TrendingUp className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-          </div>
-          <p className="text-2xl md:text-3xl font-bold text-orange-900 dark:text-orange-200 mb-1">{totalWeekOrders}</p>
-          <p className="text-xs text-orange-700 dark:text-orange-400">Weekly order count</p>
-        </div>
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Yearly Sales */}
-        <Card className="lg:col-span-2 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 overflow-hidden bg-white dark:bg-slate-900">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Yearly Sales Trends</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">Revenue overview for {yearlyChartYear}</p>
-              </div>
-              <YearPicker
-                selectedYear={yearlyChartYear}
-                onYearChange={setYearlyChartYear}
-              />
-            </div>
-            {isLoadingYearly ? (
-              <div className="flex items-center justify-center h-96">
-                <div className="text-center space-y-3">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-sm text-slate-600">Loading yearly sales...</p>
-                </div>
-              </div>
-            ) : (
-              <YearlySalesSplineChart yearlySalesData={yearlySalesData} avgSales={average} />
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Weekly Sales */}
-        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 overflow-hidden bg-white dark:bg-slate-900">
-          <CardContent className="p-0">
-            {isLoadingSales ? (
-              <div className="flex items-center justify-center h-full min-h-[500px]">
-                <div className="text-center space-y-3">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto"></div>
-                  <p className="text-sm text-slate-600">Loading sales data...</p>
-                </div>
-              </div>
-            ) : salesError ? (
-              <div className="flex items-center justify-center h-full min-h-[500px] text-sm text-red-600">Error loading sales data</div>
-            ) : (
-              <TrendAreaChart data={salesData} />
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Navigation Tiles */}
       <section className="space-y-4">
