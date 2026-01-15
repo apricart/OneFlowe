@@ -23,6 +23,8 @@ export default function ShopLoginPage() {
     localStorage.removeItem("theme")
   }, [])
 
+  const [providerType, setProviderType] = useState<"user" | "employee" | null>(null)
+
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email || !password) {
@@ -31,27 +33,54 @@ export default function ShopLoginPage() {
 
     setIsLoading(true)
     try {
-      // First sign in with credentials
-      const result = await signIn("employee-credentials", {
+      // 1. Try Standard User Login (New System - ORDER_PORTAL role)
+      let result = await signIn("credentials", {
         email,
         password,
         redirect: false,
       })
 
       if (result?.error) {
-        if (result.error.includes("MFA")) {
+        if (result.error === "MFA_REQUIRED") {
+          setProviderType("user")
           setStep("mfa")
+          setIsLoading(false)
+          return
+        }
+
+        // 2. Fallback to Employee Login (Legacy System)
+        // Only try fallback if standard login failed with specific credential error, 
+        // essentially treating the first failure as "user not found in users table"
+        console.log("Standard login failed, trying employee login fallback...")
+
+        result = await signIn("employee-credentials", {
+          email,
+          password,
+          redirect: false,
+        })
+
+        if (result?.error) {
+          if (result.error.includes("MFA")) { // Employee MFA error text might differ, auth-options throws "MFA_REQUIRED"
+            setProviderType("employee")
+            setStep("mfa")
+          } else {
+            // Both failed
+            toast({ title: "Login failed", description: "Invalid email or password", variant: "destructive" })
+          }
         } else {
-          toast({ title: "Login failed", description: result.error, variant: "destructive" })
+          // Employee Login Success
+          toast({ title: "Logged in successfully" })
+          router.push("/shop")
         }
       } else {
+        // Standard User Login Success
         toast({ title: "Logged in successfully" })
         router.push("/shop")
       }
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" })
     } finally {
-      setIsLoading(false)
+      if (step !== "mfa") setIsLoading(false)
     }
   }
 
@@ -61,9 +90,15 @@ export default function ShopLoginPage() {
       return toast({ title: "Enter valid OTP", variant: "destructive" })
     }
 
+    if (!providerType) {
+      return toast({ title: "Error", description: "Unknown login provider", variant: "destructive" })
+    }
+
     setIsLoading(true)
     try {
-      const result = await signIn("employee-mfa-credentials", {
+      const providerId = providerType === "user" ? "mfa-credentials" : "employee-mfa-credentials"
+
+      const result = await signIn(providerId, {
         email,
         password,
         otp,

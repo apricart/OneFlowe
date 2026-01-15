@@ -52,8 +52,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     jsonFetcher
   )
 
-  const organizations = organizationsData?.items || []
-  const branches = branchesData?.items || []
+  const organizations = (organizationsData as any)?.items || []
+  const branches = (branchesData as any)?.items || []
 
   // Initialize form with context when dialog opens
   useEffect(() => {
@@ -104,11 +104,11 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
       newErrors.password = "Password must be at least 6 characters"
     }
     if (!form.role) newErrors.role = "Role is required"
-    if ((form.role === "HEAD_OFFICE" || form.role === "BRANCH_ADMIN") && !form.organizationId) {
+    if ((form.role === "HEAD_OFFICE" || form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && !form.organizationId) {
       newErrors.organizationId = "Organization is required for this role"
     }
-    if (form.role === "BRANCH_ADMIN" && !form.branchId) {
-      newErrors.branchId = "Branch assignment is required for Branch Admin"
+    if ((form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && !form.branchId) {
+      newErrors.branchId = "Branch assignment is required for Branch Admin and Order Portal roles"
     }
 
     setErrors(newErrors)
@@ -131,7 +131,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
           phone: form.phone.trim() || null,
           role: form.role,
           organizationId: parseInt(form.organizationId),
-          branchId: form.role === "BRANCH_ADMIN" ? parseInt(form.branchId) : null,
+          branchId: (form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") ? parseInt(form.branchId) : null,
           mfaEnabled: form.mfaEnabled
         })
       })
@@ -150,7 +150,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
       setOpen(false)
     } catch (error: any) {
       const { message, field } = handleError(error, "create user")
-      
+
       // Show toast notification
       toast({
         title: "Error",
@@ -178,14 +178,14 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
   // Get selected organization name
   const getSelectedOrganizationName = () => {
     if (!form.organizationId) return ""
-    const org = organizations.find(o => o.id === parseInt(form.organizationId))
+    const org = organizations.find((o: any) => o.id === parseInt(form.organizationId))
     return org?.name || ""
   }
 
   // Get selected branch name
   const getSelectedBranchName = () => {
     if (!form.branchId) return ""
-    const branch = branches.find(b => b.id === parseInt(form.branchId))
+    const branch = branches.find((b: any) => b.id === parseInt(form.branchId))
     return branch?.name || ""
   }
 
@@ -209,29 +209,26 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
           {/* Progress Steps */}
           <div className="flex items-center justify-center space-x-4">
             <div className={`flex items-center gap-2 ${step >= 1 ? 'text-blue-600' : 'text-muted-foreground'}`}>
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                step >= 1 ? 'bg-blue-100 text-blue-600' : 'bg-muted'
-              }`}>
+              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium ${step >= 1 ? 'bg-blue-100 text-blue-600' : 'bg-muted'
+                }`}>
                 1
               </div>
               <span className="text-sm font-medium">Basic Info</span>
             </div>
             <div className={`h-px w-8 ${step >= 2 ? 'bg-blue-600' : 'bg-muted'}`} />
             <div className={`flex items-center gap-2 ${step >= 2 ? 'text-blue-600' : 'text-muted-foreground'}`}>
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                step >= 2 ? 'bg-blue-100 text-blue-600' : 'bg-muted'
-              }`}>
+              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium ${step >= 2 ? 'bg-blue-100 text-blue-600' : 'bg-muted'
+                }`}>
                 2
               </div>
               <span className="text-sm font-medium">Role & Assignment</span>
             </div>
             <div className={`h-px w-8 ${step >= 3 ? 'bg-blue-600' : 'bg-muted'}`} />
             <div className={`flex items-center gap-2 ${step >= 3 ? 'text-blue-600' : 'text-muted-foreground'}`}>
-              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                step >= 3 ? 'bg-blue-100 text-blue-600' : 'bg-muted'
-              }`}>
+              <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium ${step >= 3 ? 'bg-blue-100 text-blue-600' : 'bg-muted'
+                }`}>
                 3
-            </div>
+              </div>
               <span className="text-sm font-medium">Security</span>
             </div>
           </div>
@@ -254,7 +251,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   {errors.firstName && (
                     <p className="text-xs text-red-600">{errors.firstName}</p>
                   )}
-          </div>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last Name *</Label>
                   <Input
@@ -268,8 +265,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   {errors.lastName && (
                     <p className="text-xs text-red-600">{errors.lastName}</p>
                   )}
-            </div>
-          </div>
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address *</Label>
                 <Input
@@ -309,7 +306,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                 {errors.password && (
                   <p className="text-xs text-red-600">{errors.password}</p>
                 )}
-          </div>
+              </div>
             </div>
           )}
 
@@ -317,20 +314,20 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
           {step === 2 && (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold">Role & Assignment</h3>
-              
+
               {/* Organization Selector - Only for Super Admin */}
               {userRole === "SUPER_ADMIN" && (
                 <div className="space-y-2">
                   <Label htmlFor="organization">Organization *</Label>
-                  <Select 
-                    value={form.organizationId} 
+                  <Select
+                    value={form.organizationId}
                     onValueChange={value => setForm({ ...form, organizationId: value, branchId: "" })}
                   >
                     <SelectTrigger name="organizationId" className={errors.organizationId ? 'border-red-500' : ''}>
                       <SelectValue placeholder="Select organization" />
                     </SelectTrigger>
                     <SelectContent>
-                      {organizations.map((org) => (
+                      {organizations.map((org: any) => (
                         <SelectItem key={org.id} value={String(org.id)}>
                           {org.name}
                         </SelectItem>
@@ -369,6 +366,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   <SelectContent>
                     <SelectItem value="HEAD_OFFICE">Head Office</SelectItem>
                     <SelectItem value="BRANCH_ADMIN">Branch Admin</SelectItem>
+                    <SelectItem value="ORDER_PORTAL">Order Portal User</SelectItem>
                   </SelectContent>
                 </Select>
                 {errors.role && (
@@ -376,12 +374,12 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                 )}
               </div>
 
-              {/* Branch Selector - Only for Branch Admin */}
-              {form.role === "BRANCH_ADMIN" && (
+              {/* Branch Selector - Only for Branch Admin and Order Portal */}
+              {(form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && (
                 <div className="space-y-2">
                   <Label htmlFor="branch">Branch Assignment *</Label>
-                  <Select 
-                    value={form.branchId} 
+                  <Select
+                    value={form.branchId}
                     onValueChange={value => setForm({ ...form, branchId: value })}
                     disabled={!form.organizationId}
                   >
@@ -389,7 +387,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                       <SelectValue placeholder={form.organizationId ? "Select branch" : "Select organization first"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {branches.map((branch) => (
+                      {branches.map((branch: any) => (
                         <SelectItem key={branch.id} value={String(branch.id)}>
                           {branch.name}
                         </SelectItem>
@@ -416,7 +414,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                     </div>
                     <div className="flex-1 space-y-1">
                       <p className="text-sm font-medium">
-                        {form.role === "HEAD_OFFICE" ? "Head Office User" : "Branch Admin User"}
+                        {form.role === "HEAD_OFFICE" ? "Head Office User" : form.role === "BRANCH_ADMIN" ? "Branch Admin User" : "Order Portal User"}
                       </p>
                       <div className="text-xs text-muted-foreground space-y-1">
                         {form.organizationId && (
@@ -425,7 +423,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                             <span>Organization: {getSelectedOrganizationName()}</span>
                           </div>
                         )}
-                        {form.role === "BRANCH_ADMIN" && form.branchId && (
+                        {(form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && form.branchId && (
                           <div className="flex items-center gap-1">
                             <MapPin className="h-3 w-3" />
                             <span>Branch: {getSelectedBranchName()}</span>
@@ -434,7 +432,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                         {form.role === "HEAD_OFFICE" && (
                           <p>Can manage organization-wide settings and create branch admins</p>
                         )}
-                        {form.role === "BRANCH_ADMIN" && !form.branchId && (
+                        {(form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && !form.branchId && (
                           <p className="text-amber-600">Please select a branch assignment</p>
                         )}
                       </div>
@@ -443,7 +441,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   </div>
                 </Card>
               )}
-          </div>
+            </div>
           )}
 
           {/* Step 3: Security Settings */}
@@ -461,10 +459,10 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   <Label htmlFor="mfaEnabled" className="cursor-pointer">
                     Enable Multi-Factor Authentication (MFA)
                   </Label>
-          </div>
+                </div>
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
                   <p className="text-sm text-blue-700">
-                    <strong>MFA Security:</strong> When enabled, users will receive OTP codes via email for secure login verification. 
+                    <strong>MFA Security:</strong> When enabled, users will receive OTP codes via email for secure login verification.
                     This adds an extra layer of protection to their account.
                   </p>
                 </div>
@@ -502,25 +500,25 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
               onClick={() => {
                 if (step === 1 && form.firstName && form.lastName && form.email && form.password) {
                   setStep(2)
-                } else if (step === 2 && form.role && (form.role !== "BRANCH_ADMIN" || form.branchId)) {
+                } else if (step === 2 && form.role && ((form.role !== "BRANCH_ADMIN" && form.role !== "ORDER_PORTAL") || form.branchId)) {
                   setStep(3)
                 }
               }}
               disabled={
                 (step === 1 && (!form.firstName || !form.lastName || !form.email || !form.password)) ||
-                (step === 2 && (!form.role || (form.role === "BRANCH_ADMIN" && !form.branchId)))
+                (step === 2 && (!form.role || ((form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && !form.branchId)))
               }
             >
               Next
             </Button>
           ) : (
-          <Button
+            <Button
               onClick={handleSubmit}
-            disabled={submitting}
+              disabled={submitting}
               style={{ background: "var(--color-brand-primary)", color: "white" }}
-          >
+            >
               {submitting ? "Creating..." : "Create User"}
-          </Button>
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>

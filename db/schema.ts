@@ -322,6 +322,17 @@ export const orders = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+    // Approval tracking fields
+    approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    rejectedByUserId: uuid("rejected_by_user_id").references(() => users.id),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    rejectionReason: text("rejection_reason"),
+    // Secure approval token for fulfillment verification
+    approvalToken: varchar("approval_token", { length: 16 }), // Plaintext - shown only to approver
+    approvalTokenHash: varchar("approval_token_hash", { length: 255 }), // Hash for verification
+    approvalTokenCreatedAt: timestamp("approval_token_created_at", { withTimezone: true }),
+    fulfilledByUserId: uuid("fulfilled_by_user_id").references(() => users.id),
   },
   (t) => ({
     tidIdx: uniqueIndex("orders_tid_idx").on(t.tid),
@@ -631,7 +642,7 @@ export const productImportBatches = pgTable(
     successfulRows: integer("successful_rows").notNull().default(0),
     failedRows: integer("failed_rows").notNull().default(0),
     status: varchar("status", { length: 32 }).notNull().default("processing"), // processing, completed, failed, partial
-    validationErrors: jsonb("validation_errors").$type<Array<{row: number, errors: string[]}>>().default([]),
+    validationErrors: jsonb("validation_errors").$type<Array<{ row: number, errors: string[] }>>().default([]),
     importedProductIds: jsonb("imported_product_ids").$type<number[]>().default([]),
     metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
@@ -766,5 +777,37 @@ export const employeeCredentials = pgTable(
     orgIdx: index("employee_creds_org_idx").on(t.organizationId),
     activeIdx: index("employee_creds_active_idx").on(t.isActive),
     createdByIdx: index("employee_creds_created_by_idx").on(t.createdByUserId),
+  }),
+)
+
+// System Logs - Comprehensive audit trail for all system activities
+export const systemLogs = pgTable(
+  "system_logs",
+  {
+    id: serial("id").primaryKey(),
+    timestamp: timestamp("timestamp", { withTimezone: true }).defaultNow().notNull(),
+    userId: varchar("user_id", { length: 255 }), // Can be UUID or emp_123 format
+    userRole: varchar("user_role", { length: 64 }),
+    userEmail: varchar("user_email", { length: 255 }),
+    organizationId: integer("organization_id").references(() => organizations.id),
+    branchId: integer("branch_id").references(() => branches.id),
+    action: varchar("action", { length: 128 }).notNull(),
+    resourceType: varchar("resource_type", { length: 64 }).notNull(),
+    resourceId: varchar("resource_id", { length: 128 }),
+    details: jsonb("details").$type<Record<string, any>>(),
+    ipAddress: varchar("ip_address", { length: 64 }),
+    userAgent: text("user_agent"),
+    success: boolean("success").default(true).notNull(),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("system_logs_user_idx").on(t.userId),
+    actionIdx: index("system_logs_action_idx").on(t.action),
+    resourceIdx: index("system_logs_resource_idx").on(t.resourceType, t.resourceId),
+    timestampIdx: index("system_logs_timestamp_idx").on(t.timestamp),
+    orgIdx: index("system_logs_org_idx").on(t.organizationId),
+    branchIdx: index("system_logs_branch_idx").on(t.branchId),
+    roleIdx: index("system_logs_role_idx").on(t.userRole),
   }),
 )

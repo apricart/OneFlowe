@@ -1,7 +1,7 @@
 "use client"
 import React, { useMemo, useState } from "react"
 import useSWR from "swr"
-import { useSession } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { useAppContext } from "@/components/context/app-context"
@@ -76,9 +76,10 @@ export default function OrderPortalPage() {
       const userRole = (session?.user as any)?.role
       const isEmployee = (session?.user as any)?.isEmployee
       const isAdmin = userRole === "BRANCH_ADMIN" || userRole === "HEAD_OFFICE" || userRole === "SUPER_ADMIN"
+      const isOrderPortal = userRole === "ORDER_PORTAL"
 
-      // Allow admin users and employees
-      if (isAdmin || isEmployee) {
+      // Allow admin users, employees, and order portal users
+      if (isAdmin || isEmployee || isOrderPortal) {
         return // User is authorized, allow access
       }
 
@@ -90,6 +91,7 @@ export default function OrderPortalPage() {
   const userRole = (session?.user as any)?.role
   const isEmployee = (session?.user as any)?.isEmployee
   const isAdmin = userRole === "BRANCH_ADMIN" || userRole === "HEAD_OFFICE" || userRole === "SUPER_ADMIN"
+  const isOrderPortal = userRole === "ORDER_PORTAL"
   const userName = (session?.user as any)?.fullName || (session?.user as any)?.email || "User"
 
   // Use context branch ID, fallback to session branch ID for BRANCH_ADMIN and employees
@@ -100,7 +102,8 @@ export default function OrderPortalPage() {
   // We need to pass them if:
   // 1. User is admin using context selector (no default branch in session)
   // 2. User is employee (always pass to ensure correct context)
-  const needsContextParams = (isAdmin && !((session?.user as any)?.branchId)) || isEmployee
+  // 3. User is ORDER_PORTAL (similar to employee, ensure correct context)
+  const needsContextParams = (isAdmin && !((session?.user as any)?.branchId)) || isEmployee || isOrderPortal
 
   // Build API URLs using context
   const branchInventoryUrl = activeBranchId
@@ -411,30 +414,22 @@ export default function OrderPortalPage() {
               <span className="font-semibold">{cart.length}</span>
             </Button>
 
-            {/* Home / Back Button */}
+            {/* Home / Logout Button */}
             <Button
               onClick={() => {
-                // Prefer going "back" when there is navigation history
-                if (typeof window !== "undefined" && window.history.length > 1) {
-                  router.back()
-                  return
-                }
-
-                // Fallbacks by role if there is no meaningful history
                 if (isAdmin) {
                   router.push("/dashboard")
-                } else if (isEmployee) {
-                  // Employees don't have a dashboard – send them to login/home
-                  router.push("/auth/login")
                 } else {
-                  router.push("/")
+                  // For Order Portal users, "Home" means exiting the portal -> Logout
+                  // Using signOut to clear session and redirect to login
+                  signOut({ callbackUrl: "/shop/login" })
                 }
               }}
               variant="ghost"
               size="icon"
-              title="Back to where you came from"
+              title={isAdmin ? "Back to Dashboard" : "Logout / Exit Order Portal"}
             >
-              <Home className="h-4 w-4" />
+              {isAdmin ? <Home className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
             </Button>
           </div>
         </div>

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { logger } from "@/lib/utils"
 import { getToken } from "next-auth/jwt"
 
-const protectedPrefixes = ["/dashboard", "/organizations", "/users", "/orders", "/inventory", "/budgets", "/reports", "/settings", "/branches"]
+const protectedPrefixes = ["/dashboard", "/organizations", "/users", "/orders", "/inventory", "/budgets", "/reports", "/settings", "/branches", "/shop"]
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
@@ -15,8 +15,28 @@ export async function middleware(req: NextRequest) {
     const url = new URL("/login", req.url)
     return NextResponse.redirect(url)
   }
-  // Enforce SUPER_ADMIN for admin sections
+
   const role = (token as any).role as string | undefined
+
+  // Role-based routing enforcement
+  // 1. ORDER_PORTAL users can ONLY access /shop
+  if (role === "ORDER_PORTAL" && !pathname.startsWith("/shop")) {
+    const url = new URL("/shop", req.url)
+    return NextResponse.redirect(url)
+  }
+
+  // 2. Admin users (SUPER_ADMIN, HEAD_OFFICE, BRANCH_ADMIN) cannot access /shop (except maybe for debugging, but strict separation requested)
+  if (role && ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"].includes(role) && pathname.startsWith("/shop")) {
+    // If Admin tries to access shop, block them or redirect to dashboard
+    // User requested "without credential you cannot access it", implying they should not see it with Admin creds.
+    // Redirecting to dashboard effectively blocks access.
+    const url = new URL("/dashboard", req.url)
+    return NextResponse.redirect(url)
+  }
+
+  // 3. Removed redundant logic that caused potential loops
+
+  // Enforce SUPER_ADMIN for admin sections
   // Super Admin only routes
   if (pathname.startsWith("/organizations") && role !== "SUPER_ADMIN") {
     logger("middleware", { reason: "insufficient_role", path: pathname, role })
@@ -35,6 +55,7 @@ export async function middleware(req: NextRequest) {
     const url = new URL("/login", req.url)
     return NextResponse.redirect(url)
   }
+
   return NextResponse.next()
 }
 
@@ -50,5 +71,7 @@ export const config = {
     "/budgets/:path*",
     "/reports/:path*",
     "/settings/:path*",
+    "/shop",
+    "/shop/:path*",
   ],
 }

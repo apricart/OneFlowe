@@ -66,6 +66,14 @@ export default function OrdersManagementPage() {
   const [rejectReason, setRejectReason] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
 
+  // Approval token state (shown once after approval)
+  const [showTokenDialog, setShowTokenDialog] = useState(false)
+  const [approvalToken, setApprovalToken] = useState<string | null>(null)
+
+  // Fulfillment token state (Super Admin must enter to fulfill)
+  const [showFulfillDialog, setShowFulfillDialog] = useState(false)
+  const [fulfillToken, setFulfillToken] = useState("")
+
   // Build orders endpoint with context parameters
   const ordersEndpoint = useMemo(() => {
     if (!isInitialized) return null
@@ -116,9 +124,16 @@ export default function OrdersManagementPage() {
         })
       })
 
+      const data = await res.json()
+
       if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to approve order")
+        throw new Error(data.error || "Failed to approve order")
+      }
+
+      // Show approval token in modal (SECURITY: shown once, must be copied)
+      if (data.approvalToken) {
+        setApprovalToken(data.approvalToken)
+        setShowTokenDialog(true)
       }
 
       toast({ title: "Success", description: "Order approved successfully" })
@@ -146,7 +161,8 @@ export default function OrdersManagementPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: orderId,
-          action: "cancel"
+          action: "reject",
+          rejectionReason: rejectReason
         })
       })
 
@@ -167,8 +183,13 @@ export default function OrdersManagementPage() {
     }
   }
 
-  // Fulfill order
+  // Fulfill order (requires approval token)
   const handleFulfillOrder = async (orderId: number) => {
+    if (!fulfillToken.trim()) {
+      toast({ title: "Error", description: "Please enter the approval token", variant: "destructive" })
+      return
+    }
+
     setIsProcessing(true)
     try {
       const res = await fetch("/api/v1/orders", {
@@ -176,7 +197,8 @@ export default function OrdersManagementPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: orderId,
-          action: "fulfill"
+          action: "fulfill",
+          approvalToken: fulfillToken.trim().toUpperCase()
         })
       })
 
@@ -188,6 +210,8 @@ export default function OrdersManagementPage() {
       toast({ title: "Success", description: "Order fulfilled successfully" })
       mutateOrders()
       setSelectedOrder(null)
+      setShowFulfillDialog(false)
+      setFulfillToken("")
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" })
     } finally {
@@ -228,8 +252,8 @@ export default function OrdersManagementPage() {
   const scopeText = branchId
     ? selectedBranch?.name || `Branch #${branchId}`
     : organizationId
-    ? selectedOrg?.name || "Selected organization"
-    : "All organizations"
+      ? selectedOrg?.name || "Selected organization"
+      : "All organizations"
 
   if (!isInitialized || !ordersEndpoint) {
     return (
@@ -277,17 +301,17 @@ export default function OrdersManagementPage() {
       {/* Stats & Filters – shown for all roles; data is branch-scoped for branch admins */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { 
-            label: "Total Orders", 
-            count: statusCounts.all, 
+          {
+            label: "Total Orders",
+            count: statusCounts.all,
             gradient: "from-slate-50 to-slate-100 dark:from-slate-900/30 dark:to-slate-800/20",
             border: "border-slate-200 dark:border-slate-800",
             textColor: "text-slate-900 dark:text-slate-200",
             textSecondary: "text-slate-700 dark:text-slate-400",
             iconColor: "text-slate-600 dark:text-slate-400"
           },
-          { 
-            label: "Pending", 
+          {
+            label: "Pending",
             count: statusCounts.pending,
             gradient: "from-yellow-50 to-yellow-100 dark:from-yellow-900/30 dark:to-yellow-800/20",
             border: "border-yellow-200 dark:border-yellow-800",
@@ -295,8 +319,8 @@ export default function OrdersManagementPage() {
             textSecondary: "text-yellow-700 dark:text-yellow-400",
             iconColor: "text-yellow-600 dark:text-yellow-400"
           },
-          { 
-            label: "Approved", 
+          {
+            label: "Approved",
             count: statusCounts.approved,
             gradient: "from-blue-50 to-blue-100 dark:from-slate-900/30 dark:to-slate-800/20",
             border: "border-blue-200 dark:border-slate-800",
@@ -304,8 +328,8 @@ export default function OrdersManagementPage() {
             textSecondary: "text-blue-700 dark:text-slate-400",
             iconColor: "text-blue-600 dark:text-slate-400"
           },
-          { 
-            label: "Fulfilled", 
+          {
+            label: "Fulfilled",
             count: statusCounts.fulfilled,
             gradient: "from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20",
             border: "border-emerald-200 dark:border-emerald-800",
@@ -314,8 +338,8 @@ export default function OrdersManagementPage() {
             iconColor: "text-emerald-600 dark:text-emerald-400"
           },
         ].map((stat) => (
-          <div 
-            key={stat.label} 
+          <div
+            key={stat.label}
             className={`bg-gradient-to-br ${stat.gradient} ${stat.border} rounded-lg p-5 hover:shadow-md transition-shadow`}
           >
             <p className={`text-xs font-semibold uppercase tracking-wider ${stat.textColor} mb-1`}>{stat.label}</p>
@@ -374,9 +398,7 @@ export default function OrdersManagementPage() {
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Status</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Amount</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Date</th>
-                  {!isBranchAdmin && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Actions</th>
-                  )}
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-900">
@@ -387,9 +409,9 @@ export default function OrdersManagementPage() {
                   return (
                     <tr key={order.id} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="px-4 py-3 bg-white dark:bg-slate-900">
-                          <div>
-                            <p className="font-semibold text-slate-900 dark:text-white">{order.tid}</p>
-                            <p className="text-xs text-muted-foreground">ID: {order.id}</p>
+                        <div>
+                          <p className="font-semibold text-slate-900 dark:text-white">{order.tid}</p>
+                          <p className="text-xs text-muted-foreground">ID: {order.id}</p>
                         </div>
                       </td>
                       <td className="px-4 py-3 bg-white dark:bg-slate-900">
@@ -406,73 +428,74 @@ export default function OrdersManagementPage() {
                       <td className="px-4 py-3 text-sm text-muted-foreground bg-white dark:bg-slate-900">
                         {new Date(order.createdAt).toLocaleDateString()}
                       </td>
-                      {!isBranchAdmin && (
-                        <td className="px-4 py-3 bg-white dark:bg-slate-900">
-                          <div className="flex items-center gap-2">
+                      <td className="px-4 py-3 bg-white dark:bg-slate-900">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1"
+                          >
+                            <Link href={`/orders/${order.id}`}>
+                              <Eye className="h-4 w-4" />
+                              View
+                            </Link>
+                          </Button>
+
+                          {isSuperAdmin && order.status.toLowerCase() === "fulfilled" && (order.hasRefundRequests || 0) > 0 && (
                             <Button
-                              asChild
-                              variant="ghost"
+                              onClick={() => router.push(`/orders/${order.id}/refunds`)}
                               size="sm"
-                              className="gap-1"
+                              className="gap-1 bg-indigo-600 hover:bg-indigo-700 text-white"
                             >
-                              <Link href={`/orders/${order.id}`}>
-                                <Eye className="h-4 w-4" />
-                                View
-                              </Link>
+                              <Receipt className="h-4 w-4" />
+                              Refunds {(order.hasRefundRequests || 0) > 0 && `(${order.hasRefundRequests})`}
                             </Button>
+                          )}
 
-                            {isSuperAdmin && order.status.toLowerCase() === "fulfilled" && (order.hasRefundRequests || 0) > 0 && (
+                          {order.status.toLowerCase() === "pending" && isBranchAdmin && (
+                            <>
                               <Button
-                                onClick={() => router.push(`/orders/${order.id}/refunds`)}
+                                onClick={() => {
+                                  setSelectedOrder(order)
+                                  setShowApprovalDialog(true)
+                                }}
                                 size="sm"
-                                className="gap-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                                className="gap-1 bg-green-600 hover:bg-green-700"
                               >
-                                <Receipt className="h-4 w-4" />
-                                Refunds {(order.hasRefundRequests || 0) > 0 && `(${order.hasRefundRequests})`}
+                                <Check className="h-4 w-4" />
+                                Approve
                               </Button>
-                            )}
-
-                            {order.status.toLowerCase() === "pending" && (
-                              <>
-                                <Button
-                                  onClick={() => {
-                                    setSelectedOrder(order)
-                                    setShowApprovalDialog(true)
-                                  }}
-                                  size="sm"
-                                  className="gap-1 bg-green-600 hover:bg-green-700"
-                                >
-                                  <Check className="h-4 w-4" />
-                                  Approve
-                                </Button>
-                                <Button
-                                  onClick={() => {
-                                    setSelectedOrder(order)
-                                    setShowRejectDialog(true)
-                                  }}
-                                  variant="destructive"
-                                  size="sm"
-                                  className="gap-1"
-                                >
-                                  <X className="h-4 w-4" />
-                                  Reject
-                                </Button>
-                              </>
-                            )}
-
-                            {order.status.toLowerCase() === "approved" && (
                               <Button
-                                onClick={() => handleFulfillOrder(order.id)}
+                                onClick={() => {
+                                  setSelectedOrder(order)
+                                  setShowRejectDialog(true)
+                                }}
+                                variant="destructive"
                                 size="sm"
-                                className="gap-1 bg-blue-600 hover:bg-blue-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-white"
+                                className="gap-1"
                               >
-                                <CheckCircle className="h-4 w-4" />
-                                Fulfill
+                                <X className="h-4 w-4" />
+                                Reject
                               </Button>
-                            )}
-                          </div>
-                        </td>
-                      )}
+                            </>
+                          )}
+
+                          {order.status.toLowerCase() === "approved" && isSuperAdmin && (
+                            <Button
+                              onClick={() => {
+                                setSelectedOrder(order)
+                                setShowFulfillDialog(true)
+                              }}
+                              size="sm"
+                              className="gap-1 bg-blue-600 hover:bg-blue-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-white"
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              Fulfill
+                            </Button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   )
                 })}
@@ -572,6 +595,127 @@ export default function OrdersManagementPage() {
               variant="destructive"
             >
               {isProcessing ? "Rejecting..." : "Reject Order"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* SECURITY: Approval Token Display Dialog - Shown ONCE after approval */}
+      <Dialog open={showTokenDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowTokenDialog(false)
+          setApprovalToken(null)
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-700 dark:text-green-400">
+              <CheckCircle className="h-5 w-5" />
+              Order Approved - Save This Token!
+            </DialogTitle>
+            <DialogDescription className="text-amber-600 dark:text-amber-400 font-medium">
+              ⚠️ This token will NOT be shown again. Copy it now!
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 text-center">
+              <p className="text-xs text-muted-foreground mb-2">Approval Token</p>
+              <p className="font-mono text-2xl font-bold tracking-widest text-slate-900 dark:text-white select-all">
+                {approvalToken}
+              </p>
+            </div>
+
+            <div className="bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                <strong>Important:</strong> Share this token securely with the Super Admin who will fulfill this order. They will need to enter it to complete fulfillment.
+              </p>
+            </div>
+
+            <Button
+              className="w-full gap-2"
+              onClick={() => {
+                if (approvalToken) {
+                  navigator.clipboard.writeText(approvalToken)
+                  toast({ title: "Copied!", description: "Token copied to clipboard" })
+                }
+              }}
+            >
+              <Receipt className="h-4 w-4" />
+              Copy Token to Clipboard
+            </Button>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowTokenDialog(false)
+              setApprovalToken(null)
+            }}>
+              I've Saved the Token
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fulfillment Token Input Dialog - Super Admin must enter token */}
+      <Dialog open={showFulfillDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowFulfillDialog(false)
+          setFulfillToken("")
+          setSelectedOrder(null)
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Enter Approval Token</DialogTitle>
+            <DialogDescription>
+              To fulfill this order, enter the approval token provided by the Branch Admin who approved it.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedOrder && (
+            <div className="space-y-4">
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/50 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-1">Order TID</p>
+                <p className="font-mono text-blue-700 dark:text-blue-400">{selectedOrder.tid}</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">Approval Token</label>
+                <input
+                  type="text"
+                  value={fulfillToken}
+                  onChange={(e) => setFulfillToken(e.target.value.toUpperCase())}
+                  placeholder="Enter 10-character token..."
+                  className="w-full p-3 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-mono text-lg tracking-widest uppercase"
+                  maxLength={10}
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Token is case-insensitive
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowFulfillDialog(false)
+                setFulfillToken("")
+                setSelectedOrder(null)
+              }}
+              disabled={isProcessing}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => selectedOrder && handleFulfillOrder(selectedOrder.id)}
+              disabled={isProcessing || !fulfillToken.trim()}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isProcessing ? "Verifying..." : "Fulfill Order"}
             </Button>
           </DialogFooter>
         </DialogContent>

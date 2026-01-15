@@ -1,9 +1,10 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { db } from "@/lib/db"
-import { users as usersTable, roles as rolesTable } from "@/db/schema"
+import { users as usersTable, roles as rolesTable, systemLogs } from "@/db/schema"
 import { and, desc, eq } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
-type Role = "SUPER_ADMIN" | "HEAD_OFFICE" | "BRANCH_ADMIN"
+import { headers } from "next/headers"
+type Role = "SUPER_ADMIN" | "HEAD_OFFICE" | "BRANCH_ADMIN" | "ORDER_PORTAL"
 import { hashPassword } from "@/lib/password"
 
 
@@ -69,14 +70,14 @@ export async function POST(req: Request) {
   // Get the current user's role to determine what roles they can create
   const scope = await getRequestScope()
   const currentUserRole = scope?.role
-  
+
   let allowed: Role[] = []
   if (currentUserRole === "SUPER_ADMIN") {
-    allowed = ["HEAD_OFFICE", "BRANCH_ADMIN"]
+    allowed = ["HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"]
   } else if (currentUserRole === "HEAD_OFFICE") {
-    allowed = ["HEAD_OFFICE", "BRANCH_ADMIN"]
+    allowed = ["HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"]
   }
-  
+
   if (!allowed.includes(role)) {
     return error(`Only ${allowed.join(" or ")} can be created by ${currentUserRole}`, 400)
   }
@@ -92,20 +93,20 @@ export async function POST(req: Request) {
   if (role === "HEAD_OFFICE") {
     if (!organizationId) return error("organizationId required for HEAD_OFFICE", 400)
   }
-  if (role === "BRANCH_ADMIN") {
+  if (role === "BRANCH_ADMIN" || role === "ORDER_PORTAL") {
     if (!organizationId || !branchId) {
-      return error("organizationId and branchId required for BRANCH_ADMIN", 400)
+      return error("organizationId and branchId required for BRANCH_ADMIN and ORDER_PORTAL", 400)
     }
   }
 
   const [roleRow] = await db.select().from(rolesTable).where(eq(rolesTable.name, role)).limit(1)
   if (!roleRow) return error("Invalid role", 400)
-  
+
   // MFA is handled separately through the MFA system
   // No login code generation needed
-  
+
   const passwordHash = await hashPassword(password)
-  
+
   try {
     const [item] = await db
       .insert(usersTable)
@@ -123,7 +124,38 @@ export async function POST(req: Request) {
       })
       .returning()
 
-    return ok({ item }, { status: 201 })
+    const createdUser = item
+
+    // Audit Log
+    try {
+      const headersList = await headers()
+      const userAgent = headersList.get("user-agent")
+      const forwardedFor = headersList.get("x-forwarded-for")
+      const ip = forwardedFor ? forwardedFor.split(',')[0] : "unknown"
+
+      await db.insert(systemLogs).values({
+        userId: scope?.userId, // The generic/admin user who created this action
+        userRole: currentUserRole,
+        organizationId: scope?.organizationId,
+        branchId: branchId || undefined,
+        action: "USER_CREATE",
+        resourceType: "user",
+        resourceId: String(createdUser.id),
+        details: {
+          createdUserEmail: createdUser.email,
+          createdUserRole: role,
+          createdUserOrgId: organizationId,
+          createdUserBranchId: branchId
+        },
+        ipAddress: ip,
+        userAgent: userAgent,
+        success: true
+      })
+    } catch (logErr) {
+      console.error("Failed to write audit log:", logErr)
+    }
+
+    return ok({ item: createdUser }, { status: 201 })
   } catch (err: any) {
     // Handle database constraint violations
     if (err.code === '23505') {

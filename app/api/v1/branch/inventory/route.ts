@@ -17,14 +17,15 @@ export async function GET(req: NextRequest) {
     const userRole = (session.user as any).role
     let organizationId = (session.user as any).organizationId
     let branchId = (session.user as any).branchId
-    
+
     const { searchParams } = new URL(req.url)
-    
+
     // Allow BRANCH_ADMIN to access their own inventory
     // Allow EMPLOYEE to access their assigned branch inventory
+    // Allow ORDER_PORTAL to access their assigned branch inventory
     // Allow HEAD_OFFICE and SUPER_ADMIN to access if they provide branchId param
-    if (userRole === "BRANCH_ADMIN" || userRole === "EMPLOYEE") {
-      // BRANCH_ADMIN and EMPLOYEE use their own branch
+    if (userRole === "BRANCH_ADMIN" || userRole === "EMPLOYEE" || userRole === "ORDER_PORTAL") {
+      // BRANCH_ADMIN, EMPLOYEE, and ORDER_PORTAL use their own branch
       if (!organizationId || !branchId) {
         return NextResponse.json({ error: "Organization or branch not found in session" }, { status: 400 })
       }
@@ -32,11 +33,11 @@ export async function GET(req: NextRequest) {
       // Admin users need to specify branchId in query params
       const branchIdParam = searchParams.get("branchId")
       const orgIdParam = searchParams.get("organizationId")
-      
+
       if (!branchIdParam) {
         return NextResponse.json({ error: "branchId parameter required for admin users" }, { status: 400 })
       }
-      
+
       branchId = parseInt(branchIdParam)
       if (!Number.isFinite(branchId)) {
         return NextResponse.json({ error: "Invalid branch ID" }, { status: 400 })
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
       eq(organizationInventory.organizationId, orgIdNum),
       isNull(organizationInventory.deletedAt),
     ]
-    
+
     if (search) {
       conditions.push(
         or(
@@ -124,21 +125,21 @@ export async function GET(req: NextRequest) {
         customDescription: organizationInventory.customDescription,
         customImageUrl: organizationInventory.customImageUrl,
       })
-      .from(organizationInventory)
-      .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-      .leftJoin(
-        branchInventory,
-        and(
-          eq(branchInventory.organizationInventoryId, organizationInventory.id),
-          eq(branchInventory.branchId, branchId),
-          isNull(branchInventory.deletedAt),
+        .from(organizationInventory)
+        .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+        .leftJoin(
+          branchInventory,
+          and(
+            eq(branchInventory.organizationInventoryId, organizationInventory.id),
+            eq(branchInventory.branchId, branchId),
+            isNull(branchInventory.deletedAt),
+          )
         )
-      )
-      .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
-      .where(whereClause)
-      .orderBy(desc(organizationInventory.id))
-      .limit(limit)
-      .offset(offset),
+        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+        .where(whereClause)
+        .orderBy(desc(organizationInventory.id))
+        .limit(limit)
+        .offset(offset),
 
       db
         .select({ count: sql<number>`count(*)` })
@@ -204,17 +205,17 @@ export async function PUT(req: NextRequest) {
     const allowedFields = ['isVisible', 'stockQuantity', 'reorderThreshold']
     const providedFields = Object.keys(body).filter(key => key !== 'id')
     const invalidFields = providedFields.filter(field => !allowedFields.includes(field))
-    
+
     if (invalidFields.length > 0) {
-      return NextResponse.json({ 
-        error: `Branch admin can only update: ${allowedFields.join(', ')}. Invalid fields: ${invalidFields.join(', ')}` 
+      return NextResponse.json({
+        error: `Branch admin can only update: ${allowedFields.join(', ')}. Invalid fields: ${invalidFields.join(', ')}`
       }, { status: 400 })
     }
 
     const updateData: any = {
       updatedAt: new Date()
     }
-    
+
     if (isVisible !== undefined) updateData.isVisible = isVisible
     if (stockQuantity !== undefined) updateData.stockQuantity = stockQuantity
     if (reorderThreshold !== undefined) updateData.reorderThreshold = reorderThreshold
@@ -241,7 +242,7 @@ export async function PUT(req: NextRequest) {
       action: "UPDATE",
       entity: "BranchInventory",
       entityId: id.toString(),
-      metadata: { 
+      metadata: {
         organizationId,
         branchId,
         updateData,

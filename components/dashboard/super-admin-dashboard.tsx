@@ -234,10 +234,12 @@ export function SuperAdminDashboard() {
 
   const { data: todaysOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ from: startOfToday.toISOString() }), fetcher)
   const { data: pendingOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ status: "PENDING" }), fetcher)
+  const { data: approvedOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ status: "APPROVED" }), fetcher)
 
   const todaysGMVCents = (todaysOrders?.items || []).reduce((sum, o) => sum + (o.totalCents || 0), 0)
   const todaysGMV = formatPKR(todaysGMVCents / 100, { maximumFractionDigits: 0 })
   const pendingCount = pendingOrders?.items?.length || 0
+  const approvedCount = approvedOrders?.items?.length || 0
 
   const scopeText = branchId ? selectedBranch?.name || `Branch #${branchId}` : organizationId ? selectedOrg?.name || `Organization #${organizationId}` : "All organizations & branches"
   const allBranchesSelected = !branchId
@@ -309,6 +311,8 @@ export function SuperAdminDashboard() {
             gradient="from-amber-500 to-orange-600"
             iconBg="text-amber-600 bg-amber-600"
           />
+
+
 
           <BankingKPICard
             icon={Sparkles}

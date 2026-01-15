@@ -28,7 +28,7 @@ const getNavigationByRole = (role: string) => {
           { href: "/products/subcategories", label: "Sub Categories", icon: FolderOpen },
         ]
       },
-      { href: "/global-inventory", label: "Global Inventory", icon: Boxes },
+      { href: "/inventory", label: "Global Inventory", icon: Boxes },
       { href: "/budgets", label: "Budgets", icon: Wallet },
       {
         href: "/reports",

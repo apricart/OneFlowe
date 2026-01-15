@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Edit, Trash2, Search, User, Mail, Phone, Shield, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react"
 
-type UserRow = { 
+type UserRow = {
   id: string
   firstName: string
   lastName: string
@@ -235,6 +235,8 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
         return <Badge className="bg-green-100 text-green-800">Branch Admin</Badge>
       case "SUPER_ADMIN":
         return <Badge className="bg-purple-100 text-purple-800">Super Admin</Badge>
+      case "ORDER_PORTAL":
+        return <Badge className="bg-orange-100 text-orange-800">Order Portal</Badge>
       default:
         return <Badge variant="outline">{role}</Badge>
     }
@@ -261,6 +263,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
             <SelectItem value="all">All Roles</SelectItem>
             <SelectItem value="HEAD_OFFICE">Head Office</SelectItem>
             <SelectItem value="BRANCH_ADMIN">Branch Admin</SelectItem>
+            <SelectItem value="ORDER_PORTAL">Order Portal User</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -475,11 +478,12 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
                   <SelectContent>
                     <SelectItem value="HEAD_OFFICE">Head Office</SelectItem>
                     <SelectItem value="BRANCH_ADMIN">Branch Admin</SelectItem>
+                    <SelectItem value="ORDER_PORTAL">Order Portal User</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              
-              {editForm.role === "BRANCH_ADMIN" && (
+
+              {(editForm.role === "BRANCH_ADMIN" || editForm.role === "ORDER_PORTAL") && (
                 <div className="space-y-2">
                   <Label htmlFor="branch">Branch Assignment *</Label>
                   <Select value={editForm.branchId} onValueChange={value => setEditForm({ ...editForm, branchId: value })}>
@@ -571,11 +575,12 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
             <Button
               onClick={saveUser}
               disabled={
-                submitting || 
-                !editForm.firstName || 
-                !editForm.lastName || 
-                !editForm.email || 
+                submitting ||
+                !editForm.firstName ||
+                !editForm.lastName ||
+                !editForm.email ||
                 !editForm.role ||
+                ((editForm.role === "BRANCH_ADMIN" || editForm.role === "ORDER_PORTAL") && !editForm.branchId) ||
                 (showPasswordReset && (!editForm.password || !editForm.confirmPassword || editForm.password !== editForm.confirmPassword || editForm.password.length < 6))
               }
               style={{ background: "var(--color-brand-primary)", color: "white" }}

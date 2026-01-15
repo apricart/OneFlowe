@@ -24,9 +24,11 @@ function LoginForm() {
   const [pendingUser, setPendingUser] = useState<{ email: string; password: string } | null>(null)
   const [isProcessingMFA, setIsProcessingMFA] = useState(false)
 
-  // Clear theme preference on mount to ensure light theme
+  // Clear theme preference on mount and FORCE light mode
   useEffect(() => {
     localStorage.removeItem("theme")
+    document.documentElement.classList.remove("dark")
+    document.documentElement.style.colorScheme = "light"
   }, [])
 
   async function onSubmit(e: React.FormEvent) {
@@ -49,8 +51,22 @@ function LoginForm() {
         throw new Error(result.error)
       }
 
-      const cb = searchParams.get("callbackUrl")
-      router.replace(cb || "/dashboard")
+      const role = (result as any)?.role // Note: signIn doesn't return the session/role directly, we might need to rely on callback or fetch session. 
+      // Actually, standard NextAuth pattern is to let client side handle redirect or use router.
+      // Since we disabled redirect in signIn, we need to decide where to go.
+      // We can fetch the session to check role, or just let middleware handle it if we go to dashboard and get bounced.
+      // Better: fetch session or just check URL.
+
+      // Let's rely on getSession to be sure
+      const session = await getSession()
+      const userRole = (session?.user as any)?.role
+
+      if (userRole === "ORDER_PORTAL") {
+        router.replace("/shop")
+      } else {
+        const cb = searchParams.get("callbackUrl")
+        router.replace(cb || "/dashboard")
+      }
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -58,12 +74,21 @@ function LoginForm() {
     }
   }
 
-  const handleMFASuccess = () => {
+  const handleMFASuccess = async () => {
     setIsProcessingMFA(true)
     setMfaRequired(false)
     setPendingUser(null)
-    const cb = searchParams.get("callbackUrl")
-    router.replace(cb || "/dashboard")
+
+    // Check role for redirect
+    const session = await getSession()
+    const userRole = (session?.user as any)?.role
+
+    if (userRole === "ORDER_PORTAL") {
+      router.replace("/shop")
+    } else {
+      const cb = searchParams.get("callbackUrl")
+      router.replace(cb || "/dashboard")
+    }
   }
 
   const handleMFACancel = () => {
@@ -108,7 +133,7 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="bg-white/80 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
+                className="bg-white/80 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
             <div className="grid gap-2">
@@ -121,7 +146,7 @@ function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="bg-white/80 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
+                className="bg-white/80 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
             {error && (
@@ -152,16 +177,7 @@ function LoginForm() {
         </CardFooter>
       </Card>
 
-      {/* Order Portal Button */}
-      <div className="mt-6">
-        <Button
-          variant="outline"
-          onClick={() => router.push("/shop/login")}
-          className="w-full gap-2 bg-white/90 hover:bg-white border-slate-300 text-slate-700 shadow-lg backdrop-blur-sm"
-        >
-          🛒 Order Portal Login
-        </Button>
-      </div>
+
 
       {/* MFA Verification Dialog */}
       {mfaRequired && pendingUser && (

@@ -13,8 +13,24 @@ export type DashboardAnalyticsResponse = {
   ordersThisMonth: number
 }
 
-export function useDashboardAnalytics() {
-  return useSWR<DashboardAnalyticsResponse>("/api/v1/analytics/dashboard", fetcher, {
+export function useDashboardAnalytics(organizationId?: string | null, branchId?: string | null) {
+  const url = useMemo(() => {
+    const baseUrl = "/api/v1/analytics/dashboard"
+    const params = new URLSearchParams()
+
+    if (organizationId && organizationId !== "null" && organizationId !== "0") {
+      params.set("organizationId", organizationId)
+    }
+
+    if (branchId && branchId !== "null" && branchId !== "0") {
+      params.set("branchId", branchId)
+    }
+
+    const queryString = params.toString()
+    return queryString ? `${baseUrl}?${queryString}` : baseUrl
+  }, [organizationId, branchId])
+
+  return useSWR<DashboardAnalyticsResponse>(url, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: true,
   })

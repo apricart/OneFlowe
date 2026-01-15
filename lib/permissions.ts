@@ -20,7 +20,7 @@ export enum Permission {
   SYSTEM_MANAGE_ROLES = "system:manage_roles",
   SYSTEM_MANAGE_PERMISSIONS = "system:manage_permissions",
   SYSTEM_VIEW_SYSTEM_HEALTH = "system:view_health",
-  
+
   // Organization Management
   ORG_CREATE = "org:create",
   ORG_VIEW = "org:view",
@@ -29,7 +29,7 @@ export enum Permission {
   ORG_MANAGE_SETTINGS = "org:manage_settings",
   ORG_MANAGE_BRANCHES = "org:manage_branches",
   ORG_VIEW_METRICS = "org:view_metrics",
-  
+
   // User Management
   USER_CREATE = "user:create",
   USER_VIEW = "user:view",
@@ -39,7 +39,7 @@ export enum Permission {
   USER_RESET_PASSWORD = "user:reset_password",
   USER_MANAGE_MFA = "user:manage_mfa",
   USER_VIEW_SESSIONS = "user:view_sessions",
-  
+
   // Inventory Management
   INVENTORY_CREATE = "inventory:create",
   INVENTORY_VIEW = "inventory:view",
@@ -48,7 +48,7 @@ export enum Permission {
   INVENTORY_ADJUST = "inventory:adjust",
   INVENTORY_TRANSFER = "inventory:transfer",
   INVENTORY_MANAGE_SUPPLIERS = "inventory:manage_suppliers",
-  
+
   // Order Management
   ORDER_CREATE = "order:create",
   ORDER_VIEW = "order:view",
@@ -58,20 +58,20 @@ export enum Permission {
   ORDER_REJECT = "order:reject",
   ORDER_CANCEL = "order:cancel",
   ORDER_VIEW_ALL = "order:view_all",
-  
+
   // Financial Operations
   FINANCE_VIEW_BUDGETS = "finance:view_budgets",
   FINANCE_MANAGE_BUDGETS = "finance:manage_budgets",
   FINANCE_VIEW_REPORTS = "finance:view_reports",
   FINANCE_APPROVE_EXPENSES = "finance:approve_expenses",
-  
+
   // Reports & Analytics
   REPORTS_VIEW_ALL = "reports:view_all",
   REPORTS_VIEW_ORGANIZATION = "reports:view_organization",
   REPORTS_VIEW_BRANCH = "reports:view_branch",
   REPORTS_EXPORT = "reports:export",
   REPORTS_SCHEDULE = "reports:schedule",
-  
+
   // Settings & Configuration
   SETTINGS_VIEW = "settings:view",
   SETTINGS_EDIT = "settings:edit",
@@ -122,7 +122,7 @@ export const PERMISSION_DEFINITIONS: PermissionInfo[] = [
     description: "Monitor system health and performance metrics",
     category: PermissionCategory.SYSTEM,
   },
-  
+
   // Organization Management
   {
     key: Permission.ORG_CREATE,
@@ -167,7 +167,7 @@ export const PERMISSION_DEFINITIONS: PermissionInfo[] = [
     description: "Access organization performance metrics",
     category: PermissionCategory.ORGANIZATION,
   },
-  
+
   // User Management
   {
     key: Permission.USER_CREATE,
@@ -219,7 +219,7 @@ export const PERMISSION_DEFINITIONS: PermissionInfo[] = [
     description: "Monitor active user sessions",
     category: PermissionCategory.USER,
   },
-  
+
   // Inventory Management
   {
     key: Permission.INVENTORY_CREATE,
@@ -264,7 +264,7 @@ export const PERMISSION_DEFINITIONS: PermissionInfo[] = [
     description: "Create and manage supplier relationships",
     category: PermissionCategory.INVENTORY,
   },
-  
+
   // Order Management
   {
     key: Permission.ORDER_CREATE,
@@ -315,7 +315,7 @@ export const PERMISSION_DEFINITIONS: PermissionInfo[] = [
     description: "Access all orders across organizations",
     category: PermissionCategory.ORDER,
   },
-  
+
   // Financial Operations
   {
     key: Permission.FINANCE_VIEW_BUDGETS,
@@ -341,7 +341,7 @@ export const PERMISSION_DEFINITIONS: PermissionInfo[] = [
     description: "Approve expense requests",
     category: PermissionCategory.FINANCIAL,
   },
-  
+
   // Reports & Analytics
   {
     key: Permission.REPORTS_VIEW_ALL,
@@ -373,7 +373,7 @@ export const PERMISSION_DEFINITIONS: PermissionInfo[] = [
     description: "Set up automated report generation",
     category: PermissionCategory.REPORTS,
   },
-  
+
   // Settings & Configuration
   {
     key: Permission.SETTINGS_VIEW,
@@ -403,13 +403,13 @@ export const PERMISSION_DEFINITIONS: PermissionInfo[] = [
 
 export function getPermissionsByCategory() {
   const grouped = new Map<PermissionCategory, PermissionInfo[]>()
-  
+
   for (const perm of PERMISSION_DEFINITIONS) {
     const existing = grouped.get(perm.category) || []
     existing.push(perm)
     grouped.set(perm.category, existing)
   }
-  
+
   return grouped
 }
 
@@ -467,10 +467,22 @@ export const ROLE_TEMPLATES = {
       Permission.ORDER_CREATE,
       Permission.ORDER_VIEW,
       Permission.ORDER_EDIT,
+      Permission.ORDER_APPROVE,
+      Permission.ORDER_REJECT,
       Permission.FINANCE_VIEW_BUDGETS,
       Permission.REPORTS_VIEW_BRANCH,
       Permission.REPORTS_EXPORT,
       Permission.SETTINGS_VIEW,
+    ],
+  },
+  ORDER_PORTAL: {
+    name: "Order Portal User",
+    description: "Restricted access for placing orders only",
+    permissions: [
+      Permission.INVENTORY_VIEW,
+      Permission.ORDER_CREATE,
+      Permission.ORDER_VIEW,
+      Permission.FINANCE_VIEW_BUDGETS,
     ],
   },
 }

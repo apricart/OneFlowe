@@ -11,7 +11,7 @@ import { Package, Search, Filter, CheckCircle, Clock, AlertTriangle, TrendingDow
 import { formatPKR } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
 import Link from "next/link"
-import { getAutoApprovalCountdown } from "@/lib/order-utils"
+
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -142,6 +142,34 @@ export default function HeadOfficeOrdersPage() {
     }
   }
 
+  // Fulfill order (Super Admin only)
+  const handleFulfillOrder = async (orderId: number) => {
+    setIsProcessing(true)
+    try {
+      const res = await fetch("/api/v1/orders", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: orderId,
+          action: "fulfill"
+        })
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to fulfill order")
+      }
+
+      toast({ title: "Success", description: "Order fulfilled successfully" })
+      mutateOrders()
+      setSelectedOrder(null)
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" })
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, { bg: string; text: string; icon: any }> = {
       pending: { bg: "bg-yellow-50 dark:bg-yellow-950", text: "text-yellow-700 dark:text-yellow-300", icon: Clock },
@@ -261,16 +289,7 @@ export default function HeadOfficeOrdersPage() {
         })}
       </div>
 
-      <Card className="flex flex-col gap-3 border-dashed border-slate-300/70 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-800 p-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-          <Clock className="h-4 w-4 text-amber-600" />
-          Auto-approval safety net
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Pending orders are automatically approved after 2 hours to keep branches moving. Review aging requests here if you
-          need to intervene before the timer elapses.
-        </p>
-      </Card>
+
 
       {/* Filters */}
       <Card className="p-4 space-y-4 dark:bg-slate-900 dark:border-slate-800">
@@ -349,9 +368,7 @@ export default function HeadOfficeOrdersPage() {
                           <StatusIcon className="h-3 w-3 mr-1" />
                           {order.status}
                         </Badge>
-                        {order.status.toLowerCase() === "pending" && (
-                          <p className="mt-1 text-xs text-amber-600">{getAutoApprovalCountdown(order)}</p>
-                        )}
+
                       </td>
                       <td className="px-4 py-3">
                         <p className="font-bold text-slate-900 dark:text-white">
@@ -370,33 +387,7 @@ export default function HeadOfficeOrdersPage() {
                             </Link>
                           </Button>
 
-                          {order.status.toLowerCase() === "pending" && (
-                            <>
-                              <Button
-                                onClick={() => {
-                                  setSelectedOrder(order)
-                                  setShowApprovalDialog(true)
-                                }}
-                                size="sm"
-                                className="gap-1 bg-green-600 hover:bg-green-700"
-                              >
-                                <Check className="h-4 w-4" />
-                                Approve
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  setSelectedOrder(order)
-                                  setShowRejectDialog(true)
-                                }}
-                                variant="destructive"
-                                size="sm"
-                                className="gap-1"
-                              >
-                                <X className="h-4 w-4" />
-                                Reject
-                              </Button>
-                            </>
-                          )}
+
                         </div>
                       </td>
                     </tr>
@@ -477,7 +468,7 @@ export default function HeadOfficeOrdersPage() {
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
                   placeholder="Explain why this order is being rejected..."
-                  className="w-full p-3 border rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white min-h-24"
+                  className="w-full p-3 border rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white min-h-24"
                 />
               </div>
             </div>

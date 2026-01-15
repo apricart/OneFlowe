@@ -34,7 +34,7 @@ export function BranchAdminDashboard() {
   const branches = branchesData?.items || []
   const selectedBranch = branchId ? branches.find(b => b.id?.toString() === branchId) : null
 
-  const { data } = useDashboardAnalytics()
+  const { data } = useDashboardAnalytics(organizationId, branchId)
   const { data: weeklySalesData } = useWeeklySales(organizationId, branchId)
   const currentYear = new Date().getFullYear()
 

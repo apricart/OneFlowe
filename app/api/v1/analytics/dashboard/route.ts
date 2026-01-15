@@ -16,6 +16,10 @@ function getOrderConditions(role: Role | undefined, organizationId: number | nul
 
   const conditions = [gte(orders.createdAt, fromDate)]
 
+  if (role === "SUPER_ADMIN") {
+    conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED')`)
+  }
+
   if (role !== "SUPER_ADMIN" && organizationId) {
     conditions.push(eq(orders.organizationId, organizationId))
   }
@@ -33,22 +37,22 @@ export async function GET(req: NextRequest) {
 
   const scope = await getRequestScope()
   const role = scope?.role
-  
+
   // Get filter parameters from query string (for UI context selection)
   const { searchParams } = new URL(req.url)
   const orgIdParam = searchParams.get("organizationId")
   const branchIdParam = searchParams.get("branchId")
-  
+
   // Use query params if provided, otherwise fall back to auth scope
   let organizationId: number | null = null
   let branchId: number | null = null
-  
+
   if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") {
     organizationId = Number(orgIdParam)
   } else if (role !== "SUPER_ADMIN" && scope?.organizationId) {
     organizationId = scope.organizationId
   }
-  
+
   if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
     branchId = Number(branchIdParam)
   } else if (role === "BRANCH_ADMIN" && scope?.branchId) {
@@ -107,20 +111,25 @@ export async function GET(req: NextRequest) {
   const branchCount = Number(((branchCountRows as any)[0]?.count) || 0)
 
   // Pending approvals: count orders with status PENDING for the same scope (no date filter)
-  const pendingConditions: any[] = [or(eq(orders.status, "PENDING"), eq(orders.status, "pending"))]
-  if (role !== "SUPER_ADMIN" && organizationId) {
-    pendingConditions.push(eq(orders.organizationId, organizationId))
-  }
-  if (role === "BRANCH_ADMIN" && branchId) {
-    pendingConditions.push(eq(orders.branchId, branchId))
-  }
+  // Pending approvals: count orders with status PENDING for the same scope (no date filter)
+  // Super Admin does NOT see pending orders, so return 0. Only Branch Admin/Head Office need this.
+  let pendingApprovals = 0
+  if (role !== "SUPER_ADMIN") {
+    const pendingConditions: any[] = [or(eq(orders.status, "PENDING"), eq(orders.status, "pending"))]
+    if (organizationId) {
+      pendingConditions.push(eq(orders.organizationId, organizationId))
+    }
+    if (role === "BRANCH_ADMIN" && branchId) {
+      pendingConditions.push(eq(orders.branchId, branchId))
+    }
 
-  const pendingRow = await db
-    .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
-    .from(orders)
-    .where(and(...(pendingConditions as any)))
+    const pendingRow = await db
+      .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
+      .from(orders)
+      .where(and(...(pendingConditions as any)))
 
-  const pendingApprovals = Number(((pendingRow as any)[0]?.count) || 0)
+    pendingApprovals = Number(((pendingRow as any)[0]?.count) || 0)
+  }
 
   // Orders this month: Only include APPROVED or FULFILLED orders (exclude PENDING, REJECTED, REFUNDED)
   // Use explicit date range for current month to avoid timezone issues

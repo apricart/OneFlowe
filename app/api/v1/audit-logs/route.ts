@@ -1,58 +1,53 @@
+import { NextResponse, type NextRequest } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { auditLogs, users } from "@/db/schema"
-import { desc, eq, and, sql } from "drizzle-orm"
-import { ok, err, requireApiRole } from "@/lib/api"
-import { NextRequest } from "next/server"
+import { systemLogs } from "@/db/schema"
+import { and, desc, eq, gte, lte, sql } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
-  const authErr = await requireApiRole(["SUPER_ADMIN"])
-  if (authErr) return authErr
+  const session = await getServerSession(authOptions)
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { searchParams } = req.nextUrl
-  const limit = parseInt(searchParams.get("limit") || "50")
-  const offset = parseInt(searchParams.get("offset") || "0")
-  const entity = searchParams.get("entity")
-  const action = searchParams.get("action")
+  const role = (session.user as any).role
 
-  try {
-    let query = db
-      .select({
-        id: auditLogs.id,
-        userId: auditLogs.userId,
-        organizationId: auditLogs.organizationId,
-        branchId: auditLogs.branchId,
-        action: auditLogs.action,
-        entity: auditLogs.entity,
-        entityId: auditLogs.entityId,
-        metadata: auditLogs.metadata,
-        createdAt: auditLogs.createdAt,
-        userEmail: users.email,
-        userFullName: users.fullName,
-      })
-      .from(auditLogs)
-      .leftJoin(users, eq(auditLogs.userId, users.id))
-      .orderBy(desc(auditLogs.createdAt))
-      .limit(limit)
-      .offset(offset)
-
-    // Apply filters if provided
-    const conditions = []
-    if (entity) {
-      conditions.push(eq(auditLogs.entity, entity))
-    }
-    if (action) {
-      conditions.push(eq(auditLogs.action, action))
-    }
-
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions)) as any
-    }
-
-    const logs = await query
-
-    return ok({ data: logs, meta: { limit, offset } })
-  } catch (error: any) {
-    return err(error.message || "Failed to fetch audit logs", 500)
+  // Only Super Admin can view all logs. Head Office/Branch Admin might view their own?
+  // Requirement: "Create audit log viewer for Super Admin"
+  if (role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
-}
 
+  const searchParams = req.nextUrl.searchParams
+  const page = Number(searchParams.get("page") || "1")
+  const limit = Number(searchParams.get("limit") || "50")
+  const offset = (page - 1) * limit
+
+  const action = searchParams.get("action")
+  const resourceType = searchParams.get("resourceType")
+  const userId = searchParams.get("userId")
+
+  const conditions = []
+
+  if (action) conditions.push(eq(systemLogs.action, action))
+  if (resourceType) conditions.push(eq(systemLogs.resourceType, resourceType))
+  if (userId) conditions.push(eq(systemLogs.userId, userId))
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+
+  const items = await db.select()
+    .from(systemLogs)
+    .where(whereClause)
+    .orderBy(desc(systemLogs.createdAt))
+    .limit(limit)
+    .offset(offset)
+
+  // Get total count (approximation or separate query)
+  // For simplicity, just return items for now. 
+  // Ideally we want count.
+
+  return NextResponse.json({
+    items,
+    page,
+    limit
+  })
+}

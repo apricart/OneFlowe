@@ -43,19 +43,16 @@ export function Topbar() {
       {/* Right Side - Actions & Profile */}
       <div className="flex items-center gap-3">
         {/* Order Portal link */}
-        <Link
-          href={
-            userRole === "BRANCH_ADMIN" || userRole === "HEAD_OFFICE" || userRole === "SUPER_ADMIN"
-              ? "/shop"
-              : "/shop/login"
-          }
-          className="hidden sm:block"
+        {/* Order Portal link - Forces logout to switch context */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 hidden sm:flex"
+          onClick={() => signOut({ callbackUrl: "/shop" })}
         >
-          <Button variant="outline" size="sm" className="gap-2">
-            <ShoppingBag className="h-4 w-4" />
-            Order Portal
-          </Button>
-        </Link>
+          <ShoppingBag className="h-4 w-4" />
+          Order Portal
+        </Button>
         {/* Notifications */}
         <NotificationBell />
 

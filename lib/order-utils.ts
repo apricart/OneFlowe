@@ -46,10 +46,20 @@ export function buildStatusTimeline(status: string) {
   }
   const activeIndex = STATUS_FLOW.findIndex(step => step.key === normalized)
   const idx = activeIndex === -1 ? 0 : activeIndex
-  return STATUS_FLOW.map((step, index) => ({
-    ...step,
-    state: index < idx ? "complete" : index === idx ? "current" : "upcoming",
-  }))
+  return STATUS_FLOW.map((step, index) => {
+    let state = "upcoming"
+    if (index < idx) {
+      state = "complete"
+    } else if (index === idx) {
+      // Terminal states should show as complete (green check) rather than current (clock)
+      if (["fulfilled", "refunded"].includes(step.key)) {
+        state = "complete"
+      } else {
+        state = "current"
+      }
+    }
+    return { ...step, state }
+  })
 }
 
 

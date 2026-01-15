@@ -37,12 +37,12 @@ async function seed() {
   try {
     // 1. Create Roles
     console.log("📝 Step 1: Creating roles...")
-    const roleNames = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"]
+    const roleNames = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"]
     const createdRoles = []
 
     for (const roleName of roleNames) {
       const existing = await db.select().from(roles).where(eq(roles.name, roleName)).limit(1)
-      
+
       if (existing.length === 0) {
         const [role] = await db.insert(roles).values({
           name: roleName,
@@ -63,13 +63,15 @@ async function seed() {
 
     for (const role of allRoles) {
       let templatePermissions: Permission[] = []
-      
+
       if (role.name === "SUPER_ADMIN") {
         templatePermissions = ROLE_TEMPLATES.SUPER_ADMIN.permissions as Permission[]
       } else if (role.name === "HEAD_OFFICE") {
         templatePermissions = ROLE_TEMPLATES.HEAD_OFFICE.permissions as Permission[]
       } else if (role.name === "BRANCH_ADMIN") {
         templatePermissions = ROLE_TEMPLATES.BRANCH_ADMIN.permissions as Permission[]
+      } else if (role.name === "ORDER_PORTAL") {
+        templatePermissions = ROLE_TEMPLATES.ORDER_PORTAL.permissions as Permission[]
       } else {
         continue
       }
@@ -86,7 +88,7 @@ async function seed() {
         }))
 
         await db.insert(rolePermissions).values(permissionValues)
-        
+
         // Update role's permissions JSONB field
         const permissionsObj = templatePermissions.reduce((acc, key) => {
           acc[key] = true
@@ -97,7 +99,7 @@ async function seed() {
           permissions: permissionsObj,
           updatedAt: new Date(),
         }).where(eq(roles.id, role.id))
-        
+
         console.log(`  ✅ ${role.name}: ${templatePermissions.length} permissions`)
       }
     }
@@ -108,7 +110,7 @@ async function seed() {
     const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || "admin123"
 
     const superAdminRole = await db.select().from(roles).where(eq(roles.name, "SUPER_ADMIN")).limit(1)
-    
+
     if (superAdminRole.length === 0) {
       throw new Error("SUPER_ADMIN role not found")
     }
@@ -117,7 +119,7 @@ async function seed() {
 
     if (existingAdmin.length === 0) {
       const passwordHash = await bcrypt.hash(superAdminPassword, 10)
-      
+
       await db.insert(users).values({
         email: superAdminEmail,
         passwordHash,
@@ -125,7 +127,7 @@ async function seed() {
         fullName: "Super Admin",
         isActive: true,
       })
-      
+
       console.log(`  ✅ Created super admin: ${superAdminEmail}`)
     } else {
       console.log(`  ℹ️  Super admin already exists: ${superAdminEmail}`)
@@ -143,7 +145,7 @@ async function seed() {
           .select()
           .from(organizationSettings)
           .where(eq(organizationSettings.organizationId, org.id))
-        
+
         const existingKeys = new Set(existingSettings.map(s => s.key))
         let addedCount = 0
 
@@ -169,7 +171,7 @@ async function seed() {
     // Summary
     const totalPermissions = await db.select().from(rolePermissions)
     const totalSettings = await db.select().from(organizationSettings)
-    
+
     console.log("\n✨ Seeding complete!")
     console.log("\n📊 Summary:")
     console.log(`  • Roles: ${allRoles.length}`)
@@ -180,7 +182,7 @@ async function seed() {
     console.log("\n🚀 You can now login with:")
     console.log(`  Email: ${superAdminEmail}`)
     console.log(`  Password: ${superAdminPassword}`)
-    
+
     return { success: true }
   } catch (error) {
     console.error("\n❌ Error seeding database:", error)

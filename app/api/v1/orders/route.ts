@@ -2,50 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds } from "@/db/schema"
+import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds, systemLogs } from "@/db/schema"
+import { headers } from "next/headers"
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 
-const AUTO_APPROVAL_WINDOW_MS = 1000 * 60 * 60 * 2 // 2 hours
 
-async function autoApproveStaleOrders() {
-  const threshold = new Date(Date.now() - AUTO_APPROVAL_WINDOW_MS)
-
-  const staleOrders = await db
-    .select({
-      id: orders.id,
-      tid: orders.tid,
-      organizationId: orders.organizationId,
-      branchId: orders.branchId,
-    })
-    .from(orders)
-    .where(and(eq(orders.status, "pending"), lte(orders.createdAt, threshold)))
-
-  if (!staleOrders.length) return
-
-  const ids = staleOrders.map((o) => o.id)
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(orders)
-      .set({ status: "approved", updatedAt: new Date() })
-      .where(inArray(orders.id, ids))
-
-    await tx.insert(auditLogs).values(
-      staleOrders.map((ord) => ({
-        userId: null,
-        organizationId: ord.organizationId,
-        branchId: ord.branchId,
-        action: "AUTO_APPROVE",
-        entity: "Order",
-        entityId: String(ord.id),
-        metadata: {
-          tid: ord.tid,
-          reason: "auto_approved_after_2_hours",
-        },
-      })),
-    )
-  })
-}
 
 function generateTid(): string {
   // Simple ULID-like: timestamp base36 + random base36
@@ -94,6 +55,8 @@ export async function GET(req: NextRequest) {
     if (role === "SUPER_ADMIN") {
       if (organizationIdParam && /^\d+$/.test(organizationIdParam))
         conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
+      // Super Admin sees ONLY Approved and Fulfilled orders (Logic: "if branch admin approved it, it goes to super admin")
+      conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED')`)
     } else if (role === "HEAD_OFFICE") {
       if (typeof orgIdNum === "number") conditions.push(eq(orders.organizationId, orgIdNum))
     } else {
@@ -108,7 +71,7 @@ export async function GET(req: NextRequest) {
     if (from && status !== "FULFILLED") conditions.push(gte(orders.createdAt, new Date(from)))
     if (to && status !== "FULFILLED") conditions.push(lte(orders.createdAt, new Date(to)))
 
-    await autoApproveStaleOrders()
+
 
     // --- SALES MODE: Weekly / Monthly ---
     if (status === "FULFILLED") {
@@ -172,6 +135,8 @@ export async function GET(req: NextRequest) {
           FROM ${refunds}
           WHERE ${refunds.orderId} = ${orders.id}
         )`,
+        approvedByUserId: orders.approvedByUserId,
+        approvalToken: orders.approvalToken, // Will be filtered before return
       })
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -180,7 +145,15 @@ export async function GET(req: NextRequest) {
       ? selectBase.where(and(...conditions)).orderBy(desc(orders.createdAt))
       : selectBase.orderBy(desc(orders.createdAt)))
 
-    const filtered = q ? items.filter((o) => o.tid.includes(q)) : items
+    const currentUserId = (session.user as any).id
+
+    // Sanitize items: Only show approvalToken to the user who approved it
+    const sanitizedItems = items.map(item => ({
+      ...item,
+      approvalToken: item.approvedByUserId === currentUserId ? item.approvalToken : null
+    }))
+
+    const filtered = q ? sanitizedItems.filter((o) => o.tid.includes(q)) : sanitizedItems
 
     // Single order with items
     if (idParam && /^\d+$/.test(idParam)) {
@@ -407,14 +380,23 @@ export async function POST(req: NextRequest) {
 
       await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} + ${total}` }).where(eq(budgets.id, budgetId))
 
-      await tx.insert(auditLogs).values({
+      const headersList = await headers()
+      const userAgent = headersList.get("user-agent")
+      const forwardedFor = headersList.get("x-forwarded-for")
+      const ip = forwardedFor ? forwardedFor.split(',')[0] : "unknown"
+
+      await tx.insert(systemLogs).values({
         userId,
-        action: 'CREATE_ORDER',
-        entity: 'Order',
-        entityId: String(ord.id),
+        userRole: role,
         organizationId: Number(organizationId),
         branchId: Number(branchId),
-        metadata: { tid, total, items: items.length }
+        action: 'ORDER_CREATE',
+        resourceType: 'order',
+        resourceId: String(ord.id),
+        details: { tid, total, items: items.length },
+        ipAddress: ip,
+        userAgent: userAgent,
+        success: true
       })
 
       return ord
@@ -434,11 +416,11 @@ export async function PUT(req: NextRequest) {
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     const role = (session.user as any).role
     const body = await req.json()
-    const { id, action } = body as { id: number, action: 'approve' | 'cancel' | 'fulfill' }
+    const { id, action, rejectionReason, approvalToken } = body as { id: number, action: 'approve' | 'cancel' | 'fulfill' | 'reject', rejectionReason?: string, approvalToken?: string }
     if (!id || !action) return NextResponse.json({ error: 'id and action required' }, { status: 400 })
 
-    if (action === "fulfill" && role === "HEAD_OFFICE") {
-      return NextResponse.json({ error: "Head office users cannot fulfill orders" }, { status: 403 })
+    if (role === "HEAD_OFFICE") {
+      return NextResponse.json({ error: "Head office users have view-only access" }, { status: 403 })
     }
 
     const [ord] = await db.select().from(orders).where(eq(orders.id, id)).limit(1)
@@ -469,14 +451,24 @@ export async function PUT(req: NextRequest) {
       }, { status: 400 })
     }
 
+    let generatedApprovalToken: string | null = null
+
     await db.transaction(async (tx) => {
-      if (action === 'cancel') {
+      if (action === 'cancel' || action === 'reject') {
+        const targetStatus = action === 'cancel' ? 'cancelled' : 'rejected'
         // Only release budget if it was reserved (pending or approved)
         // We already checked it's not terminal, so it must be pending/approved.
-        await tx.update(orders).set({ status: 'cancelled' }).where(eq(orders.id, id))
+        // For reject, create reason
+        await tx.update(orders).set({
+          status: targetStatus,
+          rejectedByUserId: action === 'reject' ? (session.user as any).id : null,
+          rejectedAt: action === 'reject' ? new Date() : null,
+          rejectionReason: action === 'reject' ? rejectionReason : null
+        }).where(eq(orders.id, id))
+
         await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}` }).where(eq(budgets.id, (budget as any).id))
 
-        // Restore stock for cancelled orders
+        // Restore stock for cancelled/rejected orders
         const orderItemsList = await tx.select().from(orderItems).where(eq(orderItems.orderId, id))
         for (const item of orderItemsList) {
           await tx.update(globalProducts)
@@ -490,22 +482,113 @@ export async function PUT(req: NextRequest) {
         if (currentStatus !== 'pending') {
           throw new Error(`Cannot approve order in ${currentStatus} state`)
         }
-        await tx.update(orders).set({ status: 'approved' }).where(eq(orders.id, id))
+
+        // Generate secure approval token
+        const { generateApprovalToken, hashApprovalToken } = await import('@/lib/approval-token')
+        const { logTokenGenerated } = await import('@/lib/global-logger')
+
+        const plainToken = generateApprovalToken(10)
+        const tokenHash = await hashApprovalToken(plainToken)
+
+        await tx.update(orders).set({
+          status: 'approved',
+          approvedByUserId: (session.user as any).id,
+          approvedAt: new Date(),
+          approvalToken: plainToken, // Stored for approver to view later
+          approvalTokenHash: tokenHash,
+          approvalTokenCreatedAt: new Date()
+        }).where(eq(orders.id, id))
+
+        // Log token generation (without plaintext token)
+        logTokenGenerated(
+          id,
+          ord.tid,
+          (session.user as any).id,
+          (session.user as any).email || 'unknown'
+        )
+
+        // Store token to return after transaction completes
+        generatedApprovalToken = plainToken
       } else if (action === 'fulfill') {
-        // Move budget from Held -> Spent
+        // SECURITY: Require approval token for fulfillment
+        if (!approvalToken) {
+          throw new Error('Approval token required to fulfill order')
+        }
+
+        if (!ord.approvalTokenHash) {
+          throw new Error('Order has no approval token - cannot fulfill')
+        }
+
+        const { verifyApprovalToken } = await import('@/lib/approval-token')
+        const { logFulfillmentAttempt } = await import('@/lib/global-logger')
+
+        const isValid = await verifyApprovalToken(approvalToken, ord.approvalTokenHash)
+
+        if (!isValid) {
+          // Log failed attempt
+          logFulfillmentAttempt(
+            id,
+            ord.tid,
+            (session.user as any).id,
+            (session.user as any).email || 'unknown',
+            role,
+            false,
+            'Invalid token provided'
+          )
+          throw new Error('Invalid approval token - fulfillment denied')
+        }
+
+        // Token valid - proceed with fulfillment
         await tx.update(orders).set({
           status: 'fulfilled',
-          fulfilledAt: sql`NOW()` // ✅ Stores in UTC (standard practice)
+          fulfilledAt: sql`NOW()`,
+          fulfilledByUserId: (session.user as any).id
         }).where(eq(orders.id, id))
 
         await tx.update(budgets).set({
           amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,
           amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
         }).where(eq(budgets.id, (budget as any).id))
+
+        // Log successful fulfillment
+        logFulfillmentAttempt(
+          id,
+          ord.tid,
+          (session.user as any).id,
+          (session.user as any).email || 'unknown',
+          role,
+          true
+        )
         // Stock already deducted on order creation, no additional action needed
       }
-      await tx.insert(auditLogs).values({ userId: (session.user as any).id, action: 'UPDATE', entity: 'Order', entityId: String(id), organizationId: ord.organizationId, branchId: ord.branchId, metadata: { action, tid: ord.tid } })
+      const headersList = await headers()
+      const userAgent = headersList.get("user-agent")
+      const forwardedFor = headersList.get("x-forwarded-for")
+      const ip = forwardedFor ? forwardedFor.split(',')[0] : "unknown"
+
+      await tx.insert(systemLogs).values({
+        userId: (session.user as any).id,
+        userRole: role,
+        organizationId: ord.organizationId,
+        branchId: ord.branchId,
+        action: `ORDER_${action.toUpperCase()}`,
+        resourceType: 'order',
+        resourceId: String(id),
+        details: { action, tid: ord.tid, rejectionReason },
+        ipAddress: ip,
+        userAgent: userAgent,
+        success: true
+      })
     })
+
+    // Return token only for approve action (shown ONCE to user)
+    if (action === 'approve' && generatedApprovalToken) {
+      return NextResponse.json({
+        message: 'Order approved successfully',
+        approvalToken: generatedApprovalToken,
+        warning: 'SAVE THIS TOKEN! It will not be shown again.'
+      })
+    }
 
     return NextResponse.json({ message: 'Order updated' })
   } catch (e: any) {
