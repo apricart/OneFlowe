@@ -39,9 +39,6 @@ const getNavigationByRole = (role: string) => {
           { href: "/reports/refund-orders", label: "Refund Order Report" },
           { href: "/reports/product-summary", label: "Product Summary" },
           { href: "/reports/product-summary-details", label: "Product Summary Details" },
-          { href: "/reports/stock-store-summary", label: "Stock Store Summary" },
-          { href: "/reports/stock-reports", label: "Stock Reports" },
-          { href: "/reports/stock-logs", label: "Stock Logs" },
         ]
       },
       { href: "/settings", label: "Settings", icon: Settings },
@@ -65,9 +62,6 @@ const getNavigationByRole = (role: string) => {
           { href: "/reports/refund-orders", label: "Refund Order Report" },
           { href: "/reports/product-summary", label: "Product Summary" },
           { href: "/reports/product-summary-details", label: "Product Summary Details" },
-          { href: "/reports/stock-store-summary", label: "Stock Store Summary" },
-          { href: "/reports/stock-reports", label: "Stock Reports" },
-          { href: "/reports/stock-logs", label: "Stock Logs" },
         ]
       },
       { href: "/settings", label: "Settings", icon: Settings },
@@ -80,6 +74,7 @@ const getNavigationByRole = (role: string) => {
       { href: "/orders", label: "Orders", icon: Package },
       { href: "/branch-inventory", label: "Inventory", icon: Boxes },
       // { href: "/employee-management", label: "Employee Management", icon: Users },
+
       { href: "/settings", label: "Settings", icon: Settings },
     ]
   }
@@ -110,7 +105,7 @@ export function Sidebar() {
   }
 
   const isSubItemActive = (subItem: any) => {
-    return pathname.startsWith(subItem.href)
+    return pathname === subItem.href
   }
 
   return (

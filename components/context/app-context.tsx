@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react"
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react"
 import { useSession } from "next-auth/react"
 
 // Types
@@ -10,17 +10,17 @@ interface AppContextValue {
   // Current context
   organizationId: string | null
   branchId: string | null
-  
+
   // User info
   userRole: Role | null
   userOrgId: number | null
   userBranchId: number | null
-  
+
   // Actions
   setOrganizationId: (id: string | null) => void
   setBranchId: (id: string | null) => void
   resetContext: () => void
-  
+
   // UI State
   isInitialized: boolean
 }
@@ -29,9 +29,9 @@ const AppContext = createContext<AppContextValue | undefined>(undefined)
 
 const STORAGE_KEY = "oneflowe:app-context"
 
-export function AppContextProvider({ children }: { children: React.ReactNode }) {
+export function AppContextProvider({ children }: { children: ReactNode }) {
   const { data: session, status } = useSession()
-  
+
   const [organizationId, setOrganizationIdState] = useState<string | null>(null)
   const [branchId, setBranchIdState] = useState<string | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
@@ -44,7 +44,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
   // Initialize context from session and localStorage
   useEffect(() => {
     if (status === "loading") return
-    
+
     if (!session) {
       setIsInitialized(true)
       return
@@ -55,7 +55,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) savedContext = JSON.parse(saved)
-    } catch {}
+    } catch { }
 
     // Initialize based on role
     if (userRole === "SUPER_ADMIN") {
@@ -82,13 +82,13 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
   // Persist to localStorage whenever context changes
   useEffect(() => {
     if (!isInitialized) return
-    
+
     try {
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({ organizationId, branchId })
       )
-    } catch {}
+    } catch { }
   }, [organizationId, branchId, isInitialized])
 
   // Actions
@@ -140,4 +140,3 @@ export function useAppContext() {
   }
   return context
 }
-

@@ -9,64 +9,95 @@ import fs from 'fs'
 import path from 'path'
 
 const LOG_DIR = path.join(process.cwd(), 'logs')
-const LOG_FILE = path.join(LOG_DIR, 'order-security.log')
+const SYSTEM_LOG_FILE = path.join(LOG_DIR, 'system-audit.log')
 
-export interface SecurityLogEntry {
+export interface LogEntry {
     event: string
-    orderId?: number
-    tid?: string
+    timestamp?: string
     userId?: string
     userEmail?: string
     userRole?: string
+    resourceId?: string
+    organizationId?: number
+    branchId?: number
     result?: 'SUCCESS' | 'FAILED'
-    details?: Record<string, any>
+    details?: any
 }
 
 /**
- * Append a security event to the global log file
- * @param entry Log entry data
+ * Log a generic system event to the audit file
  */
-export function logSecurityEvent(entry: SecurityLogEntry): void {
+export function logEvent(entry: LogEntry): void {
     try {
-        // Ensure logs directory exists
         if (!fs.existsSync(LOG_DIR)) {
             fs.mkdirSync(LOG_DIR, { recursive: true })
         }
 
         const logLine = JSON.stringify({
             ...entry,
-            timestamp: new Date().toISOString(),
+            timestamp: entry.timestamp || new Date().toISOString(),
         }) + '\n'
 
-        fs.appendFileSync(LOG_FILE, logLine, 'utf-8')
+        fs.appendFileSync(SYSTEM_LOG_FILE, logLine, 'utf-8')
     } catch (error) {
-        // Don't throw - logging should never break the main flow
-        console.error('[SecurityLogger] Failed to write log:', error)
+        console.error('[Logger] Failed to write log:', error)
     }
 }
 
 /**
- * Log approval token generation
+ * Specifically log order activities with full details
  */
+export function logOrderActivity(
+    action: 'CREATE' | 'APPROVE' | 'FULFILL' | 'CANCEL' | 'REJECT',
+    order: any,
+    user: { id: string, email: string, role: string }
+): void {
+    logEvent({
+        event: `ORDER_${action}`,
+        userId: user.id,
+        userEmail: user.email,
+        userRole: user.role,
+        resourceId: String(order.id),
+        organizationId: order.organizationId,
+        branchId: order.branchId,
+        result: 'SUCCESS',
+        details: {
+            tid: order.tid,
+            status: order.status,
+            total: order.totalCents,
+            items: order.orderItems || [],
+            notes: order.notes,
+            timestamp: new Date().toISOString()
+        }
+    })
+}
+
+/**
+ * Legacy support for specific token events (optional but kept for internal use)
+ */
+export function logSecurityEvent(entry: any): void {
+    logEvent({
+        ...entry,
+        event: entry.event || 'SECURITY_EVENT'
+    })
+}
+
 export function logTokenGenerated(
     orderId: number,
     tid: string,
     userId: string,
     userEmail: string
 ): void {
-    logSecurityEvent({
+    logEvent({
         event: 'APPROVAL_TOKEN_GENERATED',
-        orderId,
-        tid,
+        resourceId: String(orderId),
         userId,
         userEmail,
-        result: 'SUCCESS',
+        details: { tid },
+        result: 'SUCCESS'
     })
 }
 
-/**
- * Log fulfillment attempt (success or failure)
- */
 export function logFulfillmentAttempt(
     orderId: number,
     tid: string,
@@ -76,14 +107,14 @@ export function logFulfillmentAttempt(
     success: boolean,
     reason?: string
 ): void {
-    logSecurityEvent({
+    logEvent({
         event: success ? 'ORDER_FULFILLED_WITH_TOKEN' : 'FULFILLMENT_TOKEN_MISMATCH',
-        orderId,
-        tid,
+        resourceId: String(orderId),
         userId,
         userEmail,
         userRole,
         result: success ? 'SUCCESS' : 'FAILED',
-        details: reason ? { reason } : undefined,
+        details: { tid, reason }
     })
 }
+

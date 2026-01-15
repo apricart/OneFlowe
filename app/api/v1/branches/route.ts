@@ -12,10 +12,15 @@ export async function GET(req: Request) {
   const orgIdNum = organizationIdRaw && /^\d+$/.test(organizationIdRaw) ? Number(organizationIdRaw) : undefined
   const scope = await getRequestScope()
   const scopedOrgId = scope?.role === "SUPER_ADMIN" ? orgIdNum : (scope?.organizationId ?? undefined)
+  const scopedBranchId = scope?.role === "BRANCH_ADMIN" || scope?.role === "BRANCH_MANAGER" ? scope?.branchId : undefined
+
   const items = await db
     .select()
     .from(branchesTable)
-    .where(scopedOrgId ? eq(branchesTable.organizationId, scopedOrgId) : undefined as any)
+    .where(and(
+      scopedOrgId ? eq(branchesTable.organizationId, scopedOrgId) : undefined,
+      scopedBranchId ? eq(branchesTable.id, scopedBranchId) : undefined
+    ))
     .orderBy(desc(branchesTable.createdAt))
   return ok({ items })
 }

@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds, systemLogs } from "@/db/schema"
 import { headers } from "next/headers"
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
+import { logOrderActivity } from "@/lib/global-logger"
 
 
 
@@ -380,6 +381,21 @@ export async function POST(req: NextRequest) {
 
       await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} + ${total}` }).where(eq(budgets.id, budgetId))
 
+      // --- NEW: Detailed File Logging ---
+      try {
+        // Log complete order details for archival
+        logOrderActivity('CREATE', {
+          ...ord,
+          orderItems: calculatedItems
+        }, {
+          id: userId,
+          email: session.user?.email || 'unknown',
+          role: role
+        })
+      } catch (logErr) {
+        console.error("File logging failed during order creation", logErr)
+      }
+
       const headersList = await headers()
       const userAgent = headersList.get("user-agent")
       const forwardedFor = headersList.get("x-forwarded-for")
@@ -561,6 +577,24 @@ export async function PUT(req: NextRequest) {
         )
         // Stock already deducted on order creation, no additional action needed
       }
+
+      // --- NEW: Detailed File Logging for Updates ---
+      try {
+        // Fetch order with items for full archival snapshot
+        const currentOrderItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, id))
+        logOrderActivity(action.toUpperCase() as any, {
+          ...ord,
+          status: action === 'approve' ? 'approved' : (action === 'fulfill' ? 'fulfilled' : (action === 'cancel' ? 'cancelled' : 'rejected')),
+          orderItems: currentOrderItems
+        }, {
+          id: (session.user as any).id,
+          email: (session.user as any).email || 'unknown',
+          role: role
+        })
+      } catch (logErr) {
+        console.error(`File logging failed during order ${action}`, logErr)
+      }
+
       const headersList = await headers()
       const userAgent = headersList.get("user-agent")
       const forwardedFor = headersList.get("x-forwarded-for")
