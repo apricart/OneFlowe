@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, users, roles, branches } from "@/db/schema"
+import { orders, users, roles, branches, refunds } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql, sum, count } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
@@ -42,14 +42,21 @@ export async function GET(req: NextRequest) {
     const branchId = url.searchParams.get("branchId")
     const organizationId = url.searchParams.get("organizationId")
 
-    const conditions = []
+    const status = url.searchParams.get("status")
 
-    // Ensure only approved/fulfilled/completed orders are counted for sales
-    conditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED')`)
+    const conditions = []
 
     // Security: RBAC
     const normalizedRole = roleName ? roleName.toUpperCase() : ""
-    console.log(`[Summary API] User: ${userId}, Role: ${normalizedRole}, Params: Branch=${branchId}, Org=${organizationId}`)
+    console.log(`[Summary API] User: ${userId}, Role: ${normalizedRole}, Params: Branch=${branchId}, Org=${organizationId}, Status=${status}`)
+
+    // Status Filtering Logic
+    if (status && status !== "all") {
+        conditions.push(eq(sql`UPPER(${orders.status})`, status.toUpperCase()))
+    } else {
+        // Default behavior: Show "Successful" orders (APPROVED, FULFILLED, PENDING included for general summary)
+        conditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED')`)
+    }
 
     if (normalizedRole === "SUPER_ADMIN") {
         if (organizationId && organizationId !== "null" && organizationId !== "undefined") {
@@ -90,33 +97,70 @@ export async function GET(req: NextRequest) {
     console.log(`[Summary API] Final where clause established. Filtering logic active.`)
 
     // Aggregation Query
-    const summaryResult = await db.select({
-        totalSales: sum(orders.totalCents),
-        totalTax: sum(orders.taxCents),
-        totalSubtotal: sum(orders.subtotalCents),
-        orderCount: count(orders.id),
-    })
-        .from(orders)
-        .where(whereClause)
+    let summaryResult;
+    let items;
 
-    // Recent Orders for Table with Branch Name
-    const recentOrders = await db.select({
-        id: orders.id,
-        tid: orders.tid,
-        status: orders.status,
-        totalCents: orders.totalCents,
-        branchId: orders.branchId,
-        branchName: branches.name,
-        createdAt: orders.createdAt
-    })
-        .from(orders)
-        .leftJoin(branches, eq(orders.branchId, branches.id))
-        .where(whereClause)
-        .orderBy(desc(orders.createdAt))
-        .limit(50)
+    if (status?.toLowerCase() === "refunded") {
+        // Special Case: Refunded status pulls from the refunds table for consistency
+        const refundSummary = await db.select({
+            totalSales: sum(refunds.amountCents),
+            totalTax: sql<number>`0`, // Tax is usually not calculated per-refund transaction here
+            totalSubtotal: sum(refunds.amountCents),
+            orderCount: count(refunds.id),
+        })
+            .from(refunds)
+            .innerJoin(orders, eq(refunds.orderId, orders.id))
+            .where(whereClause)
+
+        summaryResult = refundSummary[0];
+
+        // Fetch refund transactions for the table
+        items = await db.select({
+            id: refunds.id,
+            tid: orders.tid,
+            status: refunds.status,
+            totalCents: refunds.amountCents, // Use refund amount
+            branchId: orders.branchId,
+            branchName: branches.name,
+            createdAt: refunds.createdAt
+        })
+            .from(refunds)
+            .innerJoin(orders, eq(refunds.orderId, orders.id))
+            .leftJoin(branches, eq(orders.branchId, branches.id))
+            .where(whereClause)
+            .orderBy(desc(refunds.createdAt))
+            .limit(50)
+    } else {
+        // Standard Case: Approved/Fulfilled/Pending
+        const standardSummary = await db.select({
+            totalSales: sum(orders.totalCents),
+            totalTax: sum(orders.taxCents),
+            totalSubtotal: sum(orders.subtotalCents),
+            orderCount: count(orders.id),
+        })
+            .from(orders)
+            .where(whereClause)
+
+        summaryResult = standardSummary[0];
+
+        items = await db.select({
+            id: orders.id,
+            tid: orders.tid,
+            status: orders.status,
+            totalCents: orders.totalCents,
+            branchId: orders.branchId,
+            branchName: branches.name,
+            createdAt: orders.createdAt
+        })
+            .from(orders)
+            .leftJoin(branches, eq(orders.branchId, branches.id))
+            .where(whereClause)
+            .orderBy(desc(orders.createdAt))
+            .limit(50)
+    }
 
     return NextResponse.json({
-        summary: summaryResult[0],
-        orders: recentOrders
+        summary: summaryResult,
+        orders: items
     })
 }

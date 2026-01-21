@@ -3,13 +3,11 @@ import { and, eq, gte, sql, or, lt } from "drizzle-orm"
 import { requireApiRole, ok } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders, branches } from "@/db/schema"
-import { getRequestScope } from "@/lib/auth"
+import type { Role } from "@/lib/rbac"
 
-const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
+const allowedRoles: Role[] = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"]
 
-type Role = typeof allowedRoles[number]
-
-function getOrderConditions(role: Role | undefined, organizationId: number | null, branchId: number | null) {
+function getOrderConditions(role: Role, organizationId: number | null, branchId: number | null) {
   const fromDate = new Date()
   fromDate.setDate(fromDate.getDate() - 6)
   fromDate.setHours(0, 0, 0, 0)
@@ -32,11 +30,12 @@ function getOrderConditions(role: Role | undefined, organizationId: number | nul
 }
 
 export async function GET(req: NextRequest) {
-  const err = await requireApiRole(allowedRoles as any)
-  if (err) return err
+  const { user, error: authError } = await requireApiRole(allowedRoles)
+  if (authError) return authError
 
-  const scope = await getRequestScope()
-  const role = scope?.role
+  const role = user!.role
+  const organizationIdFromSession = user!.organizationId
+  const branchIdFromSession = user!.branchId
 
   // Get filter parameters from query string (for UI context selection)
   const { searchParams } = new URL(req.url)
@@ -49,18 +48,18 @@ export async function GET(req: NextRequest) {
 
   if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") {
     organizationId = Number(orgIdParam)
-  } else if (role !== "SUPER_ADMIN" && scope?.organizationId) {
-    organizationId = scope.organizationId
+  } else if (role !== "SUPER_ADMIN" && organizationIdFromSession) {
+    organizationId = organizationIdFromSession
   }
 
   if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
     branchId = Number(branchIdParam)
-  } else if (role === "BRANCH_ADMIN" && scope?.branchId) {
-    branchId = scope.branchId
+  } else if (role === "BRANCH_ADMIN" && branchIdFromSession) {
+    branchId = branchIdFromSession
   }
 
   const orderConditions = getOrderConditions(role, organizationId, branchId)
-  const whereClause = and(...(orderConditions as any))
+  const whereClause = and(...orderConditions)
 
   const dayExpr = sql`date_trunc('day', ${orders.createdAt})`
   const gmvRows = await db
@@ -88,13 +87,13 @@ export async function GET(req: NextRequest) {
   }).from(branches)
 
   const branchSelectWithFilters = branchFilters.length
-    ? branchSelect.where(and(...(branchFilters as any)))
+    ? branchSelect.where(and(...branchFilters))
     : branchSelect
 
   const branchQuery = branchSelectWithFilters
     .leftJoin(
       orders,
-      and(eq(orders.branchId, branches.id), ...(orderConditions as any)),
+      and(eq(orders.branchId, branches.id), ...orderConditions),
     )
     .groupBy(branches.id)
     .orderBy(sql`coalesce(count(${orders.id}), 0) desc`)
@@ -105,10 +104,10 @@ export async function GET(req: NextRequest) {
   // Count branches matching the same filters (or all branches for SUPER_ADMIN)
   const countSelect = db.select({ count: sql<number>`coalesce(count(${branches.id}), 0)` }).from(branches)
   const branchCountRows = branchFilters.length
-    ? await countSelect.where(and(...(branchFilters as any)))
+    ? await countSelect.where(and(...branchFilters))
     : await countSelect
 
-  const branchCount = Number(((branchCountRows as any)[0]?.count) || 0)
+  const branchCount = Number(branchCountRows[0]?.count || 0)
 
   // Pending approvals: count orders with status PENDING for the same scope (no date filter)
   // Pending approvals: count orders with status PENDING for the same scope (no date filter)
@@ -126,9 +125,9 @@ export async function GET(req: NextRequest) {
     const pendingRow = await db
       .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
       .from(orders)
-      .where(and(...(pendingConditions as any)))
+      .where(and(...pendingConditions))
 
-    pendingApprovals = Number(((pendingRow as any)[0]?.count) || 0)
+    pendingApprovals = Number(pendingRow[0]?.count || 0)
   }
 
   // Orders this month: Only include APPROVED or FULFILLED orders (exclude PENDING, REJECTED, REFUNDED)
@@ -159,9 +158,9 @@ export async function GET(req: NextRequest) {
   const ordersMonthRow = await db
     .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
     .from(orders)
-    .where(and(...(monthConditions as any)))
+    .where(and(...monthConditions))
 
-  const ordersThisMonth = Number(((ordersMonthRow as any)[0]?.count) || 0)
+  const ordersThisMonth = Number(ordersMonthRow[0]?.count || 0)
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -176,7 +175,7 @@ export async function GET(req: NextRequest) {
 
   const gmvMap: Record<string, number> = {}
   for (const row of gmvRows) {
-    const key = new Date(row.day as any).toISOString().slice(0, 10)
+    const key = new Date(row.day as Date).toISOString().slice(0, 10)
     gmvMap[key] = (row.totalCents || 0) / 100
   }
 

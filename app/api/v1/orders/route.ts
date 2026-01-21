@@ -19,23 +19,15 @@ function generateTid(): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const { user, error: authError } = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"])
+    if (authError) return authError
 
-    const role = (session.user as any).role
-    const organizationIdRaw = (session.user as any).organizationId
-    const branchIdFromUserRaw = (session.user as any).branchId
+    const role = user!.role
+    const organizationIdFromSession = user!.organizationId
+    const branchIdFromSession = user!.branchId
 
-    const orgIdNum =
-      organizationIdRaw && /^\d+$/.test(String(organizationIdRaw))
-        ? Number(organizationIdRaw)
-        : undefined
-    const branchIdFromUser =
-      branchIdFromUserRaw && /^\d+$/.test(String(branchIdFromUserRaw))
-        ? Number(branchIdFromUserRaw)
-        : undefined
+    const orgIdNum = organizationIdFromSession ?? undefined
+    const branchIdFromUser = branchIdFromSession ?? undefined
 
     const { searchParams } = new URL(req.url)
     const rawStatus = searchParams.get("status") || undefined
@@ -146,7 +138,7 @@ export async function GET(req: NextRequest) {
       ? selectBase.where(and(...conditions)).orderBy(desc(orders.createdAt))
       : selectBase.orderBy(desc(orders.createdAt)))
 
-    const currentUserId = (session.user as any).id
+    const currentUserId = user!.id
 
     // Sanitize items: Only show approvalToken to the user who approved it
     const sanitizedItems = items.map(item => ({
@@ -188,12 +180,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const role = (session.user as any).role
-    let organizationId = (session.user as any).organizationId
-    if (organizationId) organizationId = parseInt(String(organizationId))
-    const userId = (session.user as any).id
+    const { user, error: authError } = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"])
+    if (authError) return authError
+
+    const role = user!.role
+    let organizationId = user!.organizationId
+    const userId = user!.id
 
     const body = await req.json()
     const { items, branchId: branchIdInput, organizationId: orgIdInput, notes } = body as { items: { organizationInventoryId: number, quantity: number }[], branchId?: number, organizationId?: number, notes?: string }
@@ -217,8 +209,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Organization ID not found" }, { status: 400 })
     }
 
-    const branchId = role === "HEAD_OFFICE" || role === "SUPER_ADMIN" ? parseInt(String(branchIdInput)) : parseInt(String((session.user as any).branchId))
-    if (!Number.isFinite(branchId)) return NextResponse.json({ error: "Branch context required" }, { status: 400 })
+    const branchId = (role === "HEAD_OFFICE" || role === "SUPER_ADMIN")
+      ? parseInt(String(branchIdInput))
+      : (user!.branchId ?? 0)
+
+    if (!branchId || isNaN(branchId)) return NextResponse.json({ error: "Branch context required" }, { status: 400 })
 
     // Fetch inventory details and prices
     const orgInvIds = items.map(i => i.organizationInventoryId)
@@ -389,7 +384,7 @@ export async function POST(req: NextRequest) {
           orderItems: calculatedItems
         }, {
           id: userId,
-          email: session.user?.email || 'unknown',
+          email: user!.email || 'unknown',
           role: role
         })
       } catch (logErr) {
@@ -428,9 +423,13 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    const role = (session.user as any).role
+    const { user, error: authError } = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
+    if (authError) return authError
+
+    const role = user!.role
+    const userId = user!.id
+    const userEmail = user!.email
+
     const body = await req.json()
     const { id, action, rejectionReason, approvalToken } = body as { id: number, action: 'approve' | 'cancel' | 'fulfill' | 'reject', rejectionReason?: string, approvalToken?: string }
     if (!id || !action) return NextResponse.json({ error: 'id and action required' }, { status: 400 })
@@ -477,7 +476,7 @@ export async function PUT(req: NextRequest) {
         // For reject, create reason
         await tx.update(orders).set({
           status: targetStatus,
-          rejectedByUserId: action === 'reject' ? (session.user as any).id : null,
+          rejectedByUserId: action === 'reject' ? userId : null,
           rejectedAt: action === 'reject' ? new Date() : null,
           rejectionReason: action === 'reject' ? rejectionReason : null
         }).where(eq(orders.id, id))
@@ -508,7 +507,7 @@ export async function PUT(req: NextRequest) {
 
         await tx.update(orders).set({
           status: 'approved',
-          approvedByUserId: (session.user as any).id,
+          approvedByUserId: userId,
           approvedAt: new Date(),
           approvalToken: plainToken, // Stored for approver to view later
           approvalTokenHash: tokenHash,
@@ -519,8 +518,8 @@ export async function PUT(req: NextRequest) {
         logTokenGenerated(
           id,
           ord.tid,
-          (session.user as any).id,
-          (session.user as any).email || 'unknown'
+          userId,
+          userEmail || 'unknown'
         )
 
         // Store token to return after transaction completes
@@ -545,8 +544,8 @@ export async function PUT(req: NextRequest) {
           logFulfillmentAttempt(
             id,
             ord.tid,
-            (session.user as any).id,
-            (session.user as any).email || 'unknown',
+            userId,
+            userEmail || 'unknown',
             role,
             false,
             'Invalid token provided'
@@ -558,7 +557,7 @@ export async function PUT(req: NextRequest) {
         await tx.update(orders).set({
           status: 'fulfilled',
           fulfilledAt: sql`NOW()`,
-          fulfilledByUserId: (session.user as any).id
+          fulfilledByUserId: userId
         }).where(eq(orders.id, id))
 
         await tx.update(budgets).set({
@@ -587,8 +586,8 @@ export async function PUT(req: NextRequest) {
           status: action === 'approve' ? 'approved' : (action === 'fulfill' ? 'fulfilled' : (action === 'cancel' ? 'cancelled' : 'rejected')),
           orderItems: currentOrderItems
         }, {
-          id: (session.user as any).id,
-          email: (session.user as any).email || 'unknown',
+          id: userId,
+          email: userEmail || 'unknown',
           role: role
         })
       } catch (logErr) {
@@ -601,7 +600,7 @@ export async function PUT(req: NextRequest) {
       const ip = forwardedFor ? forwardedFor.split(',')[0] : "unknown"
 
       await tx.insert(systemLogs).values({
-        userId: (session.user as any).id,
+        userId: userId,
         userRole: role,
         organizationId: ord.organizationId,
         branchId: ord.branchId,

@@ -11,20 +11,24 @@ export type CurrentUser = {
   id: string
   email: string
   role: Role
+  organizationId: number | null
+  branchId: number | null
 }
 
 import { cookies } from 'next/headers'
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  // const headerList = headers()
   const session = await getServerSession(authOptions)
   if (!session?.user) return null
   return {
-    id: (session.user as any).id,
+    id: session.user.id,
     email: session.user.email || "",
-    role: ((session.user as any).role || "BRANCH_ADMIN") as Role,
+    role: session.user.role || "BRANCH_ADMIN",
+    organizationId: session.user.organizationId ?? null,
+    branchId: session.user.branchId ?? null,
   }
 }
+
 
 export type RequestScope = {
   role: Role
@@ -36,23 +40,41 @@ export type RequestScope = {
 export async function getRequestScope(): Promise<RequestScope | null> {
   const session = await getServerSession(authOptions)
   if (!session?.user) return null
-  const userId = (session.user as any).id as string
-  const role = ((session.user as any).role || "BRANCH_ADMIN") as Role
-  // Super Admin can see everything; avoid extra DB call
+
+  const userId = session.user.id
+  const role = session.user.role || "BRANCH_ADMIN"
+  const organizationId = session.user.organizationId
+  const branchId = session.user.branchId
+
+  // Super Admin can see everything; avoid extra DB call if organizationId is already in session
   if (role === "SUPER_ADMIN") {
-    return { role, userId, organizationId: null, branchId: null }
+    return { role, userId, organizationId, branchId }
   }
+
+  // If ids are already in session, return them
+  if (organizationId !== undefined || branchId !== undefined) {
+    return {
+      role,
+      userId,
+      organizationId: organizationId ?? null,
+      branchId: branchId ?? null
+    }
+  }
+
+  // Fallback to DB if for some reason they are missing from session
   const [row] = await db
     .select({ organizationId: users.organizationId, branchId: users.branchId })
     .from(users)
     .where(eq(users.id, userId))
+
   return {
     role,
     userId,
-    organizationId: (row?.organizationId ?? null) as any,
-    branchId: (row?.branchId ?? null) as any,
+    organizationId: row?.organizationId ?? null,
+    branchId: row?.branchId ?? null,
   }
 }
+
 
 export async function touchSession(userId: string) {
   await db.update(sessions).set({ lastActivityAt: new Date() }).where(and(eq(sessions.userId, userId)))

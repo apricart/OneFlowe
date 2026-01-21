@@ -170,7 +170,7 @@ export const authOptions: NextAuthOptions = {
           fullName: `${emp.firstName} ${emp.lastName}`.trim(),
           isEmployee: true,
           employeeId: emp.id
-        } as any
+        }
       },
     }),
     // Employee MFA Login
@@ -216,31 +216,31 @@ export const authOptions: NextAuthOptions = {
           fullName: `${emp.firstName} ${emp.lastName}`.trim(),
           isEmployee: true,
           employeeId: emp.id
-        } as any
+        }
       },
     }),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as any).role
-        token.organizationId = (user as any).organizationId
-        token.branchId = (user as any).branchId
-        token.fullName = (user as any).fullName
-        token.isEmployee = (user as any).isEmployee
-        token.employeeId = (user as any).employeeId
+        token.role = user.role
+        token.organizationId = user.organizationId
+        token.branchId = user.branchId
+        token.fullName = user.fullName
+        token.isEmployee = user.isEmployee
+        token.employeeId = user.employeeId
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        ; (session.user as any).id = token.sub
-          ; (session.user as any).role = (token as any).role
-          ; (session.user as any).organizationId = (token as any).organizationId
-          ; (session.user as any).branchId = (token as any).branchId
-          ; (session.user as any).fullName = (token as any).fullName
-          ; (session.user as any).isEmployee = (token as any).isEmployee
-          ; (session.user as any).employeeId = (token as any).employeeId
+        session.user.id = token.sub!
+        session.user.role = token.role
+        session.user.organizationId = token.organizationId
+        session.user.branchId = token.branchId
+        session.user.fullName = token.fullName
+        session.user.isEmployee = token.isEmployee
+        session.user.employeeId = token.employeeId
       }
       return session
     },

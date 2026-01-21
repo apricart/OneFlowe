@@ -33,13 +33,14 @@ export async function readJson<T = any>(req: Request): Promise<T | null> {
 
 export async function requireApiRole(allowed: Role[]) {
   const current = await getCurrentUser()
-  if (!current) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  if (!current) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
   try {
     requireRole(current.role, allowed)
   } catch {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
   }
-  return null
+  return { user: current }
 }
+
 
 

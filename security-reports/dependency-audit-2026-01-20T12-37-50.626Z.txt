@@ -1,0 +1,10 @@
+
+=== Dependency Vulnerability Report ===
+
+Total Vulnerabilities: undefined
+  - Critical: undefined
+  - High:     undefined
+  - Moderate: undefined
+  - Low:      undefined
+  - Info:     undefined
+

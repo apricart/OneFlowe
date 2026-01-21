@@ -8,11 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Download, RefreshCw, Loader2, Building, Building2, Calendar } from "lucide-react"
+import { Search, Download, RefreshCw, Loader2, Building, Building2, Calendar, Filter } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -21,6 +22,7 @@ export default function SalesSummaryReportPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [status, setStatus] = useState("all")
   const [generatedDate, setGeneratedDate] = useState("")
 
   // Set date on mount to avoid hydration mismatch
@@ -28,20 +30,13 @@ export default function SalesSummaryReportPage() {
     setGeneratedDate(new Date().toLocaleString())
   }, [])
 
-  // Build query string based on GLOBAL context (AppContext) and LOCAL date filters
+  // Build query string based on GLOBAL context (AppContext) and LOCAL filters
   const queryParams = new URLSearchParams()
-  if (branchId) {
-    queryParams.set("branchId", branchId)
-  }
-  if (organizationId) {
-    queryParams.set("organizationId", organizationId)
-  }
-  if (startDate) {
-    queryParams.set("startDate", startDate)
-  }
-  if (endDate) {
-    queryParams.set("endDate", endDate)
-  }
+  if (branchId) queryParams.set("branchId", branchId)
+  if (organizationId) queryParams.set("organizationId", organizationId)
+  if (startDate) queryParams.set("startDate", startDate)
+  if (endDate) queryParams.set("endDate", endDate)
+  if (status !== "all") queryParams.set("status", status)
 
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${queryParams.toString()}`, fetcher)
 
@@ -67,6 +62,7 @@ export default function SalesSummaryReportPage() {
     let filterText = ""
     if (organizationId) filterText += `Org ID: ${organizationId} `
     if (branchId) filterText += `Branch ID: ${branchId} `
+    if (status !== "all") filterText += `Status: ${status.toUpperCase()} `
     if (startDate || endDate) {
       filterText += `Range: ${startDate || 'Start'} to ${endDate || 'End'}`
     }
@@ -97,7 +93,7 @@ export default function SalesSummaryReportPage() {
       headStyles: { fillColor: [66, 66, 66] }
     })
 
-    doc.save("sales-summary-report.pdf")
+    doc.save(`sales-summary-${status}-report.pdf`)
   }
 
   return (
@@ -105,7 +101,7 @@ export default function SalesSummaryReportPage() {
       <SectionHeader title="Product Sales Summary" subtitle="Comprehensive view of sales, taxes, and order volume." />
 
       {/* Context Indicator */}
-      {(organizationId || branchId || startDate || endDate) && (
+      {(organizationId || branchId || startDate || endDate || status !== "all") && (
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground bg-muted/30 p-2 rounded-md border border-dashed">
           <span className="font-medium">Active Filters:</span>
           {organizationId && (
@@ -116,6 +112,11 @@ export default function SalesSummaryReportPage() {
           {branchId && (
             <span className="flex items-center gap-1">
               <Building2 className="h-3 w-3" /> Branch ID: {branchId}
+            </span>
+          )}
+          {status !== "all" && (
+            <span className="flex items-center gap-1">
+              <Filter className="h-3 w-3" /> Status: {status.toUpperCase()}
             </span>
           )}
           {(startDate || endDate) && (
@@ -170,9 +171,8 @@ export default function SalesSummaryReportPage() {
 
       <Card className="p-4">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
-
           <div className="flex items-center gap-2 w-full md:w-auto">
-            <div className="relative flex-1 md:w-[150px]">
+            <div className="relative flex-1 md:w-[130px]">
               <Input
                 type="date"
                 value={startDate}
@@ -182,7 +182,7 @@ export default function SalesSummaryReportPage() {
               />
             </div>
             <span className="text-muted-foreground text-xs">to</span>
-            <div className="relative flex-1 md:w-[150px]">
+            <div className="relative flex-1 md:w-[130px]">
               <Input
                 type="date"
                 value={endDate}
@@ -193,25 +193,37 @@ export default function SalesSummaryReportPage() {
             </div>
           </div>
 
+          <div className="w-full md:w-[150px]">
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Successful</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="fulfilled">Fulfilled</SelectItem>
+                <SelectItem value="refunded">Refunded</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="relative w-full md:w-auto flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search Transaction ID or Branch..."
-              className="pl-9 w-full md:max-w-[300px]"
+              placeholder="Search ID or Branch..."
+              className="pl-9 w-full md:max-w-[200px] h-9 text-xs"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
 
-          <div className="flex-1 hidden md:block" />
-
-          <div className="flex gap-2 w-full md:w-auto">
-            <Button variant="outline" onClick={() => mutate()} className="flex-1 md:flex-none">
+          <div className="flex gap-2 w-full md:w-auto ml-auto">
+            <Button variant="outline" onClick={() => mutate()} className="flex-1 md:flex-none h-9 text-xs">
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
               Refresh
             </Button>
 
-            <Button className="gap-2 flex-1 md:flex-none" onClick={handleExportPDF} disabled={isLoading || filteredOrders.length === 0}>
+            <Button className="gap-2 flex-1 md:flex-none h-9 text-xs" onClick={handleExportPDF} disabled={isLoading || filteredOrders.length === 0}>
               <Download className="h-4 w-4" />
               PDF
             </Button>
