@@ -11,6 +11,7 @@ export enum PermissionCategory {
   FINANCIAL = "Financial Operations",
   REPORTS = "Reports & Analytics",
   SETTINGS = "Settings & Configuration",
+  GROUP = "Group Management",
 }
 
 export enum Permission {
@@ -77,6 +78,13 @@ export enum Permission {
   SETTINGS_EDIT = "settings:edit",
   SETTINGS_MANAGE_CATEGORIES = "settings:manage_categories",
   SETTINGS_MANAGE_PRODUCTS = "settings:manage_products",
+
+  // Group Management
+  GROUP_CREATE = "group:create",
+  GROUP_VIEW = "group:view",
+  GROUP_EDIT = "group:edit",
+  GROUP_DELETE = "group:delete",
+  GROUP_ASSIGN_BRANCH = "group:assign_branch",
 }
 
 export interface PermissionInfo {
@@ -399,6 +407,39 @@ export const PERMISSION_DEFINITIONS: PermissionInfo[] = [
     description: "Create and configure products",
     category: PermissionCategory.SETTINGS,
   },
+
+  // Group Management
+  {
+    key: Permission.GROUP_CREATE,
+    label: "Create Groups",
+    description: "Create new branch groups",
+    category: PermissionCategory.GROUP,
+  },
+  {
+    key: Permission.GROUP_VIEW,
+    label: "View Groups",
+    description: "View branch groups",
+    category: PermissionCategory.GROUP,
+  },
+  {
+    key: Permission.GROUP_EDIT,
+    label: "Edit Groups",
+    description: "Modify group details",
+    category: PermissionCategory.GROUP,
+  },
+  {
+    key: Permission.GROUP_DELETE,
+    label: "Delete Groups",
+    description: "Remove branch groups",
+    category: PermissionCategory.GROUP,
+    isHighRisk: true,
+  },
+  {
+    key: Permission.GROUP_ASSIGN_BRANCH,
+    label: "Assign Branches",
+    description: "Assign branches to groups",
+    category: PermissionCategory.GROUP,
+  },
 ]
 
 export function getPermissionsByCategory() {
@@ -451,6 +492,7 @@ export const ROLE_TEMPLATES = {
       Permission.REPORTS_EXPORT,
       Permission.SETTINGS_VIEW,
       Permission.SETTINGS_EDIT,
+      Permission.GROUP_VIEW,
     ],
   },
   BRANCH_ADMIN: {

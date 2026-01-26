@@ -15,6 +15,9 @@ import {
   ArrowRight
 } from "lucide-react"
 
+import { useState, useEffect } from "react"
+import { Loader2 } from "lucide-react"
+
 const reportCards = [
   {
     title: "Sales Summary",
@@ -68,6 +71,20 @@ const reportCards = [
 ]
 
 export default function ReportsPage() {
+  const [hasMounted, setHasMounted] = useState(false)
+
+  useEffect(() => {
+    setHasMounted(true)
+  }, [])
+
+  if (!hasMounted) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
       {/* Hero Header */}

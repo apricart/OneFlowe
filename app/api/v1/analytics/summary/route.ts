@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     const endDate = url.searchParams.get("endDate")
     const branchId = url.searchParams.get("branchId")
     const organizationId = url.searchParams.get("organizationId")
+    const groupId = url.searchParams.get("groupId")
 
     const conditions = []
 
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
 
     // Security: RBAC
     const normalizedRole = roleName ? roleName.toUpperCase() : ""
-    console.log(`[Summary API] User: ${userId}, Role: ${normalizedRole}, Params: Branch=${branchId}, Org=${organizationId}`)
+    console.log(`[Summary API] User: ${userId}, Role: ${normalizedRole}, Params: Branch=${branchId}, Org=${organizationId}, Group=${groupId}`)
 
     if (normalizedRole === "SUPER_ADMIN") {
         if (organizationId && organizationId !== "null" && organizationId !== "undefined") {
@@ -58,11 +59,17 @@ export async function GET(req: NextRequest) {
         if (branchId && branchId !== "all" && branchId !== "null") {
             conditions.push(eq(orders.branchId, Number(branchId)))
         }
+        if (groupId && groupId !== "all" && groupId !== "null") {
+            conditions.push(eq(branches.groupId, Number(groupId)))
+        }
     } else if (normalizedRole === "HEAD_OFFICE") {
         if (currentUserOrgId) {
             conditions.push(eq(orders.organizationId, currentUserOrgId))
             if (branchId && branchId !== "all" && branchId !== "null") {
                 conditions.push(eq(orders.branchId, Number(branchId)))
+            }
+            if (groupId && groupId !== "all" && groupId !== "null") {
+                conditions.push(eq(branches.groupId, Number(groupId)))
             }
         }
     } else if (normalizedRole === "BRANCH_ADMIN" || normalizedRole === "BRANCH_MANAGER") {
@@ -97,6 +104,7 @@ export async function GET(req: NextRequest) {
         orderCount: count(orders.id),
     })
         .from(orders)
+        .leftJoin(branches, eq(orders.branchId, branches.id))
         .where(whereClause)
 
     // Recent Orders for Table with Branch Name

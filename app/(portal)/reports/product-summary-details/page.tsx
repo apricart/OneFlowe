@@ -23,9 +23,7 @@ export default function ProductSummaryDetailsReportPage() {
   const [endDate, setEndDate] = useState("")
   const [generatedDate, setGeneratedDate] = useState("")
 
-  useEffect(() => {
-    setGeneratedDate(new Date().toLocaleString())
-  }, [])
+  const [hasMounted, setHasMounted] = useState(false)
 
   const queryParams = new URLSearchParams()
   if (branchId) queryParams.set("branchId", branchId)
@@ -34,6 +32,20 @@ export default function ProductSummaryDetailsReportPage() {
   if (endDate) queryParams.set("endDate", endDate)
 
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/products/details?${queryParams.toString()}`, fetcher)
+
+  useEffect(() => {
+    setHasMounted(true)
+    setGeneratedDate(new Date().toLocaleString())
+  }, [])
+
+  if (!hasMounted) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    )
+  }
+
   const detailsData = data?.items || []
 
   const filteredDetails = detailsData.filter((d: any) =>
@@ -128,9 +140,9 @@ export default function ProductSummaryDetailsReportPage() {
       <Card className="p-4">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
           <div className="flex items-center gap-2 w-full md:w-auto">
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[140px] text-xs" />
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[140px] text-xs" suppressHydrationWarning />
             <span className="text-muted-foreground text-xs">to</span>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[140px] text-xs" />
+            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[140px] text-xs" suppressHydrationWarning />
           </div>
 
           <div className="relative w-full md:w-auto flex-1">
@@ -140,6 +152,7 @@ export default function ProductSummaryDetailsReportPage() {
               className="pl-9 w-full md:max-w-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              suppressHydrationWarning
             />
           </div>
 

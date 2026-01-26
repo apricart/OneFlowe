@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useMemo, useState, useRef } from "react"
 import { useOrganizations, useBranches, useUsers } from "@/lib/hooks/use-api"
-import { useMonthlySales, useYearlySales } from "@/lib/hooks/use-dashboard-analytics"
+import { useMonthlySales, useYearlySales, useDashboardAnalytics } from "@/lib/hooks/use-dashboard-analytics"
 import { KpiCard } from "@/components/ui/kpi-card"
 import { Card, CardContent } from "@/components/ui/card"
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
@@ -12,8 +12,9 @@ import useSWR from "swr"
 import { NotificationRail } from "@/components/notifications/notification-center"
 import { formatPKR } from "@/lib/utils"
 import { Building2, GitBranch, Users, Package, Warehouse, Wallet, BarChart3, ShieldCheck, TrendingUp, ArrowUpRight, ArrowDownRight, Sparkles, Calendar, Activity, AlertCircle } from "lucide-react"
-import SalesBarChart, { TrendAreaChart, YearlySalesSplineChart } from "@/components/dashboard/charts"
+import SalesBarChart, { TrendAreaChart, YearlySalesSplineChart, ComparisonBarChart } from "@/components/dashboard/charts"
 import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
+import { GroupFilter } from "@/components/reports/group-filter"
 import { useAppContext } from "@/components/context/app-context"
 import { startOfDay, subDays, endOfDay, eachDayOfInterval, format, parseISO, getYear } from "date-fns"
 
@@ -49,9 +50,13 @@ export function SuperAdminDashboard() {
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
   const [yearlyChartYear, setYearlyChartYear] = useState<string>(new Date().getFullYear().toString())
+  const [groupId, setGroupId] = useState<string>("")
   const [showPicker, setShowPicker] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
   const { organizationId, branchId } = useAppContext()
+
+  const { data: dashboardData } = useDashboardAnalytics(organizationId, branchId, groupId)
+  const branchData = dashboardData?.branchSeries ?? []
 
   // Close picker when clicking outside
   useEffect(() => {
@@ -96,7 +101,7 @@ export function SuperAdminDashboard() {
 
   // ---------------- Bar Chart Data (from useMonthlySales with selectedYear) ----------------
   // Convert selectedYear string to number for the hook
-  const { data: monthlySalesData, isLoading: isLoadingMonthly } = useMonthlySales(organizationId, branchId, Number(selectedYear))
+  const { data: monthlySalesData, isLoading: isLoadingMonthly } = useMonthlySales(organizationId, branchId, Number(selectedYear), groupId)
 
   const barChartData = useMemo(() => {
     // If no months selected, show last 6 months (Jul-Dec) or all if preference
@@ -156,7 +161,7 @@ export function SuperAdminDashboard() {
 
 
   // ---------------- Yearly Sales Chart Data (from useYearlySales with yearlyChartYear) ----------------
-  const { data: yearlySalesHookData, isLoading: isLoadingYearly } = useYearlySales(organizationId, branchId, Number(yearlyChartYear))
+  const { data: yearlySalesHookData, isLoading: isLoadingYearly } = useYearlySales(organizationId, branchId, Number(yearlyChartYear), groupId)
 
   const yearlySalesData = useMemo(() => {
     const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -196,6 +201,7 @@ export function SuperAdminDashboard() {
     params.set("endDate", endDate.toISOString())
     if (organizationId) params.set("organizationId", organizationId)
     if (branchId) params.set("branchId", branchId)
+    if (groupId && groupId !== "all") params.set("groupId", groupId)
     return `/api/v1/orders?${params.toString()}`
   }
 
@@ -225,6 +231,7 @@ export function SuperAdminDashboard() {
     if (params.from) search.set("from", params.from)
     if (organizationId) search.set("organizationId", organizationId)
     if (branchId) search.set("branchId", branchId)
+    if (groupId && groupId !== "all") search.set("groupId", groupId)
     const qs = search.toString()
     return `/api/v1/orders${qs ? `?${qs}` : ""}`
   }
@@ -326,7 +333,7 @@ export function SuperAdminDashboard() {
 
       {/* Main Analytics Grid - Yearly & Weekly */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Yearly Purchase Chart */}
+        {/* Yearly Sales Chart */}
         <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 overflow-hidden">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-6">
@@ -335,7 +342,7 @@ export function SuperAdminDashboard() {
                   <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Annual Purchase Performance</h3>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Annual Sales Performance</h3>
                   <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Revenue Trends • {yearlyChartYear}</p>
                 </div>
               </div>
@@ -352,12 +359,12 @@ export function SuperAdminDashboard() {
                 </div>
               </div>
             ) : (
-              <YearlySalesSplineChart yearlySalesData={yearlySalesData} avgSales={average} />
+              <YearlySalesSplineChart yearlySalesData={yearlySalesData} avgSales={average} label="Sales" />
             )}
           </CardContent>
         </Card>
 
-        {/* Weekly Purchase Chart */}
+        {/* Weekly Sales Chart */}
         <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 overflow-hidden">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-6">
@@ -379,11 +386,12 @@ export function SuperAdminDashboard() {
                 </div>
               </div>
             ) : (
-              <TrendAreaChart data={salesData} />
+              <TrendAreaChart data={salesData} label="Sales" />
             )}
           </CardContent>
         </Card>
       </div>
+
 
       {/* Month Picker & Bar Chart Section */}
       <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 overflow-hidden bg-white dark:bg-slate-900">
@@ -397,7 +405,7 @@ export function SuperAdminDashboard() {
                     <BarChart3 className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Monthly Purchase Analytics</h3>
+                    <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Monthly Sales Analytics</h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                       {selectedMonths.length > 0
                         ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} • ${selectedYear}`
@@ -449,11 +457,11 @@ export function SuperAdminDashboard() {
                 <div className="flex items-center justify-center h-[400px]">
                   <div className="text-center space-y-3">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-500 mx-auto"></div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">Loading purchase data...</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">Loading sales data...</p>
                   </div>
                 </div>
               ) : (
-                <SalesBarChart data={barChartData} />
+                <SalesBarChart data={barChartData} label="Sales" />
               )}
             </div>
           </div>

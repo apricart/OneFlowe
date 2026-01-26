@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { organizationInventory, globalProducts, categories, auditLogs } from "@/db/schema"
-import { eq, and, like, or, desc, sql, isNull } from "drizzle-orm"
+import { eq, and, like, or, desc, sql, isNull, SQL } from "drizzle-orm"
 import { cascadeOrgStatusChange } from "@/lib/inventory-cascade"
 
 // GET /api/v1/head-office/organization-inventory - List products in organization inventory
@@ -41,11 +41,11 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
 
-    const conditions = [
+    const conditions: (SQL | undefined)[] = [
       eq(organizationInventory.organizationId, parseInt(organizationId)),
       isNull(organizationInventory.deletedAt)
     ]
-    
+
     if (search) {
       conditions.push(
         or(
@@ -89,13 +89,13 @@ export async function GET(req: NextRequest) {
         status: globalProducts.status,
         categoryName: categories.name,
       })
-      .from(organizationInventory)
-      .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-      .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
-      .where(whereClause)
-      .orderBy(desc(organizationInventory.assignedAt))
-      .limit(limit)
-      .offset(offset),
+        .from(organizationInventory)
+        .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+        .where(whereClause)
+        .orderBy(desc(organizationInventory.assignedAt))
+        .limit(limit)
+        .offset(offset),
 
       db.select({ count: sql<number>`count(*)` })
         .from(organizationInventory)
@@ -126,7 +126,7 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json()
-    
+
     // Get organization ID from session context (should be set by middleware)
     // For Super Admin, get from request body if available
     let organizationId = (session.user as any).organizationId
@@ -154,15 +154,15 @@ export async function PUT(req: NextRequest) {
       id: organizationInventory.id,
       isActive: organizationInventory.isActive,
     })
-    .from(organizationInventory)
-    .where(
-      and(
-        eq(organizationInventory.id, parseInt(id)),
-        eq(organizationInventory.organizationId, parseInt(organizationId)),
-        isNull(organizationInventory.deletedAt)
+      .from(organizationInventory)
+      .where(
+        and(
+          eq(organizationInventory.id, parseInt(id)),
+          eq(organizationInventory.organizationId, parseInt(organizationId)),
+          isNull(organizationInventory.deletedAt)
+        )
       )
-    )
-    .limit(1)
+      .limit(1)
 
     if (!existingItem) {
       return NextResponse.json({ error: "Inventory item not found or access denied" }, { status: 404 })
@@ -171,7 +171,7 @@ export async function PUT(req: NextRequest) {
     const updateData: any = {
       updatedAt: new Date()
     }
-    
+
     if (isActive !== undefined) updateData.isActive = isActive
     if (customName !== undefined) updateData.customName = customName || null
     if (customPrice !== undefined) updateData.customPrice = customPrice ? Math.round(parseFloat(customPrice) * 100) : null
@@ -219,7 +219,7 @@ export async function PUT(req: NextRequest) {
       action: "UPDATE",
       entity: "OrganizationInventory",
       entityId: id.toString(),
-      metadata: { 
+      metadata: {
         organizationId,
         updateData,
         level: "head_office"

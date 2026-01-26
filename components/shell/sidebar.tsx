@@ -20,15 +20,16 @@ const getNavigationByRole = (role: string) => {
       { href: "/users", label: "Users", icon: Users },
       { href: "/orders", label: "Orders", icon: Package },
       {
-        href: "/products",
-        label: "Product Management",
-        icon: ShoppingBag,
+        href: "/products/categories",
+        label: "Product Categories",
+        icon: FolderTree,
         subItems: [
-          { href: "/products/categories", label: "Categories", icon: FolderTree },
-          { href: "/products/subcategories", label: "Sub Categories", icon: FolderOpen },
+          { href: "/products/categories", label: "Categories" },
+          { href: "/products/subcategories", label: "Subcategories" },
         ]
       },
       { href: "/inventory", label: "Global Inventory", icon: Boxes },
+      { href: "/groups", label: "Groups", icon: FolderTree },
       { href: "/budgets", label: "Budgets", icon: Wallet },
       {
         href: "/reports",
@@ -39,6 +40,7 @@ const getNavigationByRole = (role: string) => {
           { href: "/reports/refund-orders", label: "Refund Order Report" },
           { href: "/reports/product-summary", label: "Product Summary" },
           { href: "/reports/product-summary-details", label: "Product Summary Details" },
+          { href: "/reports/groups", label: "Groups Report" },
         ]
       },
       { href: "/settings", label: "Settings", icon: Settings },
@@ -52,6 +54,7 @@ const getNavigationByRole = (role: string) => {
       { href: "/users", label: "Users", icon: Users },
       { href: "/head-office-orders", label: "Orders", icon: Package },
       { href: "/inventory", label: "Inventory", icon: Boxes },
+      { href: "/groups", label: "Groups", icon: FolderTree },
       { href: "/budgets", label: "Budgets", icon: Wallet },
       {
         href: "/reports",
@@ -62,6 +65,7 @@ const getNavigationByRole = (role: string) => {
           { href: "/reports/refund-orders", label: "Refund Order Report" },
           { href: "/reports/product-summary", label: "Product Summary" },
           { href: "/reports/product-summary-details", label: "Product Summary Details" },
+          { href: "/reports/groups", label: "Groups Report" },
         ]
       },
       { href: "/settings", label: "Settings", icon: Settings },

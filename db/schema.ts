@@ -42,6 +42,8 @@ export const branches = pgTable(
     adminUserId: uuid("admin_user_id"),
     code: varchar("code", { length: 64 }),
     status: varchar("status", { length: 32 }).default("active"),
+    // Group assignment for reporting and analytics
+    groupId: integer("group_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
@@ -49,6 +51,7 @@ export const branches = pgTable(
     orgIdx: index("branches_org_idx").on(t.organizationId),
     nameIdx: index("branches_name_idx").on(t.name),
     statusIdx: index("branches_status_idx").on(t.status),
+    groupIdx: index("branches_group_idx").on(t.groupId),
   }),
 )
 
@@ -811,3 +814,57 @@ export const systemLogs = pgTable(
     roleIdx: index("system_logs_role_idx").on(t.userRole),
   }),
 )
+
+// ========================================
+// GROUP-BASED REPORTING & ANALYTICS
+// ========================================
+
+// Groups - Collections of branches for reporting purposes
+export const groups = pgTable(
+  "groups",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    status: varchar("status", { length: 32 }).default("active"), // active, inactive, deleted
+    createdByUserId: uuid("created_by_user_id").references(() => users.id).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("groups_org_idx").on(t.organizationId),
+    nameIdx: index("groups_name_idx").on(t.name),
+    statusIdx: index("groups_status_idx").on(t.status),
+    orgNameUq: uniqueIndex("groups_org_name_uq").on(t.organizationId, t.name),
+  }),
+)
+
+// Group Audit Logs - Track all group-related operations
+export const groupAuditLogs = pgTable(
+  "group_audit_logs",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    groupId: integer("group_id").references(() => groups.id),
+    action: varchar("action", { length: 128 }).notNull(), // CREATE_GROUP, UPDATE_GROUP, DELETE_GROUP, ASSIGN_BRANCH, REMOVE_BRANCH, VIEW_REPORT
+    performedByUserId: uuid("performed_by_user_id")
+      .references(() => users.id)
+      .notNull(),
+    performedByRole: varchar("performed_by_role", { length: 64 }).notNull(),
+    metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    orgIdx: index("group_audit_org_idx").on(t.organizationId),
+    groupIdx: index("group_audit_group_idx").on(t.groupId),
+    actionIdx: index("group_audit_action_idx").on(t.action),
+    userIdx: index("group_audit_user_idx").on(t.performedByUserId),
+    timestampIdx: index("group_audit_timestamp_idx").on(t.createdAt),
+  }),
+)
+

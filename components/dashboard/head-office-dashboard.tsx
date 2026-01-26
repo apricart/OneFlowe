@@ -14,6 +14,7 @@ import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
 import { Building2, AlertCircle, ShoppingCart, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3, Activity, FileCheck, Wallet, Sparkles } from "lucide-react"
 import { useOrganizations } from "@/lib/hooks/use-api"
 import { NotificationRail } from "@/components/notifications/notification-center"
+import { GroupFilter } from "@/components/reports/group-filter"
 
 const monthNames: Record<string, string> = {
   "01": "Jan",
@@ -32,12 +33,13 @@ const monthNames: Record<string, string> = {
 
 export function HeadOfficeDashboard() {
   const { organizationId, branchId } = useAppContext()
+  const [groupId, setGroupId] = useState<string>("")
   const { data: orgsData } = useOrganizations()
   const orgs = orgsData?.items || []
   const selectedOrg = organizationId ? orgs.find(o => o.id?.toString() === organizationId) : null
 
-  const { data } = useDashboardAnalytics()
-  const { data: weeklySalesData } = useWeeklySales(organizationId, branchId)
+  const { data } = useDashboardAnalytics(organizationId, branchId, groupId)
+  const { data: weeklySalesData } = useWeeklySales(organizationId, branchId, groupId)
   const currentYear = new Date().getFullYear()
 
 
@@ -51,10 +53,10 @@ export function HeadOfficeDashboard() {
   const [selectedMonths, setSelectedMonths] = useState<string[]>([])
   const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString())
   const [yearlyChartYear, setYearlyChartYear] = useState<string>(currentYear.toString())
-  const { data: yearlySalesData } = useYearlySales(organizationId, branchId, Number(yearlyChartYear))
+  const { data: yearlySalesData } = useYearlySales(organizationId, branchId, Number(yearlyChartYear), groupId)
   const [showPicker, setShowPicker] = useState(false)
   const pickerRef = useRef<HTMLDivElement>(null)
-  const { data: monthlySalesData } = useMonthlySales(organizationId, branchId, Number(selectedYear))
+  const { data: monthlySalesData } = useMonthlySales(organizationId, branchId, Number(selectedYear), groupId)
 
   // Close picker when clicking outside
   useEffect(() => {
@@ -166,6 +168,10 @@ export function HeadOfficeDashboard() {
               <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></div>
               <span className="text-xs font-bold text-white uppercase tracking-wider">System Live</span>
             </div>
+            <GroupFilter
+              onGroupChange={setGroupId}
+              organizationId={organizationId || undefined}
+            />
           </div>
         </div>
       </div>
@@ -232,7 +238,7 @@ export function HeadOfficeDashboard() {
                 />
               </div>
               {yearlySalesChartData.length > 0 ? (
-                <YearlySalesSplineChart yearlySalesData={yearlySalesChartData} avgSales={averageYearlySales} />
+                <YearlySalesSplineChart yearlySalesData={yearlySalesChartData} avgSales={averageYearlySales} label="Purchase" />
               ) : (
                 <div className="h-[500px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                   <div className="text-center">
@@ -259,7 +265,7 @@ export function HeadOfficeDashboard() {
                 </div>
               </div>
               {weeklySalesChartData.length > 0 ? (
-                <TrendAreaChart data={weeklySalesChartData} />
+                <TrendAreaChart data={weeklySalesChartData} label="Purchase" />
               ) : (
                 <div className="h-[500px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                   <div className="text-center">
@@ -271,7 +277,6 @@ export function HeadOfficeDashboard() {
             </CardContent>
           </Card>
         </div>
-
 
 
         {/* Monthly Sales Bar Chart with Month Picker */}
@@ -333,7 +338,7 @@ export function HeadOfficeDashboard() {
               {/* Chart */}
               <div className="min-h-[350px] bg-slate-50 dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
                 {monthlyBarChartData.length > 0 ? (
-                  <SalesBarChart data={monthlyBarChartData} />
+                  <SalesBarChart data={monthlyBarChartData} label="Purchase" />
                 ) : (
                   <div className="flex items-center justify-center h-[350px]">
                     <div className="text-center space-y-3">

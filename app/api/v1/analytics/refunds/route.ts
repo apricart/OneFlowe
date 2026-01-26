@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
         const endDate = url.searchParams.get("endDate")
         const branchIdParam = url.searchParams.get("branchId")
         const organizationIdParam = url.searchParams.get("organizationId")
+        const groupIdParam = url.searchParams.get("groupId")
 
         // Get user context for strict RBAC
         const [currentUser] = await db.select({
@@ -36,6 +37,9 @@ export async function GET(req: NextRequest) {
             if (branchIdParam && branchIdParam !== "all") {
                 conditions.push(eq(orders.branchId, Number(branchIdParam)))
             }
+            if (groupIdParam && groupIdParam !== "all") {
+                conditions.push(eq(branches.groupId, Number(groupIdParam)))
+            }
         } else if (role === "HEAD_OFFICE") {
             const orgId = currentUser?.organizationId
             if (!orgId) return NextResponse.json({ error: "Organization not found" }, { status: 403 })
@@ -44,6 +48,9 @@ export async function GET(req: NextRequest) {
 
             if (branchIdParam && branchIdParam !== "all") {
                 conditions.push(eq(orders.branchId, Number(branchIdParam)))
+            }
+            if (groupIdParam && groupIdParam !== "all") {
+                conditions.push(eq(branches.groupId, Number(groupIdParam)))
             }
         } else if (role === "BRANCH_ADMIN" || role === "BRANCH_MANAGER") {
             const bId = currentUser?.branchId

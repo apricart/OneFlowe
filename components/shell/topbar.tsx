@@ -3,7 +3,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { signOut, useSession } from "next-auth/react"
 import Image from "next/image"
-import { Moon, Sun, ShoppingBag } from "lucide-react"
+import { Moon, Sun, ShoppingBag, BarChart3 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { CommandPalette } from "@/components/ui/command-palette"
 import { ContextSelector } from "@/components/shell/context-selector"
@@ -53,6 +53,20 @@ export function Topbar() {
           <ShoppingBag className="h-4 w-4" />
           Order Portal
         </Button>
+
+        {/* Group Analytics link */}
+        {(userRole === "SUPER_ADMIN" || userRole === "HEAD_OFFICE") && (
+          <Link href="/groups/analytics">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 hidden sm:flex border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+            >
+              <BarChart3 className="h-4 w-4" />
+              Groups
+            </Button>
+          </Link>
+        )}
         {/* Notifications */}
         <NotificationBell />
 

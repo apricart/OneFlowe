@@ -3,8 +3,9 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { branchInventory, globalProducts, organizationInventory, categories, auditLogs } from "@/db/schema"
-import { eq, and, like, or, desc, sql, isNull } from "drizzle-orm"
+import { eq, and, like, or, desc, sql, isNull, SQL } from "drizzle-orm"
 import { getEffectiveProductData } from "@/lib/inventory-cascade"
+import { escapeLikePattern } from "@/lib/utils"
 
 // GET /api/v1/branch/inventory - List products in branch inventory
 export async function GET(req: NextRequest) {
@@ -17,6 +18,9 @@ export async function GET(req: NextRequest) {
     const userRole = (session.user as any).role
     let organizationId = (session.user as any).organizationId
     let branchId = (session.user as any).branchId
+
+    if (branchId && typeof branchId === "string") branchId = parseInt(branchId)
+    if (organizationId && typeof organizationId === "string") organizationId = parseInt(organizationId)
 
     const { searchParams } = new URL(req.url)
 
@@ -56,16 +60,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden - Access denied" }, { status: 403 })
     }
 
-    const search = searchParams.get("search") || ""
+    const searchRaw = searchParams.get("search") || ""
+    const search = searchRaw ? escapeLikePattern(searchRaw) : "" // Sanitize LIKE patterns
     const visibility = searchParams.get("visibility") || ""
-    const page = parseInt(searchParams.get("page") || "1")
-    const limit = parseInt(searchParams.get("limit") || "50")
-    const offset = (page - 1) * limit
+    const pageNum = Math.max(1, parseInt(searchParams.get("page") || "1") || 1)
+    const limitNum = Math.max(1, parseInt(searchParams.get("limit") || "50") || 50)
+    const offset = (pageNum - 1) * limitNum
 
-    const orgIdNum = typeof organizationId === "string" ? parseInt(organizationId) : organizationId
+    const orgIdNum = typeof organizationId === "string" ? parseInt(organizationId) : Number(organizationId)
+
+    if (isNaN(orgIdNum)) {
+      return NextResponse.json({ error: "Invalid organization ID" }, { status: 400 })
+    }
 
     // Build conditions based on organization-level inventory, with optional branch overrides
-    const conditions = [
+    const conditions: (SQL | undefined)[] = [
       eq(organizationInventory.organizationId, orgIdNum),
       isNull(organizationInventory.deletedAt),
     ]
@@ -82,12 +91,7 @@ export async function GET(req: NextRequest) {
     if (visibility) {
       if (visibility === "visible") {
         // Visible when explicitly marked visible OR no branch override exists
-        conditions.push(
-          or(
-            eq(branchInventory.isVisible, true),
-            isNull(branchInventory.id)
-          )
-        )
+        conditions.push(sql`(${branchInventory.isVisible} = true OR ${branchInventory.id} IS NULL)`)
       } else if (visibility === "hidden") {
         // Hidden only when branch override says so
         conditions.push(eq(branchInventory.isVisible, false))
@@ -131,44 +135,46 @@ export async function GET(req: NextRequest) {
           branchInventory,
           and(
             eq(branchInventory.organizationInventoryId, organizationInventory.id),
-            eq(branchInventory.branchId, branchId),
+            branchId ? eq(branchInventory.branchId, branchId) : eq(sql`1`, 0),
             isNull(branchInventory.deletedAt),
           )
         )
         .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
         .where(whereClause)
         .orderBy(desc(organizationInventory.id))
-        .limit(limit)
+        .limit(limitNum)
         .offset(offset),
 
       db
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: sql<number>`cast(count(*) as integer)` })
         .from(organizationInventory)
         .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
         .leftJoin(
           branchInventory,
           and(
             eq(branchInventory.organizationInventoryId, organizationInventory.id),
-            eq(branchInventory.branchId, branchId),
+            branchId ? eq(branchInventory.branchId, branchId) : eq(sql`1`, 0),
             isNull(branchInventory.deletedAt),
           )
         )
         .where(whereClause),
     ])
 
-    const total = totalResult[0].count
+    const total = Number(totalResult[0]?.count || 0)
 
-    return NextResponse.json({ items, total, page, limit })
-  } catch (error) {
+    return NextResponse.json({ items, total, page: pageNum, limit: limitNum })
+  } catch (error: any) {
     console.error("Error fetching branch inventory:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
   }
 }
 
 // PUT /api/v1/branch/inventory - Toggle visibility and update stock levels
 export async function PUT(req: NextRequest) {
   try {
+    console.log("PUT /api/v1/branch/inventory - Starting")
     const session = await getServerSession(authOptions)
+    console.log("Session retrieved:", !!session?.user)
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -188,13 +194,14 @@ export async function PUT(req: NextRequest) {
 
     const organizationId = parseInt(organizationIdParam)
     const branchId = parseInt(branchIdParam)
+    console.log(`Params: org=${organizationId}, branch=${branchId}`)
 
     const body = await req.json()
+    console.log("Body received:", JSON.stringify(body))
     const {
       id,
       isVisible,
-      stockQuantity,
-      reorderThreshold
+      isActive,
     } = body
 
     if (!id) {
@@ -202,7 +209,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // Validate that only allowed fields are being updated
-    const allowedFields = ['isVisible', 'stockQuantity', 'reorderThreshold']
+    const allowedFields = ['isVisible', 'isActive']
     const providedFields = Object.keys(body).filter(key => key !== 'id')
     const invalidFields = providedFields.filter(field => !allowedFields.includes(field))
 
@@ -217,20 +224,21 @@ export async function PUT(req: NextRequest) {
     }
 
     if (isVisible !== undefined) updateData.isVisible = isVisible
-    if (stockQuantity !== undefined) updateData.stockQuantity = stockQuantity
-    if (reorderThreshold !== undefined) updateData.reorderThreshold = reorderThreshold
+    if (isActive !== undefined) updateData.isActive = isActive
 
     const [updatedInventory] = await db.update(branchInventory)
       .set(updateData)
       .where(
         and(
-          eq(branchInventory.id, parseInt(id)),
-          eq(branchInventory.organizationId, parseInt(organizationId)),
-          eq(branchInventory.branchId, parseInt(branchId)),
+          eq(branchInventory.id, Number(id)),
+          eq(branchInventory.organizationId, organizationId),
+          eq(branchInventory.branchId, branchId),
           isNull(branchInventory.deletedAt)
         )
       )
       .returning()
+
+    console.log("Update query finished. Result:", !!updatedInventory)
 
     if (!updatedInventory) {
       return NextResponse.json({ error: "Inventory item not found or access denied" }, { status: 404 })

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { modifiers, productModifiers, globalProducts } from "@/db/schema"
 import { eq, and, like, or, desc, sql } from "drizzle-orm"
+import { escapeLikePattern } from "@/lib/utils"
 
 // GET /api/v1/modifiers - List all modifiers with search/filter
 export async function GET(req: NextRequest) {
@@ -19,7 +20,8 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url)
-    const search = searchParams.get("search") || ""
+    const searchRaw = searchParams.get("search") || ""
+    const search = searchRaw ? escapeLikePattern(searchRaw) : "" // Sanitize LIKE patterns
     const type = searchParams.get("type") || ""
     const status = searchParams.get("status") || ""
     const page = parseInt(searchParams.get("page") || "1")

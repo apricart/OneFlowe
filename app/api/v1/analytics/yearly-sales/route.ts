@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import { and, eq, gte, sql, or, lt } from "drizzle-orm"
 import { requireApiRole, ok } from "@/lib/api"
 import { db } from "@/lib/db"
-import { orders } from "@/db/schema"
+import { orders, branches } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
@@ -15,47 +15,53 @@ export async function GET(req: NextRequest) {
 
   const scope = await getRequestScope()
   const role = scope?.role
-  
+
   // Get filter parameters from query string (for UI context selection)
   const { searchParams } = new URL(req.url)
   const orgIdParam = searchParams.get("organizationId")
   const branchIdParam = searchParams.get("branchId")
   const yearParam = searchParams.get("year")
-  
+  const groupIdParam = searchParams.get("groupId")
+
   // Use query params if provided, otherwise fall back to auth scope
   let organizationId: number | null = null
   let branchId: number | null = null
-  
+  let groupId: number | null = null
+
   if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") {
     organizationId = Number(orgIdParam)
   } else if (role !== "SUPER_ADMIN" && scope?.organizationId) {
     organizationId = scope.organizationId
   }
-  
+
   if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
     branchId = Number(branchIdParam)
   } else if (role === "BRANCH_ADMIN" && scope?.branchId) {
     branchId = scope.branchId
   }
 
+  if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") {
+    groupId = Number(groupIdParam)
+  }
+
   // Get year from query param or use current year
   const currentYear = new Date().getFullYear()
   const year = yearParam ? Number(yearParam) : currentYear
-  
+
   // Calculate start and end of the year in Pakistan timezone (UTC+5)
   // Then convert to UTC for database comparison
   const pakistanOffset = 5 * 60 * 60 * 1000 // UTC+5 in milliseconds
-  
+
   // Year start in Pakistan timezone (January 1st, 00:00:00 PK time)
   const yearStartPK = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0))
   // Convert to UTC for database (subtract 5 hours)
   const yearStart = new Date(yearStartPK.getTime() - pakistanOffset)
-  
+
   // Year end in Pakistan timezone (December 31st, 23:59:59 PK time)
   const yearEndPK = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999))
   // Convert to UTC for database
   const yearEnd = new Date(yearEndPK.getTime() - pakistanOffset)
-  
+
   // Next year start in Pakistan timezone
   const nextYearStartPK = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0, 0))
   const nextYearStart = new Date(nextYearStartPK.getTime() - pakistanOffset)
@@ -82,6 +88,11 @@ export async function GET(req: NextRequest) {
     yearConditions.push(eq(orders.branchId, branchId))
   }
 
+  // Apply group filter
+  if (groupId) {
+    yearConditions.push(eq(branches.groupId, groupId))
+  }
+
   // Query monthly sales for the year based on fulfilledAt date
   // Convert fulfilledAt to Pakistan timezone (Asia/Karachi, UTC+5) before extracting month
   // This ensures orders fulfilled on Tuesday in Pakistan are counted in the correct month
@@ -93,6 +104,7 @@ export async function GET(req: NextRequest) {
       orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
     })
     .from(orders)
+    .leftJoin(branches, eq(orders.branchId, branches.id))
     .where(and(...(yearConditions as any)))
     .groupBy(sql`1,2`)
     .orderBy(sql`1`)

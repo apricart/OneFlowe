@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { categories, globalProducts } from "@/db/schema"
 import { eq, and, like, or, desc, sql, isNull, isNotNull } from "drizzle-orm"
+import { escapeLikePattern } from "@/lib/utils"
 
 // GET /api/v1/categories - List all categories with optional filtering
 export async function GET(req: NextRequest) {
@@ -19,50 +20,41 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url)
-    const search = searchParams.get("search") || ""
-    const type = searchParams.get("type") || "all" // all, parent, subcategory
+    const searchRaw = searchParams.get("search") || ""
+    const search = searchRaw ? escapeLikePattern(searchRaw) : "" // Sanitize LIKE patterns
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
 
-    // Build where clause
-    const conditions = []
+    // Build where clause - flat categories only (no parent)
+    const conditions = [isNull(categories.parentId)]
     if (search) {
       conditions.push(like(categories.name, `%${search}%`))
     }
-    if (type === "parent") {
-      conditions.push(isNull(categories.parentId))
-    } else if (type === "subcategory") {
-      conditions.push(isNotNull(categories.parentId))
-    }
 
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+    const whereClause = and(...conditions)
 
-    // Fetch categories with counts
+    // Fetch categories with product count and subcategory count
     const [items, totalResult] = await Promise.all([
       db
         .select({
           id: categories.id,
           name: categories.name,
-          parentId: categories.parentId,
           createdAt: categories.createdAt,
           updatedAt: categories.updatedAt,
-          subCategoriesCount: sql<number>`(
-            SELECT COUNT(*)::int 
-            FROM ${categories} sub 
-            WHERE sub.parent_id = ${categories.id}
+          subcategoriesCount: sql<number>`(
+            SELECT COALESCE(COUNT(*), 0)::int 
+            FROM categories sub
+            WHERE sub.parent_id = categories.id
           )`,
           productsCount: sql<number>`(
-            SELECT COUNT(*)::int 
-            FROM ${globalProducts} gp
-            WHERE 
-              -- Products assigned directly to this category
-              gp.category_id = ${categories.id}
-              OR
-              -- Products assigned to a subcategory whose parent is this category
-              gp.category_id IN (
-                SELECT sub.id FROM ${categories} sub WHERE sub.parent_id = ${categories.id}
-              )
+            SELECT COALESCE(COUNT(*), 0)::int 
+            FROM global_products gp
+            WHERE gp.category_id IN (
+              SELECT sub.id 
+              FROM categories sub 
+              WHERE sub.parent_id = categories.id
+            )
           )`,
         })
         .from(categories)
@@ -107,7 +99,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { name, parentId, description } = body
+    const { name, description } = body
 
     if (!name || name.trim().length === 0) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 })
@@ -119,7 +111,7 @@ export async function POST(req: NextRequest) {
       .from(categories)
       .where(and(
         eq(categories.name, name.trim()),
-        parentId ? eq(categories.parentId, parentId) : isNull(categories.parentId)
+        isNull(categories.parentId)
       ))
       .limit(1)
 
@@ -127,24 +119,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Category with this name already exists" }, { status: 409 })
     }
 
-    // Validate parent category exists if parentId is provided
-    if (parentId) {
-      const parentCategory = await db
-        .select()
-        .from(categories)
-        .where(eq(categories.id, parentId))
-        .limit(1)
-
-      if (parentCategory.length === 0) {
-        return NextResponse.json({ error: "Parent category not found" }, { status: 404 })
-      }
-    }
-
     const newCategory = await db
       .insert(categories)
       .values({
         name: name.trim(),
-        parentId: parentId || null,
+        parentId: null, // Always null - no subcategories
         organizationId: null, // Global categories for Super Admin
       })
       .returning()
@@ -273,25 +252,31 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Check if category has subcategories
-    const subcategories = await db
-      .select()
+    const subcategoryCount = await db
+      .select({ count: sql<number>`count(*)` })
       .from(categories)
       .where(eq(categories.parentId, parseInt(id)))
-      .limit(1)
 
-    if (subcategories.length > 0) {
-      return NextResponse.json({ error: "Cannot delete category with subcategories" }, { status: 400 })
+    const subCount = subcategoryCount[0]?.count || 0
+    if (subCount > 0) {
+      return NextResponse.json({
+        error: `Cannot delete category with ${subCount} subcategor${subCount > 1 ? 'ies' : 'y'}. Remove subcategories first.`,
+        subcategoriesCount: subCount
+      }, { status: 400 })
     }
 
     // Check if category has products
-    const products = await db
-      .select()
+    const productCount = await db
+      .select({ count: sql<number>`count(*)` })
       .from(globalProducts)
       .where(eq(globalProducts.categoryId, parseInt(id)))
-      .limit(1)
 
-    if (products.length > 0) {
-      return NextResponse.json({ error: "Cannot delete category with products" }, { status: 400 })
+    const prodCount = productCount[0]?.count || 0
+    if (prodCount > 0) {
+      return NextResponse.json({
+        error: `Cannot delete category with ${prodCount} product${prodCount > 1 ? 's' : ''} directly assigned.`,
+        productsCount: prodCount
+      }, { status: 400 })
     }
 
     await db

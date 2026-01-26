@@ -12,6 +12,9 @@ import { Search, Download, RefreshCw, Loader2, Building, Building2, Calendar, Pa
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import { GroupFilter } from "@/components/reports/group-filter"
+import { useSession } from "next-auth/react"
+import { Role } from "@/lib/rbac"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -20,19 +23,35 @@ export default function ProductSummaryReportPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [groupId, setGroupId] = useState("")
   const [generatedDate, setGeneratedDate] = useState("")
 
-  useEffect(() => {
-    setGeneratedDate(new Date().toLocaleString())
-  }, [])
+  const { data: session } = useSession()
+  const role = (session?.user as any)?.role as Role
+  const [hasMounted, setHasMounted] = useState(false)
 
   const queryParams = new URLSearchParams()
   if (branchId) queryParams.set("branchId", branchId)
   if (organizationId) queryParams.set("organizationId", organizationId)
   if (startDate) queryParams.set("startDate", startDate)
   if (endDate) queryParams.set("endDate", endDate)
+  if (groupId) queryParams.set("groupId", groupId)
 
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/products/summary?${queryParams.toString()}`, fetcher)
+
+  useEffect(() => {
+    setHasMounted(true)
+    setGeneratedDate(new Date().toLocaleString())
+  }, [])
+
+  if (!hasMounted) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    )
+  }
+
   const productData = data?.items || []
 
   const filteredProducts = productData.filter((p: any) =>
@@ -125,9 +144,9 @@ export default function ProductSummaryReportPage() {
       <Card className="p-4">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
           <div className="flex items-center gap-2 w-full md:w-auto">
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[140px] text-xs" />
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[140px] text-xs" suppressHydrationWarning />
             <span className="text-muted-foreground text-xs">to</span>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[140px] text-xs" />
+            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[140px] text-xs" suppressHydrationWarning />
           </div>
 
           <div className="relative w-full md:w-auto flex-1">
@@ -137,8 +156,16 @@ export default function ProductSummaryReportPage() {
               className="pl-9 w-full md:max-w-xs"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              suppressHydrationWarning
             />
           </div>
+
+          {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+            <GroupFilter
+              onGroupChange={setGroupId}
+              organizationId={organizationId || undefined}
+            />
+          )}
 
           <div className="flex gap-2 w-full md:w-auto ml-auto">
             <Button variant="outline" onClick={() => mutate()} className="flex-1 md:flex-none">

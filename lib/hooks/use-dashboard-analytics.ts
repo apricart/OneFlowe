@@ -13,7 +13,7 @@ export type DashboardAnalyticsResponse = {
   ordersThisMonth: number
 }
 
-export function useDashboardAnalytics(organizationId?: string | null, branchId?: string | null) {
+export function useDashboardAnalytics(organizationId?: string | null, branchId?: string | null, groupId?: string | null) {
   const url = useMemo(() => {
     const baseUrl = "/api/v1/analytics/dashboard"
     const params = new URLSearchParams()
@@ -26,9 +26,13 @@ export function useDashboardAnalytics(organizationId?: string | null, branchId?:
       params.set("branchId", branchId)
     }
 
+    if (groupId && groupId !== "all") {
+      params.set("groupId", groupId)
+    }
+
     const queryString = params.toString()
     return queryString ? `${baseUrl}?${queryString}` : baseUrl
-  }, [organizationId, branchId])
+  }, [organizationId, branchId, groupId])
 
   return useSWR<DashboardAnalyticsResponse>(url, fetcher, {
     revalidateOnFocus: false,
@@ -51,7 +55,7 @@ export type WeeklySalesResponse = {
   totalOrders: number
 }
 
-export function useWeeklySales(organizationId?: string | null, branchId?: string | null) {
+export function useWeeklySales(organizationId?: string | null, branchId?: string | null, groupId?: string | null) {
   const url = useMemo(() => {
     const baseUrl = "/api/v1/analytics/weekly-sales"
     const params = new URLSearchParams()
@@ -64,9 +68,13 @@ export function useWeeklySales(organizationId?: string | null, branchId?: string
       params.set("branchId", branchId)
     }
 
+    if (groupId && groupId !== "all") {
+      params.set("groupId", groupId)
+    }
+
     const queryString = params.toString()
     return queryString ? `${baseUrl}?${queryString}` : baseUrl
-  }, [organizationId, branchId])
+  }, [organizationId, branchId, groupId])
 
   return useSWR<WeeklySalesResponse>(url, fetcher, {
     revalidateOnFocus: false,
@@ -88,7 +96,7 @@ export type YearlySalesResponse = {
   totalOrders: number
 }
 
-export function useYearlySales(organizationId?: string | null, branchId?: string | null, year?: number) {
+export function useYearlySales(organizationId?: string | null, branchId?: string | null, year?: number, groupId?: string | null) {
   const url = useMemo(() => {
     const baseUrl = "/api/v1/analytics/yearly-sales"
     const params = new URLSearchParams()
@@ -105,9 +113,13 @@ export function useYearlySales(organizationId?: string | null, branchId?: string
       params.set("year", year.toString())
     }
 
+    if (groupId && groupId !== "all") {
+      params.set("groupId", groupId)
+    }
+
     const queryString = params.toString()
     return queryString ? `${baseUrl}?${queryString}` : baseUrl
-  }, [organizationId, branchId, year])
+  }, [organizationId, branchId, year, groupId])
 
   return useSWR<YearlySalesResponse>(url, fetcher, {
     revalidateOnFocus: false,
@@ -129,7 +141,7 @@ export type MonthlySalesResponse = {
   totalOrders: number
 }
 
-export function useMonthlySales(organizationId?: string | null, branchId?: string | null, year?: number) {
+export function useMonthlySales(organizationId?: string | null, branchId?: string | null, year?: number, groupId?: string | null) {
   const url = useMemo(() => {
     const baseUrl = "/api/v1/analytics/monthly-sales"
     const params = new URLSearchParams()
@@ -146,9 +158,13 @@ export function useMonthlySales(organizationId?: string | null, branchId?: strin
       params.set("year", year.toString())
     }
 
+    if (groupId && groupId !== "all") {
+      params.set("groupId", groupId)
+    }
+
     const queryString = params.toString()
     return queryString ? `${baseUrl}?${queryString}` : baseUrl
-  }, [organizationId, branchId, year])
+  }, [organizationId, branchId, year, groupId])
 
   return useSWR<MonthlySalesResponse>(url, fetcher, {
     revalidateOnFocus: false,

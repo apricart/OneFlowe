@@ -24,7 +24,7 @@ function parseDatabaseUrl(url: string) {
   }
 }
 
-const dbConfig = process.env.DATABASE_URL 
+const dbConfig = process.env.DATABASE_URL
   ? parseDatabaseUrl(process.env.DATABASE_URL)
   : { connectionString: process.env.DATABASE_URL }
 

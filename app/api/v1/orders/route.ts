@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds, systemLogs } from "@/db/schema"
+import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds, systemLogs, groupAuditLogs } from "@/db/schema"
 import { headers } from "next/headers"
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 import { logOrderActivity } from "@/lib/global-logger"
@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
     const organizationIdParam = searchParams.get("organizationId") || undefined
     const idParam = searchParams.get("id") || undefined
     const mode = searchParams.get("mode") || undefined // weeklySales | monthlySales
+    const groupId = searchParams.get("groupId") || undefined
 
     const conditions: any[] = []
 
@@ -68,9 +69,32 @@ export async function GET(req: NextRequest) {
     if (status && status !== "FULFILLED") conditions.push(eq(orders.status, status))
     if (idParam && /^\d+$/.test(idParam)) conditions.push(eq(orders.id, Number(idParam)))
     if (branchId && /^\d+$/.test(branchId)) conditions.push(eq(orders.branchId, Number(branchId)))
+    if (groupId && /^\d+$/.test(groupId)) conditions.push(eq(branches.groupId, Number(groupId)))
 
     if (from && status !== "FULFILLED") conditions.push(gte(orders.createdAt, new Date(from)))
     if (to && status !== "FULFILLED") conditions.push(lte(orders.createdAt, new Date(to)))
+
+    // --- Audit Logging for Group Access ---
+    if (groupId && /^\d+$/.test(groupId)) {
+      // Log access to group-specific data
+      // We do this asynchronously to not block the response
+      (async () => {
+        try {
+          await db.insert(groupAuditLogs).values({
+            organizationId: orgIdNum || 0, // Best effort
+            groupId: Number(groupId),
+            action: "VIEW_GROUP_REPORT",
+            performedByUserId: (session.user as any).id,
+            performedByRole: role,
+            metadata: {
+              filters: Object.fromEntries(searchParams.entries())
+            },
+          })
+        } catch (err) {
+          console.error("Audit log failed", err)
+        }
+      })()
+    }
 
 
 
@@ -90,6 +114,7 @@ export async function GET(req: NextRequest) {
             sales: sql<number>`SUM(${orders.totalCents})::int`,
           })
           .from(orders)
+          .leftJoin(branches, eq(orders.branchId, branches.id))
           .where(and(...conditions))
           .groupBy(sql`1,2`)
           .orderBy(sql`1`)
@@ -110,6 +135,7 @@ export async function GET(req: NextRequest) {
           totalSales: sql<number>`SUM(${orders.totalCents})::int`,
         })
         .from(orders)
+        .leftJoin(branches, eq(orders.branchId, branches.id))
         .where(and(...conditions))
         .groupBy(sql`1`)
         .orderBy(sql`1`)

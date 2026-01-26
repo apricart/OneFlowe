@@ -42,10 +42,12 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const orgIdParam = searchParams.get("organizationId")
   const branchIdParam = searchParams.get("branchId")
+  const groupIdParam = searchParams.get("groupId")
 
   // Use query params if provided, otherwise fall back to auth scope
   let organizationId: number | null = null
   let branchId: number | null = null
+  let groupId: number | null = null
 
   if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") {
     organizationId = Number(orgIdParam)
@@ -59,7 +61,14 @@ export async function GET(req: NextRequest) {
     branchId = scope.branchId
   }
 
-  const orderConditions = getOrderConditions(role, organizationId, branchId)
+  if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") {
+    groupId = Number(groupIdParam)
+  }
+
+  const orderConditions = getOrderConditions(role as Role, organizationId, branchId)
+  if (groupId) {
+    orderConditions.push(eq(branches.groupId, groupId))
+  }
   const whereClause = and(...(orderConditions as any))
 
   const dayExpr = sql`date_trunc('day', ${orders.createdAt})`
@@ -69,6 +78,7 @@ export async function GET(req: NextRequest) {
       totalCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
     })
     .from(orders)
+    .leftJoin(branches, eq(orders.branchId, branches.id))
     .where(whereClause)
     .groupBy(dayExpr)
     .orderBy(dayExpr)
@@ -79,6 +89,9 @@ export async function GET(req: NextRequest) {
   }
   if (role === "BRANCH_ADMIN" && branchId) {
     branchFilters.push(eq(branches.id, branchId))
+  }
+  if (groupId) {
+    branchFilters.push(eq(branches.groupId, groupId))
   }
 
   const branchSelect = db.select({
@@ -126,6 +139,7 @@ export async function GET(req: NextRequest) {
     const pendingRow = await db
       .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
       .from(orders)
+      .leftJoin(branches, eq(orders.branchId, branches.id))
       .where(and(...(pendingConditions as any)))
 
     pendingApprovals = Number(((pendingRow as any)[0]?.count) || 0)
@@ -159,6 +173,7 @@ export async function GET(req: NextRequest) {
   const ordersMonthRow = await db
     .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
     .from(orders)
+    .leftJoin(branches, eq(orders.branchId, branches.id))
     .where(and(...(monthConditions as any)))
 
   const ordersThisMonth = Number(((ordersMonthRow as any)[0]?.count) || 0)

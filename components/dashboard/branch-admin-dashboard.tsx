@@ -230,7 +230,7 @@ export function BranchAdminDashboard() {
                 />
               </div>
               {yearlySalesChartData.length > 0 ? (
-                <YearlySalesSplineChart yearlySalesData={yearlySalesChartData} avgSales={averageYearlySales} />
+                <YearlySalesSplineChart yearlySalesData={yearlySalesChartData} avgSales={averageYearlySales} label="Purchase" />
               ) : (
                 <div className="h-[500px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                   <div className="text-center">
@@ -257,7 +257,7 @@ export function BranchAdminDashboard() {
                 </div>
               </div>
               {weeklySalesChartData.length > 0 ? (
-                <TrendAreaChart data={weeklySalesChartData} />
+                <TrendAreaChart data={weeklySalesChartData} label="Purchase" />
               ) : (
                 <div className="h-[500px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                   <div className="text-center">
@@ -330,7 +330,7 @@ export function BranchAdminDashboard() {
               {/* Chart */}
               <div className="min-h-[350px] bg-slate-50 dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-800">
                 {monthlyBarChartData.length > 0 ? (
-                  <SalesBarChart data={monthlyBarChartData} />
+                  <SalesBarChart data={monthlyBarChartData} label="Purchase" />
                 ) : (
                   <div className="flex items-center justify-center h-[350px]">
                     <div className="text-center space-y-3">

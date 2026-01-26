@@ -2,9 +2,9 @@
  * Centralized error handling utilities for consistent error responses
  */
 
-export type ErrorType = 
+export type ErrorType =
   | 'VALIDATION_ERROR'
-  | 'PERMISSION_ERROR' 
+  | 'PERMISSION_ERROR'
   | 'NOT_FOUND_ERROR'
   | 'DUPLICATE_ERROR'
   | 'NETWORK_ERROR'
@@ -29,29 +29,29 @@ export const ERROR_MESSAGES = {
   INVALID_EMAIL: 'Please enter a valid email address',
   INVALID_PASSWORD: 'Password must be at least 6 characters long',
   INVALID_ROLE: 'Please select a valid role',
-  
+
   // Permission errors
   ORGANIZATION_SCOPE: 'You can only manage users within your own organization',
   BRANCH_SCOPE: 'You can only manage users within your own branch',
   INSUFFICIENT_PERMISSIONS: 'You don\'t have permission to perform this action',
-  
+
   // Duplicate errors
   DUPLICATE_EMAIL: 'This email address is already registered. Please use a different email',
-  
+
   // Not found errors
   USER_NOT_FOUND: 'User not found. It may have been deleted by another user',
   ORGANIZATION_NOT_FOUND: 'Organization not found',
   BRANCH_NOT_FOUND: 'Branch not found',
-  
+
   // Network errors
   REQUEST_TIMEOUT: 'Request timed out. Please check your connection and try again',
   NETWORK_ERROR: 'Network error. Please check your connection and try again',
-  
+
   // Server errors
   UNABLE_TO_VERIFY_PERMISSIONS: 'Unable to verify permissions',
   DATABASE_ERROR: 'Database error. Please try again',
   UNKNOWN_ERROR: 'An unexpected error occurred. Please try again',
-  
+
   // MFA errors
   DAILY_LIMIT_EXCEEDED: 'Daily OTP request limit exceeded. Please try again tomorrow.',
   COOLDOWN_ACTIVE: 'Please wait before requesting another OTP.',
@@ -64,7 +64,7 @@ export const ERROR_MESSAGES = {
  */
 export function parseError(error: any): ErrorDetails {
   const errorMsg = error?.message || error?.toString() || ''
-  
+
   // Validation errors
   if (errorMsg.includes('required')) {
     if (errorMsg.includes('firstName')) {
@@ -124,7 +124,7 @@ export function parseError(error: any): ErrorDetails {
       }
     }
   }
-  
+
   // Duplicate errors
   if (errorMsg.includes('Email address already exists') || errorMsg.includes('email') || errorMsg.includes('already exists')) {
     if (errorMsg.includes('email')) {
@@ -136,8 +136,8 @@ export function parseError(error: any): ErrorDetails {
       }
     }
   }
-  
-  
+
+
   // Permission errors
   if (errorMsg.includes('organization')) {
     return {
@@ -146,7 +146,7 @@ export function parseError(error: any): ErrorDetails {
       statusCode: 403
     }
   }
-  
+
   if (errorMsg.includes('permission') || errorMsg.includes('unauthorized')) {
     return {
       type: 'PERMISSION_ERROR',
@@ -154,7 +154,7 @@ export function parseError(error: any): ErrorDetails {
       statusCode: 403
     }
   }
-  
+
   // Not found errors
   if (errorMsg.includes('not found') || errorMsg.includes('404')) {
     return {
@@ -163,7 +163,7 @@ export function parseError(error: any): ErrorDetails {
       statusCode: 404
     }
   }
-  
+
   // Network errors
   if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
     return {
@@ -172,7 +172,7 @@ export function parseError(error: any): ErrorDetails {
       statusCode: 408
     }
   }
-  
+
   if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
     return {
       type: 'NETWORK_ERROR',
@@ -180,7 +180,7 @@ export function parseError(error: any): ErrorDetails {
       statusCode: 503
     }
   }
-  
+
   // Invalid format errors
   if (errorMsg.includes('Invalid')) {
     if (errorMsg.includes('email')) {
@@ -200,7 +200,7 @@ export function parseError(error: any): ErrorDetails {
       }
     }
   }
-  
+
   if (errorMsg.includes('password')) {
     return {
       type: 'VALIDATION_ERROR',
@@ -209,7 +209,7 @@ export function parseError(error: any): ErrorDetails {
       statusCode: 400
     }
   }
-  
+
   // MFA errors
   if (errorMsg.includes('Daily OTP request limit exceeded') || errorMsg.includes('daily limit')) {
     return {
@@ -218,7 +218,7 @@ export function parseError(error: any): ErrorDetails {
       statusCode: 400
     }
   }
-  
+
   if (errorMsg.includes('cooldown') || errorMsg.includes('wait before requesting')) {
     return {
       type: 'MFA_ERROR',
@@ -226,7 +226,7 @@ export function parseError(error: any): ErrorDetails {
       statusCode: 400
     }
   }
-  
+
   if (errorMsg.includes('Invalid OTP') || errorMsg.includes('invalid code')) {
     return {
       type: 'MFA_ERROR',
@@ -234,7 +234,7 @@ export function parseError(error: any): ErrorDetails {
       statusCode: 400
     }
   }
-  
+
   if (errorMsg.includes('expired') || errorMsg.includes('OTP has expired')) {
     return {
       type: 'MFA_ERROR',
@@ -242,11 +242,15 @@ export function parseError(error: any): ErrorDetails {
       statusCode: 400
     }
   }
-  
-  // Default server error
+
+  // Default server error - NEVER expose raw error messages to users
+  // Log the actual error for debugging but return generic message
+  if (process.env.NODE_ENV !== 'production') {
+    console.error('Unhandled error:', errorMsg)
+  }
   return {
     type: 'SERVER_ERROR',
-    message: errorMsg || ERROR_MESSAGES.UNKNOWN_ERROR,
+    message: ERROR_MESSAGES.UNKNOWN_ERROR,
     statusCode: 500
   }
 }

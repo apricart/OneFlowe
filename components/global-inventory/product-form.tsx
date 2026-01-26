@@ -44,12 +44,12 @@ type ProductFormState = {
   name: string
   description: string
   categoryId: string
+  subcategoryId: string
   imageUrl: string
   basePrice: string
   unit: string
   status: string
   stockQuantity: string
-  subCategoryId: string
   discountType: string
   discountValue: string
   discountStartAt: string
@@ -73,12 +73,12 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
     name: "",
     description: "",
     categoryId: "",
+    subcategoryId: "",
     imageUrl: "",
     basePrice: "",
     unit: "unit",
     status: "active",
     stockQuantity: "0",
-    subCategoryId: "",
     discountType: "",
     discountValue: "",
     discountStartAt: "",
@@ -88,21 +88,19 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
 
   useEffect(() => {
     if (initialProduct && mode === "edit") {
+      // Get subcategoryId from metadata if stored there, or from categoryId if it's a subcategory
+      const metadata = initialProduct.metadata as any
       setProductData({
         productCode: initialProduct.productCode,
         name: initialProduct.name,
         description: initialProduct.description || "",
-        categoryId: initialProduct.categoryId?.toString() || "",
+        categoryId: metadata?.parentCategoryId?.toString() || "",
+        subcategoryId: initialProduct.categoryId?.toString() || "",
         imageUrl: initialProduct.imageUrl || "",
         basePrice: (initialProduct.basePrice / 100).toFixed(2),
         unit: initialProduct.unit,
         status: initialProduct.status,
         stockQuantity: initialProduct.stockQuantity?.toString() || "0",
-        subCategoryId:
-          (initialProduct.metadata as any)?.subCategoryId !== undefined &&
-          (initialProduct.metadata as any)?.subCategoryId !== null
-            ? String((initialProduct.metadata as any).subCategoryId)
-            : "",
         discountType: initialProduct.discountType || "",
         discountValue: initialProduct.discountValue?.toString() || "",
         discountStartAt: initialProduct.discountStartAt
@@ -121,24 +119,20 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
   const [imageUploadError, setImageUploadError] = useState<string | null>(null)
 
   const { data: categoriesData, isLoading: categoriesLoading, error: categoriesError } = useSWR<{ items: Category[] }>(
-    `/api/v1/categories?type=parent`,
+    `/api/v1/categories`,
     fetcher,
     { fallbackData: { items: [] }, revalidateOnFocus: false }
   )
   const categories = categoriesData?.items || []
 
-  type SubCategory = {
-    id: number
-    name: string
-    parentId: number
-  }
-
-  const { data: subCategoriesData } = useSWR<{ items: SubCategory[] }>(
-    productData.categoryId ? `/api/v1/subcategories?parentId=${productData.categoryId}` : null,
+  // Fetch subcategories based on selected category
+  type Subcategory = { id: number; name: string; parentId: number }
+  const { data: subcategoriesData, isLoading: subcategoriesLoading } = useSWR<{ items: Subcategory[] }>(
+    productData.categoryId ? `/api/v1/subcategories?categoryId=${productData.categoryId}` : null,
     fetcher,
     { fallbackData: { items: [] }, revalidateOnFocus: false }
   )
-  const subCategories = subCategoriesData?.items || []
+  const subcategories = subcategoriesData?.items || []
 
   const discountEnabled = productData.discountActive || !!productData.discountType
 
@@ -205,16 +199,20 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
       return
     }
 
+    if (!productData.subcategoryId) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a category and subcategory",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       const method = mode === "edit" ? "PUT" : "POST"
       const metadata: Record<string, any> = {
         ...(initialProduct?.metadata || {}),
-      }
-
-      if (productData.subCategoryId) {
-        metadata.subCategoryId = parseInt(productData.subCategoryId)
-      } else if ("subCategoryId" in metadata) {
-        delete metadata.subCategoryId
+        parentCategoryId: parseInt(productData.categoryId), // Store parent category in metadata
       }
 
       const response = await fetch(`/api/v1/admin/global-inventory`, {
@@ -225,7 +223,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
           id: initialProduct?.id,
           basePrice: parseFloat(productData.basePrice),
           stockQuantity: parseInt(productData.stockQuantity) || 0,
-          categoryId: productData.categoryId ? parseInt(productData.categoryId) : null,
+          categoryId: productData.subcategoryId ? parseInt(productData.subcategoryId) : null, // Save subcategory as categoryId
           metadata,
           discountType: productData.discountType || null,
           discountValue: productData.discountValue ? parseInt(productData.discountValue) : null,
@@ -261,15 +259,18 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
   }
 
   return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)]">
+    <div className="space-y-6">
       <div className="space-y-6">
-        <Card className="w-full">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Base details</CardTitle>
+        <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+          <CardHeader className="space-y-1 pb-4">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" />
+              Base details
+            </CardTitle>
             <CardDescription>Core identifiers that Head Office relies on for downstream syncing.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <label className="block text-sm font-medium mb-1">Product Code *</label>
                 <Input
@@ -278,7 +279,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   placeholder="PRD-001"
                   required
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Avoid spaces; use dashes for readability.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Avoid spaces; use dashes.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Name *</label>
@@ -288,11 +289,29 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   placeholder="Product name"
                   required
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Visible everywhere the product is assigned.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Visible everywhere.</p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Category</label>
-                <Select value={productData.categoryId} onValueChange={(value) => setProductData({ ...productData, categoryId: value })}>
+                <label className="block text-sm font-medium mb-1">Status</label>
+                <Select value={productData.status} onValueChange={(value) => setProductData({ ...productData, status: value })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">Inactive = hidden.</p>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium mb-1">Category *</label>
+                <Select
+                  value={productData.categoryId}
+                  onValueChange={(value) => setProductData({ ...productData, categoryId: value, subcategoryId: "" })}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder={categoriesLoading ? "Loading..." : "Select a category"} />
                   </SelectTrigger>
@@ -316,53 +335,33 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 </Select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Subcategory</label>
+                <label className="block text-sm font-medium mb-1">Subcategory *</label>
                 <Select
-                  value={productData.subCategoryId || "none"}
-                  onValueChange={(value) =>
-                    setProductData({
-                      ...productData,
-                      subCategoryId: value === "none" ? "" : value,
-                    })
-                  }
-                  disabled={!productData.categoryId || subCategories.length === 0}
+                  value={productData.subcategoryId}
+                  onValueChange={(value) => setProductData({ ...productData, subcategoryId: value })}
+                  disabled={!productData.categoryId || subcategories.length === 0}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue
                       placeholder={
                         !productData.categoryId
-                          ? "Select a category first"
-                          : subCategories.length === 0
-                          ? "No subcategories for this category"
-                          : "Optional: choose a subcategory"
+                          ? "Select category first"
+                          : subcategoriesLoading
+                            ? "Loading..."
+                            : subcategories.length === 0
+                              ? "No subcategories"
+                              : "Select subcategory"
                       }
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectGroup>
-                      <SelectLabel>Subcategories</SelectLabel>
-                      <SelectItem value="none">None</SelectItem>
-                      {subCategories.map((sub) => (
-                        <SelectItem key={sub.id} value={String(sub.id)}>
-                          {sub.name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
+                    {subcategories.map((sub) => (
+                      <SelectItem key={sub.id} value={String(sub.id)}>
+                        {sub.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Status</label>
-                <Select value={productData.status} onValueChange={(value) => setProductData({ ...productData, status: value })}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="mt-1 text-xs text-muted-foreground">Inactive products stay hidden in every branch.</p>
               </div>
             </div>
             <div>
@@ -371,20 +370,20 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 value={productData.description ?? ""}
                 onChange={(e) => setProductData({ ...productData, description: e.target.value })}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                rows={3}
-                placeholder="What makes this SKU unique or how should branches position it?"
+                rows={2}
+                placeholder="What makes this SKU unique?"
               />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="w-full">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Commercial setup</CardTitle>
+        <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+          <CardHeader className="space-y-1 pb-4">
+            <CardTitle className="text-lg font-semibold">Commercial setup</CardTitle>
             <CardDescription>Baseline price, measurement unit, and packaging cues.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <label className="block text-sm font-medium mb-1">Base Price *</label>
                 <Input
@@ -395,7 +394,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   placeholder="0.00"
                   required
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Stored in PKR; branches inherit this by default.</p>
+                <p className="mt-1 text-xs text-muted-foreground">In PKR</p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Unit</label>
@@ -404,7 +403,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   onChange={(e) => setProductData({ ...productData, unit: e.target.value })}
                   placeholder="ltr / kg / box"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Shown in inventory cards and packing slips.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Measurement</p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Stock Quantity</label>
@@ -416,15 +415,12 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   onChange={(e) => setProductData({ ...productData, stockQuantity: e.target.value })}
                   placeholder="0"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Current available stock quantity. Defaults to 0.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Available</p>
               </div>
             </div>
-            <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
+            <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">Product imagery</p>
-                  <p className="text-xs text-muted-foreground">Upload a hero visual or link to an existing asset.</p>
-                </div>
+                <p className="text-sm font-medium">Product Image</p>
                 <div className="inline-flex overflow-hidden rounded-full border text-xs">
                   {(["upload", "url"] as const).map((modeOption) => (
                     <button
@@ -478,13 +474,15 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
           </CardContent>
         </Card>
 
-        <Card className="w-full">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-lg">Discounts & promos</CardTitle>
-              <CardDescription>Optional limited-time incentives that cascade to branches.</CardDescription>
+        <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+          <CardHeader className="space-y-1 pb-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-lg font-semibold">Discounts & promos</CardTitle>
+                <CardDescription>Optional limited-time incentives that cascade to branches.</CardDescription>
+              </div>
+              <Switch checked={discountEnabled} onCheckedChange={handleDiscountToggle} />
             </div>
-            <Switch checked={discountEnabled} onCheckedChange={handleDiscountToggle} />
           </CardHeader>
           {discountEnabled ? (
             <CardContent className="space-y-4">
@@ -547,102 +545,17 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
             </CardContent>
           )}
         </Card>
-      </div>
 
-      <div className="space-y-6">
-        <Card className="w-full">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Live preview</CardTitle>
-            <CardDescription>How the product will appear inside organization catalogs.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Badge variant={productData.status === "active" ? "default" : "secondary"}>
-                {productData.status === "active" ? "Active" : "Inactive"}
-              </Badge>
-              <span className="text-sm text-muted-foreground">
-                {mode === "edit" ? "Editing existing SKU" : "Creating new SKU"}
-              </span>
-            </div>
-            <div className="rounded-xl border bg-muted/30 p-4 flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                {productData.imageUrl ? (
-                  <img src={productData.imageUrl} alt={productData.name || "Preview"} className="h-16 w-16 rounded-lg object-cover border" />
-                ) : (
-                  <div className="h-16 w-16 rounded-lg border bg-background flex items-center justify-center text-muted-foreground">
-                    <Package className="h-6 w-6" />
-                  </div>
-                )}
-                <div className="flex-1">
-                  <p className="font-semibold">{productData.name || "Unnamed product"}</p>
-                  <p className="text-xs text-muted-foreground">{productData.productCode || "CODE-TBD"}</p>
-                </div>
-              </div>
-              <dl className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Base price</dt>
-                  <dd className="font-medium">
-                    {productData.basePrice ? formatPKR(Number(productData.basePrice)) : "PKR 0.00"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Unit</dt>
-                  <dd className="font-medium">{productData.unit || "unit"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Category</dt>
-                  <dd className="font-medium">
-                    {productData.categoryId
-                      ? categories.find((cat) => String(cat.id) === productData.categoryId)?.name ?? "Selected"
-                      : "Not set"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Subcategory</dt>
-                  <dd className="font-medium">
-                    {productData.subCategoryId
-                      ? subCategories.find((sub) => String(sub.id) === productData.subCategoryId)?.name ?? "Selected"
-                      : "Not set"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Discount</dt>
-                  <dd className="font-medium">{discountEnabled ? "Configured" : "None"}</dd>
-                </div>
-              </dl>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="w-full">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg">Publishing checklist</CardTitle>
-            <CardDescription>Quick guardrails before you hit save.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            <div className="flex items-start gap-3">
-              <Check className="h-4 w-4 text-emerald-500 mt-0.5" />
-              <p>Product code and name are required. The system prevents duplicates automatically.</p>
-            </div>
-            <div className="flex items-start gap-3">
-              <Check className="h-4 w-4 text-emerald-500 mt-0.5" />
-              <p>Base price is stored in cents — decimals are supported for easier math in PKR.</p>
-            </div>
-            <div className="flex items-start gap-3">
-              <Check className="h-4 w-4 text-emerald-500 mt-0.5" />
-              <p>Optional fields can be revisited later without affecting existing assignments.</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="flex items-center justify-end gap-3">
+        {/* Action Buttons */}
+        <div className="flex items-center justify-end gap-3 pt-4 border-t">
           <Button variant="outline" onClick={onCancel || (() => router.push("/global-inventory"))}>
             Cancel
           </Button>
-          <Button onClick={handleSubmitProduct}>{mode === "edit" ? "Update Product" : "Create Product"}</Button>
+          <Button onClick={handleSubmitProduct} size="lg" className="min-w-32">
+            {mode === "edit" ? "Update Product" : "Create Product"}
+          </Button>
         </div>
       </div>
     </div>
   )
 }
-

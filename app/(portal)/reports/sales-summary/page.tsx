@@ -13,6 +13,9 @@ import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { Badge } from "@/components/ui/badge"
+import { GroupFilter } from "@/components/reports/group-filter"
+import { Role } from "@/lib/rbac"
+import { useSession } from "next-auth/react"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -21,12 +24,12 @@ export default function SalesSummaryReportPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [groupId, setGroupId] = useState("")
   const [generatedDate, setGeneratedDate] = useState("")
 
-  // Set date on mount to avoid hydration mismatch
-  useEffect(() => {
-    setGeneratedDate(new Date().toLocaleString())
-  }, [])
+  const { data: session } = useSession()
+  const role = (session?.user as any)?.role as Role
+  const [hasMounted, setHasMounted] = useState(false)
 
   // Build query string based on GLOBAL context (AppContext) and LOCAL date filters
   const queryParams = new URLSearchParams()
@@ -42,8 +45,27 @@ export default function SalesSummaryReportPage() {
   if (endDate) {
     queryParams.set("endDate", endDate)
   }
+  if (groupId) {
+    queryParams.set("groupId", groupId)
+  }
 
+  // All hooks must be called before any conditional returns
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${queryParams.toString()}`, fetcher)
+
+  // Set date on mount to avoid hydration mismatch
+  useEffect(() => {
+    setHasMounted(true)
+    setGeneratedDate(new Date().toLocaleString())
+  }, [])
+
+  // Now safe to return early after all hooks are called
+  if (!hasMounted) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    )
+  }
 
   const summary = data?.summary || { totalSales: 0, totalTax: 0, totalSubtotal: 0, orderCount: 0 }
   const orders = data?.orders || []
@@ -179,6 +201,7 @@ export default function SalesSummaryReportPage() {
                 onChange={(e) => setStartDate(e.target.value)}
                 className="w-full text-xs"
                 placeholder="Start Date"
+                suppressHydrationWarning
               />
             </div>
             <span className="text-muted-foreground text-xs">to</span>
@@ -189,6 +212,7 @@ export default function SalesSummaryReportPage() {
                 onChange={(e) => setEndDate(e.target.value)}
                 className="w-full text-xs"
                 placeholder="End Date"
+                suppressHydrationWarning
               />
             </div>
           </div>
@@ -200,8 +224,16 @@ export default function SalesSummaryReportPage() {
               className="pl-9 w-full md:max-w-[300px]"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              suppressHydrationWarning
             />
           </div>
+
+          {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+            <GroupFilter
+              onGroupChange={setGroupId}
+              organizationId={organizationId || undefined}
+            />
+          )}
 
           <div className="flex-1 hidden md:block" />
 

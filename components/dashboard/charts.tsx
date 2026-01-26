@@ -37,7 +37,7 @@ const barColorsDark = [
   "#2563eb", "#1d4ed8", "#1e40af", "#1e3a8a"
 ]
 
-const CustomTooltip = ({ active, payload }: any) => {
+const CustomTooltip = ({ active, payload, labelText = "Purchase" }: any) => {
   if (!active || !payload?.length) return null
 
   return (
@@ -46,7 +46,7 @@ const CustomTooltip = ({ active, payload }: any) => {
         <p className="font-semibold text-slate-700 dark:text-slate-300 text-xs">{payload[0].payload.month}</p>
       </div>
       <div className="px-4 py-3">
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Purchase</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{labelText}</p>
         <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
           ₨{payload[0].value.toLocaleString()}
         </p>
@@ -69,9 +69,10 @@ export type SalesData = { month: string; sales: number }
 export type YearlySalesSplineChartProps = {
   yearlySalesData: SalesData[]
   avgSales: number
+  label?: string
 }
 
-export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySalesSplineChartProps) {
+export function YearlySalesSplineChart({ yearlySalesData, avgSales, label = "Purchase" }: YearlySalesSplineChartProps) {
   const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
   const totalSales = yearlySalesData.reduce((sum, item) => sum + item.sales, 0)
   const peakMonth = yearlySalesData.reduce((max, item) => item.sales > max.sales ? item : max, yearlySalesData[0])
@@ -104,7 +105,7 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
                 <DollarSign className="h-3.5 w-3.5 text-white" />
               </div>
               <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 uppercase tracking-wide">
-                Total Purchase
+                Total {label}
               </p>
             </div>
             <p className="text-2xl font-bold text-blue-900 dark:text-blue-200 mb-1">
@@ -208,7 +209,7 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales }: YearlySale
                     fontSize: "12px",
                     marginBottom: "4px"
                   }}
-                  formatter={(value: number) => [`₨${value.toLocaleString()}`, "Purchase"]}
+                  formatter={(value: number) => [`₨${value.toLocaleString()}`, label]}
                 />
 
                 <ReferenceLine
@@ -261,11 +262,13 @@ export function ChartTooltip({
   payload,
   label,
   prefix = "",
+  labelText,
 }: {
   active?: boolean
   payload?: any[]
   label?: string
   prefix?: "currency" | "count" | ""
+  labelText?: string
 }) {
   if (!active || !payload?.length) return null
   const value = payload[0].value as number
@@ -284,6 +287,7 @@ export function ChartTooltip({
         <p className="font-semibold text-slate-700 dark:text-slate-300 text-xs">{label}</p>
       </div>
       <div className="px-4 py-3">
+        {labelText && <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{labelText}</p>}
         <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{formatted}</p>
       </div>
     </div>
@@ -291,7 +295,7 @@ export function ChartTooltip({
 }
 
 // ----------------- Trend Area Chart -----------------
-export function TrendAreaChart({ data, className }: { data: TrendPoint[]; className?: string }) {
+export function TrendAreaChart({ data, className, label = "Purchase" }: { data: TrendPoint[]; className?: string; label?: string }) {
   const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
   const chartData: ChartDatum[] = useMemo(
     () => data.map((point) => ({ label: point.label, value: point.value })),
@@ -397,7 +401,7 @@ export function TrendAreaChart({ data, className }: { data: TrendPoint[]; classN
                     tickMargin={8}
                     tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontWeight: 600, fontSize: 10 }}
                   />
-                  <Tooltip content={<ChartTooltip prefix="currency" />} />
+                  <Tooltip content={<ChartTooltip prefix="currency" labelText={label} />} />
                   <Area
                     type="monotone"
                     dataKey="value"
@@ -521,7 +525,7 @@ export function ComparisonBarChart({
 }
 
 // ----------------- Sales Bar Chart -----------------
-export default function SalesBarChart({ data }: Props) {
+export default function SalesBarChart({ data, label = "Purchase" }: Props & { label?: string }) {
   const { theme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
@@ -530,9 +534,11 @@ export default function SalesBarChart({ data }: Props) {
   }, [])
 
   const isDark = mounted && theme === "dark"
-  const totalRevenue = data.reduce((sum, item) => sum + item.value, 0)
-  const avgRevenue = Math.round(totalRevenue / data.length)
-  const peakMonth = data.reduce((max, item) => item.value > max.value ? item : max, data[0])
+  const totalRevenue = data.length > 0 ? data.reduce((sum, item) => sum + item.value, 0) : 0
+  const avgRevenue = data.length > 0 ? Math.round(totalRevenue / data.length) : 0
+  const peakMonth = data.length > 0
+    ? data.reduce((max, item) => item.value > max.value ? item : max, data[0])
+    : { month: "N/A", value: 0 }
 
   return (
     <div className="space-y-6">
@@ -574,7 +580,7 @@ export default function SalesBarChart({ data }: Props) {
                   tickFormatter={(value) => `₨${value / 1000}k`}
                 />
 
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(226, 232, 240, 0.3)" }} />
+                <Tooltip content={<CustomTooltip labelText={label} />} cursor={{ fill: isDark ? "rgba(51, 65, 85, 0.3)" : "rgba(226, 232, 240, 0.3)" }} />
 
                 <Bar
                   dataKey="value"
@@ -613,7 +619,7 @@ export default function SalesBarChart({ data }: Props) {
                 <DollarSign className="h-5 w-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
               </div>
             </div>
-            <p className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider mb-1">Total Purchase</p>
+            <p className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider mb-1">Total {label}</p>
             <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">
               ₨{totalRevenue.toLocaleString()}
             </p>

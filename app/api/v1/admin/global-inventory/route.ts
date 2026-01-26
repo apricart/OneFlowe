@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { globalProducts, categories, organizationInventory, organizations, auditLogs } from "@/db/schema"
 import { eq, and, like, or, desc, sql, inArray, isNull } from "drizzle-orm"
 import { cascadeGlobalProductDeletion, cascadeGlobalProductStatusChange } from "@/lib/inventory-cascade"
+import { escapeLikePattern } from "@/lib/utils"
 
 // GET /api/v1/admin/global-inventory - List all global products with assignment stats
 export async function GET(req: NextRequest) {
@@ -84,7 +85,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Otherwise, return paginated list
-    const search = searchParams.get("search") || ""
+    const searchRaw = searchParams.get("search") || ""
+    const search = searchRaw ? escapeLikePattern(searchRaw) : "" // Sanitize LIKE patterns
     const category = searchParams.get("category") || ""
     const status = searchParams.get("status") || ""
     const page = parseInt(searchParams.get("page") || "1")
@@ -133,12 +135,12 @@ export async function GET(req: NextRequest) {
         updatedAt: globalProducts.updatedAt,
         categoryName: categories.name,
       })
-      .from(globalProducts)
-      .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
-      .where(whereClause)
-      .orderBy(desc(globalProducts.createdAt))
-      .limit(limit)
-      .offset(offset),
+        .from(globalProducts)
+        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+        .where(whereClause)
+        .orderBy(desc(globalProducts.createdAt))
+        .limit(limit)
+        .offset(offset),
       db.select({ count: sql<number>`count(*)::int` }).from(globalProducts).where(whereClause)
     ])
 
@@ -150,14 +152,14 @@ export async function GET(req: NextRequest) {
       globalProductId: organizationInventory.globalProductId,
       assignedOrganizations: sql<number>`count(distinct ${organizationInventory.organizationId})`,
     })
-    .from(organizationInventory)
-    .where(
-      and(
-        inArray(organizationInventory.globalProductId, productIds),
-        eq(organizationInventory.isActive, true)
+      .from(organizationInventory)
+      .where(
+        and(
+          inArray(organizationInventory.globalProductId, productIds),
+          eq(organizationInventory.isActive, true)
+        )
       )
-    )
-    .groupBy(organizationInventory.globalProductId) : []
+      .groupBy(organizationInventory.globalProductId) : []
 
     // Create a map for quick lookup
     const assignmentMap = new Map()
@@ -315,9 +317,9 @@ export async function PUT(req: NextRequest) {
       id: globalProducts.id,
       status: globalProducts.status,
     })
-    .from(globalProducts)
-    .where(eq(globalProducts.id, parseInt(id)))
-    .limit(1)
+      .from(globalProducts)
+      .where(eq(globalProducts.id, parseInt(id)))
+      .limit(1)
 
     if (!existingProduct) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
@@ -418,9 +420,9 @@ export async function DELETE(req: NextRequest) {
       productCode: globalProducts.productCode,
       name: globalProducts.name,
     })
-    .from(globalProducts)
-    .where(eq(globalProducts.id, parseInt(id)))
-    .limit(1)
+      .from(globalProducts)
+      .where(eq(globalProducts.id, parseInt(id)))
+      .limit(1)
 
     if (!existingProduct) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
@@ -433,13 +435,27 @@ export async function DELETE(req: NextRequest) {
       "SUPER_ADMIN"
     )
 
-    // Soft delete the global product
-    await db.update(globalProducts)
-      .set({ 
-        status: "discontinued",
-        updatedAt: new Date()
-      })
+    // Hard delete the global product (cascade will handle org/branch inventory)
+    await db.delete(globalProducts)
       .where(eq(globalProducts.id, parseInt(id)))
+
+    // Log the deletion
+    await db.insert(auditLogs).values({
+      userId: (session.user as any).id,
+      action: "DELETE",
+      entity: "GlobalProduct",
+      entityId: id.toString(),
+      metadata: {
+        productCode: existingProduct.productCode,
+        productName: existingProduct.name,
+        cascadeResult: {
+          deletedOrgCount: cascadeResult.deletedOrgCount,
+          deletedBranchCount: cascadeResult.deletedBranchCount,
+          affectedOrgs: cascadeResult.affectedOrgs,
+          affectedBranches: cascadeResult.affectedBranches
+        }
+      },
+    })
 
     return NextResponse.json({
       message: "Product deleted successfully",
