@@ -11,6 +11,12 @@ export type ErrorType =
   | 'SERVER_ERROR'
   | 'AUTHENTICATION_ERROR'
   | 'MFA_ERROR'
+  | 'DATABASE_ERROR'
+  | 'TIMEOUT_ERROR'
+  | 'RATE_LIMIT_ERROR'
+  | 'CONFLICT_ERROR'
+  | 'BAD_REQUEST_ERROR'
+  | 'INTERNAL_ERROR'
 
 export interface ErrorDetails {
   type: ErrorType
@@ -18,6 +24,9 @@ export interface ErrorDetails {
   field?: string
   code?: string
   statusCode: number
+  context?: Record<string, any>
+  recoverySuggestion?: string
+  retryable?: boolean
 }
 
 /**
@@ -29,34 +38,61 @@ export const ERROR_MESSAGES = {
   INVALID_EMAIL: 'Please enter a valid email address',
   INVALID_PASSWORD: 'Password must be at least 6 characters long',
   INVALID_ROLE: 'Please select a valid role',
+  INVALID_INPUT: 'Invalid input provided',
+  INVALID_FORMAT: (field: string) => `${field} has an invalid format`,
+  OUT_OF_RANGE: (field: string, min?: number, max?: number) => {
+    if (min !== undefined && max !== undefined) {
+      return `${field} must be between ${min} and ${max}`
+    }
+    return `${field} is out of acceptable range`
+  },
 
   // Permission errors
   ORGANIZATION_SCOPE: 'You can only manage users within your own organization',
   BRANCH_SCOPE: 'You can only manage users within your own branch',
   INSUFFICIENT_PERMISSIONS: 'You don\'t have permission to perform this action',
+  UNAUTHORIZED: 'Authentication required to access this resource',
+  FORBIDDEN: 'Access to this resource is forbidden',
 
   // Duplicate errors
   DUPLICATE_EMAIL: 'This email address is already registered. Please use a different email',
+  DUPLICATE_ENTRY: (field: string) => `This ${field} already exists`,
+  CONFLICT: 'The resource you\'re trying to modify has been changed by another user',
 
   // Not found errors
   USER_NOT_FOUND: 'User not found. It may have been deleted by another user',
   ORGANIZATION_NOT_FOUND: 'Organization not found',
   BRANCH_NOT_FOUND: 'Branch not found',
+  RESOURCE_NOT_FOUND: (resource: string) => `${resource} not found`,
+  NOT_FOUND: 'The requested resource was not found',
 
   // Network errors
   REQUEST_TIMEOUT: 'Request timed out. Please check your connection and try again',
   NETWORK_ERROR: 'Network error. Please check your connection and try again',
+  CONNECTION_ERROR: 'Unable to connect to the server. Please try again later',
 
   // Server errors
   UNABLE_TO_VERIFY_PERMISSIONS: 'Unable to verify permissions',
   DATABASE_ERROR: 'Database error. Please try again',
+  DATABASE_CONNECTION_ERROR: 'Unable to connect to database. Please try again later',
+  DATABASE_TIMEOUT: 'Database operation timed out. Please try again',
+  TRANSACTION_FAILED: 'Transaction failed. Please try again',
   UNKNOWN_ERROR: 'An unexpected error occurred. Please try again',
+  INTERNAL_ERROR: 'An internal server error occurred. Our team has been notified',
 
   // MFA errors
   DAILY_LIMIT_EXCEEDED: 'Daily OTP request limit exceeded. Please try again tomorrow.',
   COOLDOWN_ACTIVE: 'Please wait before requesting another OTP.',
   INVALID_OTP: 'Invalid OTP code. Please try again.',
-  OTP_EXPIRED: 'OTP has expired. Please request a new one.'
+  OTP_EXPIRED: 'OTP has expired. Please request a new one.',
+
+  // Rate limiting
+  RATE_LIMIT_EXCEEDED: 'Too many requests. Please slow down and try again later',
+
+  // Inventory specific
+  INSUFFICIENT_STOCK: 'Insufficient stock available',
+  INVALID_QUANTITY: 'Please enter a valid quantity',
+  NEGATIVE_STOCK: 'Stock quantity cannot be negative',
 } as const
 
 /**
@@ -274,3 +310,246 @@ export function handleError(error: any, context: string): { message: string; fie
   console.error(`Error in ${context}:`, error)
   return createUserFriendlyError(error)
 }
+
+/**
+ * Check if error is a database error
+ */
+export function isDatabaseError(error: any): boolean {
+  if (!error) return false
+  const errorMsg = error?.message || error?.toString() || ''
+  return errorMsg.includes('database') ||
+    errorMsg.includes('SQL') ||
+    errorMsg.includes('query') ||
+    errorMsg.includes('relation') ||
+    errorMsg.includes('ECONNREFUSED') ||
+    errorMsg.includes('ETIMEDOUT') ||
+    error?.code === 'ECONNREFUSED' ||
+    error?.code === 'ETIMEDOUT' ||
+    error?.code === '23505' || // Unique violation
+    error?.code === '23503' || // Foreign key violation
+    error?.code === '23502'    // Not null violation
+}
+
+/**
+ * Check if error is a timeout error
+ */
+export function isTimeoutError(error: any): boolean {
+  if (!error) return false
+  const errorMsg = error?.message || error?.toString() || ''
+  return errorMsg.includes('timeout') ||
+    errorMsg.includes('timed out') ||
+    errorMsg.includes('ETIMEDOUT') ||
+    error?.code === 'ETIMEDOUT'
+}
+
+/**
+ * Check if error is a conflict/concurrency error
+ */
+export function isConflictError(error: any): boolean {
+  if (!error) return false
+  const errorMsg = error?.message || error?.toString() || ''
+  return errorMsg.includes('conflict') ||
+    errorMsg.includes('concurrent') ||
+    errorMsg.includes('modified by another') ||
+    error?.code === '40001' || // Serialization failure
+    error?.code === '40P01'    // Deadlock
+}
+
+/**
+ * Check if error is retryable
+ */
+export function isRetryableError(error: any): boolean {
+  return isTimeoutError(error) ||
+    isConflictError(error) ||
+    (isDatabaseError(error) && error?.code === 'ETIMEDOUT')
+}
+
+/**
+ * Mask sensitive data in error context
+ */
+export function maskSensitiveData(data: any): any {
+  if (!data || typeof data !== 'object') return data
+
+  const masked = { ...data }
+  const sensitiveKeys = ['password', 'token', 'secret', 'apiKey', 'otp', 'pin']
+
+  for (const key of Object.keys(masked)) {
+    if (sensitiveKeys.some(sensitive => key.toLowerCase().includes(sensitive))) {
+      masked[key] = '***MASKED***'
+    } else if (typeof masked[key] === 'object' && masked[key] !== null) {
+      masked[key] = maskSensitiveData(masked[key])
+    }
+  }
+
+  return masked
+}
+
+/**
+ * Create detailed error for logging (with sensitive data masked)
+ */
+export function createDetailedError(error: any, context: string, additionalData?: Record<string, any>): {
+  error: string
+  context: string
+  timestamp: string
+  data?: Record<string, any>
+} {
+  return {
+    error: error?.message || error?.toString() || 'Unknown error',
+    context,
+    timestamp: new Date().toISOString(),
+    data: additionalData ? maskSensitiveData(additionalData) : undefined
+  }
+}
+
+/**
+ * Enhanced database error parser
+ */
+export function parseDatabaseError(error: any): ErrorDetails {
+  const errorMsg = error?.message || error?.toString() || ''
+  const code = error?.code
+
+  // PostgreSQL error codes
+  if (code === '23505') { // Unique violation
+    return {
+      type: 'DUPLICATE_ERROR',
+      message: ERROR_MESSAGES.DUPLICATE_ENTRY('record'),
+      statusCode: 409,
+      code,
+      retryable: false
+    }
+  }
+
+  if (code === '23503') { // Foreign key violation
+    return {
+      type: 'VALIDATION_ERROR',
+      message: 'Referenced resource does not exist',
+      statusCode: 400,
+      code,
+      retryable: false
+    }
+  }
+
+  if (code === '23502') { // Not null violation
+    return {
+      type: 'VALIDATION_ERROR',
+      message: ERROR_MESSAGES.REQUIRED_FIELD('field'),
+      statusCode: 400,
+      code,
+      retryable: false
+    }
+  }
+
+  if (code === '40001' || code === '40P01') { // Serialization failure / Deadlock
+    return {
+      type: 'CONFLICT_ERROR',
+      message: ERROR_MESSAGES.CONFLICT,
+      statusCode: 409,
+      code,
+      retryable: true,
+      recoverySuggestion: 'Please try again in a moment'
+    }
+  }
+
+  if (code === 'ECONNREFUSED') {
+    return {
+      type: 'DATABASE_ERROR',
+      message: ERROR_MESSAGES.DATABASE_CONNECTION_ERROR,
+      statusCode: 503,
+      code,
+      retryable: true,
+      recoverySuggestion: 'Please contact support if this persists'
+    }
+  }
+
+  if (code === 'ETIMEDOUT' || errorMsg.includes('timeout')) {
+    return {
+      type: 'TIMEOUT_ERROR',
+      message: ERROR_MESSAGES.DATABASE_TIMEOUT,
+      statusCode: 504,
+      code,
+      retryable: true,
+      recoverySuggestion: 'Try simplifying your request or try again later'
+    }
+  }
+
+  // Generic database error
+  return {
+    type: 'DATABASE_ERROR',
+    message: ERROR_MESSAGES.DATABASE_ERROR,
+    statusCode: 500,
+    code,
+    retryable: false
+  }
+}
+
+/**
+ * Validate input and throw descriptive error if invalid
+ */
+export function validateInput(value: any, fieldName: string, options?: {
+  required?: boolean
+  minLength?: number
+  maxLength?: number
+  pattern?: RegExp
+  custom?: (val: any) => boolean
+}): void {
+  if (options?.required && (value === null || value === undefined || value === '')) {
+    throw new Error(ERROR_MESSAGES.REQUIRED_FIELD(fieldName))
+  }
+
+  if (value !== null && value !== undefined && value !== '') {
+    if (typeof value === 'string') {
+      if (options?.minLength && value.length < options.minLength) {
+        throw new Error(`${fieldName} must be at least ${options.minLength} characters`)
+      }
+      if (options?.maxLength && value.length > options.maxLength) {
+        throw new Error(`${fieldName} must not exceed ${options.maxLength} characters`)
+      }
+      if (options?.pattern && !options.pattern.test(value)) {
+        throw new Error(ERROR_MESSAGES.INVALID_FORMAT(fieldName))
+      }
+    }
+
+    if (options?.custom && !options.custom(value)) {
+      throw new Error(ERROR_MESSAGES.INVALID_INPUT)
+    }
+  }
+}
+
+/**
+ * Validate numeric range
+ */
+export function validateRange(value: number, fieldName: string, min?: number, max?: number): void {
+  if (typeof value !== 'number' || isNaN(value)) {
+    throw new Error(ERROR_MESSAGES.INVALID_FORMAT(fieldName))
+  }
+
+  if (min !== undefined && value < min) {
+    throw new Error(ERROR_MESSAGES.OUT_OF_RANGE(fieldName, min, max))
+  }
+
+  if (max !== undefined && value > max) {
+    throw new Error(ERROR_MESSAGES.OUT_OF_RANGE(fieldName, min, max))
+  }
+}
+
+/**
+ * Safe async error wrapper - catches errors and returns ErrorDetails
+ */
+export async function safeAsync<T>(
+  fn: () => Promise<T>,
+  context: string
+): Promise<{ data?: T; error?: ErrorDetails }> {
+  try {
+    const data = await fn()
+    return { data }
+  } catch (error) {
+    console.error(`Error in ${context}:`, createDetailedError(error, context))
+
+    if (isDatabaseError(error)) {
+      return { error: parseDatabaseError(error) }
+    }
+
+    return { error: parseError(error) }
+  }
+}
+

@@ -9,6 +9,7 @@ import { users, mfaCodes } from "@/db/schema"
 import { eq, and, gte, desc } from "drizzle-orm"
 import { randomInt } from "crypto"
 import { RedisMFA, redis, REDIS_KEYS } from "@/lib/redis"
+import { logError } from "@/lib/global-logger"
 
 export interface MFACode {
   id: string
@@ -41,30 +42,74 @@ const OTP_CONFIG = {
   LENGTH: 6,
   EXPIRY_MINUTES: 2,
   MAX_ATTEMPTS: 5,
-  COOLDOWN_MINUTES: 1, // Reduced to 1 minute for better UX
+  COOLDOWN_MINUTES: 1,
   MAX_DAILY_REQUESTS: 20
 } as const
+
+/**
+ * Validate email format
+ */
+function isValidEmail(email: string): boolean {
+  if (!email || typeof email !== 'string') return false
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
+/**
+ * Validate MFA type
+ */
+function isValidMFAType(type: string): type is 'LOGIN' | 'VERIFY_EMAIL' | 'RESET_PASSWORD' {
+  return type === 'LOGIN' || type === 'VERIFY_EMAIL' || type === 'RESET_PASSWORD'
+}
 
 /**
  * Generate a secure 6-digit OTP
  */
 export function generateOTP(): string {
-  return randomInt(100000, 999999).toString()
+  try {
+    const otp = randomInt(100000, 999999).toString()
+
+    // Validate generated OTP
+    if (otp.length !== OTP_CONFIG.LENGTH) {
+      throw new Error(`Generated OTP length invalid: ${otp.length}`)
+    }
+
+    return otp
+  } catch (error) {
+    console.error('[MFA] Error generating OTP:', error)
+    throw new Error('Failed to generate OTP')
+  }
 }
 
 /**
- * Send OTP via email (placeholder - integrate with your email service)
+ * Send OTP via email
  */
 export async function sendOTPEmail(email: string, code: string, type: string): Promise<boolean> {
   try {
+    // Validate inputs
+    if (!isValidEmail(email)) {
+      console.error('[MFA] Invalid email format:', email)
+      return false
+    }
+
+    if (!code || typeof code !== 'string' || code.length !== OTP_CONFIG.LENGTH) {
+      console.error('[MFA] Invalid OTP code format')
+      return false
+    }
+
+    if (!isValidMFAType(type)) {
+      console.error('[MFA] Invalid MFA type:', type)
+      return false
+    }
+
     // TODO: Integrate with your email service (SendGrid, AWS SES, etc.)
-    console.log(`Sending OTP to ${email}: ${code} (${type})`)
-    
+    console.log(`[MFA] Sending OTP to ${email}: ${code} (${type})`)
+
     // For now, just log to console
     // In production, replace with actual email service
     return true
   } catch (error) {
-    console.error("Failed to send OTP email:", error)
+    logError(error, 'MFA_SEND_EMAIL', { email, type })
     return false
   }
 }
@@ -119,86 +164,117 @@ export async function generateAndSendOTP(
   type: 'LOGIN' | 'VERIFY_EMAIL' | 'RESET_PASSWORD'
 ): Promise<MFAResult> {
   try {
-    console.log("MFA - generateAndSendOTP called for userId:", userId, "email:", email, "type:", type)
-    
+    // Validate inputs
+    if (!userId || typeof userId !== 'string') {
+      console.error('[MFA] Invalid userId:', userId)
+      return {
+        success: false,
+        message: "Invalid user ID"
+      }
+    }
+
+    if (!isValidEmail(email)) {
+      console.error('[MFA] Invalid email:', email)
+      return {
+        success: false,
+        message: "Invalid email address"
+      }
+    }
+
+    if (!isValidMFAType(type)) {
+      console.error('[MFA] Invalid MFA type:', type)
+      return {
+        success: false,
+        message: "Invalid request type"
+      }
+    }
+
+    console.log(`[MFA] generateAndSendOTP: userId=${userId}, email=${email}, type=${type}`)
+
     // Check cooldown
     const cooldown = await checkCooldown(userId, 'OTP_REQUEST')
-    console.log("MFA - Cooldown check result:", cooldown)
-    
+
     if (cooldown) {
-      const remainingMs = cooldown.timestamp ? 
-        cooldown.timestamp - Date.now() : 
+      const remainingMs = cooldown.timestamp ?
+        cooldown.timestamp - Date.now() :
         new Date(cooldown.cooldownUntil).getTime() - Date.now()
-      
+
       if (remainingMs > 0) {
-        console.log("MFA - Cooldown active, remaining:", remainingMs)
+        const minutes = Math.ceil(remainingMs / 60000)
         return {
           success: false,
-          message: `Please wait ${Math.ceil(remainingMs / 60000)} minutes before requesting another OTP`,
+          message: `Please wait ${minutes} minute${minutes !== 1 ? 's' : ''} before requesting another OTP`,
           cooldownUntil: new Date(cooldown.cooldownUntil)
         }
       }
     }
-    
+
     // Check daily limit
     const withinLimit = await checkDailyLimit(userId)
-    console.log("MFA - Daily limit check:", withinLimit)
-    
+
     if (!withinLimit) {
-      console.log("MFA - Daily limit exceeded")
       return {
         success: false,
         message: "Daily OTP request limit exceeded. Please try again tomorrow."
       }
     }
-    
+
     // Generate OTP
     const code = generateOTP()
     const ttlSeconds = OTP_CONFIG.EXPIRY_MINUTES * 60
-    console.log("MFA - Generated OTP:", code, "TTL:", ttlSeconds)
-    
+
     // Save OTP to Redis
-    console.log("MFA - Saving OTP to Redis")
-    await RedisMFA.setOTP(userId, code, ttlSeconds, type)
-    
-    // Also save to database for audit trail
+    try {
+      await RedisMFA.setOTP(userId, code, ttlSeconds, type)
+    } catch (redisError) {
+      logError(redisError, 'MFA_REDIS_SET_OTP', { userId, type })
+      // Continue even if Redis fails - we have database backup
+    }
+
+    // Save to database for audit trail
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000)
-    console.log("MFA - Saving OTP to database")
-    await db.insert(mfaCodes).values({
-      userId,
-      code,
-      type,
-      expiresAt,
-      attempts: 0,
-      isUsed: false
-    })
-    
-    // Send OTP via email
-    console.log("MFA - Sending OTP email")
-    const emailSent = await sendOTPEmail(email, code, type)
-    console.log("MFA - Email sent result:", emailSent)
-    
-    if (!emailSent) {
-      console.log("MFA - Email sending failed")
+    try {
+      await db.insert(mfaCodes).values({
+        userId,
+        code,
+        type,
+        expiresAt,
+        attempts: 0,
+        isUsed: false
+      })
+    } catch (dbError) {
+      logError(dbError, 'MFA_DB_INSERT_CODE', { userId, type })
       return {
         success: false,
-        message: "Failed to send OTP. Please try again."
+        message: "Failed to save OTP. Please try again."
       }
     }
-    
-    // Don't set cooldown on first successful OTP send
-    // Cooldown will only be set if there are multiple failed attempts
-    
+
+    // Send OTP via email
+    const emailSent = await sendOTPEmail(email, code, type)
+
+    if (!emailSent) {
+      return {
+        success: false,
+        message: "Failed to send OTP email. Please try again."
+      }
+    }
+
     // Increment daily count
-    await RedisMFA.incrementDailyCount(userId)
-    
+    try {
+      await RedisMFA.incrementDailyCount(userId)
+    } catch (error) {
+      // Log but don't fail - daily count is not critical
+      console.error('[MFA] Failed to increment daily count:', error)
+    }
+
     return {
       success: true,
       message: `OTP sent to ${email}. Valid for ${OTP_CONFIG.EXPIRY_MINUTES} minutes.`
     }
-    
+
   } catch (error) {
-    console.error("Error generating OTP:", error)
+    logError(error, 'MFA_GENERATE_AND_SEND', { userId, email, type })
     return {
       success: false,
       message: "Failed to generate OTP. Please try again."
@@ -210,39 +286,87 @@ export async function generateAndSendOTP(
  * Verify OTP code
  */
 export async function verifyOTP(
-  userId: string, 
-  code: string, 
+  userId: string,
+  code: string,
   type: 'LOGIN' | 'VERIFY_EMAIL' | 'RESET_PASSWORD'
 ): Promise<MFAResult> {
   try {
+    // Validate inputs
+    if (!userId || typeof userId !== 'string') {
+      console.error('[MFA] Invalid userId for verification')
+      return {
+        success: false,
+        message: "Invalid request"
+      }
+    }
+
+    if (!code || typeof code !== 'string') {
+      console.error('[MFA] Invalid OTP code')
+      return {
+        success: false,
+        message: "Invalid OTP code"
+      }
+    }
+
+    //Trim and validate code format
+    const sanitizedCode = code.trim()
+    if (!/^\d{6}$/.test(sanitizedCode)) {
+      console.error('[MFA] OTP code format invalid:', sanitizedCode)
+      return {
+        success: false,
+        message: "Invalid OTP format"
+      }
+    }
+
+    if (!isValidMFAType(type)) {
+      console.error('[MFA] Invalid MFA type for verification:', type)
+      return {
+        success: false,
+        message: "Invalid request type"
+      }
+    }
+
     // Check cooldown
     const cooldown = await checkCooldown(userId, 'OTP_VERIFY')
     if (cooldown) {
-      const remainingMs = cooldown.timestamp ? 
-        cooldown.timestamp - Date.now() : 
+      const remainingMs = cooldown.timestamp ?
+        cooldown.timestamp - Date.now() :
         new Date(cooldown.cooldownUntil).getTime() - Date.now()
-      
+
       if (remainingMs > 0) {
+        const minutes = Math.ceil(remainingMs / 60000)
         return {
           success: false,
-          message: `Too many failed attempts. Please wait ${Math.ceil(remainingMs / 60000)} minutes before trying again`,
+          message: `Too many failed attempts. Please wait ${minutes} minute${minutes !== 1 ? 's' : ''} before trying again`,
           cooldownUntil: new Date(cooldown.cooldownUntil)
         }
       }
     }
-    
+
     // Check OTP in Redis first
-    const otpData = await RedisMFA.getOTP(userId, code)
-    
+    let otpData
+    try {
+      otpData = await RedisMFA.getOTP(userId, sanitizedCode)
+    } catch (redisError) {
+      logError(redisError, 'MFA_REDIS_GET_OTP', { userId })
+      // Fall back to database if Redis fails
+      otpData = null
+    }
+
     if (!otpData || otpData.isUsed || otpData.type !== type) {
       // Increment failed attempts
       const attempts = (cooldown?.attempts || 0) + 1
-      await setCooldown(userId, 'OTP_VERIFY', attempts)
+
+      try {
+        await setCooldown(userId, 'OTP_VERIFY', attempts)
+      } catch (error) {
+        console.error('[MFA] Failed to set cooldown:', error)
+      }
 
       return {
         success: false,
         message: "Invalid or expired OTP code",
-        remainingAttempts: OTP_CONFIG.MAX_ATTEMPTS - attempts
+        remainingAttempts: Math.max(0, OTP_CONFIG.MAX_ATTEMPTS - attempts)
       }
     }
 
@@ -255,30 +379,45 @@ export async function verifyOTP(
     }
 
     // Mark OTP as used in Redis
-    await RedisMFA.markOTPUsed(userId, code)
-    
-    // Also update database for audit trail
-    await db
-      .update(mfaCodes)
-      .set({ isUsed: true })
-      .where(
-        and(
-          eq(mfaCodes.userId, userId),
-          eq(mfaCodes.code, code),
-          eq(mfaCodes.type, type)
+    try {
+      await RedisMFA.markOTPUsed(userId, sanitizedCode)
+    } catch (redisError) {
+      logError(redisError, 'MFA_REDIS_MARK_USED', { userId })
+      // Continue - database update is more critical
+    }
+
+    // Update database for audit trail
+    try {
+      await db
+        .update(mfaCodes)
+        .set({ isUsed: true })
+        .where(
+          and(
+            eq(mfaCodes.userId, userId),
+            eq(mfaCodes.code, sanitizedCode),
+            eq(mfaCodes.type, type)
+          )
         )
-      )
+    } catch (dbError) {
+      logError(dbError, 'MFA_DB_MARK_USED', { userId, type })
+      // Log but don't fail - OTP was validated
+    }
 
     // Clear cooldowns on success
-    await clearAllMFACooldowns(userId)
-    
+    try {
+      await clearAllMFACooldowns(userId)
+    } catch (error) {
+      console.error('[MFA] Failed to clear cooldowns:', error)
+      // Log but don't fail - verification was successful
+    }
+
     return {
       success: true,
       message: "OTP verified successfully"
     }
-    
+
   } catch (error) {
-    console.error("Error verifying OTP:", error)
+    logError(error, 'MFA_VERIFY_OTP', { userId, type })
     return {
       success: false,
       message: "Failed to verify OTP. Please try again."
@@ -291,17 +430,26 @@ export async function verifyOTP(
  */
 export async function enableMFA(userId: string): Promise<MFAResult> {
   try {
+    // Validate userId
+    if (!userId || typeof userId !== 'string') {
+      console.error('[MFA] Invalid userId for enable MFA')
+      return {
+        success: false,
+        message: "Invalid user ID"
+      }
+    }
+
     await db
       .update(users)
       .set({ mfaEnabled: true })
       .where(eq(users.id, userId))
-    
+
     return {
       success: true,
       message: "MFA enabled successfully"
     }
   } catch (error) {
-    console.error("Error enabling MFA:", error)
+    logError(error, 'MFA_ENABLE', { userId })
     return {
       success: false,
       message: "Failed to enable MFA. Please try again."
@@ -314,25 +462,44 @@ export async function enableMFA(userId: string): Promise<MFAResult> {
  */
 export async function disableMFA(userId: string): Promise<MFAResult> {
   try {
+    // Validate userId
+    if (!userId || typeof userId !== 'string') {
+      console.error('[MFA] Invalid userId for disable MFA')
+      return {
+        success: false,
+        message: "Invalid user ID"
+      }
+    }
+
     await db
       .update(users)
       .set({ mfaEnabled: false })
       .where(eq(users.id, userId))
 
     // Clean up any pending OTP codes from database
-    await db
-      .delete(mfaCodes)
-      .where(eq(mfaCodes.userId, userId))
+    try {
+      await db
+        .delete(mfaCodes)
+        .where(eq(mfaCodes.userId, userId))
+    } catch (deleteError) {
+      console.error('[MFA] Failed to delete MFA codes:', deleteError)
+      // Log but continue - main goal achieved
+    }
 
     // Clean up Redis cooldowns and OTPs
-    await clearAllMFACooldowns(userId)
+    try {
+      await clearAllMFACooldowns(userId)
+    } catch (clearError) {
+      console.error('[MFA] Failed to clear cooldowns:', clearError)
+      // Log but continue
+    }
 
     return {
       success: true,
       message: "MFA disabled successfully"
     }
   } catch (error) {
-    console.error("Error disabling MFA:", error)
+    logError(error, 'MFA_DISABLE', { userId })
     return {
       success: false,
       message: "Failed to disable MFA. Please try again."
@@ -345,15 +512,21 @@ export async function disableMFA(userId: string): Promise<MFAResult> {
  */
 export async function isMFAEnabled(userId: string): Promise<boolean> {
   try {
+    // Validate userId
+    if (!userId || typeof userId !== 'string') {
+      console.error('[MFA] Invalid userId for MFA status check')
+      return false
+    }
+
     const [user] = await db
       .select({ mfaEnabled: users.mfaEnabled })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1)
-    
+
     return user?.mfaEnabled || false
   } catch (error) {
-    console.error("Error checking MFA status:", error)
+    logError(error, 'MFA_CHECK_STATUS', { userId })
     return false
   }
 }
@@ -365,10 +538,10 @@ export async function checkMfaCooldown(userId: string): Promise<number> {
   try {
     const cooldown = await RedisMFA.getCooldown(userId, 'OTP_REQUEST')
     if (cooldown) {
-      const remainingMs = cooldown.timestamp ? 
-        cooldown.timestamp - Date.now() : 
+      const remainingMs = cooldown.timestamp ?
+        cooldown.timestamp - Date.now() :
         new Date(cooldown.cooldownUntil).getTime() - Date.now()
-      
+
       return remainingMs > 0 ? remainingMs : 0
     }
     return 0

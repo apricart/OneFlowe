@@ -74,6 +74,16 @@ export type YearlySalesSplineChartProps = {
 
 export function YearlySalesSplineChart({ yearlySalesData, avgSales, label = "Purchase" }: YearlySalesSplineChartProps) {
   const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+
+  // Add null safety checks
+  if (!yearlySalesData || yearlySalesData.length === 0) {
+    return (
+      <div className="animate-fade-in p-6 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+        <p className="text-slate-500 dark:text-slate-400 text-center">No sales data available</p>
+      </div>
+    )
+  }
+
   const totalSales = yearlySalesData.reduce((sum, item) => sum + item.sales, 0)
   const peakMonth = yearlySalesData.reduce((max, item) => item.sales > max.sales ? item : max, yearlySalesData[0])
 
@@ -298,9 +308,19 @@ export function ChartTooltip({
 export function TrendAreaChart({ data, className, label = "Purchase" }: { data: TrendPoint[]; className?: string; label?: string }) {
   const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
   const chartData: ChartDatum[] = useMemo(
-    () => data.map((point) => ({ label: point.label, value: point.value })),
+    () => data?.map((point) => ({ label: point.label, value: point.value })) || [],
     [data]
   )
+
+  if (!chartData || chartData.length === 0) {
+    return (
+      <div className={className}>
+        <div className="p-6 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+          <p className="text-slate-500 dark:text-slate-400 text-center">No data available</p>
+        </div>
+      </div>
+    )
+  }
 
   const totalValue = chartData.reduce((sum, item) => sum + item.value, 0)
   const peakDay = chartData.reduce((max, item) => item.value > max.value ? item : max, chartData[0])
@@ -534,11 +554,18 @@ export default function SalesBarChart({ data, label = "Purchase" }: Props & { la
   }, [])
 
   const isDark = mounted && theme === "dark"
-  const totalRevenue = data.length > 0 ? data.reduce((sum, item) => sum + item.value, 0) : 0
-  const avgRevenue = data.length > 0 ? Math.round(totalRevenue / data.length) : 0
-  const peakMonth = data.length > 0
-    ? data.reduce((max, item) => item.value > max.value ? item : max, data[0])
-    : { month: "N/A", value: 0 }
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="p-6 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+        <p className="text-slate-500 dark:text-slate-400 text-center">No data available</p>
+      </div>
+    )
+  }
+
+  const totalRevenue = data.reduce((sum, item) => sum + item.value, 0)
+  const avgRevenue = Math.round(totalRevenue / data.length)
+  const peakMonth = data.reduce((max, item) => item.value > max.value ? item : max, data[0])
 
   return (
     <div className="space-y-6">

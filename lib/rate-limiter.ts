@@ -27,25 +27,72 @@ const RATE_LIMITS = {
 
 export type RateLimitType = keyof typeof RATE_LIMITS
 
+// Validate rate limit configuration on startup
+Object.entries(RATE_LIMITS).forEach(([key, config]) => {
+    if (config.requests <= 0 || config.windowSeconds <= 0) {
+        console.error(`[RateLimit] Invalid configuration for ${key}:`, config)
+    }
+})
+
 // Redis key patterns for rate limiting
-const RATE_LIMIT_KEY = (type: string, identifier: string) =>
-    `rate_limit:${type}:${identifier}`
+const RATE_LIMIT_KEY = (type: string, identifier: string) => {
+    if (!type || !identifier) {
+        throw new Error('[RateLimit] type and identifier are required for rate limit key')
+    }
+    return `rate_limit:${type}:${identifier}`
+}
 
 /**
  * Get client identifier for rate limiting
  * Uses IP address or user ID if available
  */
 export async function getClientIdentifier(userId?: string): Promise<string> {
-    if (userId) {
-        return `user:${userId}`
+    try {
+        // Validate and sanitize userId
+        if (userId) {
+            if (typeof userId !== 'string' || userId.trim().length === 0) {
+                console.warn('[RateLimit] Invalid userId provided, falling back to IP')
+            } else {
+                return `user:${userId.trim()}`
+            }
+        }
+
+        const headersList = await headers()
+        const forwardedFor = headersList.get("x-forwarded-for")
+        const realIp = headersList.get("x-real-ip")
+
+        // Parse forwarded-for header (may contain multiple IPs)
+        let ip = "unknown"
+        if (forwardedFor) {
+            const ips = forwardedFor.split(",").map(ip => ip.trim())
+            ip = ips[0] || "unknown"
+        } else if (realIp) {
+            ip = realIp.trim()
+        }
+
+        // Validate IP format (basic check)
+        if (ip !== "unknown" && !isValidIP(ip)) {
+            console.warn(`[RateLimit] Invalid IP detected: ${ip}`)
+            ip = "unknown"
+        }
+
+        return `ip:${ip}`
+    } catch (error) {
+        console.error('[RateLimit] Error getting client identifier:', error)
+        return 'ip:unknown'
     }
+}
 
-    const headersList = await headers()
-    const forwardedFor = headersList.get("x-forwarded-for")
-    const realIp = headersList.get("x-real-ip")
-    const ip = forwardedFor?.split(",")[0] || realIp || "unknown"
+/**
+ * Basic IP validation (supports IPv4 and basic IPv6)
+ */
+function isValidIP(ip: string): boolean {
+    // IPv4 pattern
+    const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/
+    // Basic IPv6 pattern (simplified)
+    const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/
 
-    return `ip:${ip}`
+    return ipv4Pattern.test(ip) || ipv6Pattern.test(ip)
 }
 
 /**
@@ -57,11 +104,28 @@ export async function checkRateLimit(
     type: RateLimitType = "api"
 ): Promise<{ allowed: boolean; remaining: number; resetIn: number }> {
     try {
+        // Validate inputs
+        if (!identifier || typeof identifier !== 'string') {
+            console.error('[RateLimit] Invalid identifier')
+            return { allowed: false, remaining: 0, resetIn: 60 }
+        }
+
+        if (!type || !(type in RATE_LIMITS)) {
+            console.error('[RateLimit] Invalid rate limit type:', type)
+            return { allowed: false, remaining: 0, resetIn: 60 }
+        }
+
         const config = RATE_LIMITS[type]
         const key = RATE_LIMIT_KEY(type, identifier)
 
         // Increment counter
         const current = await redis.incr(key)
+
+        // Validate counter value
+        if (typeof current !== 'number' || current < 0) {
+            console.error('[RateLimit] Invalid counter value from Redis:', current)
+            return { allowed: true, remaining: config.requests, resetIn: config.windowSeconds }
+        }
 
         // Set expiry on first request
         if (current === 1) {
@@ -70,15 +134,17 @@ export async function checkRateLimit(
 
         // Get TTL for reset time
         const ttl = await redis.ttl(key)
+        const validTTL = typeof ttl === 'number' && ttl > 0 ? ttl : config.windowSeconds
 
         return {
             allowed: current <= config.requests,
             remaining: Math.max(0, config.requests - current),
-            resetIn: ttl > 0 ? ttl : config.windowSeconds
+            resetIn: validTTL
         }
     } catch (error) {
         // If Redis fails, allow the request but log the error
-        console.error("Rate limit check failed:", error)
+        console.error("[RateLimit] Rate limit check failed:", error)
+        // Return permissive values to avoid blocking legitimate traffic during Redis outage
         return { allowed: true, remaining: 0, resetIn: 0 }
     }
 }
@@ -87,16 +153,21 @@ export async function checkRateLimit(
  * Rate limit response with proper headers
  */
 export function rateLimitResponse(resetIn: number): NextResponse {
+    // Validate resetIn
+    const validResetIn = typeof resetIn === 'number' && resetIn > 0 ? resetIn : 60
+
     return NextResponse.json(
         {
             error: "Too many requests. Please try again later.",
-            retryAfter: resetIn
+            retryAfter: validResetIn,
+            message: `Please wait ${validResetIn} seconds before trying again.`
         },
         {
             status: 429,
             headers: {
-                "Retry-After": String(resetIn),
-                "X-RateLimit-Remaining": "0"
+                "Retry-After": String(validResetIn),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + validResetIn)
             }
         }
     )
@@ -110,14 +181,21 @@ export async function withRateLimit(
     type: RateLimitType = "api",
     userId?: string
 ): Promise<NextResponse | null> {
-    const identifier = await getClientIdentifier(userId)
-    const { allowed, remaining, resetIn } = await checkRateLimit(identifier, type)
+    try {
+        const identifier = await getClientIdentifier(userId)
+        const { allowed, remaining, resetIn } = await checkRateLimit(identifier, type)
 
-    if (!allowed) {
-        return rateLimitResponse(resetIn)
+        if (!allowed) {
+            console.warn(`[RateLimit] Rate limit exceeded for ${identifier} on ${type} endpoint`)
+            return rateLimitResponse(resetIn)
+        }
+
+        return null
+    } catch (error) {
+        console.error('[RateLimit] Error in withRateLimit:', error)
+        // Allow request on error to avoid false positives
+        return null
     }
-
-    return null
 }
 
 /**
@@ -125,8 +203,61 @@ export async function withRateLimit(
  * Returns headers to add to successful responses
  */
 export function getRateLimitHeaders(remaining: number, resetIn: number): Record<string, string> {
+    // Validate inputs
+    const validRemaining = typeof remaining === 'number' && remaining >= 0 ? remaining : 0
+    const validResetIn = typeof resetIn === 'number' && resetIn > 0 ? resetIn : 0
+
     return {
-        "X-RateLimit-Remaining": String(remaining),
-        "X-RateLimit-Reset": String(resetIn)
+        "X-RateLimit-Remaining": String(validRemaining),
+        "X-RateLimit-Reset": String(validResetIn),
+        "X-RateLimit-Limit": String(RATE_LIMITS.api.requests) // Default to api limit
+    }
+}
+
+/**
+ * Reset rate limit for a specific identifier (admin function)
+ */
+export async function resetRateLimit(identifier: string, type: RateLimitType): Promise<boolean> {
+    try {
+        if (!identifier || !type) {
+            console.error('[RateLimit] Invalid parameters for resetRateLimit')
+            return false
+        }
+
+        const key = RATE_LIMIT_KEY(type, identifier)
+        await redis.del(key)
+        console.log(`[RateLimit] Reset rate limit for ${identifier} on ${type}`)
+        return true
+    } catch (error) {
+        console.error('[RateLimit] Failed to reset rate limit:', error)
+        return false
+    }
+}
+
+/**
+ * Get current rate limit status for an identifier
+ */
+export async function getRateLimitStatus(
+    identifier: string,
+    type: RateLimitType
+): Promise<{ current: number; limit: number; resetIn: number } | null> {
+    try {
+        if (!identifier || !type) {
+            return null
+        }
+
+        const key = RATE_LIMIT_KEY(type, identifier)
+        const current = await redis.get(key)
+        const ttl = await redis.ttl(key)
+        const config = RATE_LIMITS[type]
+
+        return {
+            current: typeof current === 'number' ? current : 0,
+            limit: config.requests,
+            resetIn: typeof ttl === 'number' && ttl > 0 ? ttl : config.windowSeconds
+        }
+    } catch (error) {
+        console.error('[RateLimit] Failed to get rate limit status:', error)
+        return null
     }
 }

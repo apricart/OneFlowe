@@ -2,100 +2,195 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, branches, users } from "@/db/schema"
+import { orders, orderItems, branches, users, groups, categories, globalProducts } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm"
+import { handleError } from "@/lib/error-handler"
+import { logError } from "@/lib/global-logger"
+import { isValidRole } from "@/lib/rbac"
+import { getCached, generateCacheKey, invalidateCache } from "@/lib/cache-utils"
+
+function parseAndValidateDate(dateStr: string | null, paramName: string): Date | null {
+    if (!dateStr) return null
+    try {
+        const date = new Date(dateStr)
+        if (isNaN(date.getTime())) {
+            throw new Error(`Invalid ${paramName}: ${dateStr}`)
+        }
+        const now = Date.now()
+        const tenYearsAgo = now - (10 * 365 * 24 * 60 * 60 * 1000)
+        const oneYearFromNow = now + (365 * 24 * 60 * 60 * 1000)
+        if (date.getTime() < tenYearsAgo || date.getTime() > oneYearFromNow) {
+            console.warn(`[ProductSummary] ${paramName} outside reasonable range: ${dateStr}`)
+        }
+        return date
+    } catch (error) {
+        console.error(`[ProductSummary] Error parsing ${paramName}:`, error)
+        return null
+    }
+}
+
+function parseNumericId(value: string | null, paramName: string): number | null {
+    if (!value || value === "all") return null
+    const parsed = parseInt(value, 10)
+    if (isNaN(parsed) || parsed <= 0) {
+        console.warn(`[ProductSummary] Invalid ${paramName}: ${value}`)
+        return null
+    }
+    return parsed
+}
 
 export async function GET(req: NextRequest) {
     try {
         const session = await getServerSession(authOptions)
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        if (!session?.user) {
+            return NextResponse.json(
+                { error: "Unauthorized", message: "Authentication required" },
+                { status: 401 }
+            )
+        }
 
         const userId = (session.user as any).id
         const userRole = (session.user as any).role
-        const role = userRole ? userRole.toUpperCase() : ""
+        const userOrgId = (session.user as any).organizationId
+        const userBranchId = (session.user as any).branchId
+
+        if (!userId || typeof userId !== 'string') {
+            console.error('[ProductSummary] Invalid user ID in session')
+            return NextResponse.json(
+                { error: "Invalid session", message: "User ID not found" },
+                { status: 401 }
+            )
+        }
+
+        const role = userRole ? String(userRole).toUpperCase() : ""
+        if (!isValidRole(role as any)) {
+            console.error('[ProductSummary] Invalid role:', userRole)
+            return NextResponse.json(
+                { error: "Invalid role", message: "User role is invalid" },
+                { status: 403 }
+            )
+        }
 
         const url = new URL(req.url)
-        const startDate = url.searchParams.get("startDate")
-        const endDate = url.searchParams.get("endDate")
-        const branchIdParam = url.searchParams.get("branchId")
-        const organizationIdParam = url.searchParams.get("organizationId")
-        const groupIdParam = url.searchParams.get("groupId")
+        const startDate = parseAndValidateDate(url.searchParams.get("startDate"), "startDate")
+        const endDate = parseAndValidateDate(url.searchParams.get("endDate"), "endDate")
+        const branchId = parseNumericId(url.searchParams.get("branchId"), "branchId")
+        const organizationId = parseNumericId(url.searchParams.get("organizationId"), "organizationId")
+        const groupId = parseNumericId(url.searchParams.get("groupId"), "groupId")
 
-        // Get user context for strict RBAC
-        const [currentUser] = await db.select({
-            organizationId: users.organizationId,
-            branchId: users.branchId
-        }).from(users).where(eq(users.id, userId)).limit(1)
-
-        const conditions = []
-
-        // 1. Role-Based Access Control
-        if (role === "SUPER_ADMIN") {
-            if (organizationIdParam && organizationIdParam !== "all") {
-                conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
-            }
-            if (branchIdParam && branchIdParam !== "all") {
-                conditions.push(eq(orders.branchId, Number(branchIdParam)))
-            }
-            if (groupIdParam && groupIdParam !== "all") {
-                conditions.push(eq(branches.groupId, Number(groupIdParam)))
-            }
-        } else if (role === "HEAD_OFFICE") {
-            const orgId = currentUser?.organizationId
-            if (!orgId) return NextResponse.json({ error: "Organization not found" }, { status: 403 })
-
-            conditions.push(eq(orders.organizationId, orgId))
-
-            if (branchIdParam && branchIdParam !== "all") {
-                conditions.push(eq(orders.branchId, Number(branchIdParam)))
-            }
-            if (groupIdParam && groupIdParam !== "all") {
-                conditions.push(eq(branches.groupId, Number(groupIdParam)))
-            }
-        } else if (role === "BRANCH_ADMIN" || role === "BRANCH_MANAGER") {
-            const bId = currentUser?.branchId
-            if (!bId) return NextResponse.json({ error: "Branch not assigned" }, { status: 403 })
-            conditions.push(eq(orders.branchId, bId))
-        }
-
-        // 2. Date Filtering
-        if (startDate) {
-            const start = new Date(startDate)
-            start.setHours(0, 0, 0, 0)
-            conditions.push(gte(orders.createdAt, start))
-        }
-        if (endDate) {
-            const end = new Date(endDate)
-            end.setHours(23, 59, 59, 999)
-            conditions.push(lte(orders.createdAt, end))
-        }
-
-        // 3. Execution with Aggregation
-        const data = await db
-            .select({
-                productName: orderItems.productName,
-                productCode: orderItems.productCode,
-                unit: orderItems.unit,
-                branchName: branches.name,
-                totalQuantity: sql<number>`sum(${orderItems.quantity})`.mapWith(Number),
-                totalRevenue: sql<number>`sum(${orderItems.priceCents} * ${orderItems.quantity})`.mapWith(Number),
-                orderCount: sql<number>`count(distinct ${orderItems.orderId})`.mapWith(Number)
-            })
-            .from(orderItems)
-            .innerJoin(orders, eq(orderItems.orderId, orders.id))
-            .innerJoin(branches, eq(orders.branchId, branches.id))
-            .where(and(...conditions))
-            .groupBy(
-                orderItems.productName,
-                orderItems.productCode,
-                orderItems.unit,
-                branches.name
+        if (startDate && endDate && startDate > endDate) {
+            return NextResponse.json(
+                { error: "Invalid date range", message: "Start date must be before end date" },
+                { status: 400 }
             )
-            .orderBy(desc(sql`sum(${orderItems.priceCents} * ${orderItems.quantity})`))
+        }
 
-        return NextResponse.json({ items: data })
+        const cacheKey = generateCacheKey('product-summary', {
+            role,
+            userId,
+            startDate: startDate?.toISOString(),
+            endDate: endDate?.toISOString(),
+            branchId,
+            organizationId,
+            groupId
+        })
+
+        const fetchData = async () => {
+            const conditions = []
+
+            if (role === "SUPER_ADMIN") {
+                if (organizationId) conditions.push(eq(orders.organizationId, organizationId))
+                if (branchId) conditions.push(eq(orders.branchId, branchId))
+                if (groupId) conditions.push(eq(branches.groupId, groupId))
+            } else if (role === "HEAD_OFFICE") {
+                if (!userOrgId) {
+                    throw new Error("No organization assigned to user")
+                }
+                conditions.push(eq(orders.organizationId, userOrgId))
+                if (branchId) conditions.push(eq(orders.branchId, branchId))
+                if (groupId) conditions.push(eq(branches.groupId, groupId))
+            } else if (role === "BRANCH_ADMIN" || role === "BRANCH_MANAGER" || role === "ORDER_PORTAL") {
+                if (!userBranchId) {
+                    throw new Error("No branch assigned to user")
+                }
+                conditions.push(eq(orders.branchId, userBranchId))
+            } else {
+                throw new Error("Insufficient permissions")
+            }
+
+            if (startDate) {
+                const start = new Date(startDate)
+                start.setHours(0, 0, 0, 0)
+                conditions.push(gte(orders.createdAt, start))
+            }
+            if (endDate) {
+                const end = new Date(endDate)
+                end.setHours(23, 59, 59, 999)
+                conditions.push(lte(orders.createdAt, end))
+            }
+
+            const data = await db
+                .select({
+                    orderDate: orders.createdAt,
+                    userEmail: users.email,
+                    employeeId: users.id,
+                    groupName: groups.name,
+                    productName: orderItems.productName,
+                    productCode: orderItems.productCode,
+                    categoryName: sql<string>`COALESCE((SELECT c2.name FROM categories c2 WHERE c2.id = ${categories.parentId}), ${categories.name})`,
+                    subCategoryName: sql<string>`CASE WHEN ${categories.parentId} IS NOT NULL THEN ${categories.name} ELSE NULL END`,
+                    branchName: branches.name,
+                    quantity: orderItems.quantity,
+                    priceCents: orderItems.priceCents,
+                    totalAmount: sql<number>`${orderItems.priceCents} * ${orderItems.quantity}`.mapWith(Number),
+                    orderStatus: orders.status,
+                    orderId: orders.id
+                })
+                .from(orderItems)
+                .innerJoin(orders, eq(orderItems.orderId, orders.id))
+                .innerJoin(branches, eq(orders.branchId, branches.id))
+                .innerJoin(users, eq(orders.createdByUserId, users.id))
+                .leftJoin(groups, eq(branches.groupId, groups.id))
+                .leftJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
+                .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+                .where(conditions.length > 0 ? and(...conditions) : undefined)
+                .orderBy(desc(orders.createdAt))
+                .limit(5000)
+
+            return data
+        }
+
+        const data = await getCached(cacheKey, fetchData, { ttl: 300 })
+
+        return NextResponse.json({
+            items: data,
+            metadata: {
+                count: data.length,
+                cached: true,
+                filters: {
+                    startDate: startDate?.toISOString(),
+                    endDate: endDate?.toISOString(),
+                    branchId,
+                    organizationId,
+                    groupId
+                }
+            }
+        })
+
     } catch (error: any) {
-        console.error("Product Summary API Error:", error)
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+        logError(error, 'PRODUCT_SUMMARY_API', {
+            url: req.url,
+            method: req.method
+        })
+
+        const errorResponse = handleError(error, 'Product Summary API')
+
+        return NextResponse.json(
+            {
+                error: "Internal Server Error",
+                message: errorResponse.message || "An unexpected error occurred"
+            },
+            { status: 500 }
+        )
     }
 }

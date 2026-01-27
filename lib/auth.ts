@@ -4,8 +4,14 @@ import { db } from "@/lib/db"
 import { sessions, users } from "@/db/schema"
 import { and, eq } from "drizzle-orm"
 import { authOptions } from "./auth-options"
+import { logError } from "@/lib/global-logger"
 
 const INACTIVITY_TIMEOUT_MIN = Number(process.env.INACTIVITY_TIMEOUT_MINUTES || 30)
+
+// Validate inactivity timeout configuration
+if (isNaN(INACTIVITY_TIMEOUT_MIN) || INACTIVITY_TIMEOUT_MIN < 0) {
+  console.warn(`Invalid INACTIVITY_TIMEOUT_MINUTES: ${process.env.INACTIVITY_TIMEOUT_MINUTES}. Using default: 30`)
+}
 
 export type CurrentUser = {
   id: string
@@ -15,14 +21,46 @@ export type CurrentUser = {
 
 import { cookies } from 'next/headers'
 
+/**
+ * Get current authenticated user
+ * @returns CurrentUser or null if not authenticated
+ */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  // const headerList = headers()
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return null
-  return {
-    id: (session.user as any).id,
-    email: session.user.email || "",
-    role: ((session.user as any).role || "BRANCH_ADMIN") as Role,
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user) {
+      return null
+    }
+
+    // Validate session user data
+    const userId = (session.user as any).id
+    const email = session.user.email
+    const role = (session.user as any).role
+
+    if (!userId || typeof userId !== 'string') {
+      console.error('[Auth] Invalid user ID in session')
+      return null
+    }
+
+    if (!email || typeof email !== 'string') {
+      console.error('[Auth] Invalid email in session')
+      return null
+    }
+
+    if (!role || typeof role !== 'string') {
+      console.error('[Auth] Invalid role in session')
+      return null
+    }
+
+    return {
+      id: userId,
+      email: email,
+      role: role as Role || "BRANCH_ADMIN",
+    }
+  } catch (error) {
+    logError(error, 'GET_CURRENT_USER')
+    return null
   }
 }
 
@@ -33,36 +71,159 @@ export type RequestScope = {
   branchId: number | null
 }
 
+/**
+ * Get request scope with user context
+ * @returns RequestScope or null if not authenticated
+ */
 export async function getRequestScope(): Promise<RequestScope | null> {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return null
-  const userId = (session.user as any).id as string
-  const role = ((session.user as any).role || "BRANCH_ADMIN") as Role
-  // Super Admin can see everything; avoid extra DB call
-  if (role === "SUPER_ADMIN") {
-    return { role, userId, organizationId: null, branchId: null }
-  }
-  const [row] = await db
-    .select({ organizationId: users.organizationId, branchId: users.branchId })
-    .from(users)
-    .where(eq(users.id, userId))
-  return {
-    role,
-    userId,
-    organizationId: (row?.organizationId ?? null) as any,
-    branchId: (row?.branchId ?? null) as any,
+  try {
+    const session = await getServerSession(authOptions)
+
+    if (!session?.user) {
+      return null
+    }
+
+    const userId = (session.user as any).id as string
+    const role = ((session.user as any).role || "BRANCH_ADMIN") as Role
+
+    // Validate user ID
+    if (!userId || typeof userId !== 'string') {
+      console.error('[Auth] Invalid user ID in session for request scope')
+      return null
+    }
+
+    // Super Admin can see everything; avoid extra DB call
+    if (role === "SUPER_ADMIN") {
+      return { role, userId, organizationId: null, branchId: null }
+    }
+
+    // Fetch user's organization and branch with error handling
+    try {
+      const [row] = await db
+        .select({ organizationId: users.organizationId, branchId: users.branchId })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1)
+
+      if (!row) {
+        console.warn(`[Auth] User ${userId} not found in database for request scope`)
+        return { role, userId, organizationId: null, branchId: null }
+      }
+
+      return {
+        role,
+        userId,
+        organizationId: (row?.organizationId ?? null) as any,
+        branchId: (row?.branchId ?? null) as any,
+      }
+    } catch (dbError) {
+      logError(dbError, 'GET_REQUEST_SCOPE_DB_QUERY', { userId, role })
+      // Return partial scope rather than failing entirely
+      return { role, userId, organizationId: null, branchId: null }
+    }
+  } catch (error) {
+    logError(error, 'GET_REQUEST_SCOPE')
+    return null
   }
 }
 
-export async function touchSession(userId: string) {
-  await db.update(sessions).set({ lastActivityAt: new Date() }).where(and(eq(sessions.userId, userId)))
+/**
+ * Touch session to update last activity timestamp
+ * @param userId - User ID to update session for
+ */
+export async function touchSession(userId: string): Promise<void> {
+  try {
+    // Validate user ID
+    if (!userId || typeof userId !== 'string') {
+      console.error('[Auth] Invalid user ID for touch session')
+      return
+    }
+
+    await db
+      .update(sessions)
+      .set({ lastActivityAt: new Date() })
+      .where(and(eq(sessions.userId, userId)))
+
+  } catch (error) {
+    logError(error, 'TOUCH_SESSION', { userId })
+    // Don't throw - session touch failures shouldn't break the app
+  }
 }
 
-export async function isSessionInactive(lastActivity: Date) {
-  const now = Date.now()
-  const diffMin = (now - lastActivity.getTime()) / 60000
-  return diffMin > INACTIVITY_TIMEOUT_MIN
+/**
+ * Check if session is inactive based on last activity
+ * @param lastActivity - Last activity timestamp
+ * @returns Promise<boolean> indicating if session is inactive
+ */
+export async function isSessionInactive(lastActivity: Date | null | undefined): Promise<boolean> {
+  try {
+    // Handle null or undefined input
+    if (!lastActivity) {
+      console.warn('[Auth] No last activity provided, considering session inactive')
+      return true
+    }
+
+    // Validate last activity is a valid date
+    if (!(lastActivity instanceof Date) || isNaN(lastActivity.getTime())) {
+      console.error('[Auth] Invalid lastActivity date')
+      return true
+    }
+
+    const now = Date.now()
+    const lastActivityTime = lastActivity.getTime()
+
+    // Validate we're not dealing with future dates (clock skew)
+    if (lastActivityTime > now + 60000) { // Allow 1 minute clock skew
+      console.warn('[Auth] Last activity is in the future, possible clock skew')
+      return true
+    }
+
+    const diffMin = (now - lastActivityTime) / 60000
+    const timeoutMin = Math.max(INACTIVITY_TIMEOUT_MIN, 1) // Minimum 1 minute
+
+    return diffMin > timeoutMin
+  } catch (error) {
+    logError(error, 'IS_SESSION_INACTIVE', { lastActivity })
+    // On error, consider session inactive for security
+    return true
+  }
+}
+
+/**
+ * Validate role is a valid system role
+ * @param role - Role string to validate
+ * @returns boolean indicating if role is valid
+ */
+export function isValidRole(role: string | undefined | null): role is Role {
+  if (!role || typeof role !== 'string') {
+    return false
+  }
+
+  const validRoles: Role[] = ['SUPER_ADMIN', 'HEAD_OFFICE', 'BRANCH_ADMIN', 'ORDER_PORTAL']
+  return validRoles.includes(role as Role)
+}
+
+/**
+ * Safely get user role with fallback
+ * @param session - Session object
+ * @returns Valid role or default BRANCH_ADMIN
+ */
+export function getSafeUserRole(session: any): Role {
+  try {
+    const role = session?.user?.role
+
+    if (isValidRole(role)) {
+      return role
+    }
+
+    console.warn('[Auth] Invalid or missing role in session, using BRANCH_ADMIN as default')
+    return 'BRANCH_ADMIN'
+  } catch (error) {
+    console.error('[Auth] Error getting user role:', error)
+    return 'BRANCH_ADMIN'
+  }
 }
 
 // Convenience: create SUPER_ADMIN role and first user if not exists (optional bootstrap)
 // Optionally implement bootstrap via a separate script using Drizzle directly
+

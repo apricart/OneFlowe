@@ -4,11 +4,38 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { budgets, branches, auditLogs } from "@/db/schema"
 import { and, eq } from "drizzle-orm"
+import { handleError } from "@/lib/error-handler"
+import { logError } from "@/lib/global-logger"
 
+/**
+ * Validate numeric ID parameter
+ */
+function validateNumericId(value: string | undefined | null, paramName: string): number | null {
+  if (!value) return null
+
+  if (!/^\d+$/.test(value)) {
+    console.warn(`[Budgets] Invalid ${paramName}: ${value}`)
+    return null
+  }
+
+  const num = parseInt(value, 10)
+  if (isNaN(num) || num <= 0) {
+    console.warn(`[Budgets] ${paramName} out of range: ${num}`)
+    return null
+  }
+
+  return num
+}
+
+/**
+ * GET /api/v1/budgets - Fetch budget information
+ */
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
     const role = (session.user as any).role
     let orgId = (session.user as any).organizationId
@@ -19,11 +46,19 @@ export async function GET(req: NextRequest) {
     const branchIdParam = searchParams.get("branchId")
     const orgIdParam = searchParams.get("organizationId")
 
+    // Validate organization ID from session
+    if (orgId && !/^\d+$/.test(String(orgId))) {
+      console.error('[Budgets] Invalid organizationId in session')
+      return NextResponse.json({ error: "Invalid session data" }, { status: 400 })
+    }
+
     // For admin users using context selector, accept organizationId from query param
     if (orgIdParam && (role === "HEAD_OFFICE" || role === "SUPER_ADMIN")) {
-      const parsedOrgId = parseInt(orgIdParam)
-      if (Number.isFinite(parsedOrgId)) {
+      const parsedOrgId = validateNumericId(orgIdParam, "organizationId")
+      if (parsedOrgId) {
         orgId = parsedOrgId
+      } else {
+        return NextResponse.json({ error: "Invalid organization ID" }, { status: 400 })
       }
     }
 
@@ -31,6 +66,13 @@ export async function GET(req: NextRequest) {
     if (allParam && (role === "HEAD_OFFICE" || role === "SUPER_ADMIN")) {
       try {
         const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
+
+        // Validate organization context for HEAD_OFFICE
+        if (role === "HEAD_OFFICE" && !orgId) {
+          return NextResponse.json({
+            error: "Organization context required for HEAD_OFFICE users"
+          }, { status: 400 })
+        }
 
         // Use LEFT JOIN to get all branches, even if they don't have budgets for current period yet
         const allBranches = await db
@@ -69,17 +111,19 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({ budgets: budgetsWithRemaining })
       } catch (err: any) {
-        console.error("Error fetching budgets:", err)
-        return NextResponse.json({ error: err.message }, { status: 500 })
+        logError(err, 'BUDGETS_GET_ALL')
+        return NextResponse.json({ error: err.message || "Failed to fetch budgets" }, { status: 500 })
       }
     }
 
     // Single branch budget query - must be for current month period
     const branchId = (role === "HEAD_OFFICE" || role === "SUPER_ADMIN") && branchIdParam
-      ? parseInt(branchIdParam)
-      : parseInt(userBranchId)
+      ? validateNumericId(branchIdParam, "branchId")
+      : validateNumericId(String(userBranchId), "branchId")
 
-    if (!branchId) return NextResponse.json({ error: "Branch ID required" }, { status: 400 })
+    if (!branchId) {
+      return NextResponse.json({ error: "Valid branch ID required" }, { status: 400 })
+    }
 
     const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
     const [b] = await db.select().from(budgets).where(
@@ -98,6 +142,7 @@ export async function GET(req: NextRequest) {
     }
 
     const remainingCents = (b.amountAllocatedCents + b.amountCreditedCents) - (b.amountSpentCents + b.amountHeldCents)
+
     return NextResponse.json({
       branchId,
       amountAllocatedCents: b.amountAllocatedCents,
@@ -108,14 +153,20 @@ export async function GET(req: NextRequest) {
       period: b.period,
     })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    logError(e, 'BUDGETS_GET')
+    return handleError(e)
   }
 }
 
+/**
+ * PUT /api/v1/budgets - Update or create budget allocation
+ */
 export async function PUT(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
     const role = (session.user as any).role
     const userId = (session.user as any).id
@@ -126,15 +177,36 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    const body = await req.json()
+    let body
+    try {
+      body = await req.json()
+    } catch (jsonError) {
+      return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
+    }
+
     const { branchId, amountAllocatedCents } = body
 
-    if (!branchId || amountAllocatedCents === undefined) {
-      return NextResponse.json({ error: "branchId and amountAllocatedCents required" }, { status: 400 })
+    // Validate required fields
+    if (!branchId) {
+      return NextResponse.json({ error: "branchId is required" }, { status: 400 })
+    }
+
+    if (amountAllocatedCents === undefined || amountAllocatedCents === null) {
+      return NextResponse.json({ error: "amountAllocatedCents is required" }, { status: 400 })
+    }
+
+    // Validate types
+    if (typeof branchId !== 'number' || branchId <= 0) {
+      return NextResponse.json({ error: "branchId must be a positive number" }, { status: 400 })
     }
 
     if (!Number.isFinite(amountAllocatedCents) || amountAllocatedCents < 0) {
-      return NextResponse.json({ error: "Invalid amount" }, { status: 400 })
+      return NextResponse.json({ error: "Amount must be a non-negative finite number" }, { status: 400 })
+    }
+
+    // Additional safety check for extremely large values
+    if (amountAllocatedCents > Number.MAX_SAFE_INTEGER / 2) {
+      return NextResponse.json({ error: "Amount exceeds maximum allowed value" }, { status: 400 })
     }
 
     // Verify branch exists and belongs to org
@@ -148,8 +220,11 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Branch not found" }, { status: 404 })
     }
 
+    // HEAD_OFFICE users can only update budgets for their own organization
     if (role === "HEAD_OFFICE" && branch.organizationId !== orgId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+      return NextResponse.json({
+        error: "Unauthorized: Branch belongs to different organization"
+      }, { status: 403 })
     }
 
     // Update or create budget for current period
@@ -164,27 +239,59 @@ export async function PUT(req: NextRequest) {
       const oldAmount = budget.amountAllocatedCents
       const newAmount = oldAmount + amountAllocatedCents // ADD to existing budget
 
+      // Prevent negative budgets
+      if (newAmount < 0) {
+        return NextResponse.json({
+          error: `Cannot reduce budget below zero. Current: ${(oldAmount / 100).toFixed(2)} PKR, Attempted reduction: ${(Math.abs(amountAllocatedCents) / 100).toFixed(2)} PKR`
+        }, { status: 400 })
+      }
+
       await db.update(budgets).set({
         amountAllocatedCents: newAmount,
         updatedAt: new Date(),
       }).where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
 
       // Log action
-      await db.insert(auditLogs).values({
-        userId,
-        organizationId: orgId,
-        action: "UPDATE_BUDGET_ALLOCATION",
-        entity: "BUDGET",
-        entityId: String(branchId),
-        metadata: {
+      try {
+        await db.insert(auditLogs).values({
+          userId,
+          organizationId: branch.organizationId,
+          action: "UPDATE_BUDGET_ALLOCATION",
+          entity: "BUDGET",
+          entityId: String(branchId),
+          metadata: {
+            branchName: branch.name,
+            period: currentMonth,
+            oldAmount: oldAmount / 100,
+            addedAmount: amountAllocatedCents / 100,
+            newAmount: newAmount / 100,
+          },
+        })
+      } catch (auditError) {
+        // Log but don't fail the request
+        logError(auditError, 'BUDGETS_AUDIT_LOG')
+      }
+
+      return NextResponse.json({
+        message: "Budget updated successfully",
+        budget: {
+          branchId,
           branchName: branch.name,
+          period: currentMonth,
           oldAmount: oldAmount / 100,
           addedAmount: amountAllocatedCents / 100,
-          newAmount: newAmount / 100,
-        },
+          newAmount: newAmount / 100
+        }
       })
     } else {
       // Create new budget record for current period
+      // Cannot create with negative initial allocation
+      if (amountAllocatedCents < 0) {
+        return NextResponse.json({
+          error: "Cannot create budget with negative allocation"
+        }, { status: 400 })
+      }
+
       await db.insert(budgets).values({
         organizationId: branch.organizationId,
         branchId,
@@ -196,24 +303,37 @@ export async function PUT(req: NextRequest) {
       })
 
       // Log action
-      await db.insert(auditLogs).values({
-        userId,
-        organizationId: orgId,
-        action: "CREATE_BUDGET_ALLOCATION",
-        entity: "BUDGET",
-        entityId: String(branchId),
-        metadata: {
+      try {
+        await db.insert(auditLogs).values({
+          userId,
+          organizationId: branch.organizationId,
+          action: "CREATE_BUDGET_ALLOCATION",
+          entity: "BUDGET",
+          entityId: String(branchId),
+          metadata: {
+            branchName: branch.name,
+            amount: amountAllocatedCents / 100,
+            period: currentMonth,
+          },
+        })
+      } catch (auditError) {
+        // Log but don't fail the request
+        logError(auditError, 'BUDGETS_AUDIT_LOG')
+      }
+
+      return NextResponse.json({
+        message: "Budget created successfully",
+        budget: {
+          branchId,
           branchName: branch.name,
-          amount: amountAllocatedCents / 100,
           period: currentMonth,
-        },
+          amount: amountAllocatedCents / 100
+        }
       })
     }
-
-    return NextResponse.json({ message: "Budget updated" })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    logError(e, 'BUDGETS_PUT')
+    return NextResponse.json({ error: e.message || "Internal server error" }, { status: 500 })
   }
 }
-
 

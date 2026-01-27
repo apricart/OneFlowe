@@ -1,10 +1,7 @@
 "use client"
-import { useMemo, useState, useEffect, useRef } from "react"
+import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area } from "recharts"
-// KpiCard is still imported but may be used elsewhere
-
 import { Card, CardContent } from "@/components/ui/card"
-
 import { useDashboardAnalytics, useWeeklySales, useYearlySales, useMonthlySales } from "@/lib/hooks/use-dashboard-analytics"
 import { useAppContext } from "@/components/context/app-context"
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
@@ -36,7 +33,10 @@ export function HeadOfficeDashboard() {
   const [groupId, setGroupId] = useState<string>("")
   const { data: orgsData } = useOrganizations()
   const orgs = orgsData?.items || []
-  const selectedOrg = organizationId ? orgs.find(o => o.id?.toString() === organizationId) : null
+  const selectedOrg = useMemo(() =>
+    organizationId ? orgs.find(o => o.id?.toString() === organizationId) : null,
+    [organizationId, orgs]
+  )
 
   const { data } = useDashboardAnalytics(organizationId, branchId, groupId)
   const { data: weeklySalesData } = useWeeklySales(organizationId, branchId, groupId)
@@ -132,9 +132,20 @@ export function HeadOfficeDashboard() {
     }))
   }, [selectedMonths, monthlySalesData])
 
-  // Check if all branches are selected (branchId is null)
+  const handleGroupChange = useCallback((newGroupId: string) => {
+    setGroupId(newGroupId)
+  }, [])
+
+  const handleShowPickerToggle = useCallback(() => {
+    setShowPicker(prev => !prev)
+  }, [])
+
+  const handleApplySelection = useCallback(() => {
+    setShowPicker(false)
+  }, [])
+
   const allBranchesSelected = !branchId
-  const scopeText = organizationId ? selectedOrg?.name || `Organization #${organizationId}` : "All Organizations"
+  const scopeText = selectedOrg?.name || `Organization #${organizationId}` || "All Organizations"
 
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
@@ -169,7 +180,7 @@ export function HeadOfficeDashboard() {
               <span className="text-xs font-bold text-white uppercase tracking-wider">System Live</span>
             </div>
             <GroupFilter
-              onGroupChange={setGroupId}
+              onGroupChange={handleGroupChange}
               organizationId={organizationId || undefined}
             />
           </div>
@@ -304,14 +315,13 @@ export function HeadOfficeDashboard() {
                 {/* Picker Toggle Button */}
                 <div className="relative" ref={pickerRef}>
                   <button
-                    onClick={() => setShowPicker(!showPicker)}
+                    onClick={handleShowPickerToggle}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white font-semibold text-sm hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors border border-indigo-700 dark:border-indigo-600 shadow-sm"
                   >
                     <Calendar className="h-4 w-4" />
                     <span>Select Period</span>
                   </button>
 
-                  {/* Dropdown Picker */}
                   {showPicker && (
                     <div className="absolute right-0 top-full mt-2 z-50">
                       <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border-2 border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -323,7 +333,7 @@ export function HeadOfficeDashboard() {
                         />
                         <div className="p-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
                           <button
-                            onClick={() => setShowPicker(false)}
+                            onClick={handleApplySelection}
                             className="w-full px-4 py-2 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors"
                           >
                             Apply Selection

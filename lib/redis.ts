@@ -1,5 +1,10 @@
 import { Redis } from '@upstash/redis'
 
+// Validate Redis configuration
+if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+  console.error('[Redis] Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN environment variables')
+}
+
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL!,
   token: process.env.UPSTASH_REDIS_REST_TOKEN!,
@@ -9,46 +14,114 @@ export { redis }
 
 // Redis key patterns for MFA system
 export const REDIS_KEYS = {
-  MFA_COOLDOWN: (userId: string, type: string) => `mfa:cooldown:${userId}:${type}`,
-  MFA_OTP: (userId: string, code: string) => `mfa:otp:${userId}:${code}`,
-  MFA_ATTEMPTS: (userId: string, type: string) => `mfa:attempts:${userId}:${type}`,
-  MFA_DAILY_COUNT: (userId: string, date: string) => `mfa:daily:${userId}:${date}`,
+  MFA_COOLDOWN: (userId: string, type: string) => {
+    if (!userId || !type) {
+      throw new Error('userId and type are required for MFA_COOLDOWN key')
+    }
+    return `mfa:cooldown:${userId}:${type}`
+  },
+  MFA_OTP: (userId: string, code: string) => {
+    if (!userId || !code) {
+      throw new Error('userId and code are required for MFA_OTP key')
+    }
+    return `mfa:otp:${userId}:${code}`
+  },
+  MFA_ATTEMPTS: (userId: string, type: string) => {
+    if (!userId || !type) {
+      throw new Error('userId and type are required for MFA_ATTEMPTS key')
+    }
+    return `mfa:attempts:${userId}:${type}`
+  },
+  MFA_DAILY_COUNT: (userId: string, date: string) => {
+    if (!userId || !date) {
+      throw new Error('userId and date are required for MFA_DAILY_COUNT key')
+    }
+    return `mfa:daily:${userId}:${date}`
+  },
 } as const
+
+/**
+ * Check if Redis is available
+ */
+export async function isRedisAvailable(): Promise<boolean> {
+  try {
+    await redis.ping()
+    return true
+  } catch (error) {
+    console.error('[Redis] Connection check failed:', error)
+    return false
+  }
+}
 
 // Helper functions for Redis operations
 export class RedisMFA {
   // Set cooldown with TTL
   static async setCooldown(userId: string, type: string, ttlSeconds: number, attempts: number = 1): Promise<void> {
-    const key = REDIS_KEYS.MFA_COOLDOWN(userId, type)
-    const cooldownUntil = new Date(Date.now() + ttlSeconds * 1000)
-    const cooldownData = {
-      userId,
-      type,
-      attempts,
-      cooldownUntil: cooldownUntil.toISOString(),
-      timestamp: cooldownUntil.getTime()
+    try {
+      // Validate inputs
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('Invalid userId for setCooldown')
+      }
+      if (!type || typeof type !== 'string') {
+        throw new Error('Invalid type for setCooldown')
+      }
+      if (typeof ttlSeconds !== 'number' || ttlSeconds <= 0 || ttlSeconds > 86400) {
+        throw new Error('ttlSeconds must be a positive number not exceeding 24 hours')
+      }
+      if (typeof attempts !== 'number' || attempts < 1) {
+        throw new Error('attempts must be a positive number')
+      }
+
+      const key = REDIS_KEYS.MFA_COOLDOWN(userId, type)
+      const cooldownUntil = new Date(Date.now() + ttlSeconds * 1000)
+      const cooldownData = {
+        userId,
+        type,
+        attempts,
+        cooldownUntil: cooldownUntil.toISOString(),
+        timestamp: cooldownUntil.getTime()
+      }
+      await redis.setex(key, ttlSeconds, JSON.stringify(cooldownData))
+    } catch (error) {
+      console.error('[Redis] Failed to set cooldown:', error)
+      throw error
     }
-    await redis.setex(key, ttlSeconds, JSON.stringify(cooldownData))
   }
 
   // Get cooldown data
   static async getCooldown(userId: string, type: string): Promise<any | null> {
-    const key = REDIS_KEYS.MFA_COOLDOWN(userId, type)
-    const data = await redis.get(key)
-    if (!data) return null
-    
-    // Handle different data types from Upstash Redis
-    if (typeof data === 'string') {
-      try {
-        return JSON.parse(data)
-      } catch (error) {
-        console.error('Error parsing cooldown data:', error, 'Data:', data)
+    try {
+      // Validate inputs
+      if (!userId || typeof userId !== 'string') {
+        console.error('[Redis] Invalid userId for getCooldown')
         return null
       }
-    } else if (typeof data === 'object') {
-      return data
+      if (!type || typeof type !== 'string') {
+        console.error('[Redis] Invalid type for getCooldown')
+        return null
+      }
+
+      const key = REDIS_KEYS.MFA_COOLDOWN(userId, type)
+      const data = await redis.get(key)
+
+      if (!data) return null
+
+      // Handle different data types from Upstash Redis
+      if (typeof data === 'string') {
+        try {
+          return JSON.parse(data)
+        } catch (error) {
+          console.error('Error parsing cooldown data:', error, 'Data:', data)
+          return null
+        }
+      } else if (typeof data === 'object') {
+        return data
+      }
+      return null
+    } catch (error) {
+      console.error('[Redis] Failed to get cooldown:', error)
+      return null
     }
-    return null
   }
 
   // Delete cooldown
@@ -78,7 +151,7 @@ export class RedisMFA {
     const key = REDIS_KEYS.MFA_OTP(userId, code)
     const data = await redis.get(key)
     if (!data) return null
-    
+
     // Handle different data types from Upstash Redis
     if (typeof data === 'string') {
       try {
@@ -111,7 +184,7 @@ export class RedisMFA {
       } else {
         return
       }
-      
+
       otpData.attempts = attempts
       await redis.setex(key, 120, JSON.stringify(otpData)) // 2 minutes TTL
     }
@@ -135,7 +208,7 @@ export class RedisMFA {
       } else {
         return
       }
-      
+
       otpData.isUsed = true
       await redis.setex(key, 120, JSON.stringify(otpData)) // 2 minutes TTL
     }
@@ -166,7 +239,7 @@ export class RedisMFA {
     const key = REDIS_KEYS.MFA_DAILY_COUNT(userId, today)
     const count = await redis.get(key)
     if (!count) return 0
-    
+
     if (typeof count === 'string') {
       const parsed = parseInt(count)
       return isNaN(parsed) ? 0 : parsed
