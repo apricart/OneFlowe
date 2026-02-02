@@ -23,7 +23,6 @@ type OrganizationInventoryItem = {
     customDescription?: string
     customImageUrl?: string
     categoryName?: string
-    basePrice: number
     unit: string
     assignedAt: string
 }
@@ -157,8 +156,7 @@ export default function HeadOfficeInventoryView() {
                                 <TableRow>
                                     <TableHead>Product</TableHead>
                                     <TableHead>Category</TableHead>
-                                    <TableHead>Base price</TableHead>
-                                    <TableHead>Custom price</TableHead>
+                                    <TableHead>Price</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Assigned on</TableHead>
                                 </TableRow>
@@ -166,13 +164,13 @@ export default function HeadOfficeInventoryView() {
                             <TableBody>
                                 {isLoading ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                                        <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
                                             Loading assigned catalog…
                                         </TableCell>
                                     </TableRow>
                                 ) : assignedProducts.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                                        <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
                                             No products have been assigned yet. Once Super Admin approves products for your organization, they
                                             will appear here automatically.
                                         </TableCell>
@@ -205,8 +203,9 @@ export default function HeadOfficeInventoryView() {
                                             <TableCell>
                                                 <Badge variant="outline">{item.categoryName || "Uncategorized"}</Badge>
                                             </TableCell>
-                                            <TableCell>{formatPKR(item.basePrice / 100)}</TableCell>
-                                            <TableCell>{item.customPrice ? formatPKR(item.customPrice / 100) : "—"}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {item.customPrice ? formatPKR(item.customPrice / 100) : <span className="text-muted-foreground">Contact Admin</span>}
+                                            </TableCell>
                                             <TableCell>
                                                 <Badge variant={item.isActive ? "default" : "secondary"}>{item.isActive ? "Active" : "Inactive"}</Badge>
                                             </TableCell>

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { globalProducts, productImportBatches, auditLogs, categories } from "@/db/schema"
-import { eq } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 
 interface CSVRow {
   productCode: string
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     // Create import batch record
     const [batch] = await db.insert(productImportBatches).values({
       fileName,
-      uploadedByUserId: session.user.id as string,
+      uploadedByUserId: (session.user as any).id,
       totalRows: rows.length,
       status: "processing"
     }).returning()
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
             basePrice,
             unit: row.unit?.trim() || "unit",
             status: row.status?.toLowerCase() === "inactive" ? "inactive" : "active",
-            createdByUserId: session.user.id as string,
+            createdByUserId: (session.user as any).id,
             lastSyncedAt: new Date()
           }).returning()
 
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
 
     // Log audit
     await db.insert(auditLogs).values({
-      userId: session.user.id as string,
+      userId: (session.user as any).id,
       organizationId: null,
       branchId: null,
       action: "import_products",
@@ -200,7 +200,7 @@ export async function GET(req: NextRequest) {
       // List recent batches
       const batches = await db.select()
         .from(productImportBatches)
-        .where(eq(productImportBatches.uploadedByUserId, session.user.id as string))
+        .where(eq(productImportBatches.uploadedByUserId, (session.user as any).id))
         .orderBy(sql`created_at DESC`)
         .limit(20)
 

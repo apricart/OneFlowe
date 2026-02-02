@@ -48,8 +48,7 @@ export async function GET(req: NextRequest) {
         customPrice: organizationProducts.customPrice,
         customImageUrl: organizationProducts.customImageUrl,
         tags: organizationProducts.tags,
-        priority: organizationProducts.priority,
-        overrideSource: organizationProducts.overrideSource
+        priority: organizationProducts.priority
       })
       .from(globalProducts)
       .leftJoin(
@@ -98,7 +97,7 @@ export async function PUT(req: NextRequest) {
         ...(customImageUrl !== undefined && { customImageUrl }),
         ...(tags !== undefined && { tags }),
         ...(priority !== undefined && { priority }),
-        updatedByUserId: session.user.id as string,
+        updatedByUserId: (session.user as any).id,
         updatedAt: new Date()
       })
       .where(eq(organizationProducts.id, organizationProductId))
@@ -106,7 +105,7 @@ export async function PUT(req: NextRequest) {
 
     // Log audit
     await db.insert(auditLogs).values({
-      userId: session.user.id as string,
+      userId: (session.user as any).id,
       organizationId: updated.organizationId,
       branchId: null,
       action: "update_org_product",

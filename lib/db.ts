@@ -121,7 +121,7 @@ pool.on("remove", (client) => {
   }
 })
 
-export const db = drizzle(pool)
+export const db = drizzle(pool, { logger: true })
 
 /**
  * Test database connection

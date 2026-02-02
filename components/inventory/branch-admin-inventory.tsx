@@ -7,12 +7,12 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table } from "@/components/ui/table"
 import { Switch } from "@/components/ui/switch"
-import { 
-  Package, 
-  Search, 
-  RefreshCw, 
-  Eye, 
-  EyeOff, 
+import {
+  Package,
+  Search,
+  RefreshCw,
+  Eye,
+  EyeOff,
   AlertCircle,
   Check,
   X
@@ -70,21 +70,21 @@ export default function BranchAdminInventory({
   // Filter products
   const filteredProducts = useMemo(() => {
     let filtered = products
-    
+
     if (visibilityFilter === "visible") {
       filtered = filtered.filter(p => p.isVisible)
     } else if (visibilityFilter === "hidden") {
       filtered = filtered.filter(p => !p.isVisible)
     }
-    
+
     if (searchQuery) {
-      filtered = filtered.filter(p => 
+      filtered = filtered.filter(p =>
         p.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.productCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.customName?.toLowerCase().includes(searchQuery.toLowerCase())
       )
     }
-    
+
     return filtered
   }, [products, visibilityFilter, searchQuery])
 
@@ -311,16 +311,8 @@ export default function BranchAdminInventory({
                     <div className="text-xs text-gray-500">{product.unit}</div>
                   </td>
                   <td className="p-4">
-                    <div className="text-sm">
-                      <span className={product.stockQuantity <= product.reorderThreshold ? "text-orange-600 font-medium" : ""}>
-                        {product.stockQuantity}
-                      </span>
-                      {product.stockQuantity <= product.reorderThreshold && (
-                        <span className="text-xs text-orange-600 ml-1">(Low Stock)</span>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      Threshold: {product.reorderThreshold}
+                    <div className="text-sm text-gray-500">
+                      N/A
                     </div>
                   </td>
                   <td className="p-4">
@@ -331,17 +323,12 @@ export default function BranchAdminInventory({
                       >
                         {product.isAvailable ? "Available" : "Unavailable"}
                       </Badge>
-                      {product.stockQuantity <= product.reorderThreshold && (
-                        <Badge variant="outline" className="text-orange-600 border-orange-300">
-                          Low Stock
-                        </Badge>
-                      )}
                     </div>
                   </td>
                   <td className="p-4 text-center">
                     <Switch
                       checked={product.isVisible}
-                      onCheckedChange={(checked) => 
+                      onCheckedChange={(checked) =>
                         handleToggleVisibility(product.organizationProductId, checked)
                       }
                     />
@@ -376,7 +363,7 @@ export default function BranchAdminInventory({
                 variant="outline"
                 size="sm"
                 onClick={() => handleBulkVisibilityToggle(
-                  filteredProducts.map(p => p.organizationProductId), 
+                  filteredProducts.map(p => p.organizationProductId),
                   true
                 )}
               >
@@ -387,7 +374,7 @@ export default function BranchAdminInventory({
                 variant="outline"
                 size="sm"
                 onClick={() => handleBulkVisibilityToggle(
-                  filteredProducts.map(p => p.organizationProductId), 
+                  filteredProducts.map(p => p.organizationProductId),
                   false
                 )}
               >
@@ -406,7 +393,7 @@ export default function BranchAdminInventory({
           <div>
             <h4 className="font-medium text-blue-900">Branch Visibility Control</h4>
             <p className="text-sm text-blue-700 mt-1">
-              You can control which products are visible to customers in your branch. 
+              You can control which products are visible to customers in your branch.
               Hidden products won't appear in customer-facing interfaces but will still be tracked in inventory.
               Stock levels and availability are managed by Head Office.
             </p>

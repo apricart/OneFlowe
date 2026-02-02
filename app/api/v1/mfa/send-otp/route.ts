@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
 
     const { type = 'LOGIN' } = body
     const scope = await getRequestScope()
-    
+
     if (!scope?.userId) {
       return error("User not authenticated", 401)
     }
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     const { db } = await import("@/lib/db")
     const { users } = await import("@/db/schema")
     const { eq } = await import("drizzle-orm")
-    
+
     const [user] = await db
       .select({ email: users.email })
       .from(users)
@@ -34,18 +34,18 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await generateAndSendOTP(scope.userId, user.email, type)
-    
+
     if (result.success) {
-      return ok({ 
+      return ok({
         message: result.message,
-        cooldownUntil: result.cooldownUntil 
+        cooldownUntil: result.cooldownUntil
       })
     } else {
       return error(result.message, 400)
     }
 
-  } catch (error) {
-    console.error("Error sending OTP:", error)
+  } catch (err) {
+    console.error("Error sending OTP:", err)
     return error("Failed to send OTP", 500)
   }
 }

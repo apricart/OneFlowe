@@ -105,7 +105,7 @@ export async function PUT(req: NextRequest) {
       .set({
         ...(isAvailable !== undefined && { isAvailable }),
         ...(customNotes !== undefined && { customNotes }),
-        updatedByUserId: session.user.id as string,
+        updatedByUserId: (session.user as any).id,
         updatedAt: new Date()
       })
       .where(eq(branchProducts.id, branchProductId))
@@ -113,7 +113,7 @@ export async function PUT(req: NextRequest) {
 
     // Log audit
     await db.insert(auditLogs).values({
-      userId: session.user.id as string,
+      userId: (session.user as any).id,
       organizationId: updated.organizationId,
       branchId: updated.branchId,
       action: "update_branch_product",

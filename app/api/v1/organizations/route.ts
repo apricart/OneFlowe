@@ -126,7 +126,7 @@ export async function POST(req: Request) {
       return error("Organization with this code already exists", 409)
     }
 
-    logError(e, 'ORGANIZATIONS_POST', { name: body?.name, code: body?.code })
+    logError(e, 'ORGANIZATIONS_POST')
     return handleError(e, 'ORGANIZATIONS_POST')
   }
 }

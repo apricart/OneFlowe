@@ -72,7 +72,7 @@ async function POST(req: NextRequest) {
       },
     })
 
-    return ok({ credential: credential }, {status: 201})
+    return ok({ credential: credential }, { status: 201 })
   } catch (err: any) {
     console.error("POST /employee-credentials error:", err)
     return error(err.message, 500)
@@ -112,7 +112,7 @@ async function GET(req: NextRequest) {
         )
       )
 
-    return ok({ credentials: credentials }, {status: 200})
+    return ok({ credentials: credentials }, { status: 200 })
   } catch (err: any) {
     console.error("GET /employee-credentials error:", err)
     return error(err.message, 500)
@@ -128,6 +128,11 @@ async function PUT(req: NextRequest) {
       return error("ID required", 400)
     }
 
+    const credId = typeof id === 'number' ? id : parseInt(id, 10)
+    if (isNaN(credId)) {
+      return error("Invalid ID format", 400)
+    }
+
     // Get user scope with proper role and organization/branch info
     const scope = await getRequestScope()
     if (!scope || scope.role !== "BRANCH_ADMIN") {
@@ -135,6 +140,9 @@ async function PUT(req: NextRequest) {
     }
 
     const userBranchId = scope.branchId
+    if (!userBranchId) {
+      return error("Branch admin must be assigned to a branch", 403)
+    }
 
     // Verify ownership
     const [cred] = await db
@@ -142,7 +150,7 @@ async function PUT(req: NextRequest) {
       .from(employeeCredentials)
       .where(
         and(
-          eq(employeeCredentials.id, id),
+          eq(employeeCredentials.id, credId),
           eq(employeeCredentials.branchId, userBranchId)
         )
       )
@@ -159,10 +167,10 @@ async function PUT(req: NextRequest) {
     const [updated] = await db
       .update(employeeCredentials)
       .set(updates)
-      .where(eq(employeeCredentials.id, id))
+      .where(eq(employeeCredentials.id, credId))
       .returning()
 
-    return ok({ credential: updated }, {status: 200})
+    return ok({ credential: updated }, { status: 200 })
   } catch (err: any) {
     console.error("PUT /employee-credentials error:", err)
     return error(err.message, 500)
@@ -186,13 +194,22 @@ async function DELETE(req: NextRequest) {
 
     const userBranchId = scope.branchId
 
+    if (!userBranchId) {
+      return error("Branch admin must be assigned to a branch", 403)
+    }
+
+    const credId = parseInt(id, 10)
+    if (isNaN(credId)) {
+      return error("Invalid ID format", 400)
+    }
+
     // Verify ownership
     const [cred] = await db
       .select()
       .from(employeeCredentials)
       .where(
         and(
-          eq(employeeCredentials.id, id),
+          eq(employeeCredentials.id, credId),
           eq(employeeCredentials.branchId, userBranchId)
         )
       )
@@ -204,9 +221,9 @@ async function DELETE(req: NextRequest) {
     await db
       .update(employeeCredentials)
       .set({ isActive: false, deactivatedAt: new Date() })
-      .where(eq(employeeCredentials.id, id))
+      .where(eq(employeeCredentials.id, credId))
 
-    return ok({ message: "Credential deactivated" }, {status: 200})
+    return ok({ message: "Credential deactivated" }, { status: 200 })
   } catch (err: any) {
     console.error("DELETE /employee-credentials error:", err)
     return error(err.message, 500)

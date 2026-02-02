@@ -105,7 +105,12 @@ export async function GET(req: NextRequest) {
 
     const total = totalResult[0].count
 
-    return NextResponse.json({ items, total, page, limit })
+    // For non-Super Admin users, remove basePrice from response (it's internal)
+    const sanitizedItems = userRole === "SUPER_ADMIN"
+      ? items
+      : items.map(({ basePrice, ...rest }) => rest)
+
+    return NextResponse.json({ items: sanitizedItems, total, page, limit })
   } catch (error) {
     console.error("Error fetching organization inventory:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

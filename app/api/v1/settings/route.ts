@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
       // Validate organization ID
       const organizationId = parseInt(organizationIdParam, 10)
       if (isNaN(organizationId) || organizationId <= 0) {
-        return error("Invalid organization ID", 400)
+        return err("Invalid organization ID", 400)
       }
 
       const settings = await db
@@ -54,9 +54,9 @@ export async function GET(req: NextRequest) {
     // Return all settings
     const allSettings = await db.select().from(organizationSettings)
     return ok({ data: allSettings })
-  } catch (error) {
-    logError(error, 'SETTINGS_GET')
-    return handleError(error)
+  } catch (e) {
+    logError(e, 'SETTINGS_GET')
+    return handleError(e, 'SETTINGS_GET')
   }
 }
 

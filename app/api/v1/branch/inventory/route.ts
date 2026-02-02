@@ -73,10 +73,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid organization ID" }, { status: 400 })
     }
 
-    // Build conditions based on organization-level inventory, with optional branch overrides
+    // Build conditions - products must be in branchInventory for this branch
     const conditions: (SQL | undefined)[] = [
-      eq(organizationInventory.organizationId, orgIdNum),
-      isNull(organizationInventory.deletedAt),
+      eq(branchInventory.branchId, branchId),
+      eq(branchInventory.organizationId, orgIdNum),
+      isNull(branchInventory.deletedAt),
+      eq(branchInventory.isVisible, true), // Only show visible products
+      eq(branchInventory.isActive, true),  // Only show active products
     ]
 
     if (search) {
@@ -90,25 +93,25 @@ export async function GET(req: NextRequest) {
     }
     if (visibility) {
       if (visibility === "visible") {
-        // Visible when explicitly marked visible OR no branch override exists
-        conditions.push(sql`(${branchInventory.isVisible} = true OR ${branchInventory.id} IS NULL)`)
+        conditions.push(eq(branchInventory.isVisible, true))
       } else if (visibility === "hidden") {
-        // Hidden only when branch override says so
         conditions.push(eq(branchInventory.isVisible, false))
       }
     }
 
     const whereClause = and(...conditions)
 
+    console.log(`[Branch Inventory API] Query params - branchId: ${branchId}, orgId: ${orgIdNum}, visibility: ${visibility}`)
+
     const [items, totalResult] = await Promise.all([
       db.select({
-        // Use organization-level ID as stable fallback when branch row doesn't exist
-        id: sql<number>`COALESCE(${branchInventory.id}, ${organizationInventory.id})`,
+        // Use branch inventory ID as the primary ID
+        id: branchInventory.id,
         branchId: branchInventory.branchId,
-        organizationId: organizationInventory.organizationId,
-        organizationInventoryId: organizationInventory.id,
-        isVisible: sql<boolean>`COALESCE(${branchInventory.isVisible}, true)`,
-        isActive: sql<boolean>`COALESCE(${branchInventory.isActive}, true)`,
+        organizationId: branchInventory.organizationId,
+        organizationInventoryId: branchInventory.organizationInventoryId,
+        isVisible: branchInventory.isVisible,
+        isActive: branchInventory.isActive,
         // Stock comes from global products (single source of truth)
         stockQuantity: globalProducts.stockQuantity,
         // Reorder threshold no longer used – always 0 for compatibility
@@ -129,38 +132,26 @@ export async function GET(req: NextRequest) {
         customDescription: organizationInventory.customDescription,
         customImageUrl: organizationInventory.customImageUrl,
       })
-        .from(organizationInventory)
+        .from(branchInventory)
+        .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
         .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-        .leftJoin(
-          branchInventory,
-          and(
-            eq(branchInventory.organizationInventoryId, organizationInventory.id),
-            branchId ? eq(branchInventory.branchId, branchId) : eq(sql`1`, 0),
-            isNull(branchInventory.deletedAt),
-          )
-        )
         .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
         .where(whereClause)
-        .orderBy(desc(organizationInventory.id))
+        .orderBy(desc(branchInventory.assignedAt))
         .limit(limitNum)
         .offset(offset),
 
       db
         .select({ count: sql<number>`cast(count(*) as integer)` })
-        .from(organizationInventory)
+        .from(branchInventory)
+        .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
         .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-        .leftJoin(
-          branchInventory,
-          and(
-            eq(branchInventory.organizationInventoryId, organizationInventory.id),
-            branchId ? eq(branchInventory.branchId, branchId) : eq(sql`1`, 0),
-            isNull(branchInventory.deletedAt),
-          )
-        )
         .where(whereClause),
     ])
 
     const total = Number(totalResult[0]?.count || 0)
+
+    console.log(`[Branch Inventory API] Found ${items.length} items, total: ${total}`)
 
     return NextResponse.json({ items, total, page: pageNum, limit: limitNum })
   } catch (error: any) {

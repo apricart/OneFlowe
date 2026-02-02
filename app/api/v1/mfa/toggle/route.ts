@@ -12,10 +12,9 @@ export async function POST(req: NextRequest) {
     if (!body) return error("Invalid request body", 400)
 
     const { action, otpCode } = body // 'enable' or 'disable'
-    console.log("MFA Toggle - Request body:", { action, otpCode: otpCode ? "***" : "undefined" })
-    
+
     const scope = await getRequestScope()
-    
+
     if (!scope?.userId) {
       return error("User not authenticated", 401)
     }
@@ -23,27 +22,25 @@ export async function POST(req: NextRequest) {
     if (action === 'enable') {
       // For enabling MFA, we don't need OTP verification since the user is already authenticated
       // and accessing the settings page proves their identity
-      console.log("MFA Toggle - Enabling MFA for user:", scope.userId)
-      
+
       const result = await enableMFA(scope.userId)
-      return ok({ 
+      return ok({
         message: result.message,
         mfaEnabled: true
       })
-    } 
-    
+    }
+
     else if (action === 'disable') {
       // For disabling MFA, we don't need OTP verification since the user is already authenticated
       // and accessing the settings page proves their identity
-      console.log("MFA Toggle - Disabling MFA for user:", scope.userId)
-      
+
       const result = await disableMFA(scope.userId)
-      return ok({ 
+      return ok({
         message: result.message,
         mfaEnabled: false
       })
-    } 
-    
+    }
+
     else {
       return error("Invalid action. Use 'enable' or 'disable'", 400)
     }

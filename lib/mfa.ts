@@ -102,12 +102,10 @@ export async function sendOTPEmail(email: string, code: string, type: string): P
       return false
     }
 
-    // TODO: Integrate with your email service (SendGrid, AWS SES, etc.)
-    console.log(`[MFA] Sending OTP to ${email}: ${code} (${type})`)
+    // Use the email service to send the OTP
+    const { sendOTPEmail: sendEmail } = await import('@/lib/email')
+    return await sendEmail(email, code, type as 'LOGIN' | 'VERIFY_EMAIL' | 'RESET_PASSWORD')
 
-    // For now, just log to console
-    // In production, replace with actual email service
-    return true
   } catch (error) {
     logError(error, 'MFA_SEND_EMAIL', { email, type })
     return false

@@ -193,11 +193,7 @@ export async function POST(req: Request) {
       return error("Referenced organization does not exist", 404)
     }
 
-    logError(e, 'BRANCHES_POST', {
-      name: req.body?.name,
-      code: req.body?.code,
-      organizationId: req.body?.organizationId
-    })
-    return handleError(e)
+    logError(e, 'BRANCHES_POST')
+    return handleError(e, 'BRANCHES_POST')
   }
 }

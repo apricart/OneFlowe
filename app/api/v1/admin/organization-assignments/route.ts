@@ -53,13 +53,13 @@ export async function GET(req: NextRequest) {
         productImageUrl: globalProducts.imageUrl,
         organizationName: organizations.name,
       })
-      .from(organizationInventory)
-      .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-      .leftJoin(organizations, eq(organizationInventory.organizationId, organizations.id))
-      .where(whereClause)
-      .orderBy(desc(organizationInventory.assignedAt))
-      .limit(limit)
-      .offset(offset),
+        .from(organizationInventory)
+        .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+        .leftJoin(organizations, eq(organizationInventory.organizationId, organizations.id))
+        .where(whereClause)
+        .orderBy(desc(organizationInventory.assignedAt))
+        .limit(limit)
+        .offset(offset),
 
       db.select({ count: sql<number>`count(*)` })
         .from(organizationInventory)
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     console.log("POST /api/v1/admin/organization-assignments - Request body:", body)
-    
+
     const {
       productIds,
       assignments: assignmentOverrides,
@@ -134,9 +134,9 @@ export async function POST(req: NextRequest) {
 
     if (!validation.valid) {
       console.log("Validation failed:", validation.errors)
-      return NextResponse.json({ 
-        error: "Validation failed", 
-        details: validation.errors 
+      return NextResponse.json({
+        error: "Validation failed",
+        details: validation.errors
       }, { status: 400 })
     }
 
@@ -144,24 +144,24 @@ export async function POST(req: NextRequest) {
     const existingAssignments = await db.select({
       globalProductId: organizationInventory.globalProductId,
     })
-    .from(organizationInventory)
-    .where(
-      and(
-      eq(organizationInventory.organizationId, parseInt(organizationId)),
-      inArray(organizationInventory.globalProductId, normalizedProductIds),
-        isNull(organizationInventory.deletedAt)
+      .from(organizationInventory)
+      .where(
+        and(
+          eq(organizationInventory.organizationId, parseInt(organizationId)),
+          inArray(organizationInventory.globalProductId, normalizedProductIds),
+          isNull(organizationInventory.deletedAt)
+        )
       )
-    )
 
     // Create a set of existing product IDs for quick lookup
     const existingProductIds = new Set(existingAssignments.map(a => a.globalProductId))
-    const unassignedProductIds = productIds.filter(id => !existingProductIds.has(parseInt(id)))
+    const unassignedProductIds = productIds.filter((id: string) => !existingProductIds.has(parseInt(id)))
 
     // If all products are already assigned, return a helpful message
     if (unassignedProductIds.length === 0) {
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: "All selected products are already assigned to this organization",
-        alreadyAssigned: productIds.map(id => parseInt(id)),
+        alreadyAssigned: productIds.map((id: string) => parseInt(id)),
         unassigned: []
       }, { status: 400 })
     }
@@ -169,18 +169,18 @@ export async function POST(req: NextRequest) {
     // If some products are already assigned, return partial success with details
     if (unassignedProductIds.length < normalizedProductIds.length) {
       const alreadyAssignedIds = normalizedProductIds.filter(id => existingProductIds.has(id))
-      
+
       // Create assignments only for unassigned products
-      const assignments = unassignedProductIds.map(productId => {
+      const assignments = unassignedProductIds.map((productId: string) => {
         const override = Array.isArray(assignmentOverrides)
-          ? assignmentOverrides.find((entry: any) => parseInt(entry.productId) === productId)
+          ? assignmentOverrides.find((entry: any) => parseInt(entry.productId) === parseInt(productId))
           : null
         const resolvedCustomPrice =
           override && override.customPrice !== undefined && override.customPrice !== null
             ? Math.round(parseFloat(override.customPrice) * 100)
             : customPrice
-            ? Math.round(parseFloat(customPrice) * 100)
-            : null
+              ? Math.round(parseFloat(customPrice) * 100)
+              : null
 
         return {
           globalProductId: productId,
@@ -213,8 +213,8 @@ export async function POST(req: NextRequest) {
         override && override.customPrice !== undefined && override.customPrice !== null
           ? Math.round(parseFloat(override.customPrice) * 100)
           : customPrice
-          ? Math.round(parseFloat(customPrice) * 100)
-          : null
+            ? Math.round(parseFloat(customPrice) * 100)
+            : null
 
       return {
         globalProductId: productId,
@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
       action: "CREATE",
       entity: "OrganizationAssignment",
       entityId: newAssignments.map(a => a.id).join(','),
-      metadata: { 
+      metadata: {
         assignedCount: newAssignments.length,
         organizationId,
         productIds,
@@ -358,7 +358,7 @@ export async function DELETE(req: NextRequest) {
       action: "DELETE",
       entity: "OrganizationAssignment",
       entityId: id || "bulk",
-      metadata: { 
+      metadata: {
         deletedCount: assignmentsToDelete.length,
         branchDeletions: totalBranchDeletions,
         affectedBranches: [...new Set(affectedBranches)],
@@ -410,13 +410,13 @@ export async function PUT(req: NextRequest) {
       id: organizationInventory.id,
       isActive: organizationInventory.isActive,
     })
-    .from(organizationInventory)
-    .where(
-      and(
-        eq(organizationInventory.id, parseInt(id)),
-        isNull(organizationInventory.deletedAt)
+      .from(organizationInventory)
+      .where(
+        and(
+          eq(organizationInventory.id, parseInt(id)),
+          isNull(organizationInventory.deletedAt)
+        )
       )
-    )
 
     if (!existingAssignment) {
       return NextResponse.json({ error: "Assignment not found" }, { status: 404 })
@@ -425,7 +425,7 @@ export async function PUT(req: NextRequest) {
     const updateData: any = {
       updatedAt: new Date()
     }
-    
+
     if (isActive !== undefined) updateData.isActive = isActive
     if (customName !== undefined) updateData.customName = customName
     if (customPrice !== undefined) updateData.customPrice = customPrice ? Math.round(parseFloat(customPrice) * 100) : null
@@ -469,7 +469,7 @@ export async function PUT(req: NextRequest) {
       action: "UPDATE",
       entity: "OrganizationAssignment",
       entityId: id.toString(),
-      metadata: { 
+      metadata: {
         updateData,
         performedByRole: "SUPER_ADMIN"
       },

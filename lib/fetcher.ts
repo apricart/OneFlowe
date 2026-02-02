@@ -66,11 +66,13 @@ export async function jsonFetcher<T>(url: string, init?: RequestInit): Promise<T
     }
 
   } catch (error: any) {
-    // Enhanced error logging
+    // Enhanced error logging with proper serialization
     console.error('[Fetcher] Request failed:', {
       url,
-      error: error.message,
-      status: error.status
+      errorMessage: error?.message || 'Unknown error',
+      errorStatus: error?.status || 'N/A',
+      errorCode: error?.code || 'N/A',
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
     })
     throw error
   }
@@ -164,9 +166,10 @@ export async function fetcher<T>(url: string, timeoutMs: number = DEFAULT_TIMEOU
     // Top-level error handler with enhanced logging
     console.error('[Fetcher] Error:', {
       url,
-      code: error.code,
-      message: error.message,
-      status: error.status
+      errorCode: error?.code || 'N/A',
+      errorMessage: error?.message || 'Unknown error',
+      errorStatus: error?.status || 'N/A',
+      fullError: JSON.stringify(error, Object.getOwnPropertyNames(error))
     })
     throw error
   }

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     if (!body) return error("Invalid request body", 400)
 
     const { code, type = 'LOGIN' } = body
-    
+
     if (!code || code.length !== 6) {
       return error("Please enter a valid 6-digit OTP code", 400)
     }
@@ -23,21 +23,18 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await verifyOTP(scope.userId, code, type)
-    
+
     if (result.success) {
-      return ok({ 
+      return ok({
         message: result.message,
         verified: true
       })
     } else {
-      return error(result.message, 400, {
-        remainingAttempts: result.remainingAttempts,
-        cooldownUntil: result.cooldownUntil
-      })
+      return error(result.message + (result.remainingAttempts !== undefined ? ` (${result.remainingAttempts} attempts remaining)` : ''), 400)
     }
 
-  } catch (error) {
-    console.error("Error verifying OTP:", error)
+  } catch (err) {
+    console.error("Error verifying OTP:", err)
     return error("Failed to verify OTP", 500)
   }
 }

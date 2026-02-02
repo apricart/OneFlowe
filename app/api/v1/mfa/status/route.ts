@@ -14,14 +14,14 @@ export async function GET(req: NextRequest) {
     }
 
     const enabled = await isMFAEnabled(scope.userId)
-    
-    return ok({ 
+
+    return ok({
       mfaEnabled: enabled,
       message: enabled ? "MFA is enabled" : "MFA is disabled"
     })
 
-  } catch (error) {
-    console.error("Error checking MFA status:", error)
+  } catch (err) {
+    console.error("Error checking MFA status:", err)
     return error("Failed to check MFA status", 500)
   }
 }

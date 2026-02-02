@@ -69,7 +69,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     // Log audit
     await db.insert(auditLogs).values({
-      userId: session.user.id as string,
+      userId: (session.user as any).id,
       organizationId: null,
       branchId: null,
       action: "update_global_product",
@@ -113,7 +113,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     // Log audit
     await db.insert(auditLogs).values({
-      userId: session.user.id as string,
+      userId: (session.user as any).id,
       organizationId: null,
       branchId: null,
       action: "delete_global_product",

@@ -1,0 +1,220 @@
+/**
+ * Email Service
+ * Handles email sending using nodemailer with SMTP configuration
+ */
+
+import nodemailer from 'nodemailer'
+import type { Transporter } from 'nodemailer'
+import { logError } from '@/lib/global-logger'
+
+// Email configuration from environment variables
+const EMAIL_CONFIG = {
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+    from: process.env.SMTP_USER || 'noreply@example.com',
+} as const
+
+// Validate email configuration
+function validateEmailConfig(): boolean {
+    if (!EMAIL_CONFIG.user || !EMAIL_CONFIG.pass) {
+        console.error('[Email] SMTP credentials not configured. Please set SMTP_USER and SMTP_PASS in .env.local')
+        return false
+    }
+    return true
+}
+
+// Create transporter instance (singleton)
+let transporter: Transporter | null = null
+
+function getTransporter(): Transporter | null {
+    if (!validateEmailConfig()) {
+        return null
+    }
+
+    if (!transporter) {
+        try {
+            transporter = nodemailer.createTransport({
+                host: EMAIL_CONFIG.host,
+                port: EMAIL_CONFIG.port,
+                secure: EMAIL_CONFIG.port === 465, // true for 465, false for other ports
+                auth: {
+                    user: EMAIL_CONFIG.user,
+                    pass: EMAIL_CONFIG.pass,
+                },
+            })
+        } catch (error) {
+            logError(error, 'EMAIL_CREATE_TRANSPORTER')
+            return null
+        }
+    }
+
+    return transporter
+}
+
+/**
+ * Generate HTML email template for OTP
+ */
+function generateOTPEmailHTML(code: string, type: string): string {
+    const typeText = type === 'LOGIN' ? 'Login' : type === 'VERIFY_EMAIL' ? 'Email Verification' : 'Password Reset'
+
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Your OTP Code</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+      <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 40px 0;">
+            <table role="presentation" style="width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <!-- Header -->
+              <tr>
+                <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+                  <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">OneFlowe</h1>
+                  <p style="margin: 10px 0 0 0; color: #ffffff; font-size: 14px; opacity: 0.9;">${typeText} Verification</p>
+                </td>
+              </tr>
+              
+              <!-- Content -->
+              <tr>
+                <td style="padding: 40px 30px;">
+                  <p style="margin: 0 0 20px 0; color: #333333; font-size: 16px; line-height: 1.5;">
+                    Hello,
+                  </p>
+                  <p style="margin: 0 0 30px 0; color: #333333; font-size: 16px; line-height: 1.5;">
+                    We received a request for ${typeText.toLowerCase()}. Please use the following one-time password (OTP) to complete your verification:
+                  </p>
+                  
+                  <!-- OTP Code -->
+                  <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 30px 0;">
+                    <tr>
+                      <td style="text-align: center; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #667eea; font-family: 'Courier New', monospace;">
+                          ${code}
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                  
+                  <p style="margin: 30px 0 20px 0; color: #333333; font-size: 16px; line-height: 1.5;">
+                    This code will expire in <strong>2 minutes</strong>.
+                  </p>
+                  
+                  <p style="margin: 0 0 10px 0; color: #666666; font-size: 14px; line-height: 1.5;">
+                    If you didn't request this code, please ignore this email or contact support if you have concerns.
+                  </p>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e9ecef;">
+                  <p style="margin: 0 0 10px 0; color: #666666; font-size: 14px;">
+                    This is an automated message, please do not reply.
+                  </p>
+                  <p style="margin: 0; color: #999999; font-size: 12px;">
+                    © ${new Date().getFullYear()} OneFlowe. All rights reserved.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `
+}
+
+/**
+ * Generate plain text email for OTP (fallback)
+ */
+function generateOTPEmailText(code: string, type: string): string {
+    const typeText = type === 'LOGIN' ? 'Login' : type === 'VERIFY_EMAIL' ? 'Email Verification' : 'Password Reset'
+
+    return `
+OneFlowe - ${typeText} Verification
+
+Hello,
+
+We received a request for ${typeText.toLowerCase()}. Please use the following one-time password (OTP) to complete your verification:
+
+OTP Code: ${code}
+
+This code will expire in 2 minutes.
+
+If you didn't request this code, please ignore this email or contact support if you have concerns.
+
+This is an automated message, please do not reply.
+
+© ${new Date().getFullYear()} OneFlowe. All rights reserved.
+  `.trim()
+}
+
+/**
+ * Send OTP email to user
+ */
+export async function sendOTPEmail(
+    to: string,
+    code: string,
+    type: 'LOGIN' | 'VERIFY_EMAIL' | 'RESET_PASSWORD'
+): Promise<boolean> {
+    try {
+        // Validate inputs
+        if (!to || !code || !type) {
+            console.error('[Email] Invalid parameters for sendOTPEmail')
+            return false
+        }
+
+        // Get transporter
+        const transport = getTransporter()
+        if (!transport) {
+            console.error('[Email] Failed to create email transporter. Check SMTP configuration.')
+            return false
+        }
+
+        // Prepare email subject
+        const typeText = type === 'LOGIN' ? 'Login' : type === 'VERIFY_EMAIL' ? 'Email Verification' : 'Password Reset'
+        const subject = `Your OneFlowe ${typeText} Code`
+
+        // Send email
+        const info = await transport.sendMail({
+            from: `"OneFlowe" <${EMAIL_CONFIG.from}>`,
+            to,
+            subject,
+            text: generateOTPEmailText(code, type),
+            html: generateOTPEmailHTML(code, type),
+        })
+
+        console.log(`[Email] OTP email sent successfully to ${to} - Message ID: ${info.messageId}`)
+        return true
+
+    } catch (error) {
+        logError(error, 'EMAIL_SEND_OTP', { to, type })
+        return false
+    }
+}
+
+/**
+ * Verify email service configuration
+ */
+export async function verifyEmailConfig(): Promise<boolean> {
+    try {
+        const transport = getTransporter()
+        if (!transport) {
+            return false
+        }
+
+        await transport.verify()
+        console.log('[Email] SMTP configuration verified successfully')
+        return true
+    } catch (error) {
+        logError(error, 'EMAIL_VERIFY_CONFIG')
+        return false
+    }
+}

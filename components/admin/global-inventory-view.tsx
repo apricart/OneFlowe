@@ -1,5 +1,6 @@
 "use client"
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -31,6 +32,7 @@ type GlobalInventoryItem = {
 }
 
 export default function GlobalInventoryView() {
+    const router = useRouter()
     const [searchQuery, setSearchQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState("all")
     const [categoryFilter, setCategoryFilter] = useState("")
@@ -118,7 +120,7 @@ export default function GlobalInventoryView() {
                         <CardTitle className="text-xl text-slate-900 dark:text-white">Global product catalog</CardTitle>
                         <p className="text-sm text-muted-foreground">Manage all products in the global catalog.</p>
                     </div>
-                    <Button className="gap-2" onClick={() => setDialogMode("create")}>
+                    <Button className="gap-2" onClick={() => router.push("/inventory/add")}>
                         <Plus className="h-4 w-4" />
                         Create product
                     </Button>
@@ -259,8 +261,8 @@ export default function GlobalInventoryView() {
             </Card>
 
 
-            {/* Create/Edit Dialog */}
-            <Dialog open={dialogMode === "create" || dialogMode === "edit"} onOpenChange={(open) => {
+            {/* Edit Dialog */}
+            <Dialog open={dialogMode === "edit"} onOpenChange={(open) => {
                 if (!open) {
                     setDialogMode(null)
                     setSelectedProduct(null)
@@ -271,13 +273,13 @@ export default function GlobalInventoryView() {
                         <div className="sticky top-0 z-10 bg-background border-b px-6 py-4">
                             <DialogHeader>
                                 <DialogTitle className="text-2xl font-semibold">
-                                    {dialogMode === "create" ? "Create New Product" : "Edit Product"}
+                                    Edit Product
                                 </DialogTitle>
                             </DialogHeader>
                         </div>
                         <div className="px-6 py-6">
                             <ProductForm
-                                mode={(dialogMode === "edit" ? "edit" : "create") as "create" | "edit"}
+                                mode="edit"
                                 initialProduct={selectedProduct}
                                 onCancel={() => {
                                     setDialogMode(null)

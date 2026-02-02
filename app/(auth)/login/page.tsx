@@ -122,7 +122,7 @@ function LoginForm() {
           </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit} className="grid gap-4">
+          <form onSubmit={onSubmit} className="grid gap-4" suppressHydrationWarning>
             <div className="grid gap-2">
               <label htmlFor="email" className="text-sm font-medium text-slate-700">
                 Email

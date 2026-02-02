@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
               unit: row.unit?.trim() || "unit",
               status: row.status?.toLowerCase() === "inactive" ? "inactive" : "active",
               stockQuantity,
-              createdByUserId: session.user.id as string,
+              createdByUserId: (session.user as any).id,
               lastSyncedAt: new Date(),
             })
             .returning()
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
 
     // Log audit
     await db.insert(auditLogs).values({
-      userId: session.user.id as string,
+      userId: (session.user as any).id,
       organizationId: null,
       branchId: null,
       action: "import_products",

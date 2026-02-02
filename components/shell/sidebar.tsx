@@ -20,15 +20,32 @@ const getNavigationByRole = (role: string) => {
       { href: "/users", label: "Users", icon: Users },
       { href: "/orders", label: "Orders", icon: Package },
       {
-        href: "/products/categories",
-        label: "Product Categories",
-        icon: FolderTree,
+        href: "/inventory",
+        label: "Inventory Management",
+        icon: Boxes,
         subItems: [
+          { href: "/inventory", label: "Global Products" },
+          {
+            href: "/inventory/assign",
+            label: "Organization Inventory",
+            subItems: [
+              { href: "/inventory/assign", label: "Assign from Global" },
+              { href: "/inventory/assigned", label: "View Assigned" },
+            ]
+          },
+          {
+            href: "/inventory/branch",
+            label: "Group Assignments",
+            subItems: [
+              { href: "/inventory/branch", label: "View Products" },
+              { href: "/inventory/branch/assign", label: "Assign to Group" },
+              { href: "/inventory/branch/remove", label: "Remove from Group" },
+            ]
+          },
           { href: "/products/categories", label: "Categories" },
           { href: "/products/subcategories", label: "Subcategories" },
         ]
       },
-      { href: "/inventory", label: "Global Inventory", icon: Boxes },
       { href: "/groups", label: "Groups", icon: FolderTree },
       { href: "/budgets", label: "Budgets", icon: Wallet },
       {
@@ -158,6 +175,53 @@ export function Sidebar() {
                   <div className="ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1 mt-1 animate-in fade-in slide-in-from-left-2 duration-300">
                     {item.subItems.map((subItem: any) => {
                       const subActive = isSubItemActive(subItem)
+                      const hasNestedItems = 'subItems' in subItem && Array.isArray(subItem.subItems) && subItem.subItems.length > 0
+                      const isNestedExpanded = expandedItems.includes(subItem.href)
+
+                      if (hasNestedItems) {
+                        return (
+                          <div key={subItem.href} className="space-y-1">
+                            <button
+                              onClick={() => toggleExpanded(subItem.href)}
+                              className={cn(
+                                "w-full rounded-lg px-4 py-2 text-xs font-medium flex items-center gap-2 text-left transition-all duration-300",
+                                subActive
+                                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm"
+                                  : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                              )}
+                            >
+                              <div className="w-1 h-1 rounded-full bg-current opacity-30" />
+                              <span className="flex-1">{subItem.label}</span>
+                              <ChevronDown size={12} className={cn("opacity-50 transition-transform duration-300", isNestedExpanded ? "rotate-180" : "rotate-0")} />
+                            </button>
+                            {isNestedExpanded && (
+                              <div className="ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1">
+                                {subItem.subItems.map((nestedItem: any) => {
+                                  const nestedActive = pathname === nestedItem.href
+                                  return (
+                                    <Link
+                                      key={nestedItem.href}
+                                      href={nestedItem.href}
+                                      className={cn(
+                                        "block rounded-lg px-4 py-2 text-xs font-medium transition-all duration-300",
+                                        nestedActive
+                                          ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm"
+                                          : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-1 h-1 rounded-full bg-current opacity-30" />
+                                        <span>{nestedItem.label}</span>
+                                      </div>
+                                    </Link>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+
                       return (
                         <Link
                           key={subItem.href}

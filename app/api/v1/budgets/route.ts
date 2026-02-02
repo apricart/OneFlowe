@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
     })
   } catch (e: any) {
     logError(e, 'BUDGETS_GET')
-    return handleError(e)
+    return handleError(e, 'BUDGETS_GET')
   }
 }
 

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
-import { branchInventory, organizationInventory, branches, globalProducts, auditLogs } from "@/db/schema"
+import { db, pool } from "@/lib/db"
+import { branchInventory, organizationInventory, branches, globalProducts, auditLogs, groups } from "@/db/schema"
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm"
+import { logInventoryAction } from "@/lib/global-logger"
 
 // GET /api/v1/head-office/branch-assignments - List branch assignments
 export async function GET(req: NextRequest) {
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url)
-    
+
     // Get organization ID from session context (should be set by middleware)
     // For Super Admin, get from query params if available
     let organizationId = (session.user as any).organizationId
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest) {
     }
 
     const branchId = searchParams.get("branchId")
+    const groupId = searchParams.get("groupId") // New parameter
     const productId = searchParams.get("productId")
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
@@ -43,10 +45,17 @@ export async function GET(req: NextRequest) {
       eq(branchInventory.organizationId, parseInt(organizationId)),
       isNull(branchInventory.deletedAt)
     ]
-    
+
     if (branchId) {
       conditions.push(eq(branchInventory.branchId, parseInt(branchId)))
     }
+
+    if (groupId) {
+      conditions.push(eq(branches.groupId, parseInt(groupId)))
+    }
+
+    console.log('[API] GET branch-assignments params:', { organizationId, branchId, groupId })
+    console.log('[API] Conditions count:', conditions.length)
     // productId refers to global product; filter via organizationInventory.globalProductId after join
 
     const whereClause = and(...conditions)
@@ -61,8 +70,6 @@ export async function GET(req: NextRequest) {
         globalProductId: globalProducts.id,
         isVisible: branchInventory.isVisible,
         isActive: branchInventory.isActive,
-        stockQuantity: branchInventory.stockQuantity,
-        reorderThreshold: branchInventory.reorderThreshold,
         assignedAt: branchInventory.assignedAt,
         updatedAt: branchInventory.updatedAt,
         // Related data
@@ -75,31 +82,32 @@ export async function GET(req: NextRequest) {
         customName: organizationInventory.customName,
         customPrice: organizationInventory.customPrice,
       })
-      .from(branchInventory)
-      .leftJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
-      .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-      .leftJoin(branches, eq(branchInventory.branchId, branches.id))
-      .where(
-        productId
-          ? and(
+        .from(branchInventory)
+        .leftJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+        .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+        .leftJoin(branches, eq(branchInventory.branchId, branches.id))
+        .where(
+          productId
+            ? and(
               ...conditions,
               eq(organizationInventory.globalProductId, parseInt(productId))
             )
-          : and(...conditions)
-      )
-      .orderBy(desc(branchInventory.assignedAt))
-      .limit(limit)
-      .offset(offset),
+            : and(...conditions)
+        )
+        .orderBy(desc(branchInventory.assignedAt))
+        .limit(limit)
+        .offset(offset),
 
       db.select({ count: sql<number>`count(*)` })
         .from(branchInventory)
         .leftJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+        .leftJoin(branches, eq(branchInventory.branchId, branches.id))
         .where(
           productId
             ? and(
-                ...conditions,
-                eq(organizationInventory.globalProductId, parseInt(productId))
-              )
+              ...conditions,
+              eq(organizationInventory.globalProductId, parseInt(productId))
+            )
             : and(...conditions)
         ),
     ])
@@ -126,26 +134,84 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden - Head Office or Super Admin access required" }, { status: 403 })
     }
 
-    const organizationId = (session.user as any).organizationId
-    if (!organizationId) {
-      return NextResponse.json({ error: "Organization not found in session" }, { status: 400 })
-    }
-
     const body = await req.json()
-    const { 
-      organizationInventoryIds, 
-      branchIds, 
+    const {
+      organizationInventoryIds,
+      branchIds: directBranchIds, // Optional: for backward compatibility
+      groupId, // New: assign to all branches in a group
+      organizationId: bodyOrgId,
       isVisible = true,
       isActive = true,
-      stockQuantity = 0,
-      reorderThreshold = 10
     } = body
+
+    // Debug logging
+    console.log('POST /api/v1/head-office/branch-assignments received:', {
+      organizationInventoryIds,
+      directBranchIds,
+      groupId,
+      organizationIdTypes: {
+        orgInvIds: organizationInventoryIds?.map((id: any) => typeof id),
+        branchIds: directBranchIds?.map((id: any) => typeof id)
+      }
+    })
+
+    // Get organizationId from session or body (for Super Admin context selector)
+    let organizationId = (session.user as any).organizationId
+    if (userRole === "SUPER_ADMIN" && bodyOrgId) {
+      organizationId = bodyOrgId
+    }
+    if (!organizationId) {
+      return NextResponse.json({ error: "Organization ID is required" }, { status: 400 })
+    }
 
     if (!organizationInventoryIds || organizationInventoryIds.length === 0) {
       return NextResponse.json({ error: "Organization inventory IDs are required" }, { status: 400 })
     }
-    if (!branchIds || branchIds.length === 0) {
-      return NextResponse.json({ error: "Branch IDs are required" }, { status: 400 })
+
+    // Determine branch IDs: either from groupId (expanded) or direct branchIds
+    let branchIds: number[] = []
+    let groupName: string | null = null
+
+    if (groupId) {
+      // Fetch group and validate it belongs to the organization
+      const [group] = await db.select()
+        .from(groups)
+        .where(eq(groups.id, groupId))
+        .limit(1)
+
+      if (!group) {
+        return NextResponse.json({ error: "Group not found" }, { status: 400 })
+      }
+
+      if (group.organizationId !== parseInt(organizationId)) {
+        return NextResponse.json({ error: "Group does not belong to this organization" }, { status: 403 })
+      }
+
+      groupName = group.name
+
+      // Fetch all branches in this group
+      const groupBranches = await db.select({
+        id: branches.id,
+      })
+        .from(branches)
+        .where(
+          and(
+            eq(branches.organizationId, parseInt(organizationId)),
+            eq(branches.groupId, groupId)
+          )
+        )
+
+      if (groupBranches.length === 0) {
+        return NextResponse.json({ error: `No branches found in group "${groupName}"` }, { status: 400 })
+      }
+
+      branchIds = groupBranches.map(b => b.id)
+      console.log(`Expanded groupId ${groupId} to ${branchIds.length} branches:`, branchIds)
+    } else if (directBranchIds && directBranchIds.length > 0) {
+      // Use direct branch IDs (backward compatibility)
+      branchIds = directBranchIds
+    } else {
+      return NextResponse.json({ error: "Either groupId or branchIds is required" }, { status: 400 })
     }
 
     // Verify all organization inventory items belong to this organization
@@ -153,71 +219,129 @@ export async function POST(req: NextRequest) {
       id: organizationInventory.id,
       globalProductId: organizationInventory.globalProductId,
     })
-    .from(organizationInventory)
-    .where(
-      and(
-        eq(organizationInventory.organizationId, parseInt(organizationId)),
-        inArray(organizationInventory.id, organizationInventoryIds.map(id => parseInt(id))),
-        isNull(organizationInventory.deletedAt)
+      .from(organizationInventory)
+      .where(
+        and(
+          eq(organizationInventory.organizationId, parseInt(organizationId)),
+          inArray(organizationInventory.id, organizationInventoryIds),
+          isNull(organizationInventory.deletedAt)
+        )
       )
-    )
+
+    console.log('Organization inventory validation:', {
+      requested: organizationInventoryIds,
+      found: orgInventoryItems.map(i => i.id),
+      organizationId: parseInt(organizationId)
+    })
 
     if (orgInventoryItems.length !== organizationInventoryIds.length) {
       return NextResponse.json({ error: "Some inventory items not found or access denied" }, { status: 400 })
     }
 
-    // Check for existing assignments to avoid duplicates
-    const existingAssignments = await db.select({
+    // Check for ALL existing assignments (including soft-deleted) to handle unique constraint
+    const allExistingAssignments = await db.select({
+      id: branchInventory.id,
       organizationInventoryId: branchInventory.organizationInventoryId,
       branchId: branchInventory.branchId,
+      deletedAt: branchInventory.deletedAt,
     })
-    .from(branchInventory)
-    .where(
-      and(
-        inArray(branchInventory.organizationInventoryId, organizationInventoryIds.map(id => parseInt(id))),
-        inArray(branchInventory.branchId, branchIds.map(id => parseInt(id))),
-        isNull(branchInventory.deletedAt)
+      .from(branchInventory)
+      .where(
+        and(
+          inArray(branchInventory.organizationInventoryId, organizationInventoryIds),
+          inArray(branchInventory.branchId, branchIds)
+        )
       )
-    )
 
-    // Create a set of existing assignment keys for quick lookup
-    const existingKeys = new Set(
-      existingAssignments.map(a => `${a.organizationInventoryId}-${a.branchId}`)
+    // Separate active and soft-deleted assignments
+    const activeKeys = new Set(
+      allExistingAssignments
+        .filter(a => a.deletedAt === null)
+        .map(a => `${a.organizationInventoryId}-${a.branchId}`)
     )
+    const softDeletedAssignments = allExistingAssignments.filter(a => a.deletedAt !== null)
 
     // Create assignments for each inventory item and branch combination
-    const assignments = []
+    const toInsert = []
+    const toRestore: number[] = []  // IDs of soft-deleted records to restore
+
     for (const orgInventoryId of organizationInventoryIds) {
-      const orgItem = orgInventoryItems.find(item => item.id === parseInt(orgInventoryId))
+      const orgItem = orgInventoryItems.find(item => item.id === orgInventoryId)
       if (!orgItem) continue
 
       for (const branchId of branchIds) {
         const key = `${orgInventoryId}-${branchId}`
-        if (!existingKeys.has(key)) {
-          assignments.push({
-            branchId: parseInt(branchId),
-            organizationId: parseInt(organizationId),
-            organizationInventoryId: parseInt(orgInventoryId),
+
+        // Skip if already active
+        if (activeKeys.has(key)) continue
+
+        // Check if soft-deleted record exists - restore it instead of inserting
+        const softDeleted = softDeletedAssignments.find(
+          a => a.organizationInventoryId === orgInventoryId && a.branchId === branchId
+        )
+
+        if (softDeleted) {
+          toRestore.push(softDeleted.id)
+        } else {
+          toInsert.push({
+            branchId: Number(branchId),
+            organizationId: Number(organizationId),
+            organizationInventoryId: Number(orgInventoryId),
             assignedByUserId: (session.user as any).id,
-            isVisible,
-            isActive,
-            stockQuantity,
-            reorderThreshold,
+            isVisible: Boolean(isVisible),
+            isActive: Boolean(isActive),
           })
         }
       }
     }
 
-    if (assignments.length === 0) {
-      return NextResponse.json({ 
+    console.log('Operations:', { toInsert: toInsert.length, toRestore: toRestore.length })
+
+    if (toInsert.length === 0 && toRestore.length === 0) {
+      return NextResponse.json({
         message: "All selected products are already assigned to the selected branches",
         assignments: []
       })
     }
 
-    const newAssignments = await db.insert(branchInventory)
-      .values(assignments)
-      .returning()
+    const newAssignments = []
+
+    // Restore soft-deleted records
+    if (toRestore.length > 0) {
+      const restored = await db.update(branchInventory)
+        .set({
+          deletedAt: null,
+          isActive: isActive,
+          isVisible: isVisible,
+          assignedByUserId: (session.user as any).id,
+          updatedAt: new Date(),
+        })
+        .where(inArray(branchInventory.id, toRestore))
+        .returning()
+
+      newAssignments.push(...restored)
+      console.log('Restored assignments:', restored.length)
+    }
+
+    // Insert new records
+    if (toInsert.length > 0) {
+      for (const assignment of toInsert) {
+        try {
+          const [result] = await db.insert(branchInventory)
+            .values(assignment)
+            .returning()
+          newAssignments.push(result)
+        } catch (insertError: any) {
+          console.error("Insert failed:", assignment, insertError.message)
+          return NextResponse.json({
+            error: insertError.message,
+            code: insertError.code,
+            detail: insertError.detail
+          }, { status: 500 })
+        }
+      }
+      console.log('Inserted assignments:', toInsert.length)
+    }
 
     // Log the assignment creation
     await db.insert(auditLogs).values({
@@ -225,23 +349,82 @@ export async function POST(req: NextRequest) {
       action: "CREATE",
       entity: "BranchAssignment",
       entityId: newAssignments.map(a => a.id).join(','),
-      metadata: { 
+      metadata: {
         assignedCount: newAssignments.length,
         organizationId,
         organizationInventoryIds,
         branchIds,
+        groupId: groupId || null,
+        groupName: groupName || null,
         skippedCount: (organizationInventoryIds.length * branchIds.length) - newAssignments.length
       },
     })
 
+    // Log to inventory audit file
+    logInventoryAction(
+      'ASSIGN',
+      'BRANCH_ASSIGNMENT',
+      {
+        id: (session.user as any).id,
+        email: (session.user as any).email,
+        role: (session.user as any).role
+      },
+      {
+        organizationId: parseInt(organizationId),
+        productIds: organizationInventoryIds,
+        assignmentIds: newAssignments.map(a => a.id),
+        count: newAssignments.length,
+        metadata: {
+          branchIds: branchIds,
+          groupId: groupId || null,
+          groupName: groupName || null,
+          skipped: (organizationInventoryIds.length * branchIds.length) - newAssignments.length
+        }
+      }
+    )
+
     return NextResponse.json({
-      message: `${newAssignments.length} products assigned to branches successfully!`,
+      message: groupName
+        ? `${newAssignments.length} products assigned to group "${groupName}" (${branchIds.length} branches) successfully!`
+        : `${newAssignments.length} products assigned to branches successfully!`,
       assignments: newAssignments,
-      skipped: (organizationInventoryIds.length * branchIds.length) - newAssignments.length
+      skipped: (organizationInventoryIds.length * branchIds.length) - newAssignments.length,
+      groupName: groupName,
+      branchCount: branchIds.length
     })
   } catch (error: any) {
-    console.error("Error creating branch assignments:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    console.error("Error creating branch assignments:")
+    console.error("Error message:", error.message)
+    console.error("Error code:", error.code)
+    console.error("Error detail:", error.detail)
+    console.error("Error constraint:", error.constraint)
+    console.error("Error stack:", error.stack)
+
+    // Check for duplicate key constraint
+    if (error.message?.includes('duplicate key') || error.code === '23505') {
+      return NextResponse.json({
+        error: "Some products are already assigned to these branches",
+        details: error.detail || error.message
+      }, { status: 400 })
+    }
+
+    // Check for foreign key constraint violation
+    if (error.code === '23503') {
+      return NextResponse.json({
+        error: "Invalid reference: One or more IDs do not exist in the database",
+        details: error.detail || "Check that organization inventory items, branches, and user exist",
+        constraint: error.constraint
+      }, { status: 400 })
+    }
+
+    // Return detailed error for debugging
+    return NextResponse.json({
+      error: error.message || "Internal Server Error",
+      code: error.code,
+      detail: error.detail,
+      hint: error.hint,
+      constraint: error.constraint
+    }, { status: 500 })
   }
 }
 
@@ -258,21 +441,43 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden - Head Office or Super Admin access required" }, { status: 403 })
     }
 
-    const organizationId = (session.user as any).organizationId
-    if (!organizationId) {
-      return NextResponse.json({ error: "Organization not found in session" }, { status: 400 })
-    }
-
     const { searchParams } = new URL(req.url)
     const id = searchParams.get("id")
     const branchId = searchParams.get("branchId")
     const productId = searchParams.get("productId")
+    const queryOrgId = searchParams.get("organizationId")
+
+    // Get organization ID - from session for HEAD_OFFICE, from query param for SUPER_ADMIN
+    let organizationId = (session.user as any).organizationId
+
+    // SUPER_ADMIN can pass organizationId via query param, or we'll get it from the assignment
+    if (userRole === "SUPER_ADMIN" && !organizationId) {
+      organizationId = queryOrgId
+    }
+
+    // If deleting by specific ID, we can look up the organization from the assignment
+    if (id && !organizationId) {
+      const [assignment] = await db.select({ organizationId: branchInventory.organizationId })
+        .from(branchInventory)
+        .where(eq(branchInventory.id, parseInt(id)))
+        .limit(1)
+      if (assignment) {
+        organizationId = String(assignment.organizationId)
+      }
+    }
+
+    if (!organizationId) {
+      return NextResponse.json({ error: "Organization ID is required" }, { status: 400 })
+    }
+
+    // Parse organizationId to number for use in queries and logging
+    const orgIdNum = parseInt(String(organizationId))
 
     const whereConditions = [
-      eq(branchInventory.organizationId, parseInt(organizationId)),
+      eq(branchInventory.organizationId, orgIdNum),
       isNull(branchInventory.deletedAt)
     ]
-    
+
     if (id) {
       whereConditions.push(eq(branchInventory.id, parseInt(id)))
     }
@@ -294,14 +499,14 @@ export async function DELETE(req: NextRequest) {
       branchId: branchInventory.branchId,
       organizationInventoryId: branchInventory.organizationInventoryId,
     })
-    .from(branchInventory)
-    .leftJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+      .from(branchInventory)
+      .leftJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
       .where(
         productId
           ? and(
-              ...whereConditions,
-              eq(organizationInventory.globalProductId, parseInt(productId))
-            )
+            ...whereConditions,
+            eq(organizationInventory.globalProductId, parseInt(productId))
+          )
           : and(...whereConditions)
       )
 
@@ -312,35 +517,61 @@ export async function DELETE(req: NextRequest) {
     // Soft delete the assignments
     const now = new Date()
     await db.update(branchInventory)
-      .set({ 
+      .set({
         deletedAt: now,
         updatedAt: now
       })
       .where(
         productId
           ? and(
-              ...whereConditions,
-              inArray(
-                branchInventory.id,
-                assignmentsToDelete.map(a => a.id)
-              )
+            ...whereConditions,
+            inArray(
+              branchInventory.id,
+              assignmentsToDelete.map(a => a.id)
             )
+          )
           : and(...whereConditions)
       )
 
     // Log the assignment deletion
-    await db.insert(auditLogs).values({
-      userId: (session.user as any).id,
-      action: "DELETE",
-      entity: "BranchAssignment",
-      entityId: id || "bulk",
-      metadata: { 
-        deletedCount: assignmentsToDelete.length,
-        organizationId,
-        branchId,
-        productId
-      },
-    })
+    try {
+      await db.insert(auditLogs).values({
+        userId: (session.user as any).id,
+        organizationId: orgIdNum,
+        action: "DELETE",
+        entity: "BranchAssignment",
+        entityId: id || "bulk",
+        metadata: {
+          deletedCount: assignmentsToDelete.length,
+          branchId,
+          productId
+        },
+      })
+    } catch (auditError) {
+      console.error("Failed to insert audit log:", auditError)
+    }
+
+    // Log to inventory audit file
+    try {
+      logInventoryAction(
+        'REMOVE',
+        'BRANCH_ASSIGNMENT',
+        {
+          id: (session.user as any).id,
+          email: (session.user as any).email || 'unknown',
+          role: (session.user as any).role || userRole
+        },
+        {
+          organizationId: orgIdNum,
+          branchId: branchId ? parseInt(branchId) : undefined,
+          assignmentIds: assignmentsToDelete.map(a => a.id),
+          count: assignmentsToDelete.length,
+          metadata: { productId }
+        }
+      )
+    } catch (logError) {
+      console.error("Failed to log inventory action:", logError)
+    }
 
     return NextResponse.json({
       message: "Branch assignments removed successfully",
@@ -348,7 +579,7 @@ export async function DELETE(req: NextRequest) {
     })
   } catch (error: any) {
     console.error("Error deleting branch assignments:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -386,7 +617,7 @@ export async function PUT(req: NextRequest) {
     const updateData: any = {
       updatedAt: new Date()
     }
-    
+
     if (isVisible !== undefined) updateData.isVisible = isVisible
     if (isActive !== undefined) updateData.isActive = isActive
     if (stockQuantity !== undefined) updateData.stockQuantity = stockQuantity
@@ -413,7 +644,7 @@ export async function PUT(req: NextRequest) {
       action: "UPDATE",
       entity: "BranchAssignment",
       entityId: id.toString(),
-      metadata: { 
+      metadata: {
         organizationId,
         updateData,
         level: "head_office"

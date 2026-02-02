@@ -1,52 +1,36 @@
 "use client"
-import { useState } from "react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { Card, CardHeader, CardTitle } from "@/components/ui/card"
+import { Sparkles } from "lucide-react"
+import { ProductForm } from "@/components/global-inventory/product-form"
+import { useRouter } from "next/navigation"
 
-export default function AddInventoryPage() {
-  const [form, setForm] = useState({ organizationId: "", branchId: "", note: "", items: [{ sku: "", name: "", quantity: 0, unit: "pcs" }] })
-  const [saving, setSaving] = useState(false)
-  function setItem(idx: number, field: string, value: any) {
-    const items = [...form.items]
-    ;(items[idx] as any)[field] = value
-    setForm({ ...form, items })
-  }
-  async function onSave() {
-    setSaving(true)
-    try {
-      const res = await fetch("/api/v1/inventory/transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, type: "ADD" }) })
-      if (!res.ok) throw new Error("Failed")
-      alert("Inventory added")
-    } finally {
-      setSaving(false)
-    }
-  }
+export default function CreateProductPage() {
+  const router = useRouter()
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Add Inventory</h1>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="grid gap-1"><label className="text-sm">Organization Id</label><Input value={form.organizationId} onChange={(e) => setForm({ ...form, organizationId: e.target.value })} /></div>
-        <div className="grid gap-1"><label className="text-sm">Branch Id</label><Input value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })} /></div>
-      </div>
-      <div className="grid gap-2">
-        <div className="text-sm font-medium">Items</div>
-        {form.items.map((it, i) => (
-          <div key={i} className="grid gap-2 md:grid-cols-4">
-            <Input placeholder="SKU" value={it.sku} onChange={(e) => setItem(i, "sku", e.target.value)} />
-            <Input placeholder="Name" value={it.name} onChange={(e) => setItem(i, "name", e.target.value)} />
-            <Input placeholder="Qty" type="number" value={it.quantity} onChange={(e) => setItem(i, "quantity", Number(e.target.value))} />
-            <Input placeholder="Unit" value={it.unit} onChange={(e) => setItem(i, "unit", e.target.value)} />
-          </div>
-        ))}
-        <div>
-          <Button variant="secondary" onClick={() => setForm({ ...form, items: [...form.items, { sku: "", name: "", quantity: 0, unit: "pcs" }] })}>Add Item</Button>
+    <div className="space-y-8 p-6">
+      <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-purple-900 to-indigo-800 text-white shadow-xl">
+        <div className="pointer-events-none absolute inset-0 opacity-30">
+          <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
+          <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-indigo-400/40 blur-3xl" />
         </div>
-      </div>
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={() => history.back()}>Back</Button>
-        <Button onClick={onSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
-      </div>
+        <CardHeader className="relative space-y-3">
+          <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-white/70">
+            <Sparkles className="h-4 w-4" />
+            Inventory Management
+          </p>
+          <CardTitle className="text-3xl font-semibold text-white">Create New Product</CardTitle>
+          <p className="text-sm text-white/80">
+            Add a new product to the global inventory catalog. This product will be available for assignment to organizations.
+          </p>
+        </CardHeader>
+      </Card>
+
+      <ProductForm
+        mode="create"
+        onCancel={() => router.push("/inventory")}
+        onSuccess={() => router.push("/inventory")}
+      />
     </div>
   )
 }
-

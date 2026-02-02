@@ -11,6 +11,7 @@ import path from 'path'
 const LOG_DIR = path.join(process.cwd(), 'logs')
 const SYSTEM_LOG_FILE = path.join(LOG_DIR, 'system-audit.log')
 const ERROR_LOG_FILE = path.join(LOG_DIR, 'error.log')
+const INVENTORY_LOG_FILE = path.join(LOG_DIR, 'inventory-audit.log')
 const MAX_LOG_SIZE = 10 * 1024 * 1024 // 10MB
 const MAX_LOG_FILES = 5
 
@@ -310,11 +311,12 @@ export function logFulfillmentAttempt(
 /**
  * Get log statistics
  */
-export function getLogStats(): { systemLogSize: number; errorLogSize: number } | null {
+export function getLogStats(): { systemLogSize: number; errorLogSize: number; inventoryLogSize: number } | null {
     try {
         return {
             systemLogSize: fs.existsSync(SYSTEM_LOG_FILE) ? fs.statSync(SYSTEM_LOG_FILE).size : 0,
-            errorLogSize: fs.existsSync(ERROR_LOG_FILE) ? fs.statSync(ERROR_LOG_FILE).size : 0
+            errorLogSize: fs.existsSync(ERROR_LOG_FILE) ? fs.statSync(ERROR_LOG_FILE).size : 0,
+            inventoryLogSize: fs.existsSync(INVENTORY_LOG_FILE) ? fs.statSync(INVENTORY_LOG_FILE).size : 0
         }
     } catch (error) {
         console.error('[Logger] Failed to get log stats:', error)
@@ -322,4 +324,63 @@ export function getLogStats(): { systemLogSize: number; errorLogSize: number } |
     }
 }
 
+/**
+ * Log inventory-related actions (assignments, removals, updates)
+ */
+export function logInventoryAction(
+    action: 'ASSIGN' | 'REMOVE' | 'UPDATE' | 'CREATE' | 'DELETE',
+    entityType: 'BRANCH_ASSIGNMENT' | 'ORGANIZATION_INVENTORY' | 'GLOBAL_INVENTORY',
+    user: { id: string; email: string; role: string },
+    details: {
+        organizationId?: number
+        branchId?: number
+        productIds?: number[]
+        assignmentIds?: number[]
+        count?: number
+        metadata?: Record<string, any>
+    }
+): void {
+    try {
+        if (!action || !entityType || !user) {
+            console.error('[Logger] Invalid inventory action: missing required fields')
+            return
+        }
+
+        const logEntry = {
+            event: `INVENTORY_${action}_${entityType}`,
+            timestamp: new Date().toISOString(),
+            userId: user.id,
+            userEmail: user.email,
+            userRole: user.role,
+            organizationId: details.organizationId,
+            branchId: details.branchId,
+            result: 'SUCCESS',
+            details: {
+                productIds: details.productIds,
+                assignmentIds: details.assignmentIds,
+                count: details.count,
+                ...details.metadata
+            }
+        }
+
+        const logLine = JSON.stringify(logEntry) + '\n'
+        writeLog(INVENTORY_LOG_FILE, logLine)
+
+        // Also log to system audit for critical actions
+        if (action === 'DELETE' || action === 'REMOVE') {
+            logEvent({
+                event: logEntry.event,
+                userId: user.id,
+                userEmail: user.email,
+                userRole: user.role,
+                organizationId: details.organizationId,
+                branchId: details.branchId,
+                result: 'SUCCESS',
+                details: logEntry.details
+            })
+        }
+    } catch (error) {
+        logError(error, 'INVENTORY_ACTION_LOGGING', { action, entityType })
+    }
+}
 

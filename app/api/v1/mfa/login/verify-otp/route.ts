@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     if (!body) return error("Invalid request body", 400)
 
     const { email, code, type = 'LOGIN' } = body
-    
+
     if (!email || !code) {
       return error("Email and code are required", 400)
     }
@@ -21,12 +21,12 @@ export async function POST(req: NextRequest) {
     const { db } = await import("@/lib/db")
     const { users } = await import("@/db/schema")
     const { eq } = await import("drizzle-orm")
-    
+
     const [user] = await db
-      .select({ 
-        id: users.id, 
+      .select({
+        id: users.id,
         email: users.email,
-        mfaEnabled: users.mfaEnabled 
+        mfaEnabled: users.mfaEnabled
       })
       .from(users)
       .where(eq(users.email, email.toLowerCase()))
@@ -41,18 +41,15 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await verifyOTP(user.id, code, type)
-    
+
     if (result.success) {
-      return ok({ 
+      return ok({
         message: result.message,
         verified: true,
         userId: user.id
       })
     } else {
-      return error(result.message, 400, {
-        remainingAttempts: result.remainingAttempts,
-        cooldownUntil: result.cooldownUntil
-      })
+      return error(result.message + (result.remainingAttempts !== undefined ? ` (${result.remainingAttempts} attempts remaining)` : ''), 400)
     }
 
   } catch (err) {
