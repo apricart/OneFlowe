@@ -19,6 +19,7 @@ const getNavigationByRole = (role: string) => {
       { href: "/organizations", label: "Organizations", icon: Building2 },
       { href: "/users", label: "Users", icon: Users },
       { href: "/orders", label: "Orders", icon: Package },
+      { href: "/refunds", label: "Refunds", icon: Wallet },
       {
         href: "/inventory",
         label: "Inventory Management",

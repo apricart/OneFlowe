@@ -57,8 +57,8 @@ export async function GET(req: NextRequest) {
     if (role === "SUPER_ADMIN") {
       if (organizationIdParam && /^\d+$/.test(organizationIdParam))
         conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
-      // Super Admin sees ONLY Approved and Fulfilled orders (Logic: "if branch admin approved it, it goes to super admin")
-      conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED')`)
+      // Super Admin sees ONLY Approved, Fulfilled, and Refunded orders
+      conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'REFUNDED')`)
     } else if (role === "HEAD_OFFICE") {
       if (typeof orgIdNum === "number") conditions.push(eq(orders.organizationId, orgIdNum))
     } else {
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
           .select({
             monthNum: sql<number>`EXTRACT(MONTH FROM ${orders.fulfilledAt})::int`,
             month: sql<string>`TO_CHAR(${orders.fulfilledAt}, 'Mon')`,
-            sales: sql<number>`SUM(${orders.totalCents})::int`,
+            sales: sql<number>`SUM(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0))::int`,
           })
           .from(orders)
           .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -132,7 +132,7 @@ export async function GET(req: NextRequest) {
         .select({
           day: sql<string>`TO_CHAR(${orders.fulfilledAt}, 'YYYY-MM-DD')`,
           ordersCount: sql<number>`COUNT(*)::int`,
-          totalSales: sql<number>`SUM(${orders.totalCents})::int`,
+          totalSales: sql<number>`SUM(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0))::int`,
         })
         .from(orders)
         .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -151,6 +151,11 @@ export async function GET(req: NextRequest) {
         organizationId: orders.organizationId,
         branchId: orders.branchId,
         status: orders.status,
+        statusAtRefund: orders.statusAtRefund,
+        refundedAt: orders.refundedAt,
+        refundedByUserId: orders.refundedByUserId,
+        refundAmountCents: orders.refundAmountCents,
+        refundReason: orders.refundReason,
         subtotalCents: orders.subtotalCents,
         taxCents: orders.taxCents,
         totalCents: orders.totalCents,

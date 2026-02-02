@@ -336,6 +336,12 @@ export const orders = pgTable(
     approvalTokenHash: varchar("approval_token_hash", { length: 255 }), // Hash for verification
     approvalTokenCreatedAt: timestamp("approval_token_created_at", { withTimezone: true }),
     fulfilledByUserId: uuid("fulfilled_by_user_id").references(() => users.id),
+    // Refund tracking fields
+    refundedAt: timestamp("refunded_at", { withTimezone: true }),
+    refundedByUserId: uuid("refunded_by_user_id").references(() => users.id),
+    statusAtRefund: varchar("status_at_refund", { length: 32 }), // Status before refund (e.g., "APPROVED", "FULFILLED")
+    refundAmountCents: integer("refund_amount_cents"), // Total refund amount
+    refundReason: text("refund_reason"),
   },
   (t) => ({
     tidIdx: uniqueIndex("orders_tid_idx").on(t.tid),

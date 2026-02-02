@@ -39,7 +39,11 @@ interface OrderItem {
   tid: string
   organizationId: number
   branchId: number
+  branchName?: string | null
   status: string
+  statusAtRefund?: string | null
+  refundedAt?: string | null
+  refundAmountCents?: number | null
   subtotalCents: number
   taxCents: number
   totalCents: number
@@ -247,6 +251,7 @@ export default function OrdersManagementPage() {
     pending: orders.filter((o: OrderItem) => o.status.toLowerCase() === "pending").length,
     approved: orders.filter((o: OrderItem) => o.status.toLowerCase() === "approved").length,
     fulfilled: orders.filter((o: OrderItem) => o.status.toLowerCase() === "fulfilled").length,
+    refunded: orders.filter((o: OrderItem) => o.status.toLowerCase() === "refunded").length,
   }
 
   const scopeText = branchId
@@ -367,7 +372,7 @@ export default function OrdersManagementPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {["all", "pending", "approved", "fulfilled"].map((status) => (
+            {["all", "pending", "approved", "fulfilled", "refunded"].map((status) => (
               <Button
                 key={status}
                 onClick={() => setStatusFilter(status)}
@@ -395,6 +400,7 @@ export default function OrdersManagementPage() {
               <thead className="border-b bg-slate-50 dark:bg-slate-900 dark:border-slate-800">
                 <tr className="bg-slate-50 dark:bg-slate-900">
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">TID</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Branch</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Status</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Amount</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Date</th>
@@ -415,10 +421,38 @@ export default function OrdersManagementPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 bg-white dark:bg-slate-900">
-                        <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
-                          <StatusIcon className="h-3 w-3 mr-1" />
-                          {order.status}
-                        </Badge>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">
+                          {order.branchName || `Branch #${order.branchId}`}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 bg-white dark:bg-slate-900">
+                        {order.status.toLowerCase() === "refunded" && order.statusAtRefund ? (
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 border-0 w-fit">
+                              <TrendingDown className="h-3 w-3 mr-1" />
+                              REFUNDED
+                            </Badge>
+                            <Badge variant="outline" className="text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 w-fit">
+                              Was: {order.statusAtRefund}
+                            </Badge>
+                          </div>
+                        ) : (order.refundAmountCents && order.refundAmountCents > 0) ? (
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0 w-fit`}>
+                              <StatusIcon className="h-3 w-3 mr-1" />
+                              {order.status}
+                            </Badge>
+                            <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-600 w-fit">
+                              <TrendingDown className="h-3 w-3 mr-1" />
+                              Partially Refunded
+                            </Badge>
+                          </div>
+                        ) : (
+                          <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
+                            <StatusIcon className="h-3 w-3 mr-1" />
+                            {order.status}
+                          </Badge>
+                        )}
                       </td>
                       <td className="px-4 py-3 bg-white dark:bg-slate-900">
                         <p className="font-bold text-slate-900 dark:text-white">

@@ -78,10 +78,11 @@ export default function RefundOrdersReportPage() {
     if (filterText) doc.text(filterText, 14, 33)
 
     const tableData = filteredRefunds.map((r: any) => [
-      new Date(r.createdAt).toLocaleDateString(),
+      new Date(r.refundedAt || r.createdAt).toLocaleDateString(),
       r.tid,
       r.branchName,
-      r.status,
+      r.refundType || "N/A",
+      r.statusAtRefund || r.status,
       formatPKR(r.orderTotal / 100),
       formatPKR(r.refundAmount / 100),
       r.reason || "N/A"
@@ -89,7 +90,7 @@ export default function RefundOrdersReportPage() {
 
     autoTable(doc, {
       startY: 40,
-      head: [["Date", "Transaction ID", "Branch", "Status", "Order Total", "Refund Amount", "Reason"]],
+      head: [["Refund Date", "Transaction ID", "Branch", "Refund Type", "Previous Status", "Order Total", "Refund Amount", "Reason"]],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [153, 0, 0] }
@@ -186,10 +187,11 @@ export default function RefundOrdersReportPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
+              <TableHead>Refund Date</TableHead>
               <TableHead>Transaction ID</TableHead>
               <TableHead>Branch</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Refund Type</TableHead>
+              <TableHead>Previous Status</TableHead>
               <TableHead className="text-right">Order Total</TableHead>
               <TableHead className="text-right">Refund Amount</TableHead>
               <TableHead>Reason</TableHead>
@@ -203,10 +205,19 @@ export default function RefundOrdersReportPage() {
             ) : (
               filteredRefunds.map((refund: any) => (
                 <TableRow key={refund.id}>
-                  <TableCell className="text-xs" suppressHydrationWarning>{new Date(refund.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell className="text-xs" suppressHydrationWarning>{refund.refundedAt ? new Date(refund.refundedAt).toLocaleDateString() : new Date(refund.createdAt).toLocaleDateString()}</TableCell>
                   <TableCell className="text-xs font-medium">{refund.tid}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{refund.branchName}</TableCell>
-                  <TableCell><Badge variant={refund.status === 'APPROVED' ? 'default' : 'outline'} className="text-[10px]">{refund.status}</Badge></TableCell>
+                  <TableCell>
+                    <Badge variant={refund.refundType === 'FULL' ? 'destructive' : 'outline'} className="text-[10px]">
+                      {refund.refundType || 'PARTIAL'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {refund.statusAtRefund || refund.status}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-right text-xs">{formatPKR(refund.orderTotal / 100)}</TableCell>
                   <TableCell className="text-right text-xs font-bold text-red-600">-{formatPKR(refund.refundAmount / 100)}</TableCell>
                   <TableCell className="text-xs max-w-[200px] truncate">{refund.reason || "-"}</TableCell>

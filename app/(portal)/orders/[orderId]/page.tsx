@@ -31,6 +31,11 @@ type OrderDetail = {
   branchId: number
   branchName?: string | null
   status: string
+  statusAtRefund?: string | null
+  refundedAt?: string | null
+  refundedByUserId?: string | null
+  refundAmountCents?: number | null
+  refundReason?: string | null
   subtotalCents: number
   taxCents: number
   totalCents: number
@@ -105,14 +110,7 @@ export default function SuperAdminOrderDetailsPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to orders
         </Button>
-        {numericId && (
-          <Button asChild variant="outline" className="gap-2">
-            <Link href={`/orders/${numericId}/refunds`}>
-              <TrendingDown className="h-4 w-4" />
-              Manage refunds
-            </Link>
-          </Button>
-        )}
+
       </div>
 
       {order && (
@@ -139,7 +137,82 @@ export default function SuperAdminOrderDetailsPage() {
             </p>
             <p className="text-xs text-muted-foreground">Order ID #{order.id}</p>
           </Card>
+          {order.refundAmountCents && order.refundAmountCents > 0 && (
+            <Card className="rounded-2xl border-0 bg-yellow-50 dark:bg-yellow-950/50 border-yellow-200 dark:border-yellow-800 p-4 shadow-md">
+              <p className="text-sm text-yellow-700 dark:text-yellow-300">Refund amount</p>
+              <p className="text-2xl font-semibold text-yellow-900 dark:text-yellow-200">
+                {formatPKR(order.refundAmountCents / 100)}
+              </p>
+              <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                {order.status.toLowerCase() === "refunded" ? "Full refund" : "Partial refund"}
+              </p>
+            </Card>
+          )}
         </div>
+      )}
+
+      {/* Refund Information Card */}
+      {order && (order.refundAmountCents && order.refundAmountCents > 0) && (
+        <Card className="border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-950/20 p-6">
+          <div className="flex items-start gap-4">
+            <div className="rounded-full bg-yellow-100 dark:bg-yellow-900 p-2 text-yellow-600 dark:text-yellow-400">
+              <TrendingDown className="h-5 w-5" />
+            </div>
+            <div className="flex-1 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100">Refund Information</h3>
+                <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                  {order.status.toLowerCase() === "refunded"
+                    ? "This order has been fully refunded"
+                    : "This order has been partially refunded"}
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
+                  <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300">Refunded Amount</p>
+                  <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200">
+                    {formatPKR(order.refundAmountCents / 100)}
+                  </p>
+                </div>
+
+                {order.status.toLowerCase() !== "refunded" && (
+                  <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
+                    <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300">Remaining Balance</p>
+                    <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200">
+                      {formatPKR((order.totalCents - order.refundAmountCents) / 100)}
+                    </p>
+                  </div>
+                )}
+
+                {order.statusAtRefund && (
+                  <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
+                    <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300">Status Before Refund</p>
+                    <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200 uppercase">
+                      {order.statusAtRefund}
+                    </p>
+                  </div>
+                )}
+
+                {order.refundedAt && (
+                  <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
+                    <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300">Refunded At</p>
+                    <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-200">
+                      {formatDistanceToNow(new Date(order.refundedAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {order.refundReason && (
+                <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
+                  <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300 mb-1">Refund Reason</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">{order.refundReason}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
       )}
 
       {!numericId && (
