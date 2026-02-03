@@ -469,7 +469,7 @@ export function SuperAdminDashboard() {
       </Card>
 
       {/* Navigation Tiles */}
-      <section className="space-y-4">
+      {/* <section className="space-y-4">
         <div className="flex items-center gap-3">
           <div className="h-1 w-12 rounded-full bg-blue-600"></div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Admin Control Areas</h2>
@@ -507,7 +507,7 @@ export function SuperAdminDashboard() {
             )
           })}
         </div>
-      </section>
+      </section> */}
     </main>
   )
 }

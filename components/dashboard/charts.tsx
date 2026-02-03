@@ -121,9 +121,7 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales, label = "Pur
             <p className="text-2xl font-bold text-blue-900 dark:text-blue-200 mb-1">
               ₨{totalSales.toLocaleString()}
             </p>
-            <div className="w-full h-1 bg-blue-200 dark:bg-blue-900/50 rounded-full overflow-hidden">
-              <div className="w-full h-full bg-blue-600 dark:bg-blue-500 rounded-full"></div>
-            </div>
+
           </div>
 
           <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -138,9 +136,7 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales, label = "Pur
             <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-200 mb-1">
               ₨{Math.round(avgSales).toLocaleString()}
             </p>
-            <div className="w-full h-1 bg-indigo-200 dark:bg-indigo-900/50 rounded-full overflow-hidden">
-              <div className="w-3/4 h-full bg-indigo-600 dark:bg-indigo-500 rounded-full"></div>
-            </div>
+
           </div>
 
           <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -344,9 +340,7 @@ export function TrendAreaChart({ data, className, label = "Purchase" }: { data: 
               <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-200 mb-1">
                 ₨{totalValue.toLocaleString()}
               </p>
-              <div className="w-full h-1 bg-emerald-200 dark:bg-emerald-900/50 rounded-full overflow-hidden">
-                <div className="w-full h-full bg-emerald-600 dark:bg-emerald-500 rounded-full"></div>
-              </div>
+
             </div>
 
             <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -380,9 +374,7 @@ export function TrendAreaChart({ data, className, label = "Purchase" }: { data: 
               <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-200 mb-1">
                 ₨{Math.round(totalValue / (chartData.length || 1)).toLocaleString()}
               </p>
-              <div className="w-full h-1 bg-indigo-200 dark:bg-indigo-900/50 rounded-full overflow-hidden">
-                <div className="w-2/3 h-full bg-indigo-600 dark:bg-indigo-500 rounded-full"></div>
-              </div>
+
             </div>
           </div>
 

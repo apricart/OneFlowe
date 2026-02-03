@@ -14,6 +14,8 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { ReactNode, useEffect, useMemo, useState } from "react"
 import { useAppContext } from "@/components/context/app-context"
+import { PremiumConfirmDialog } from "@/components/premium/premium-confirm-dialog"
+import { PremiumAlert, type AlertType } from "@/components/premium/premium-alert"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Search } from "lucide-react"
 
@@ -27,9 +29,24 @@ export default function OrganizationsPage() {
 
   const [openOrg, setOpenOrg] = useState(false)
   const [openBranch, setOpenBranch] = useState(false)
+  const [feedback, setFeedback] = useState<{ message: string; type: AlertType; visible: boolean }>({
+    message: "",
+    type: "info",
+    visible: false,
+  })
+
+  const showFeedback = (message: string, type: AlertType) => {
+    setFeedback({ message, type, visible: true })
+  }
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
   const [orgSearch, setOrgSearch] = useState("")
   const [branchStatusFilter, setBranchStatusFilter] = useState<"all" | "active" | "inactive">("all")
+  const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: string | null; name: string | null }>({
+    open: false,
+    id: null,
+    name: null,
+  })
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     if (contextOrgId) {
@@ -38,6 +55,26 @@ export default function OrganizationsPage() {
       setSelectedOrgId(String(orgs!.items[0].id))
     }
   }, [contextOrgId, orgs?.items, selectedOrgId])
+
+  async function removeOrganization(id: string, refresh: () => void) {
+    try {
+      setIsDeleting(true)
+      const res = await fetch(`/api/v1/organizations/${id}`, { method: "DELETE" })
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete organization")
+      }
+
+      showFeedback("Organization deleted successfully.", "success")
+      refresh()
+    } catch (e: any) {
+      showFeedback(e.message, "error")
+    } finally {
+      setIsDeleting(false)
+      setConfirmDelete({ open: false, id: null, name: null })
+    }
+  }
 
   const filteredOrganizations = useMemo(() => {
     if (!orgs?.items) return []
@@ -76,199 +113,224 @@ export default function OrganizationsPage() {
   const branchCount = branches?.items.length ?? 0
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
-      <header className="flex items-center justify-between">
-        <h1 className={cn("text-2xl font-semibold text-balance")}>Companies</h1>
-        <div className="flex gap-2">
-          <CreateOrgDialog
-            open={openOrg}
-            onOpenChange={setOpenOrg}
-            onCreated={() => {
-              setOpenOrg(false)
-              refetchOrgs()
-            }}
-          />
-          <CreateBranchDialog
-            organizations={orgs?.items || []}
-            open={openBranch}
-            onOpenChange={setOpenBranch}
-            onCreated={() => {
-              setOpenBranch(false)
-              refetchBranches()
-            }}
-          />
-        </div>
-      </header>
-
-      <section className="grid gap-4">
-        <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-xl">
-          <div className="pointer-events-none absolute inset-0 opacity-30">
-            <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
-            <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-indigo-400/40 blur-3xl" />
+    <>
+      <PremiumAlert
+        message={feedback.message}
+        type={feedback.type}
+        isVisible={feedback.visible}
+        onClose={() => setFeedback({ ...feedback, visible: false })}
+      />
+      <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
+        <header className="flex items-center justify-between">
+          <h1 className={cn("text-2xl font-semibold text-balance")}>Companies</h1>
+          <div className="flex gap-2">
+            <CreateOrgDialog
+              open={openOrg}
+              onOpenChange={setOpenOrg}
+              showFeedback={showFeedback}
+              onCreated={() => {
+                setOpenOrg(false)
+                refetchOrgs()
+                showFeedback("Company created successfully.", "success")
+              }}
+            />
+            <CreateBranchDialog
+              organizations={orgs?.items || []}
+              open={openBranch}
+              onOpenChange={setOpenBranch}
+              showFeedback={showFeedback}
+              onCreated={() => {
+                setOpenBranch(false)
+                refetchBranches()
+                showFeedback("Branch created successfully.", "success")
+              }}
+            />
           </div>
-          <CardHeader className="relative space-y-6">
-            <div className="space-y-2">
-              <p className="text-xs uppercase tracking-[0.2em] text-white/70">Organization overview</p>
-              <CardTitle className="text-3xl font-semibold text-white">Multi-tenant control center</CardTitle>
-              <p className="text-sm text-white/80">
-                Keep every company and its branch network aligned. Use this panel to manage hierarchy, status, and growth.
-              </p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <HeroStat label="Companies" value={orgCount} helper="Active tenants" />
-              <HeroStat label="Branches" value={branchCount} helper="Across all orgs" />
-              <HeroStat label="Average branches/org" value={orgCount ? Math.max(1, Math.round(branchCount / orgCount)) : 0} helper="Coverage" />
-            </div>
-          </CardHeader>
-        </Card>
-      </section>
+        </header>
 
-      <section className="grid gap-6 lg:grid-cols-[320px,1fr]">
-        <Card className="h-full border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Company List
-              <Badge variant="outline">{orgCount}</Badge>
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">Select a company to view its details and branches.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search companies..."
-                value={orgSearch}
-                onChange={(e) => setOrgSearch(e.target.value)}
-                className="pl-9"
-              />
+        <section className="grid gap-4">
+          <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-xl">
+            <div className="pointer-events-none absolute inset-0 opacity-30">
+              <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
+              <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-indigo-400/40 blur-3xl" />
             </div>
-            <ScrollArea className="max-h-[520px] pr-3">
+            <CardHeader className="relative space-y-6">
               <div className="space-y-2">
-                <OrganizationListItem
-                  isActive={!selectedOrgId}
-                  onClick={() => setSelectedOrgId(null)}
-                  title="All Companies"
-                  subtitle={`${orgCount} companies, ${branchCount} branches`}
-                  badgeLabel="Global"
+                <p className="text-xs uppercase tracking-[0.2em] text-white/70">Organization overview</p>
+                <CardTitle className="text-3xl font-semibold text-white">Multi-tenant control center</CardTitle>
+                <p className="text-sm text-white/80">
+                  Keep every company and its branch network aligned. Use this panel to manage hierarchy, status, and growth.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <HeroStat label="Companies" value={orgCount} helper="Active tenants" />
+                <HeroStat label="Branches" value={branchCount} helper="Across all orgs" />
+                <HeroStat label="Average branches/org" value={orgCount ? Math.max(1, Math.round(branchCount / orgCount)) : 0} helper="Coverage" />
+              </div>
+            </CardHeader>
+          </Card>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[320px,1fr]">
+          <Card className="h-full border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                Company List
+                <Badge variant="outline">{orgCount}</Badge>
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Select a company to view its details and branches.</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search companies..."
+                  value={orgSearch}
+                  onChange={(e) => setOrgSearch(e.target.value)}
+                  className="pl-9"
                 />
-                {filteredOrganizations.map((org) => (
+              </div>
+              <ScrollArea className="max-h-[520px] pr-3">
+                <div className="space-y-2">
                   <OrganizationListItem
-                    key={org.id}
-                    isActive={String(org.id) === String(selectedOrgId)}
-                    onClick={() => setSelectedOrgId(String(org.id))}
-                    title={org.name}
-                    subtitle={`${org.code} • ${branchesByOrgId.get(org.id)?.length || 0} branches`}
-                    status={isActiveStatus(org.status)}
-                  >
-                    <EditOrgDialog org={org} onSave={(payload) => editOrganization(String(org.id), payload, refetchOrgs)} />
+                    isActive={!selectedOrgId}
+                    onClick={() => setSelectedOrgId(null)}
+                    title="All Companies"
+                    subtitle={`${orgCount} companies, ${branchCount} branches`}
+                    badgeLabel="Global"
+                  />
+                  {filteredOrganizations.map((org) => (
+                    <OrganizationListItem
+                      key={org.id}
+                      isActive={String(org.id) === String(selectedOrgId)}
+                      onClick={() => setSelectedOrgId(String(org.id))}
+                      title={org.name}
+                      subtitle={`${org.code} • ${branchesByOrgId.get(org.id)?.length || 0} branches`}
+                      status={isActiveStatus(org.status)}
+                    >
+                      <EditOrgDialog org={org} onSave={(payload) => editOrganization(String(org.id), payload, refetchOrgs, showFeedback)} />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setConfirmDelete({ open: true, id: String(org.id), name: org.name })
+                        }}
+                        title="Delete company"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </OrganizationListItem>
+                  ))}
+                  {filteredOrganizations.length === 0 && (
+                    <p className="text-sm text-muted-foreground px-2">No companies match your search.</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-6">
+            <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
+              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>{selectedOrg ? selectedOrg.name : "All Companies"}</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedOrg
+                      ? `Code ${selectedOrg.code} • ${branchesByOrgId.get(selectedOrg.id)?.length || 0} branch(es)`
+                      : "Showing metrics across every company"}
+                  </p>
+                </div>
+                {selectedOrg && (
+                  <div className="flex items-center gap-2">
+                    <EditOrgDialog org={selectedOrg} onSave={(payload) => editOrganization(String(selectedOrg.id), payload, refetchOrgs, showFeedback)} />
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        removeOrganization(String(org.id), refetchOrgs)
-                      }}
+                      onClick={() => setConfirmDelete({ open: true, id: String(selectedOrg.id), name: selectedOrg.name })}
                       title="Delete company"
                     >
                       <Trash2 size={16} />
                     </Button>
-                  </OrganizationListItem>
-                ))}
-                {filteredOrganizations.length === 0 && (
-                  <p className="text-sm text-muted-foreground px-2">No companies match your search.</p>
+                  </div>
                 )}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
-          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle>{selectedOrg ? selectedOrg.name : "All Companies"}</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {selectedOrg
-                    ? `Code ${selectedOrg.code} • ${branchesByOrgId.get(selectedOrg.id)?.length || 0} branch(es)`
-                    : "Showing metrics across every company"}
-                </p>
-              </div>
-              {selectedOrg && (
-                <div className="flex items-center gap-2">
-                  <EditOrgDialog org={selectedOrg} onSave={(payload) => editOrganization(String(selectedOrg.id), payload, refetchOrgs)} />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeOrganization(String(selectedOrg.id), refetchOrgs)}
-                    title="Delete company"
-                  >
-                    <Trash2 size={16} />
-                  </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <SummaryStat
+                    label={selectedOrg ? "Current company" : "Companies"}
+                    value={selectedOrg ? selectedOrg.name : orgCount}
+                    helper={selectedOrg ? `Code ${selectedOrg.code}` : "Total tenants"}
+                    icon={<Building2 className="h-4 w-4 text-primary" />}
+                  />
+                  <SummaryStat
+                    label="Branches in view"
+                    value={filteredBranches.length}
+                    helper={branchStatusFilter === "all" ? "All statuses" : `${branchStatusFilter} only`}
+                    icon={<GitBranch className="h-4 w-4 text-emerald-500" />}
+                  />
+                  <SummaryStat
+                    label="Status"
+                    value={
+                      selectedOrg ? (isActiveStatus(selectedOrg.status) ? "Active" : "Inactive") : `${branchCount} branches total`
+                    }
+                    helper={selectedOrg ? "Company visibility" : "Across all orgs"}
+                    icon={<Badge variant="outline">{selectedOrg ? "Org" : "All"}</Badge>}
+                  />
                 </div>
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <SummaryStat
-                  label={selectedOrg ? "Current company" : "Companies"}
-                  value={selectedOrg ? selectedOrg.name : orgCount}
-                  helper={selectedOrg ? `Code ${selectedOrg.code}` : "Total tenants"}
-                  icon={<Building2 className="h-4 w-4 text-primary" />}
-                />
-                <SummaryStat
-                  label="Branches in view"
-                  value={filteredBranches.length}
-                  helper={branchStatusFilter === "all" ? "All statuses" : `${branchStatusFilter} only`}
-                  icon={<GitBranch className="h-4 w-4 text-emerald-500" />}
-                />
-                <SummaryStat
-                  label="Status"
-                  value={
-                    selectedOrg ? (isActiveStatus(selectedOrg.status) ? "Active" : "Inactive") : `${branchCount} branches total`
-                  }
-                  helper={selectedOrg ? "Company visibility" : "Across all orgs"}
-                  icon={<Badge variant="outline">{selectedOrg ? "Org" : "All"}</Badge>}
-                />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle>Branches {selectedOrg ? `for ${selectedOrg.name}` : ""}</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {filteredBranches.length} branch{filteredBranches.length === 1 ? "" : "es"} shown
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-sm text-muted-foreground">Status</Label>
-                <Select value={branchStatusFilter} onValueChange={(value) => setBranchStatusFilter(value as typeof branchStatusFilter)}>
-                  <SelectTrigger className="w-[160px]">
-                    <SelectValue placeholder="Filter status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All statuses</SelectItem>
-                    <SelectItem value="active">Active only</SelectItem>
-                    <SelectItem value="inactive">Inactive only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <BranchesTable
-                items={filteredBranches}
-                organizations={orgs?.items || []}
-                refresh={refetchBranches}
-                showCompanyColumn={!selectedOrg}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+            <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
+              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>Branches {selectedOrg ? `for ${selectedOrg.name}` : ""}</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {filteredBranches.length} branch{filteredBranches.length === 1 ? "" : "es"} shown
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm text-muted-foreground">Status</Label>
+                  <Select value={branchStatusFilter} onValueChange={(value) => setBranchStatusFilter(value as typeof branchStatusFilter)}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Filter status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="active">Active only</SelectItem>
+                      <SelectItem value="inactive">Inactive only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <BranchesTable
+                  items={filteredBranches}
+                  organizations={orgs?.items || []}
+                  refresh={refetchBranches}
+                  showCompanyColumn={!selectedOrg}
+                  showFeedback={showFeedback}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        </section>
 
-      {loadingOrgs && <div className="text-sm text-muted-foreground">Loading...</div>}
-    </main>
+
+        {loadingOrgs && <div className="text-sm text-muted-foreground">Loading...</div>}
+
+        <PremiumConfirmDialog
+          open={confirmDelete.open}
+          onOpenChange={(open) => setConfirmDelete((prev) => ({ ...prev, open }))}
+          onConfirm={() => confirmDelete.id && removeOrganization(confirmDelete.id, refetchOrgs)}
+          title={`Delete "${confirmDelete.name}"?`}
+          description="This action cannot be undone. All data related to this organization must be removed first."
+          confirmText="Delete Company"
+          type="danger"
+          isLoading={isDeleting}
+        />
+      </main>
+    </>
   )
 }
 
@@ -278,14 +340,21 @@ function isActiveStatus(status: unknown): boolean {
   return Boolean(status)
 }
 
-async function removeOrganization(id: string, refresh: () => void) {
-  await fetch(`/api/v1/organizations/${id}`, { method: "DELETE" })
-  refresh()
-}
 
-async function editOrganization(id: string, payload: Partial<Organization>, refresh: () => void) {
-  await fetch(`/api/v1/organizations/${id}`, { method: "PATCH", body: JSON.stringify(payload) })
-  refresh()
+async function editOrganization(id: string, payload: Partial<Organization>, refresh: () => void, showFeedback: (msg: string, type: AlertType) => void) {
+  try {
+    const res = await fetch(`/api/v1/organizations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+      headers: { "Content-Type": "application/json" }
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || "Failed to update organization")
+    showFeedback("Organization updated successfully.", "success")
+    refresh()
+  } catch (e: any) {
+    showFeedback(e.message, "error")
+  }
 }
 
 function BranchesTable({
@@ -293,20 +362,38 @@ function BranchesTable({
   organizations,
   refresh,
   showCompanyColumn = true,
+  showFeedback,
 }: {
   items: Branch[]
   organizations: Organization[]
   refresh: () => void
   showCompanyColumn?: boolean
+  showFeedback: (msg: string, type: AlertType) => void
 }) {
   const orgById = useMemo(() => Object.fromEntries(organizations.map((o) => [o.id, o])), [organizations])
   async function remove(id: string) {
-    await fetch(`/api/v1/branches/${id}`, { method: "DELETE" })
-    refresh()
+    try {
+      const res = await fetch(`/api/v1/branches/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Failed to delete branch")
+      showFeedback("Branch deleted successfully.", "success")
+      refresh()
+    } catch (e: any) {
+      showFeedback(e.message, "error")
+    }
   }
   async function edit(id: string, payload: Partial<Branch>) {
-    await fetch(`/api/v1/branches/${id}`, { method: "PATCH", body: JSON.stringify(payload) })
-    refresh()
+    try {
+      const res = await fetch(`/api/v1/branches/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" }
+      })
+      if (!res.ok) throw new Error("Failed to update branch")
+      showFeedback("Branch updated successfully.", "success")
+      refresh()
+    } catch (e: any) {
+      showFeedback(e.message, "error")
+    }
   }
   return (
     <div className="overflow-x-auto">
@@ -468,23 +555,34 @@ function CreateOrgDialog({
   open,
   onOpenChange,
   onCreated,
+  showFeedback,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   onCreated: () => void
+  showFeedback: (msg: string, type: AlertType) => void
 }) {
   const [name, setName] = useState("")
   const [code, setCode] = useState("")
   const [status, setStatus] = useState<boolean>(true)
   async function submit() {
-    await fetch("/api/v1/organizations", {
-      method: "POST",
-      body: JSON.stringify({ name, code, status: status ? "active" : "inactive" }),
-    })
-    setName("")
-    setCode("")
-    setStatus(true)
-    onCreated()
+    try {
+      const res = await fetch("/api/v1/organizations", {
+        method: "POST",
+        body: JSON.stringify({ name, code, status: status ? "active" : "inactive" }),
+        headers: { "Content-Type": "application/json" }
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to create company")
+
+      showFeedback("Company created successfully.", "success")
+      setName("")
+      setCode("")
+      setStatus(true)
+      onCreated()
+    } catch (e: any) {
+      showFeedback(e.message, "error")
+    }
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -556,11 +654,13 @@ function CreateBranchDialog({
   open,
   onOpenChange,
   onCreated,
+  showFeedback,
 }: {
   organizations: Organization[]
   open: boolean
   onOpenChange: (v: boolean) => void
   onCreated: () => void
+  showFeedback: (msg: string, type: AlertType) => void
 }) {
   const [orgId, setOrgId] = useState<string | undefined>(undefined)
   const [name, setName] = useState("")
@@ -568,20 +668,29 @@ function CreateBranchDialog({
   const [status, setStatus] = useState<boolean>(true)
   async function submit() {
     if (!orgId) return
-    await fetch("/api/v1/branches", {
-      method: "POST",
-      body: JSON.stringify({ organizationId: orgId, name, code, status: status ? "active" : "inactive" }),
-    })
-    setName("")
-    setCode("")
-    setStatus(true)
-    setOrgId(undefined)
-    onCreated()
+    try {
+      const res = await fetch("/api/v1/branches", {
+        method: "POST",
+        body: JSON.stringify({ organizationId: orgId, name, code, status: status ? "active" : "inactive" }),
+        headers: { "Content-Type": "application/json" }
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to create branch")
+
+      showFeedback("Branch created successfully.", "success")
+      setName("")
+      setCode("")
+      setStatus(true)
+      setOrgId(undefined)
+      onCreated()
+    } catch (e: any) {
+      showFeedback(e.message, "error")
+    }
   }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button variant="secondary" className="gap-2">
+        <Button className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400 border-none">
           <GitBranch className="h-4 w-4" />
           Create Branch
         </Button>
@@ -603,11 +712,13 @@ function CreateBranchDialog({
                     <SelectValue placeholder="Select company" />
                   </SelectTrigger>
                   <SelectContent>
-                    {organizations.map((o) => (
-                      <SelectItem key={o.id} value={String(o.id)}>
-                        {o.name}
-                      </SelectItem>
-                    ))}
+                    {organizations
+                      .filter((o) => o.status === "active")
+                      .map((o) => (
+                        <SelectItem key={o.id} value={String(o.id)}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -665,6 +776,12 @@ function EditOrgDialog({ org, onSave }: { org: Organization; onSave: (payload: P
   const [name, setName] = useState(org.name)
   const [code, setCode] = useState(org.code)
   const [status, setStatus] = useState<boolean>(((org as any).status || "active") === "active")
+
+  useEffect(() => {
+    setName(org.name)
+    setCode(org.code)
+    setStatus(((org as any).status || "active") === "active")
+  }, [org.name, org.code, (org as any).status])
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -727,6 +844,12 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
   const [name, setName] = useState(branch.name)
   const [code, setCode] = useState(branch.code)
   const [status, setStatus] = useState<boolean>(((branch as any).status || "active") === "active")
+
+  useEffect(() => {
+    setName(branch.name)
+    setCode(branch.code)
+    setStatus(((branch as any).status || "active") === "active")
+  }, [branch.name, branch.code, (branch as any).status])
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>

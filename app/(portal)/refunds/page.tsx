@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -41,9 +41,12 @@ type OrderData = {
     items: OrderItem[]
 }
 
+import { useSearchParams } from "next/navigation"
+
 export default function RefundsPage() {
     const { toast } = useToast()
-    const [searchQuery, setSearchQuery] = useState("")
+    const searchParams = useSearchParams()
+    const [searchQuery, setSearchQuery] = useState(searchParams.get("tid") || "")
     const [searching, setSearching] = useState(false)
     const [order, setOrder] = useState<OrderData | null>(null)
     const [error, setError] = useState<string | null>(null)
@@ -52,11 +55,11 @@ export default function RefundsPage() {
     const [refundReason, setRefundReason] = useState("")
     const [processing, setProcessing] = useState(false)
 
-    const searchOrder = async () => {
-        if (!searchQuery.trim()) {
-            toast({ title: "Error", description: "Please enter a Transaction ID (TID)", variant: "destructive" })
-            return
-        }
+    const [pendingRefunds, setPendingRefunds] = useState<any[]>([])
+
+    // Separate search function to be called from effect or button
+    const performSearch = async (tid: string) => {
+        if (!tid.trim()) return
 
         setSearching(true)
         setError(null)
@@ -64,7 +67,7 @@ export default function RefundsPage() {
         setSelectedItems(new Map())
 
         try {
-            const response = await fetch(`/api/v1/admin/refunds?q=${encodeURIComponent(searchQuery.trim())}`)
+            const response = await fetch(`/api/v1/admin/refunds?q=${encodeURIComponent(tid.trim())}`)
             const data = await response.json()
 
             if (!response.ok) {
@@ -80,6 +83,33 @@ export default function RefundsPage() {
             setSearching(false)
         }
     }
+
+    // Fetch pending refunds on mount
+    useEffect(() => {
+        const fetchPendingRefunds = async () => {
+            try {
+                const response = await fetch('/api/v1/admin/refunds?status=pending')
+                if (response.ok) {
+                    const data = await response.json()
+                    setPendingRefunds(data.refunds || [])
+                }
+            } catch (error) {
+                console.error("Failed to fetch pending refunds", error)
+            }
+        }
+
+        fetchPendingRefunds()
+    }, [])
+
+    // Auto-search on mount if tid param exists
+    useEffect(() => {
+        const tid = searchParams.get("tid")
+        if (tid) {
+            performSearch(tid)
+        }
+    }, [searchParams])
+
+    const searchOrder = () => performSearch(searchQuery)
 
     const handleItemToggle = (itemId: number, maxQty: number) => {
         setSelectedItems(prev => {
@@ -259,6 +289,53 @@ export default function RefundsPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {!order && pendingRefunds.length > 0 && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-amber-600">
+                            <AlertTriangle className="h-5 w-5" />
+                            Pending Refund Requests
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Requested</TableHead>
+                                    <TableHead>Branch</TableHead>
+                                    <TableHead>Transaction ID</TableHead>
+                                    <TableHead>Amount</TableHead>
+                                    <TableHead>Requested By</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {pendingRefunds.map((refund) => (
+                                    <TableRow key={refund.id}>
+                                        <TableCell>{new Date(refund.createdAt).toLocaleDateString()}</TableCell>
+                                        <TableCell>{refund.branchName || "Unknown"}</TableCell>
+                                        <TableCell className="font-mono">{refund.tid}</TableCell>
+                                        <TableCell className="font-bold">PKR {(refund.amountCents / 100).toFixed(2)}</TableCell>
+                                        <TableCell>{refund.requestedByName || "Unknown"}</TableCell>
+                                        <TableCell className="text-right">
+                                            <Button
+                                                size="sm"
+                                                onClick={() => {
+                                                    setSearchQuery(refund.tid)
+                                                    performSearch(refund.tid)
+                                                }}
+                                            >
+                                                Review
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            )}
 
             {order && (
                 <Card>

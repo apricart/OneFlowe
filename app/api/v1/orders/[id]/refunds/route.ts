@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { refunds, orders, budgets, auditLogs, users } from "@/db/schema"
-import { eq, sql, desc } from "drizzle-orm"
+import { refunds, orders, budgets, auditLogs, users, orderItems, refundItems } from "@/db/schema"
+import { eq, sql, desc, inArray } from "drizzle-orm"
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -50,7 +50,38 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .where(eq(refunds.orderId, orderId))
       .orderBy(desc(refunds.createdAt))
 
-    return NextResponse.json({ refunds: refundsData })
+    // Fetch refund items if any refunds exist
+    let refundsWithItems = refundsData.map(r => ({ ...r, items: [] as any[] }))
+
+    if (refundsData.length > 0) {
+      const refundIds = refundsData.map(r => r.id)
+      const items = await db
+        .select({
+          refundId: refundItems.refundId,
+          orderItemId: refundItems.orderItemId,
+          quantity: refundItems.quantity,
+          amountCents: refundItems.amountCents,
+          productName: orderItems.productName,
+          unit: orderItems.unit
+        })
+        .from(refundItems)
+        .innerJoin(orderItems, eq(refundItems.orderItemId, orderItems.id))
+        .where(inArray(refundItems.refundId, refundIds))
+
+      // Attach items to refunds
+      const itemsMap = new Map<number, typeof items>()
+      items.forEach(item => {
+        if (!itemsMap.has(item.refundId)) itemsMap.set(item.refundId, [])
+        itemsMap.get(item.refundId)?.push(item)
+      })
+
+      refundsWithItems = refundsData.map(r => ({
+        ...r,
+        items: itemsMap.get(r.id) || []
+      }))
+    }
+
+    return NextResponse.json({ refunds: refundsWithItems })
   } catch (error: any) {
     console.error("Error fetching refunds:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
@@ -83,34 +114,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
     }
 
-    const { amountCents, reason } = body as { amountCents: number, reason?: string }
+    const { items, reason } = body as { items: { id: number, quantity: number }[], reason?: string }
 
-    // Validate refund amount
-    if (amountCents === undefined || amountCents === null) {
-      return NextResponse.json({ error: 'Refund amount is required' }, { status: 400 })
-    }
-
-    if (!Number.isFinite(amountCents)) {
-      return NextResponse.json({ error: 'Refund amount must be a valid number' }, { status: 400 })
-    }
-
-    if (amountCents <= 0) {
-      return NextResponse.json({ error: 'Refund amount must be positive' }, { status: 400 })
-    }
-
-    // Safety check for extremely large values
-    if (amountCents > Number.MAX_SAFE_INTEGER / 2) {
-      return NextResponse.json({ error: 'Refund amount exceeds maximum allowed value' }, { status: 400 })
-    }
-
-    // Validate reason if provided
-    if (reason !== undefined && reason !== null) {
-      if (typeof reason !== 'string') {
-        return NextResponse.json({ error: 'Reason must be a string' }, { status: 400 })
-      }
-      if (reason.trim().length > 500) {
-        return NextResponse.json({ error: 'Reason must not exceed 500 characters' }, { status: 400 })
-      }
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: 'List of items to refund is required' }, { status: 400 })
     }
 
     // Fetch order with validation
@@ -122,7 +129,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const orderData = ord as any
 
-    // Validate order status - cannot refund pending or already refunded orders
+    // Validate order status
     const orderStatus = String(orderData.status || '').toUpperCase()
     if (orderStatus === 'PENDING') {
       return NextResponse.json({
@@ -136,26 +143,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }, { status: 400 })
     }
 
-    // Validate refund amount doesn't exceed order total
-    const orderTotal = orderData.totalCents || 0
-    if (amountCents > orderTotal) {
+    // Validate refund window (must be same month/year)
+    const orderDate = new Date(orderData.createdAt)
+    const now = new Date()
+    if (orderDate.getMonth() !== now.getMonth() || orderDate.getFullYear() !== now.getFullYear()) {
       return NextResponse.json({
-        error: `Refund amount (${(amountCents / 100).toFixed(2)} PKR) cannot exceed order total (${(orderTotal / 100).toFixed(2)} PKR)`
-      }, { status: 400 })
-    }
-
-    // Check for existing refunds to prevent over-refunding
-    const existingRefunds = await db
-      .select({ amountCents: refunds.amountCents })
-      .from(refunds)
-      .where(eq(refunds.orderId, orderId))
-
-    const totalRefunded = existingRefunds.reduce((sum, r) => sum + (r.amountCents || 0), 0)
-    const remainingRefundable = orderTotal - totalRefunded
-
-    if (amountCents > remainingRefundable) {
-      return NextResponse.json({
-        error: `Refund amount (${(amountCents / 100).toFixed(2)} PKR) exceeds remaining refundable amount (${(remainingRefundable / 100).toFixed(2)} PKR). Already refunded: ${(totalRefunded / 100).toFixed(2)} PKR`
+        error: 'Refund period ended. Refunds are only allowed within the calendar month of the order.'
       }, { status: 400 })
     }
 
@@ -173,21 +166,101 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Forbidden: Cannot refund orders from other organizations" }, { status: 403 })
     }
 
+    // 1. Fetch original order items to validate prices and quantities
+    const orderItemsList = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId))
+    const orderItemsMap = new Map(orderItemsList.map(i => [i.id, i]))
+
+    // Check previously refunded quantities
+    // We need to fetch all refund_items associated with refunds for this order
+    // But since we can query refund_items directly joined with refund...
+    const previousRefunds = await db
+      .select({
+        orderItemId: refundItems.orderItemId,
+        quantity: refundItems.quantity,
+        status: refunds.status
+      })
+      .from(refundItems)
+      .innerJoin(refunds, eq(refundItems.refundId, refunds.id))
+      .where(eq(refunds.orderId, orderId))
+
+    // Aggregate previously refunded quantities per item, excluding REJECTED refunds
+    const previouslyRefundedMap = new Map<number, number>()
+    for (const p of previousRefunds) {
+      if (p.status !== 'REJECTED') {
+        previouslyRefundedMap.set(p.orderItemId, (previouslyRefundedMap.get(p.orderItemId) || 0) + p.quantity)
+      }
+    }
+
+    // 2. Calculate refund amount from server-side data
+    let totalRefundAmount = 0
+    const refundDetails: { orderItemId: number, name: string, quantity: number, amount: number }[] = []
+
+    for (const item of items) {
+      const originalItem = orderItemsMap.get(item.id)
+      if (!originalItem) {
+        return NextResponse.json({ error: `Item ${item.id} does not belong to this order` }, { status: 400 })
+      }
+
+      if (item.quantity <= 0) {
+        return NextResponse.json({ error: `Invalid quantity for item ${originalItem.productName}` }, { status: 400 })
+      }
+
+      const previouslyRefunded = previouslyRefundedMap.get(item.id) || 0
+      const remainingQty = originalItem.quantity - previouslyRefunded
+
+      if (item.quantity > remainingQty) {
+        return NextResponse.json({
+          error: `Cannot refund ${item.quantity} of ${originalItem.productName}. Only ${remainingQty} remaining (Ordered: ${originalItem.quantity}, Refunded: ${previouslyRefunded})`
+        }, { status: 400 })
+      }
+
+      const itemTotal = originalItem.priceCents * item.quantity
+      totalRefundAmount += itemTotal
+
+      refundDetails.push({
+        orderItemId: item.id,
+        name: originalItem.productName,
+        quantity: item.quantity,
+        amount: itemTotal
+      })
+    }
+
+    // Check for existing refunds to prevent over-refunding (amount check as safety net)
+    const existingRefunds = await db
+      .select({ amountCents: refunds.amountCents, status: refunds.status })
+      .from(refunds)
+      .where(eq(refunds.orderId, orderId))
+
+    const totalRefundedAmount = existingRefunds
+      .filter(r => r.status !== 'REJECTED')
+      .reduce((sum, r) => sum + (r.amountCents || 0), 0)
+
+    const remainingRefundableAmount = orderData.totalCents - totalRefundedAmount
+
+    if (totalRefundAmount > remainingRefundableAmount) {
+      return NextResponse.json({
+        error: `Refund amount (${(totalRefundAmount / 100).toFixed(2)} PKR) exceeds remaining refundable amount.`
+      }, { status: 400 })
+    }
+
     // Execute refund in transaction
     await db.transaction(async (tx) => {
+      let refundId: number;
+
       if (userRole === "SUPER_ADMIN") {
         // Super Admin: approve/process refund and adjust budgets
-        await tx.insert(refunds).values({
+        const [insertedRefund] = await tx.insert(refunds).values({
           organizationId: orderData.organizationId,
           orderId,
-          amountCents,
+          amountCents: totalRefundAmount,
           reason: reason?.trim() || null,
           status: "APPROVED",
           processedByUserId: userId,
-        })
+        }).returning({ id: refunds.id })
+
+        refundId = insertedRefund.id;
 
         // Adjust budget - credit back the refunded amount
-        const currentPeriod = new Date().toISOString().slice(0, 7) // YYYY-MM
         const [budget] = await tx
           .select()
           .from(budgets)
@@ -195,25 +268,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           .limit(1)
 
         if (budget) {
-          // Validate budget won't go negative
-          const newSpentAmount = (budget.amountSpentCents || 0) - amountCents
-          if (newSpentAmount < 0) {
-            console.warn(`[Refunds] Budget spent would go negative for branch ${orderData.branchId}: ${newSpentAmount}`)
-          }
-
           await tx
             .update(budgets)
             .set({
-              amountSpentCents: sql`${budgets.amountSpentCents} - ${amountCents}`,
-              amountCreditedCents: sql`${budgets.amountCreditedCents} + ${amountCents}`,
+              amountSpentCents: sql`${budgets.amountSpentCents} - ${totalRefundAmount}`,
+              amountCreditedCents: sql`${budgets.amountCreditedCents} + ${totalRefundAmount}`,
               updatedAt: new Date(),
             })
             .where(eq(budgets.id, budget.id))
         }
 
-        // If full refund (or total refunded equals order total), mark order as refunded
-        const newTotalRefunded = totalRefunded + amountCents
-        if (newTotalRefunded >= orderTotal) {
+        // Check if fully refunded
+        const newTotalRefunded = totalRefundedAmount + totalRefundAmount
+        if (newTotalRefunded >= orderData.totalCents) {
           await tx
             .update(orders)
             .set({
@@ -221,9 +288,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               updatedAt: new Date()
             })
             .where(eq(orders.id, orderId))
+        } else {
+          // If unrelated to full refund, maybe update status to PARTIALLY_REFUNDED if we had that status?
+          // Since we don't seem to have PARTIALLY_REFUNDED in enum based on strict strings, we might leave it as FULFILLED.
+          // But the user asked for "Partially Refunded" indication.
+          // The UI handles the display status, but the DB status typically remains FULFILLED or APPROVED until fully refunded.
         }
 
-        // Audit log
         await tx.insert(auditLogs).values({
           userId,
           action: "REFUND_APPROVED",
@@ -233,25 +304,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           branchId: orderData.branchId,
           metadata: {
             tid: orderData.tid,
-            amountCents,
-            amountPKR: (amountCents / 100).toFixed(2),
-            reason: reason?.trim() || 'No reason provided',
-            previouslyRefunded: totalRefunded,
-            newTotalRefunded
+            amountCents: totalRefundAmount,
+            reason: reason?.trim() || 'Itemized refund',
+            items: refundDetails
           },
         })
       } else {
-        // Branch Admin / Head Office: create refund REQUEST only (no budget changes)
-        await tx.insert(refunds).values({
+        // Branch Admin / Head Office: create refund REQUEST
+        const [insertedRefund] = await tx.insert(refunds).values({
           organizationId: orderData.organizationId,
           orderId,
-          amountCents,
+          amountCents: totalRefundAmount,
           reason: reason?.trim() || null,
           status: "PENDING",
           requestedByUserId: userId,
-        })
+        }).returning({ id: refunds.id })
 
-        // Audit log
+        refundId = insertedRefund.id;
+
         await tx.insert(auditLogs).values({
           userId,
           action: "REFUND_REQUESTED",
@@ -261,29 +331,38 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           branchId: orderData.branchId,
           metadata: {
             tid: orderData.tid,
-            amountCents,
-            amountPKR: (amountCents / 100).toFixed(2),
-            reason: reason?.trim() || 'No reason provided'
+            amountCents: totalRefundAmount,
+            reason: reason?.trim() || 'Itemized refund',
+            items: refundDetails
           },
         })
+      }
+
+      // Insert refund items
+      if (refundId && refundDetails.length > 0) {
+        await tx.insert(refundItems).values(
+          refundDetails.map(item => ({
+            refundId,
+            orderItemId: item.orderItemId,
+            quantity: item.quantity,
+            amountCents: item.amount
+          }))
+        )
       }
     })
 
     return NextResponse.json({
       message: userRole === "SUPER_ADMIN"
-        ? `Refund of ${(amountCents / 100).toFixed(2)} PKR processed successfully`
-        : `Refund request of ${(amountCents / 100).toFixed(2)} PKR submitted successfully`,
-      refundAmount: (amountCents / 100).toFixed(2),
-      remainingRefundable: ((remainingRefundable - amountCents) / 100).toFixed(2)
+        ? `Refund of ${(totalRefundAmount / 100).toFixed(2)} PKR processed successfully`
+        : `Refund request of ${(totalRefundAmount / 100).toFixed(2)} PKR submitted successfully`,
+      refundAmount: (totalRefundAmount / 100).toFixed(2),
+      remainingRefundable: ((remainingRefundableAmount - totalRefundAmount) / 100).toFixed(2)
     })
   } catch (e: any) {
     console.error('[Refunds] Error processing refund:', e)
-
-    // Handle specific database errors
     if (e.code === '23503') {
       return NextResponse.json({ error: 'Referenced order or user not found' }, { status: 404 })
     }
-
     return NextResponse.json({
       error: e.message || 'Internal server error while processing refund'
     }, { status: 500 })

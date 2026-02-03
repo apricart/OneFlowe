@@ -75,7 +75,7 @@ export function PremiumConfirmDialog({
 
     return (
         <AlertDialog open={open} onOpenChange={onOpenChange}>
-            <AlertDialogContent className="max-w-[400px] border-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] p-8 overflow-hidden relative">
+            <AlertDialogContent className="max-w-[400px] border-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] p-8 overflow-hidden">
                 {/* Abstract Background Elements */}
                 <div className={cn("absolute -top-24 -right-24 w-48 h-48 opacity-20 blur-3xl rounded-full", iconConfig.pulse)} />
 

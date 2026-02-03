@@ -25,7 +25,7 @@ export const organizations = pgTable(
   },
   (t) => ({
     orgNameIdx: uniqueIndex("org_name_idx").on(t.name),
-    // uniqueIndex("org_code_idx").on(t.code), // uncomment when data is ready to enforce
+    orgCodeIdx: uniqueIndex("org_code_idx").on(t.code),
     orgStatusIdx: index("org_status_idx").on(t.status),
   }),
 )
@@ -402,6 +402,27 @@ export const refunds = pgTable(
     processedByIdx: index("refunds_processed_by_idx").on(t.processedByUserId),
   }),
 )
+
+export const refundItems = pgTable(
+  "refund_items",
+  {
+    id: serial("id").primaryKey(),
+    refundId: integer("refund_id")
+      .references(() => refunds.id, { onDelete: "cascade" })
+      .notNull(),
+    orderItemId: integer("order_item_id")
+      .references(() => orderItems.id)
+      .notNull(),
+    quantity: integer("quantity").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    refundIdx: index("refund_items_refund_idx").on(t.refundId),
+    orderItemIdx: index("refund_items_order_item_idx").on(t.orderItemId),
+  }),
+)
+
 
 export const notifications = pgTable(
   "notifications",

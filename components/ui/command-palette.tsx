@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { 
+import {
   Command,
   CommandDialog,
   CommandEmpty,
@@ -12,22 +12,25 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { 
-  Building2, 
-  Home, 
-  Settings, 
-  Users, 
-  Package, 
+import {
+  Building2,
+  Home,
+  Settings,
+  Users,
+  Package,
   BarChart3,
   Shield,
   Search,
   Zap,
 } from "lucide-react"
 import useSWR from "swr"
+import { useSession } from "next-auth/react"
 
 export function CommandPalette() {
   const [open, setOpen] = React.useState(false)
   const router = useRouter()
+  const { data: session } = useSession()
+  const role = (session?.user as any)?.role || "BRANCH_ADMIN"
   const { data: orgsData } = useSWR("/api/v1/organizations")
   const { data: branchesData } = useSWR("/api/v1/branches")
 
@@ -68,7 +71,7 @@ export function CommandPalette() {
         <CommandInput placeholder="Type a command or search..." />
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
-          
+
           <CommandGroup heading="Quick Actions">
             <CommandItem
               onSelect={() => runCommand(() => router.push("/dashboard"))}
@@ -76,30 +79,34 @@ export function CommandPalette() {
               <Home className="mr-2 h-4 w-4" />
               <span>Go to Dashboard</span>
             </CommandItem>
+
+            {role !== "BRANCH_ADMIN" && (
+              <CommandItem
+                onSelect={() => runCommand(() => router.push("/users"))}
+              >
+                <Users className="mr-2 h-4 w-4" />
+                <span>Manage Users</span>
+              </CommandItem>
+            )}
+
             <CommandItem
-              onSelect={() => runCommand(() => router.push("/admin"))}
-            >
-              <Shield className="mr-2 h-4 w-4" />
-              <span>Admin Control Panel</span>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => runCommand(() => router.push("/users"))}
-            >
-              <Users className="mr-2 h-4 w-4" />
-              <span>Manage Users</span>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => runCommand(() => router.push("/inventory"))}
+              onSelect={() => runCommand(() =>
+                router.push(role === "BRANCH_ADMIN" ? "/branch-inventory" : "/inventory")
+              )}
             >
               <Package className="mr-2 h-4 w-4" />
               <span>View Inventory</span>
             </CommandItem>
-            <CommandItem
-              onSelect={() => runCommand(() => router.push("/reports"))}
-            >
-              <BarChart3 className="mr-2 h-4 w-4" />
-              <span>View Reports</span>
-            </CommandItem>
+
+            {role !== "BRANCH_ADMIN" && (
+              <CommandItem
+                onSelect={() => runCommand(() => router.push("/reports"))}
+              >
+                <BarChart3 className="mr-2 h-4 w-4" />
+                <span>View Reports</span>
+              </CommandItem>
+            )}
+
             <CommandItem
               onSelect={() => runCommand(() => router.push("/settings"))}
             >
@@ -108,55 +115,7 @@ export function CommandPalette() {
             </CommandItem>
           </CommandGroup>
 
-          {organizations.length > 0 && (
-            <>
-              <CommandSeparator />
-              <CommandGroup heading="Switch Organization">
-                {organizations.map((org: any) => (
-                  <CommandItem
-                    key={org.id}
-                    onSelect={() => {
-                      runCommand(() => {
-                        localStorage.setItem("ctx.organizationId", org.id.toString())
-                        router.refresh()
-                      })
-                    }}
-                  >
-                    <Building2 className="mr-2 h-4 w-4" />
-                    <span>{org.name}</span>
-                    {org.status === "active" && (
-                      <span className="ml-auto text-xs text-green-600">●</span>
-                    )}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </>
-          )}
 
-          {branches.length > 0 && (
-            <>
-              <CommandSeparator />
-              <CommandGroup heading="Switch Branch">
-                {branches.slice(0, 5).map((branch: any) => (
-                  <CommandItem
-                    key={branch.id}
-                    onSelect={() => {
-                      runCommand(() => {
-                        localStorage.setItem("ctx.branchId", branch.id.toString())
-                        router.refresh()
-                      })
-                    }}
-                  >
-                    <Zap className="mr-2 h-4 w-4" />
-                    <span>{branch.name}</span>
-                    {branch.status === "active" && (
-                      <span className="ml-auto text-xs text-green-600">●</span>
-                    )}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </>
-          )}
         </CommandList>
       </CommandDialog>
     </>

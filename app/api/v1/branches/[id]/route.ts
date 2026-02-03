@@ -34,9 +34,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const patch: any = {}
-    if (body.name) patch.name = String(body.name)
-    if (body.code) patch.code = String(body.code)
-    if (body.status) patch.status = String(body.status)
+    if (body.name !== undefined) patch.name = String(body.name)
+    if (body.code !== undefined) patch.code = String(body.code)
+    if (body.status !== undefined) patch.status = String(body.status)
     if (body.groupId !== undefined) patch.groupId = body.groupId === null ? null : Number(body.groupId)
     const [item] = await db.update(branches).set(patch).where(eq(branches.id, Number(id))).returning()
     return ok({ item })

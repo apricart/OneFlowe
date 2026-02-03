@@ -10,10 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { UserPlus, Mail, Phone, Shield, Building2, MapPin, AlertCircle, CheckCircle, Plus } from "lucide-react"
+import { UserPlus, Mail, Phone, Shield, Building2, MapPin, AlertCircle, CheckCircle, Plus, Eye, EyeOff } from "lucide-react"
 import { useAppContext } from "@/components/context/app-context"
 import { useToast } from "@/components/ui/use-toast"
 import { handleError } from "@/lib/error-handler"
+import { cn } from "../../lib/utils"
+import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+
 
 type CreateUserDialogProps = {
   onSuccess?: () => void
@@ -23,6 +27,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [step, setStep] = useState(1)
+  const [showPassword, setShowPassword] = useState(false)
   const { organizationId, userRole } = useAppContext()
   const { toast } = useToast()
 
@@ -35,7 +40,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     role: "",
     organizationId: "",
     branchId: "",
-    mfaEnabled: false
+    mfaEnabled: false,
+    isActive: true
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -67,7 +73,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         role: "",
         organizationId: organizationId || "",
         branchId: "",
-        mfaEnabled: false
+        mfaEnabled: false,
+        isActive: true
       })
       setErrors({})
       setStep(1)
@@ -81,12 +88,40 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         role: "",
         organizationId: "",
         branchId: "",
-        mfaEnabled: false
+        mfaEnabled: false,
+        isActive: true
       })
       setErrors({})
       setStep(1)
     }
   }, [open, organizationId])
+
+  // Validate specific field
+  const validateField = (name: string, value: string) => {
+    const newErrors = { ...errors }
+
+    if (name === "email") {
+      if (!value.trim()) {
+        newErrors.email = "Email is required"
+      } else if (!/\S+@\S+\.\S+/.test(value)) {
+        newErrors.email = "Please enter a valid email"
+      } else {
+        delete newErrors.email
+      }
+    }
+
+    if (name === "phone") {
+      if (value && !/^\d+$/.test(value)) {
+        newErrors.phone = "Phone number must contain only digits"
+      } else if (value && (value.length < 7 || value.length > 15)) {
+        newErrors.phone = "Phone number must be between 7 and 15 digits"
+      } else {
+        delete newErrors.phone
+      }
+    }
+
+    setErrors(newErrors)
+  }
 
   // Validate form
   const validateForm = () => {
@@ -99,6 +134,13 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     } else if (!/\S+@\S+\.\S+/.test(form.email)) {
       newErrors.email = "Please enter a valid email"
     }
+
+    if (form.phone && !/^\d+$/.test(form.phone)) {
+      newErrors.phone = "Phone number must contain only digits"
+    } else if (form.phone && (form.phone.length < 7 || form.phone.length > 15)) {
+      newErrors.phone = "Phone number must be between 7 and 15 digits"
+    }
+
     if (!form.password) newErrors.password = "Password is required"
     if (form.password && form.password.length < 6) {
       newErrors.password = "Password must be at least 6 characters"
@@ -130,11 +172,12 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
           password: form.password,
           phone: form.phone.trim() || null,
           role: form.role,
-          organizationId: parseInt(form.organizationId),
-          branchId: (form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") ? parseInt(form.branchId) : null,
-          mfaEnabled: form.mfaEnabled
+          organizationId: form.organizationId ? parseInt(form.organizationId) : null,
+          branchId: (form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && form.branchId ? parseInt(form.branchId) : null,
+          mfaEnabled: form.mfaEnabled,
+          isActive: form.isActive
         })
-      })
+      }) as any
 
       if (response.error) {
         throw new Error(response.error)
@@ -274,7 +317,11 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   name="email"
                   type="email"
                   value={form.email}
-                  onChange={e => setForm({ ...form, email: e.target.value })}
+                  onChange={e => {
+                    const val = e.target.value
+                    setForm({ ...form, email: val })
+                    validateField("email", val)
+                  }}
                   placeholder="Enter email address"
                   className={errors.email ? 'border-red-500' : ''}
                 />
@@ -288,21 +335,56 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   id="phone"
                   name="phone"
                   value={form.phone}
-                  onChange={e => setForm({ ...form, phone: e.target.value })}
-                  placeholder="Enter phone number (optional)"
+                  onChange={e => {
+                    const val = e.target.value
+                    setForm({ ...form, phone: val })
+                    validateField("phone", val)
+                  }}
+                  placeholder="Enter phone number (e.g. 03001234567)"
+                  className={errors.phone ? 'border-red-500' : ''}
                 />
+                {errors.phone && (
+                  <p className="text-xs text-red-600">{errors.phone}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password *</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  value={form.password}
-                  onChange={e => setForm({ ...form, password: e.target.value })}
-                  placeholder="Enter password (min 6 characters)"
-                  className={errors.password ? 'border-red-500' : ''}
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={e => {
+                      const val = e.target.value
+                      setForm({ ...form, password: val })
+                      if (val.length >= 6) {
+                        setErrors(prev => {
+                          const next = { ...prev }
+                          delete next.password
+                          return next
+                        })
+                      } else if (val.length > 0) {
+                        setErrors(prev => ({ ...prev, password: "Password must be at least 6 characters" }))
+                      }
+                    }}
+                    placeholder="Enter password (min 6 characters)"
+                    className={cn("pr-10", errors.password ? 'border-red-500' : '')}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
                 {errors.password && (
                   <p className="text-xs text-red-600">{errors.password}</p>
                 )}
@@ -327,11 +409,13 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                       <SelectValue placeholder="Select organization" />
                     </SelectTrigger>
                     <SelectContent>
-                      {organizations.map((org: any) => (
-                        <SelectItem key={org.id} value={String(org.id)}>
-                          {org.name}
-                        </SelectItem>
-                      ))}
+                      {organizations
+                        .filter((org: any) => org.status === "active")
+                        .map((org: any) => (
+                          <SelectItem key={org.id} value={String(org.id)}>
+                            {org.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                   {form.organizationId && (
@@ -460,6 +544,26 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                     Enable Multi-Factor Authentication (MFA)
                   </Label>
                 </div>
+
+                <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="isActive" className="text-base font-medium">Initial Account Status</Label>
+                    <p className="text-xs text-muted-foreground">Set whether this account should be active immediately</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={form.isActive ? "default" : "secondary"} className={cn(
+                      form.isActive ? "bg-emerald-500 hover:bg-emerald-600" : "bg-red-500 hover:bg-red-600"
+                    )}>
+                      {form.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                    <Switch
+                      id="isActive"
+                      checked={form.isActive}
+                      onCheckedChange={(checked) => setForm({ ...form, isActive: checked })}
+                    />
+                  </div>
+                </div>
+
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
                   <p className="text-sm text-blue-700">
                     <strong>MFA Security:</strong> When enabled, users will receive OTP codes via email for secure login verification.
@@ -498,14 +602,14 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
           {step < 3 ? (
             <Button
               onClick={() => {
-                if (step === 1 && form.firstName && form.lastName && form.email && form.password) {
+                if (step === 1 && form.firstName && form.lastName && form.email && form.password && !errors.email && !errors.phone && !errors.password) {
                   setStep(2)
                 } else if (step === 2 && form.role && ((form.role !== "BRANCH_ADMIN" && form.role !== "ORDER_PORTAL") || form.branchId)) {
                   setStep(3)
                 }
               }}
               disabled={
-                (step === 1 && (!form.firstName || !form.lastName || !form.email || !form.password)) ||
+                (step === 1 && (!form.firstName || !form.lastName || !form.email || !form.password || !!errors.email || !!errors.phone || !!errors.password)) ||
                 (step === 2 && (!form.role || ((form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && !form.branchId)))
               }
             >

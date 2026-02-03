@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, organizations, branches, users, budgets, auditLogs } from "@/db/schema"
-import { eq, or, ilike, sql, and } from "drizzle-orm"
+import { orders, orderItems, organizations, branches, users, budgets, auditLogs, refunds, refundItems } from "@/db/schema"
+import { eq, or, ilike, sql, and, desc } from "drizzle-orm"
 
 /**
  * GET /api/v1/admin/refunds/search?q=<order_tid_or_id>
@@ -27,8 +27,33 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url)
         const query = searchParams.get("q")?.trim()
 
+        if (searchParams.has("status") && searchParams.get("status") === "pending") {
+            const pendingRefunds = await db
+                .select({
+                    id: refunds.id,
+                    amountCents: refunds.amountCents,
+                    reason: refunds.reason,
+                    status: refunds.status,
+                    createdAt: refunds.createdAt,
+                    orderId: orders.id,
+                    tid: orders.tid,
+                    totalCents: orders.totalCents,
+                    branchName: branches.name,
+                    requestedByName: users.fullName,
+                })
+                .from(refunds)
+                .innerJoin(orders, eq(refunds.orderId, orders.id))
+                .leftJoin(branches, eq(orders.branchId, branches.id))
+                .leftJoin(users, eq(refunds.requestedByUserId, users.id))
+                .where(eq(refunds.status, "PENDING"))
+                .orderBy(desc(refunds.createdAt))
+                .limit(50)
+
+            return NextResponse.json({ refunds: pendingRefunds })
+        }
+
         if (!query) {
-            return NextResponse.json({ error: "Search query is required" }, { status: 400 })
+            return NextResponse.json({ error: "Search query or status is required" }, { status: 400 })
         }
 
         // Sanitize and validate input - TID only
@@ -98,13 +123,40 @@ export async function GET(req: NextRequest) {
             .from(orderItems)
             .where(eq(orderItems.orderId, orderData.id))
 
+        // Fetch already refunded quantities
+        const refundedItemsData = await db
+            .select({
+                orderItemId: refundItems.orderItemId,
+                quantity: refundItems.quantity,
+            })
+            .from(refundItems)
+            .innerJoin(refunds, eq(refunds.id, refundItems.refundId))
+            .where(and(
+                eq(refunds.orderId, orderData.id),
+                or(eq(refunds.status, "APPROVED"), eq(refunds.status, "COMPLETED"))
+            ))
+
+        // Aggregate refunded quantities
+        const refundedQuantityMap = new Map<number, number>()
+        for (const record of refundedItemsData) {
+            const current = refundedQuantityMap.get(record.orderItemId) || 0
+            refundedQuantityMap.set(record.orderItemId, current + record.quantity)
+        }
+
+        // Merge with items
+        const itemsWithRefundStats = items.map(item => ({
+            ...item,
+            refundedQuantity: refundedQuantityMap.get(item.id) || 0,
+            remainingQuantity: item.quantity - (refundedQuantityMap.get(item.id) || 0)
+        }))
+
         return NextResponse.json({
             order: {
                 ...orderData,
                 organizationName: org?.name || "Unknown",
                 branchName: branch?.name || "Unknown",
                 createdByUserName: user?.fullName || user?.email || "Unknown",
-                items,
+                items: itemsWithRefundStats,
             }
         })
 
@@ -256,6 +308,25 @@ export async function POST(req: NextRequest) {
         // Create a map for quick lookup
         const orderItemsMap = new Map(orderItemsData.map(item => [item.id, item]))
 
+        // Fetch already refunded items to calculate remaining quantity
+        const refundedItemsData = await db
+            .select({
+                orderItemId: refundItems.orderItemId,
+                quantity: refundItems.quantity,
+            })
+            .from(refundItems)
+            .innerJoin(refunds, eq(refunds.id, refundItems.refundId))
+            .where(and(
+                eq(refunds.orderId, orderId),
+                or(eq(refunds.status, "APPROVED"), eq(refunds.status, "COMPLETED"))
+            ))
+
+        const refundedQuantityMap = new Map<number, number>()
+        for (const record of refundedItemsData) {
+            const current = refundedQuantityMap.get(record.orderItemId) || 0
+            refundedQuantityMap.set(record.orderItemId, current + record.quantity)
+        }
+
         let totalRefundAmount = 0
         const refundDetails: Array<{
             itemId: number
@@ -275,10 +346,13 @@ export async function POST(req: NextRequest) {
                 }, { status: 400 })
             }
 
-            // Validate quantity doesn't exceed ordered amount
-            if (refundItem.quantity > orderItem.quantity) {
+            const alreadyRefundedQty = refundedQuantityMap.get(refundItem.itemId) || 0
+            const remainingQty = orderItem.quantity - alreadyRefundedQty
+
+            // Validate quantity doesn't exceed remaining amount
+            if (refundItem.quantity > remainingQty) {
                 return NextResponse.json({
-                    error: `Refund quantity (${refundItem.quantity}) exceeds ordered quantity (${orderItem.quantity}) for item: ${orderItem.productName}`
+                    error: `Refund quantity (${refundItem.quantity}) exceeds remaining quantity (${remainingQty}) for item: ${orderItem.productName}`
                 }, { status: 400 })
             }
 
@@ -337,9 +411,7 @@ export async function POST(req: NextRequest) {
                 .limit(1)
 
             if (budget) {
-                // Credit by reducing the spent amount (DO NOT also add to amountCredited - that would be double counting!)
-                // Available Budget = Allocated - Spent + Credited
-                // By reducing Spent, the budget automatically becomes available again
+                // Credit by reducing the spent amount
                 const currentSpent = budget.amountSpentCents || 0
                 const newSpentAmount = Math.max(0, currentSpent - totalRefundAmount)
 
@@ -376,6 +448,28 @@ export async function POST(req: NextRequest) {
                     reason: reason?.trim() || "No reason provided",
                 },
             })
+
+            // 4. Create refund record
+            const [newRefund] = await tx.insert(refunds).values({
+                organizationId: orderData.organizationId,
+                orderId,
+                amountCents: totalRefundAmount,
+                reason: reason?.trim() || null,
+                status: "APPROVED",
+                processedByUserId: userId,
+            }).returning({ id: refunds.id })
+
+            // 5. Insert refund items
+            if (newRefund && refundDetails.length > 0) {
+                await tx.insert(refundItems).values(
+                    refundDetails.map(item => ({
+                        refundId: newRefund.id,
+                        orderItemId: item.itemId,
+                        quantity: item.quantity,
+                        amountCents: item.totalCents
+                    }))
+                )
+            }
         })
 
         return NextResponse.json({

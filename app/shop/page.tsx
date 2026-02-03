@@ -4,6 +4,7 @@ import useSWR from "swr"
 import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
+import { useOrganizations, useBranches } from "@/lib/hooks/use-api"
 import { useAppContext } from "@/components/context/app-context"
 import { ContextSelector } from "@/components/shell/context-selector"
 import { Card } from "@/components/ui/card"
@@ -11,9 +12,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
-import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, AlertTriangle, DollarSign, Star, Zap, Package, TrendingDown, Grid, LogOut, ArrowRight, ArrowLeft, Calendar, MapPin, RefreshCw } from "lucide-react"
+import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, AlertTriangle, DollarSign, Star, Zap, Package, TrendingDown, Grid, LogOut, ArrowRight, ArrowLeft, Calendar, MapPin, RefreshCw, Building2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import Image from "next/image"
+import { RefundManagement } from "@/components/refund-management"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -38,6 +40,9 @@ interface Order {
   status: string
   totalCents: number
   createdAt: string
+  refundAmountCents?: number | null
+  refundedAt?: string | null
+  refundReason?: string | null
 }
 
 export default function OrderPortalPage() {
@@ -115,6 +120,18 @@ export default function OrderPortalPage() {
   const { data: branchInventory, mutate: mutateBranchInventory } = useSWR<any>(branchInventoryUrl, fetcher)
   const { data: budget, mutate: mutateBudget } = useSWR<any>(budgetsUrl, fetcher)
   const { data: ordersData, mutate: mutateOrders } = useSWR<any>("/api/v1/orders", fetcher)
+
+  // Fetch names for header context
+  const { data: orgsData } = useOrganizations()
+  const { data: branchesData } = useBranches(activeOrgId?.toString())
+
+  const activeOrgName = useMemo(() => {
+    return orgsData?.items?.find((o: any) => o.id === activeOrgId)?.name || "Loading..."
+  }, [orgsData, activeOrgId])
+
+  const activeBranchName = useMemo(() => {
+    return branchesData?.items?.find((b: any) => b.id === activeBranchId)?.name || "Loading..."
+  }, [branchesData, activeBranchId])
 
   const products: Product[] = useMemo(() => {
     return branchInventory?.items?.map((it: any) => ({
@@ -356,9 +373,20 @@ export default function OrderPortalPage() {
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
                 Order Portal
               </h1>
-              <p className="text-xs text-muted-foreground">
-                Welcome, <span className="font-medium text-foreground/80">{userName}</span>
-              </p>
+              <div className="text-xs text-muted-foreground space-y-0.5">
+                <p>Welcome, <span className="font-medium text-foreground/80">{userName}</span></p>
+                <div className="flex items-center gap-2 opacity-75">
+                  <span className="flex items-center gap-1">
+                    <Building2 className="h-3 w-3" />
+                    {activeOrgName}
+                  </span>
+                  <span className="text-[10px] opacity-40">•</span>
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    {activeBranchName}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1161,10 +1189,14 @@ export default function OrderPortalPage() {
                 orderId={selectedOrder.id}
                 orderTotalCents={selectedOrder.totalCents}
                 orderStatus={selectedOrder.status}
+                createdAt={selectedOrder.createdAt}
                 onRefundSuccess={() => {
                   // Refresh orders data
                   mutateOrders?.()
                 }}
+                refundAmountCents={selectedOrder.refundAmountCents}
+                refundedAt={selectedOrder.refundedAt}
+                refundReason={selectedOrder.refundReason}
               />
             </div>
           )}

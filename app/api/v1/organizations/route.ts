@@ -94,15 +94,26 @@ export async function POST(req: Request) {
       return error(`Status must be one of: ${validStatuses.join(', ')}`, 400)
     }
 
+    // Check for duplicate name
+    const existingName = await db
+      .select({ id: orgsTable.id })
+      .from(orgsTable)
+      .where(eq(orgsTable.name, name))
+      .limit(1)
+
+    if (existingName.length > 0) {
+      return error(`Organization with name '${name}' already exists`, 400)
+    }
+
     // Check for duplicate code
-    const existing = await db
-      .select({ id: orgsTable.id, code: orgsTable.code })
+    const existingCode = await db
+      .select({ id: orgsTable.id })
       .from(orgsTable)
       .where(eq(orgsTable.code, code))
       .limit(1)
 
-    if (existing.length > 0) {
-      return error(`Organization with code '${code}' already exists`, 409)
+    if (existingCode.length > 0) {
+      return error(`Organization with code '${code}' already exists`, 400)
     }
 
     // Insert organization

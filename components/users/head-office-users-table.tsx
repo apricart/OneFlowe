@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
-import { Edit, Trash2, Search, User, Mail, Phone, Shield, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react"
+import { Edit, Trash2, Search, User, Mail, Phone, Shield, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Switch } from "@/components/ui/switch"
 
 type UserRow = {
   id: string
@@ -23,6 +25,7 @@ type UserRow = {
   branchId?: number | null
   phone?: string
   mfaEnabled?: boolean
+  isActive: boolean
   createdAt: string
 }
 
@@ -30,10 +33,11 @@ type HeadOfficeUsersTableProps = {
   users: UserRow[]
   branches: any[]
   organizations: any[]
+  userRole?: string
   onUserUpdate: () => void
 }
 
-export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpdate }: HeadOfficeUsersTableProps) {
+export function HeadOfficeUsersTable({ users, branches, organizations, userRole, onUserUpdate }: HeadOfficeUsersTableProps) {
   const PAGE_SIZE = 20
   const [searchQuery, setSearchQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState("all")
@@ -43,6 +47,8 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
   const [deleteConfirm, setDeleteConfirm] = useState<UserRow | null>(null)
 
   const [showPasswordReset, setShowPasswordReset] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [editForm, setEditForm] = useState({
     firstName: "",
     lastName: "",
@@ -52,6 +58,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
     organizationId: "",
     branchId: "",
     mfaEnabled: false,
+    isActive: true,
     password: "",
     confirmPassword: ""
   })
@@ -106,6 +113,16 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
     return map
   }, [organizations])
 
+  const orgStatusMap = useMemo(() => {
+    const map = new Map<number, string>()
+    organizations.forEach((org: any) => {
+      if (org?.id) {
+        map.set(org.id, org.status || "active")
+      }
+    })
+    return map
+  }, [organizations])
+
   const branchMap = useMemo(() => {
     const map = new Map<number, string>()
     branches.forEach((branch: any) => {
@@ -139,6 +156,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
       organizationId: user.organizationId ? String(user.organizationId) : "",
       branchId: user.branchId ? String(user.branchId) : "",
       mfaEnabled: user.mfaEnabled || false,
+      isActive: user.isActive,
       password: "",
       confirmPassword: ""
     })
@@ -157,6 +175,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
       organizationId: "",
       branchId: "",
       mfaEnabled: false,
+      isActive: true,
       password: "",
       confirmPassword: ""
     })
@@ -188,7 +207,8 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
         role: editForm.role,
         organizationId: editForm.organizationId ? parseInt(editForm.organizationId) : null,
         branchId: editForm.branchId ? parseInt(editForm.branchId) : null,
-        mfaEnabled: editForm.mfaEnabled
+        mfaEnabled: editForm.mfaEnabled,
+        isActive: editForm.isActive
       }
 
       // Include password if password reset is enabled
@@ -221,6 +241,23 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
     } catch (error: any) {
       console.error("Error deleting user:", error)
       alert("Failed to delete user: " + error.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Toggle user status
+  const toggleUserStatus = async (user: UserRow) => {
+    setSubmitting(true)
+    try {
+      await jsonFetcher(`/api/v1/users/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: !user.isActive })
+      })
+      onUserUpdate()
+    } catch (error: any) {
+      console.error("Error toggling user status:", error)
+      alert("Failed to update user status: " + error.message)
     } finally {
       setSubmitting(false)
     }
@@ -277,6 +314,8 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
               <TableHead className="w-[150px]">Contact</TableHead>
               <TableHead className="w-[100px]">Role</TableHead>
               <TableHead className="w-[150px]">Assignment</TableHead>
+              <TableHead className="w-[120px]">Company Status</TableHead>
+              <TableHead className="w-[120px]">User Status</TableHead>
               <TableHead className="w-[100px]">Security</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
@@ -284,7 +323,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
           <TableBody>
             {filteredUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-12">
+                <TableCell colSpan={8} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <User className="h-12 w-12 opacity-20" />
                     <p className="text-sm font-medium">No users found</p>
@@ -340,6 +379,48 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
                           <MapPin className="h-3 w-3 text-muted-foreground" />
                           {getBranchName(user.branchId)}
                         </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {user.organizationId ? (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          orgStatusMap.get(user.organizationId) === "active"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        )}
+                      >
+                        {orgStatusMap.get(user.organizationId) === "active" ? "Active" : "Inactive"}
+                      </Badge>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          user.isActive
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-red-50 text-red-700 border-red-200"
+                        )}
+                      >
+                        {user.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                      {userRole === "SUPER_ADMIN" && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          disabled={submitting}
+                          onClick={() => toggleUserStatus(user)}
+                          title={user.isActive ? "Deactivate User" : "Activate User"}
+                        >
+                          <RefreshCw className={cn("h-3.5 w-3.5", submitting && "animate-spin")} />
+                        </Button>
                       )}
                     </div>
                   </TableCell>
@@ -491,33 +572,61 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
                       <SelectValue placeholder="Select branch" />
                     </SelectTrigger>
                     <SelectContent>
-                      {branches.map((branch) => (
-                        <SelectItem key={branch.id} value={String(branch.id)}>
-                          {branch.name}
-                        </SelectItem>
-                      ))}
+                      {branches
+                        .filter(branch => !editForm.organizationId || branch.organizationId === parseInt(editForm.organizationId))
+                        .map((branch) => (
+                          <SelectItem key={branch.id} value={String(branch.id)}>
+                            {branch.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
               )}
             </div>
 
-            {/* Security Settings */}
+            {/* Security & Access */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold">Security Settings</h3>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="mfaEnabled"
-                  checked={editForm.mfaEnabled}
-                  onCheckedChange={checked => setEditForm({ ...editForm, mfaEnabled: !!checked })}
-                />
-                <Label htmlFor="mfaEnabled" className="cursor-pointer">
-                  Enable Multi-Factor Authentication
-                </Label>
+              <h3 className="text-sm font-semibold">Security & Access</h3>
+              <div className="flex flex-col gap-4 rounded-lg border p-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="isActive" className="text-base">Account Status</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Enable or disable this user's ability to log in
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={editForm.isActive ? "default" : "secondary"} className={cn(
+                      editForm.isActive ? "bg-emerald-500 hover:bg-emerald-600" : "bg-red-500 hover:bg-red-600"
+                    )}>
+                      {editForm.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                    <Switch
+                      id="isActive"
+                      checked={editForm.isActive}
+                      onCheckedChange={(checked) => setEditForm({ ...editForm, isActive: checked })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between border-t pt-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="edit-mfa" className="text-base">Two-Factor Authentication</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Require MFA for this user
+                    </p>
+                  </div>
+                  <Switch
+                    id="edit-mfa"
+                    checked={editForm.mfaEnabled}
+                    onCheckedChange={(checked) => setEditForm({ ...editForm, mfaEnabled: checked })}
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Password Reset Section */}
+            {/* Password Reset */}
             <div className="space-y-4 pt-4 border-t">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold">Password Reset</h3>
@@ -539,23 +648,55 @@ export function HeadOfficeUsersTable({ users, branches, organizations, onUserUpd
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="password">New Password *</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={editForm.password}
-                      onChange={e => setEditForm({ ...editForm, password: e.target.value })}
-                      placeholder="Enter new password (min. 6 characters)"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={editForm.password}
+                        onChange={e => setEditForm({ ...editForm, password: e.target.value })}
+                        placeholder="Enter new password (min. 6 characters)"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="confirmPassword">Confirm Password *</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={editForm.confirmPassword}
-                      onChange={e => setEditForm({ ...editForm, confirmPassword: e.target.value })}
-                      placeholder="Confirm new password"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={editForm.confirmPassword}
+                        onChange={e => setEditForm({ ...editForm, confirmPassword: e.target.value })}
+                        placeholder="Confirm new password"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
                     {editForm.password && editForm.confirmPassword && editForm.password !== editForm.confirmPassword && (
                       <p className="text-sm text-red-600">Passwords do not match</p>
                     )}

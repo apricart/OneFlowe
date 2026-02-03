@@ -162,6 +162,7 @@ export default function UsersPage() {
             users={filteredUsers}
             branches={branches}
             organizations={organizations}
+            userRole={userRole}
             onUserUpdate={() => mutateUsers()}
           />
         </CardContent>

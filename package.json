@@ -53,6 +53,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^3.6.0",
     "drizzle-orm": "latest",
+    "framer-motion": "^12.31.0",
     "geist": "latest",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",

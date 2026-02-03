@@ -25,6 +25,7 @@ export async function GET(req: Request) {
       branchId: usersTable.branchId,
       createdAt: usersTable.createdAt,
       role: rolesTable.name,
+      isActive: usersTable.isActive,
     })
     .from(usersTable)
     .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
@@ -45,6 +46,7 @@ export async function GET(req: Request) {
     branchId: r.branchId ?? null,
     createdAt: r.createdAt as any,
     role: r.role || "",
+    isActive: !!r.isActive,
   }))
   return ok({ items })
 }
@@ -54,6 +56,7 @@ export async function POST(req: Request) {
   if (err) return err
 
   const body = await readJson<any>(req)
+  console.log("[DEBUG] POST body:", body)
   if (!body) return error("Invalid body", 400)
 
   const firstName = String(body.firstName || "")
@@ -61,14 +64,17 @@ export async function POST(req: Request) {
   const email = String(body.email || "")
   const password = String(body.password || "")
   const role = String(body.role || "") as Role
-  const organizationId = body.organizationId ? Number(body.organizationId) : null
-  const branchId = body.branchId ? Number(body.branchId) : null
+  const organizationId = (body.organizationId === null || body.organizationId === undefined) ? null : Number(body.organizationId)
+  const branchId = (body.branchId === null || body.branchId === undefined) ? null : Number(body.branchId)
+
+  console.log("[DEBUG] Parsed fields:", { firstName, lastName, email, role, organizationId, branchId })
 
   if (!firstName || !lastName || !email || !password || !role) {
     return error("firstName, lastName, email, password, role are required", 400)
   }
   // Get the current user's role to determine what roles they can create
   const scope = await getRequestScope()
+  console.log("[DEBUG] Request scope:", scope)
   const currentUserRole = scope?.role
 
   let allowed: Role[] = []
@@ -100,14 +106,17 @@ export async function POST(req: Request) {
   }
 
   const [roleRow] = await db.select().from(rolesTable).where(eq(rolesTable.name, role)).limit(1)
+  console.log("[DEBUG] Role row:", roleRow)
   if (!roleRow) return error("Invalid role", 400)
 
   // MFA is handled separately through the MFA system
   // No login code generation needed
 
   const passwordHash = await hashPassword(password)
+  console.log("[DEBUG] Password hashed")
 
   try {
+    console.log("[DEBUG] Attempting user insert...")
     const [item] = await db
       .insert(usersTable)
       .values({
@@ -118,16 +127,19 @@ export async function POST(req: Request) {
         lastName,
         phone: body.phone ? String(body.phone) : null,
         mfaEnabled: Boolean(body.mfaEnabled),
+        isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
         organizationId,
         branchId,
         fullName: `${firstName} ${lastName}`,
       })
       .returning()
 
+    console.log("[DEBUG] User inserted:", item?.id)
     const createdUser = item
 
     // Audit Log
     try {
+      console.log("[DEBUG] Attempting audit log...")
       const headersList = await headers()
       const userAgent = headersList.get("user-agent")
       const forwardedFor = headersList.get("x-forwarded-for")
@@ -151,12 +163,14 @@ export async function POST(req: Request) {
         userAgent: userAgent,
         success: true
       })
+      console.log("[DEBUG] Audit log written")
     } catch (logErr) {
-      console.error("Failed to write audit log:", logErr)
+      console.error("[DEBUG] Failed to write audit log:", logErr)
     }
 
     return ok({ item: createdUser }, { status: 201 })
   } catch (err: any) {
+    console.error("[DEBUG] Error creating user (full):", err)
     // Handle database constraint violations
     if (err.code === '23505') {
       if (err.constraint === 'users_email_key' || err.constraint === 'users_email_idx') {
@@ -164,6 +178,6 @@ export async function POST(req: Request) {
       }
     }
     console.error("Error creating user:", err)
-    return error("Failed to create user. Please try again.", 500)
+    return error(`Failed to create user: ${err.message}`, 500)
   }
 }

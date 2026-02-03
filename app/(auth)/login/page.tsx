@@ -11,6 +11,7 @@ import { Spinner } from "@/components/ui/skeleton"
 import { MFAVerificationDialog } from "@/components/mfa/mfa-verification-dialog"
 import { useToast } from "@/components/ui/use-toast"
 import Image from "next/image"
+import { Eye, EyeOff } from "lucide-react"
 
 function LoginForm() {
   const router = useRouter()
@@ -18,6 +19,7 @@ function LoginForm() {
   const { toast } = useToast()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mfaRequired, setMfaRequired] = useState(false)
@@ -48,6 +50,10 @@ function LoginForm() {
           setMfaRequired(true)
           return
         }
+        // Improve error message for invalid credentials
+        if (result.error === "CredentialsSignin") {
+          throw new Error("Invalid credentials. Please check your email and password.")
+        }
         throw new Error(result.error)
       }
 
@@ -68,7 +74,7 @@ function LoginForm() {
         router.replace(cb || "/dashboard")
       }
     } catch (err: any) {
-      setError(err.message)
+      setError(err.message || "An error occurred during login")
     } finally {
       setLoading(false)
     }
@@ -140,19 +146,35 @@ function LoginForm() {
               <label htmlFor="password" className="text-sm font-medium text-slate-700">
                 Password
               </label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="bg-white/80 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500"
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="bg-white/80 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 focus:outline-none"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </div>
             {error && (
-              <p className="text-sm text-red-600 font-medium">
-                {error}
-              </p>
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600 font-medium flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-alert-circle"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
+                  {error}
+                </p>
+              </div>
             )}
             <Button
               type="submit"
