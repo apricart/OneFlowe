@@ -56,7 +56,9 @@ export async function GET(req: NextRequest) {
             groupConditions.push(eq(groups.id, Number(groupIdParam)))
         }
 
-        // 1. Fetch Group stats with branch-level breakdown
+        // 1. Fetch Group stats with branch-level breakdown in a single query if possible, 
+        // or a more efficient approach. Actually, Postgres allows us to aggregate branches into a JSON array.
+
         const groupStats = await db
             .select({
                 id: groups.id,
@@ -66,6 +68,18 @@ export async function GET(req: NextRequest) {
                 totalOrders: sql<number>`count(${orders.id})::int`,
                 totalAmountCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`,
                 branchCount: sql<number>`count(distinct ${branches.id})::int`,
+                // Optimization: Aggregate branch data into a JSON array within the main query
+                branches: sql<any>`
+                    COALESCE(
+                        JSON_AGG(
+                            DISTINCT JSONB_BUILD_OBJECT(
+                                'id', ${branches.id},
+                                'name', ${branches.name}
+                            )
+                        ) FILTER (WHERE ${branches.id} IS NOT NULL),
+                        '[]'
+                    )
+                `
             })
             .from(groups)
             .leftJoin(organizations, eq(groups.organizationId, organizations.id))
@@ -78,12 +92,19 @@ export async function GET(req: NextRequest) {
             .groupBy(groups.id, organizations.id)
             .orderBy(sql`coalesce(sum(${orders.totalCents}), 0)::int desc`)
 
-        // 2. For each group, fetch branch-level breakdown
-        const groupsWithBranches = await Promise.all(groupStats.map(async (group) => {
-            const branchBreakdown = await db
+        // 2. Fetch specific branch-level revenue/order counts separately but in ONE query per group type if needed, 
+        // or refine the aggregation above. The current approach above gets branch names but not their individual stats.
+        // Let's do a separate query for branches stats to avoid heavy grouping complexity in one.
+
+        const groupIds = groupStats.map(g => g.id)
+
+        const branchStatsMap: Record<number, any[]> = {}
+        if (groupIds.length > 0) {
+            const allBranchStats = await db
                 .select({
                     id: branches.id,
                     name: branches.name,
+                    groupId: branches.groupId,
                     orders: sql<number>`count(${orders.id})::int`,
                     revenue: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`,
                 })
@@ -92,14 +113,21 @@ export async function GET(req: NextRequest) {
                     eq(orders.branchId, branches.id),
                     orderWhere
                 ))
-                .where(eq(branches.groupId, group.id))
+                .where(sql`${branches.groupId} IN ${groupIds}`)
                 .groupBy(branches.id)
                 .orderBy(sql`coalesce(sum(${orders.totalCents}), 0)::int desc`)
 
-            return {
-                ...group,
-                branches: branchBreakdown
-            }
+            allBranchStats.forEach(bs => {
+                if (bs.groupId) {
+                    if (!branchStatsMap[bs.groupId]) branchStatsMap[bs.groupId] = []
+                    branchStatsMap[bs.groupId].push(bs)
+                }
+            })
+        }
+
+        const groupsWithBranches = groupStats.map(group => ({
+            ...group,
+            branches: branchStatsMap[group.id] || []
         }))
 
         // 3. Calculate summary statistics

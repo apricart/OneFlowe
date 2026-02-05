@@ -22,6 +22,7 @@ import { Search } from "lucide-react"
 type OrgsRes = { items: Organization[] }
 type BranchesRes = { items: Branch[] }
 
+
 export default function OrganizationsPage() {
   const { data: orgs, mutate: refetchOrgs, isLoading: loadingOrgs } = useOrganizations()
   const { data: branches, mutate: refetchBranches } = useBranches()
@@ -46,7 +47,81 @@ export default function OrganizationsPage() {
     id: null,
     name: null,
   })
+  const [confirmDeleteBranch, setConfirmDeleteBranch] = useState<{ open: boolean; id: string | null; name: string | null }>({
+    open: false,
+    id: null,
+    name: null,
+  })
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Helper to add a new organization to the cache optimistically
+  const addOrganizationOptimistic = async (newOrg: Organization) => {
+    console.log("[OrganizationsPage] 🚀 Adding org optimistically:", newOrg)
+    const currentOrgs = orgs?.items || []
+    await refetchOrgs({ items: [newOrg, ...currentOrgs] }, { revalidate: true })
+    console.log("[OrganizationsPage] ✅ Org added, revalidating in background")
+  }
+
+  // Helper to remove an organization from the cache optimistically
+  const removeOrganizationOptimistic = async (id: string) => {
+    console.log("[OrganizationsPage] 🚀 Removing org optimistically:", id)
+    const currentOrgs = orgs?.items || []
+    const updatedOrgs = currentOrgs.filter(o => String(o.id) !== String(id))
+    await refetchOrgs({ items: updatedOrgs }, { revalidate: true })
+    console.log("[OrganizationsPage] ✅ Org removed, revalidating in background")
+  }
+
+  // Helper to edit an organization in the cache optimistically
+  const editOrganizationOptimistic = async (id: string, payload: Partial<Organization>) => {
+    console.log("[OrganizationsPage] 🚀 Editing org optimistically:", id, payload)
+    const currentOrgs = orgs?.items || []
+    const updatedOrgs = currentOrgs.map(o => String(o.id) === String(id) ? { ...o, ...payload } : o)
+    await refetchOrgs({ items: updatedOrgs }, { revalidate: true })
+    console.log("[OrganizationsPage] ✅ Org edited, revalidating in background")
+  }
+
+  // Helper to add a new branch to the cache optimistically
+  const addBranchOptimistic = async (newBranch: Branch) => {
+    console.log("[OrganizationsPage] 🚀 Adding branch optimistically:", newBranch)
+    const currentBranches = branches?.items || []
+    await refetchBranches({ items: [newBranch, ...currentBranches] }, { revalidate: true })
+    console.log("[OrganizationsPage] ✅ Branch added, revalidating in background")
+  }
+
+  // Helper to remove a branch from the cache optimistically
+  const removeBranchOptimistic = async (id: string) => {
+    console.log("[OrganizationsPage] 🚀 Removing branch optimistically:", id)
+    const currentBranches = branches?.items || []
+    const updatedBranches = currentBranches.filter(b => String(b.id) !== String(id))
+    await refetchBranches({ items: updatedBranches }, { revalidate: true })
+    console.log("[OrganizationsPage] ✅ Branch removed, revalidating in background")
+  }
+
+  // Helper to edit a branch in the cache optimistically
+  const editBranchOptimistic = async (id: string, payload: Partial<Branch>) => {
+    console.log("[OrganizationsPage] 🚀 Editing branch optimistically:", id, payload)
+    const currentBranches = branches?.items || []
+    const updatedBranches = currentBranches.map(b => String(b.id) === String(id) ? { ...b, ...payload } : b)
+    await refetchBranches({ items: updatedBranches }, { revalidate: true })
+    console.log("[OrganizationsPage] ✅ Branch edited, revalidating in background")
+  }
+
+  // Combined refresh helper
+  const refreshAll = async () => {
+    console.log("[OrganizationsPage] 🔄 Triggering full refresh...")
+    console.log("[OrganizationsPage] Current orgs count:", orgs?.items?.length)
+    console.log("[OrganizationsPage] Current branches count:", branches?.items?.length)
+
+    // Trigger revalidation
+    await Promise.all([
+      refetchOrgs(),
+      refetchBranches()
+    ])
+
+    console.log("[OrganizationsPage] ✅ Refresh complete")
+    console.log("[OrganizationsPage] New orgs count:", orgs?.items?.length)
+    console.log("[OrganizationsPage] New branches count:", branches?.items?.length)
+  }
 
   useEffect(() => {
     if (contextOrgId) {
@@ -56,7 +131,7 @@ export default function OrganizationsPage() {
     }
   }, [contextOrgId, orgs?.items, selectedOrgId])
 
-  async function removeOrganization(id: string, refresh: () => void) {
+  async function removeOrganization(id: string) {
     try {
       setIsDeleting(true)
       const res = await fetch(`/api/v1/organizations/${id}`, { method: "DELETE" })
@@ -67,12 +142,51 @@ export default function OrganizationsPage() {
       }
 
       showFeedback("Organization deleted successfully.", "success")
-      refresh()
+      await removeOrganizationOptimistic(id)
     } catch (e: any) {
       showFeedback(e.message, "error")
+      await refreshAll() // Rollback/Restore on error
     } finally {
       setIsDeleting(false)
       setConfirmDelete({ open: false, id: null, name: null })
+    }
+  }
+
+  async function removeBranch(id: string) {
+    try {
+      setIsDeleting(true)
+      const res = await fetch(`/api/v1/branches/${id}`, { method: "DELETE" })
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete branch")
+      }
+
+      showFeedback("Branch deleted successfully.", "success")
+      await removeBranchOptimistic(id)
+    } catch (e: any) {
+      showFeedback(e.message, "error")
+      await refreshAll() // Rollback/Restore on error
+    } finally {
+      setIsDeleting(false)
+      setConfirmDeleteBranch({ open: false, id: null, name: null })
+    }
+  }
+
+  async function editOrganization(id: string, payload: Partial<Organization>) {
+    try {
+      const res = await fetch(`/api/v1/organizations/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" }
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to update organization")
+      showFeedback("Organization updated successfully.", "success")
+      await editOrganizationOptimistic(id, payload)
+    } catch (e: any) {
+      showFeedback(e.message, "error")
+      await refreshAll() // Rollback on error
     }
   }
 
@@ -128,10 +242,9 @@ export default function OrganizationsPage() {
               open={openOrg}
               onOpenChange={setOpenOrg}
               showFeedback={showFeedback}
-              onCreated={() => {
+              onCreated={async (newOrg) => {
                 setOpenOrg(false)
-                refetchOrgs()
-                showFeedback("Company created successfully.", "success")
+                await addOrganizationOptimistic(newOrg)
               }}
             />
             <CreateBranchDialog
@@ -139,10 +252,9 @@ export default function OrganizationsPage() {
               open={openBranch}
               onOpenChange={setOpenBranch}
               showFeedback={showFeedback}
-              onCreated={() => {
+              onCreated={async (newBranch) => {
                 setOpenBranch(false)
-                refetchBranches()
-                showFeedback("Branch created successfully.", "success")
+                await addBranchOptimistic(newBranch)
               }}
             />
           </div>
@@ -190,7 +302,7 @@ export default function OrganizationsPage() {
                   className="pl-9"
                 />
               </div>
-              <ScrollArea className="max-h-[520px] pr-3">
+              <ScrollArea className="h-[calc(100vh-280px)] pr-3">
                 <div className="space-y-2">
                   <OrganizationListItem
                     isActive={!selectedOrgId}
@@ -208,7 +320,7 @@ export default function OrganizationsPage() {
                       subtitle={`${org.code} • ${branchesByOrgId.get(org.id)?.length || 0} branches`}
                       status={isActiveStatus(org.status)}
                     >
-                      <EditOrgDialog org={org} onSave={(payload) => editOrganization(String(org.id), payload, refetchOrgs, showFeedback)} />
+                      <EditOrgDialog org={org} onSave={(payload) => editOrganization(String(org.id), payload)} />
                       <Button
                         variant="ghost"
                         size="icon"
@@ -243,7 +355,7 @@ export default function OrganizationsPage() {
                 </div>
                 {selectedOrg && (
                   <div className="flex items-center gap-2">
-                    <EditOrgDialog org={selectedOrg} onSave={(payload) => editOrganization(String(selectedOrg.id), payload, refetchOrgs, showFeedback)} />
+                    <EditOrgDialog org={selectedOrg} onSave={(payload) => editOrganization(String(selectedOrg.id), payload)} />
                     <Button
                       variant="ghost"
                       size="icon"
@@ -307,9 +419,11 @@ export default function OrganizationsPage() {
                 <BranchesTable
                   items={filteredBranches}
                   organizations={orgs?.items || []}
-                  refresh={refetchBranches}
                   showCompanyColumn={!selectedOrg}
                   showFeedback={showFeedback}
+                  onDelete={(id, name) => setConfirmDeleteBranch({ open: true, id, name })}
+                  onRefresh={refreshAll}
+                  onEdit={editBranchOptimistic}
                 />
               </CardContent>
             </Card>
@@ -322,10 +436,21 @@ export default function OrganizationsPage() {
         <PremiumConfirmDialog
           open={confirmDelete.open}
           onOpenChange={(open) => setConfirmDelete((prev) => ({ ...prev, open }))}
-          onConfirm={() => confirmDelete.id && removeOrganization(confirmDelete.id, refetchOrgs)}
+          onConfirm={() => confirmDelete.id && removeOrganization(confirmDelete.id)}
           title={`Delete "${confirmDelete.name}"?`}
           description="This action cannot be undone. All data related to this organization must be removed first."
           confirmText="Delete Company"
+          type="danger"
+          isLoading={isDeleting}
+        />
+
+        <PremiumConfirmDialog
+          open={confirmDeleteBranch.open}
+          onOpenChange={(open) => setConfirmDeleteBranch((prev) => ({ ...prev, open }))}
+          onConfirm={() => confirmDeleteBranch.id && removeBranch(confirmDeleteBranch.id)}
+          title={`Delete Branch "${confirmDeleteBranch.name}"?`}
+          description="This action cannot be undone. Branch inventory, orders, and staff records will be permanently removed."
+          confirmText="Delete Branch"
           type="danger"
           isLoading={isDeleting}
         />
@@ -341,46 +466,25 @@ function isActiveStatus(status: unknown): boolean {
 }
 
 
-async function editOrganization(id: string, payload: Partial<Organization>, refresh: () => void, showFeedback: (msg: string, type: AlertType) => void) {
-  try {
-    const res = await fetch(`/api/v1/organizations/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-      headers: { "Content-Type": "application/json" }
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || "Failed to update organization")
-    showFeedback("Organization updated successfully.", "success")
-    refresh()
-  } catch (e: any) {
-    showFeedback(e.message, "error")
-  }
-}
-
 function BranchesTable({
   items,
   organizations,
-  refresh,
   showCompanyColumn = true,
   showFeedback,
+  onDelete,
+  onRefresh,
+  onEdit,
 }: {
   items: Branch[]
   organizations: Organization[]
-  refresh: () => void
   showCompanyColumn?: boolean
   showFeedback: (msg: string, type: AlertType) => void
+  onDelete: (id: string, name: string) => void
+  onRefresh: () => Promise<void>
+  onEdit: (id: string, payload: Partial<Branch>) => Promise<void>
 }) {
   const orgById = useMemo(() => Object.fromEntries(organizations.map((o) => [o.id, o])), [organizations])
-  async function remove(id: string) {
-    try {
-      const res = await fetch(`/api/v1/branches/${id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Failed to delete branch")
-      showFeedback("Branch deleted successfully.", "success")
-      refresh()
-    } catch (e: any) {
-      showFeedback(e.message, "error")
-    }
-  }
+
   async function edit(id: string, payload: Partial<Branch>) {
     try {
       const res = await fetch(`/api/v1/branches/${id}`, {
@@ -390,9 +494,10 @@ function BranchesTable({
       })
       if (!res.ok) throw new Error("Failed to update branch")
       showFeedback("Branch updated successfully.", "success")
-      refresh()
+      await onEdit(id, payload)
     } catch (e: any) {
       showFeedback(e.message, "error")
+      await onRefresh() // Rollback on error
     }
   }
   return (
@@ -427,7 +532,7 @@ function BranchesTable({
               <td className="py-2 text-right">
                 <div className="inline-flex items-center gap-1">
                   <EditBranchDialog branch={b} onSave={(payload) => edit(String(b.id), payload)} />
-                  <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => remove(String(b.id))}>
+                  <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => onDelete(String(b.id), b.name)}>
                     <Trash2 size={16} />
                   </Button>
                 </div>
@@ -559,7 +664,7 @@ function CreateOrgDialog({
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
-  onCreated: () => void
+  onCreated: (item: Organization) => void
   showFeedback: (msg: string, type: AlertType) => void
 }) {
   const [name, setName] = useState("")
@@ -579,7 +684,7 @@ function CreateOrgDialog({
       setName("")
       setCode("")
       setStatus(true)
-      onCreated()
+      onCreated(data.item)
     } catch (e: any) {
       showFeedback(e.message, "error")
     }
@@ -659,7 +764,7 @@ function CreateBranchDialog({
   organizations: Organization[]
   open: boolean
   onOpenChange: (v: boolean) => void
-  onCreated: () => void
+  onCreated: (item: Branch) => void
   showFeedback: (msg: string, type: AlertType) => void
 }) {
   const [orgId, setOrgId] = useState<string | undefined>(undefined)
@@ -668,6 +773,8 @@ function CreateBranchDialog({
   const [status, setStatus] = useState<boolean>(true)
   async function submit() {
     if (!orgId) return
+    console.log("[CreateBranchDialog] 📝 Submitting new branch:", { orgId, name, code, status })
+
     try {
       const res = await fetch("/api/v1/branches", {
         method: "POST",
@@ -675,6 +782,9 @@ function CreateBranchDialog({
         headers: { "Content-Type": "application/json" }
       })
       const data = await res.json()
+
+      console.log("[CreateBranchDialog] 📡 API Response:", { ok: res.ok, status: res.status, data })
+
       if (!res.ok) throw new Error(data.error || "Failed to create branch")
 
       showFeedback("Branch created successfully.", "success")
@@ -682,8 +792,12 @@ function CreateBranchDialog({
       setCode("")
       setStatus(true)
       setOrgId(undefined)
-      onCreated()
+
+      console.log("[CreateBranchDialog] 🔄 Calling onCreated to trigger refresh...")
+      onCreated(data.item)
+      console.log("[CreateBranchDialog] ✅ onCreated called")
     } catch (e: any) {
+      console.error("[CreateBranchDialog] ❌ Error:", e.message)
       showFeedback(e.message, "error")
     }
   }
@@ -713,7 +827,6 @@ function CreateBranchDialog({
                   </SelectTrigger>
                   <SelectContent>
                     {organizations
-                      .filter((o) => o.status === "active")
                       .map((o) => (
                         <SelectItem key={o.id} value={String(o.id)}>
                           {o.name}

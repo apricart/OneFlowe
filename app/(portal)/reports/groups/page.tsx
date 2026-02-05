@@ -12,10 +12,11 @@ import { Search, Download, RefreshCw, Loader2, Building, ChevronDown, ChevronRig
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
-import { GroupFilter } from "@/components/reports/group-filter"
+import { Badge } from "@/components/ui/badge"
 import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
-import { cn } from "@/lib/utils"
+
+import { ReportFilters } from "@/components/reports/report-filters"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -40,6 +41,8 @@ interface Group {
 export default function GroupsReportPage() {
     const { organizationId, branchId } = useAppContext()
     const [searchTerm, setSearchTerm] = useState("")
+    const [startDate, setStartDate] = useState("")
+    const [endDate, setEndDate] = useState("")
     const [groupId, setGroupId] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
     const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set())
@@ -50,8 +53,10 @@ export default function GroupsReportPage() {
 
     // Build query params - this needs to be before useSWR
     const queryParams = new URLSearchParams()
-    if (organizationId) queryParams.set("organizationId", organizationId)
+    if (organizationId) queryParams.set("organizationId", organizationId.toString())
     if (groupId && groupId !== "all") queryParams.set("groupId", groupId)
+    if (startDate) queryParams.set("startDate", startDate)
+    if (endDate) queryParams.set("endDate", endDate)
 
     // All hooks must be called before any conditional returns
     const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/groups?${queryParams.toString()}`, fetcher)
@@ -108,8 +113,8 @@ export default function GroupsReportPage() {
         doc.setFontSize(12)
         doc.text(`Total Groups: ${summary.totalGroups}`, 20, 50)
         doc.text(`Total Orders: ${summary.totalOrders}`, 100, 50)
-        doc.text(`Total Revenue: ${formatPKR(summary.totalRevenue / 100)}`, 20, 60)
-        doc.text(`Avg Revenue/Group: ${formatPKR(summary.avgRevenuePerGroup / 100)}`, 100, 60)
+        doc.text(`${role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue"}: ${formatPKR(summary.totalRevenue / 100)}`, 20, 60)
+        doc.text(`${role === "HEAD_OFFICE" ? "Avg Expense/Group" : "Avg Revenue/Group"}: ${formatPKR(summary.avgRevenuePerGroup / 100)}`, 100, 60)
 
         let currentY = 75
 
@@ -125,7 +130,7 @@ export default function GroupsReportPage() {
 
             doc.setFontSize(10)
             doc.setTextColor(100, 100, 100)
-            doc.text(`Organization: ${group.organizationName} | Branches: ${group.branchCount} | Orders: ${group.totalOrders} | Revenue: ${formatPKR(group.totalAmountCents / 100)}`, 14, currentY)
+            doc.text(`Organization: ${group.organizationName} | Branches: ${group.branchCount} | Orders: ${group.totalOrders} | ${role === "HEAD_OFFICE" ? "Expense" : "Revenue"}: ${formatPKR(group.totalAmountCents / 100)}`, 14, currentY)
             currentY += 8
 
             // Branch details table
@@ -138,7 +143,7 @@ export default function GroupsReportPage() {
 
                 autoTable(doc, {
                     startY: currentY,
-                    head: [["Branch Name", "Orders", "Revenue"]],
+                    head: [["Branch Name", "Orders", role === "HEAD_OFFICE" ? "Expense" : "Revenue"]],
                     body: branchData,
                     theme: 'striped',
                     headStyles: { fillColor: [100, 100, 100], fontSize: 9 },
@@ -176,7 +181,7 @@ export default function GroupsReportPage() {
             return str
         }
 
-        const headers = ["Group Name", "Organization", "Branch Count", "Total Orders", "Total Revenue", "Branch Name", "Branch Orders", "Branch Revenue"]
+        const headers = ["Group Name", "Organization", "Branch Count", "Total Orders", role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue", "Branch Name", "Branch Orders", role === "HEAD_OFFICE" ? "Branch Expense" : "Branch Revenue"]
         const rows: string[][] = []
 
         filteredGroups.forEach((group) => {
@@ -253,7 +258,7 @@ export default function GroupsReportPage() {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                        <CardTitle className="text-sm font-medium">{role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue"}</CardTitle>
                         <span className="text-muted-foreground">💰</span>
                     </CardHeader>
                     <CardContent>
@@ -262,7 +267,7 @@ export default function GroupsReportPage() {
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Avg Revenue/Group</CardTitle>
+                        <CardTitle className="text-sm font-medium">{role === "HEAD_OFFICE" ? "Avg Expense/Group" : "Avg Revenue/Group"}</CardTitle>
                         <span className="text-muted-foreground">📈</span>
                     </CardHeader>
                     <CardContent>
@@ -271,42 +276,23 @@ export default function GroupsReportPage() {
                 </Card>
             </div>
 
-            <Card className="p-4">
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
-                    <div className="relative w-full md:w-auto flex-1">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            placeholder="Search groups or organizations..."
-                            className="pl-9 w-full md:max-w-xs"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            suppressHydrationWarning
-                        />
-                    </div>
-
-                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-                        <GroupFilter
-                            onGroupChange={setGroupId}
-                            organizationId={organizationId || undefined}
-                        />
-                    )}
-
-                    <div className="flex gap-2 w-full md:w-auto ml-auto">
-                        <Button variant="outline" onClick={() => mutate()} className="flex-1 md:flex-none">
-                            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                            Refresh
-                        </Button>
-                        <Button className="gap-2 flex-1 md:flex-none" onClick={handleExportPDF} disabled={isLoading || filteredGroups.length === 0}>
-                            <Download className="h-4 w-4" />
-                            PDF
-                        </Button>
-                        <Button className="gap-2 flex-1 md:flex-none" onClick={handleExportCSV} disabled={isLoading || filteredGroups.length === 0}>
-                            <Download className="h-4 w-4" />
-                            CSV
-                        </Button>
-                    </div>
-                </div>
-            </Card>
+            <ReportFilters
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                startDate={startDate}
+                setStartDate={setStartDate}
+                endDate={endDate}
+                setEndDate={setEndDate}
+                groupId={groupId}
+                setGroupId={setGroupId}
+                onRefresh={() => mutate()}
+                isLoading={isLoading}
+                role={role}
+                organizationId={organizationId || undefined}
+                searchPlaceholder="Search groups or organizations..."
+                onExport={handleExportPDF}
+                showGroupFilter={true}
+            />
 
             <Card className="overflow-hidden">
                 <Table>
@@ -317,7 +303,7 @@ export default function GroupsReportPage() {
                             <TableHead>Organization</TableHead>
                             <TableHead className="text-center">Branches</TableHead>
                             <TableHead className="text-right">Orders</TableHead>
-                            <TableHead className="text-right">Revenue</TableHead>
+                            <TableHead className="text-right">{role === "HEAD_OFFICE" ? "Expense" : "Revenue"}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>

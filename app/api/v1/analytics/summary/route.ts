@@ -43,10 +43,14 @@ export async function GET(req: NextRequest) {
     const organizationId = url.searchParams.get("organizationId")
     const groupId = url.searchParams.get("groupId")
 
+    const page = parseInt(url.searchParams.get("page") || "1")
+    const limit = parseInt(url.searchParams.get("limit") || "50")
+    const offset = (page - 1) * limit
+
     const conditions = []
 
-    // Ensure only approved/fulfilled/completed orders are counted for sales
-    conditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED')`)
+    // Ensure only approved/fulfilled orders are counted for sales (exclude PENDING)
+    conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'COMPLETED')`)
 
     // Security: RBAC
     const normalizedRole = roleName ? roleName.toUpperCase() : ""
@@ -107,7 +111,7 @@ export async function GET(req: NextRequest) {
         .leftJoin(branches, eq(orders.branchId, branches.id))
         .where(whereClause)
 
-    // Recent Orders for Table with Branch Name
+    // Recent Orders for Table with Branch Name and Pagination
     const recentOrders = await db.select({
         id: orders.id,
         tid: orders.tid,
@@ -121,10 +125,16 @@ export async function GET(req: NextRequest) {
         .leftJoin(branches, eq(orders.branchId, branches.id))
         .where(whereClause)
         .orderBy(desc(orders.createdAt))
-        .limit(50)
+        .limit(limit)
+        .offset(offset)
 
     return NextResponse.json({
         summary: summaryResult[0],
-        orders: recentOrders
+        orders: recentOrders,
+        pagination: {
+            page,
+            limit,
+            hasMore: recentOrders.length === limit
+        }
     })
 }

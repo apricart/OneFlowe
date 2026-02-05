@@ -22,7 +22,9 @@ type OrganizationInventoryItem = {
     customPrice?: number
     customDescription?: string
     customImageUrl?: string
+
     categoryName?: string
+    basePrice?: number
     unit: string
     assignedAt: string
 }
@@ -30,11 +32,12 @@ export default function HeadOfficeInventoryView() {
     const { organizationId } = useAppContext()
     const [searchQuery, setSearchQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState("all")
+    const [categoryFilter, setCategoryFilter] = useState("all")
     const [page, setPage] = useState(1)
     const PAGE_SIZE = 20
 
     const encodedSearch = encodeURIComponent(searchQuery)
-    const query = `/api/v1/head-office/organization-inventory?search=${encodedSearch}&status=${statusFilter}${organizationId ? `&organizationId=${organizationId}` : ""
+    const query = `/api/v1/head-office/organization-inventory?search=${encodedSearch}&status=${statusFilter}${categoryFilter !== 'all' ? `&category=${categoryFilter}` : ''}${organizationId ? `&organizationId=${organizationId}` : ""
         }`
 
     const { data, isLoading } = useSWR<{ items: OrganizationInventoryItem[]; total: number }>(query, fetcher, {
@@ -107,13 +110,7 @@ export default function HeadOfficeInventoryView() {
                     icon={<ShieldCheck className="h-5 w-5 text-white" />}
                     accent="from-emerald-500 to-lime-500"
                 />
-                <SummaryCard
-                    label="Custom priced"
-                    value={customPriceCount}
-                    helper="Tailored rates by Admin"
-                    icon={<Building2 className="h-5 w-5 text-white" />}
-                    accent="from-blue-500 to-cyan-500"
-                />
+
                 <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
                     <CardContent className="p-4 space-y-2 text-sm text-muted-foreground">
                         <p className="font-semibold text-foreground">Read-only</p>
@@ -138,6 +135,7 @@ export default function HeadOfficeInventoryView() {
                                 onChange={(event) => setSearchQuery(event.target.value)}
                             />
                         </div>
+
                         <select
                             value={statusFilter}
                             onChange={(event) => setStatusFilter(event.target.value)}
@@ -156,7 +154,7 @@ export default function HeadOfficeInventoryView() {
                                 <TableRow>
                                     <TableHead>Product</TableHead>
                                     <TableHead>Category</TableHead>
-                                    <TableHead>Price</TableHead>
+                                    <TableHead>Unit Price</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Assigned on</TableHead>
                                 </TableRow>
@@ -204,7 +202,7 @@ export default function HeadOfficeInventoryView() {
                                                 <Badge variant="outline">{item.categoryName || "Uncategorized"}</Badge>
                                             </TableCell>
                                             <TableCell className="font-medium">
-                                                {item.customPrice ? formatPKR(item.customPrice / 100) : <span className="text-muted-foreground">Contact Admin</span>}
+                                                {formatPKR((item.customPrice ?? item.basePrice ?? 0) / 100)}
                                             </TableCell>
                                             <TableCell>
                                                 <Badge variant={item.isActive ? "default" : "secondary"}>{item.isActive ? "Active" : "Inactive"}</Badge>
@@ -248,6 +246,24 @@ export default function HeadOfficeInventoryView() {
                 </CardContent>
             </Card>
         </div>
+    )
+}
+
+const CategoryFilter = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+    const { data } = useSWR<{ items: { id: number, name: string }[] }>('/api/v1/categories?limit=100', fetcher)
+    return (
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
+        >
+            <option value="all">All Categories</option>
+            {data?.items?.map((cat) => (
+                <option key={cat.id} value={cat.id.toString()}>
+                    {cat.name}
+                </option>
+            ))}
+        </select>
     )
 }
 

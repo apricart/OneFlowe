@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, branches } from "@/db/schema"
+import { orders, branches, organizations } from "@/db/schema"
 import { eq, and, gte, lte, or, gt, sql, inArray } from "drizzle-orm"
 
 /**
@@ -75,6 +75,8 @@ export async function GET(req: NextRequest) {
             .select({
                 id: orders.id,
                 tid: orders.tid,
+                organizationId: orders.organizationId,
+                organizationName: organizations.name,
                 branchId: orders.branchId,
                 branchName: branches.name,
                 status: orders.status,
@@ -87,6 +89,7 @@ export async function GET(req: NextRequest) {
             })
             .from(orders)
             .leftJoin(branches, eq(orders.branchId, branches.id))
+            .leftJoin(organizations, eq(orders.organizationId, organizations.id))
             .where(and(...conditions))
             .orderBy(sql`${orders.refundedAt} DESC NULLS LAST`)
             .limit(500)

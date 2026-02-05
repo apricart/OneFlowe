@@ -267,7 +267,7 @@ export default function BranchAdminInventory({
           <thead>
             <tr>
               <th className="text-left p-4 font-medium">Product</th>
-              <th className="text-left p-4 font-medium">Price</th>
+              <th className="text-left p-4 font-medium">Unit Price</th>
               <th className="text-left p-4 font-medium">Stock</th>
               <th className="text-left p-4 font-medium">Status</th>
               <th className="text-center p-4 font-medium">Visibility</th>

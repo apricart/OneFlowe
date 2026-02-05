@@ -17,6 +17,7 @@ interface ProductDetailCardProps {
     reorderThreshold: number
     isVisible: boolean
     isActive: boolean
+    description?: string
     customName?: string
     customPrice?: number
     customDescription?: string
@@ -44,6 +45,8 @@ export function ProductDetailCard({
   const effectiveName = product.customName || product.productName
   const effectivePrice = product.customPrice || product.basePrice
   const effectiveImage = product.customImageUrl || product.productImageUrl
+  const effectiveDescription = product.customDescription || product.description
+
 
   const getSource = (field: "name" | "price" | "description" | "image") => {
     switch (field) {
@@ -81,7 +84,7 @@ export function ProductDetailCard({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <StockStatusBadge 
+            <StockStatusBadge
               quantity={product.stockQuantity}
               threshold={product.reorderThreshold}
             />
@@ -112,7 +115,7 @@ export function ProductDetailCard({
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
         {/* Product Details */}
         <div className="space-y-3">
@@ -123,9 +126,9 @@ export function ProductDetailCard({
                 {formatPKR(effectivePrice / 100)} {product.unit}
               </span>
               {showSource && (
-                <FieldSourceBadge 
-                  source={getSource("price")} 
-                  field="price" 
+                <FieldSourceBadge
+                  source={getSource("price")}
+                  field="price"
                 />
               )}
             </div>
@@ -136,23 +139,24 @@ export function ProductDetailCard({
             <div className="flex items-center gap-2">
               <span className="font-medium">{effectiveName}</span>
               {showSource && (
-                <FieldSourceBadge 
-                  source={getSource("name")} 
-                  field="name" 
+                <FieldSourceBadge
+                  source={getSource("name")}
+                  field="name"
                 />
               )}
             </div>
           </div>
 
-          {product.customDescription && (
+
+          {effectiveDescription && (
             <div className="flex items-start justify-between">
               <span className="text-sm font-medium text-muted-foreground">Description</span>
-              <div className="flex items-center gap-2 max-w-xs">
-                <span className="text-sm text-right">{product.customDescription}</span>
+              <div className="flex items-start gap-2 max-w-xs">
+                <span className="text-sm text-right">{effectiveDescription}</span>
                 {showSource && (
-                  <FieldSourceBadge 
-                    source={getSource("description")} 
-                    field="description" 
+                  <FieldSourceBadge
+                    source={getSource("description")}
+                    field="description"
                   />
                 )}
               </div>
@@ -164,8 +168,8 @@ export function ProductDetailCard({
         <div className="pt-3 border-t space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-muted-foreground">Stock Status</span>
-            <StockStatusBadge 
-              quantity={product.stockQuantity || 0} 
+            <StockStatusBadge
+              quantity={product.stockQuantity || 0}
               threshold={product.reorderThreshold || 10}
             />
           </div>
@@ -186,13 +190,13 @@ export function ProductDetailCard({
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-muted-foreground">Status</span>
             <div className="flex items-center gap-2">
-              <Badge 
+              <Badge
                 variant={product.isActive ? "default" : "secondary"}
                 className={product.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}
               >
                 {product.isActive ? "Active" : "Inactive"}
               </Badge>
-              <Badge 
+              <Badge
                 variant={product.isVisible ? "default" : "secondary"}
                 className={product.isVisible ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-600"}
               >

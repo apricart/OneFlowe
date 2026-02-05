@@ -94,13 +94,11 @@ export function ContextSelector() {
                 {userRole === "SUPER_ADMIN" && (
                   <SelectItem value="all">All Organizations</SelectItem>
                 )}
-                {organizations
-                  .filter((org: any) => org.status === "active")
-                  .map((org: any) => (
-                    <SelectItem key={org.id} value={org.id.toString()}>
-                      {org.name}
-                    </SelectItem>
-                  ))}
+                {organizations.map((org: any) => (
+                  <SelectItem key={org.id} value={org.id.toString()}>
+                    {org.name}
+                  </SelectItem>
+                ))}
               </SelectGroup>
             </SelectContent>
           </Select>

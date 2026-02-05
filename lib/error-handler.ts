@@ -279,6 +279,15 @@ export function parseError(error: any): ErrorDetails {
     }
   }
 
+  // Pre-mapped specific messages from our APIs (e.g. blockers)
+  if (errorMsg.startsWith('Cannot delete') || errorMsg.includes('Please') || errorMsg.includes('assigned') || errorMsg.includes('records')) {
+    return {
+      type: 'VALIDATION_ERROR',
+      message: errorMsg,
+      statusCode: 400
+    }
+  }
+
   // Default server error - NEVER expose raw error messages to users
   // Log the actual error for debugging but return generic message
   if (process.env.NODE_ENV !== 'production') {
@@ -307,7 +316,16 @@ export function createUserFriendlyError(error: any): { message: string; field?: 
  * Log error for debugging while returning user-friendly message
  */
 export function handleError(error: any, context: string): { message: string; field?: string; type: ErrorType } {
-  console.error(`Error in ${context}:`, error)
+  const errorDetails = parseError(error)
+  const isValidationError = errorDetails.statusCode >= 400 && errorDetails.statusCode < 500
+
+  // Use quieter logging for expected validation failures
+  if (isValidationError) {
+    console.warn(`[Validation] ${context}: ${errorDetails.message}`)
+  } else {
+    console.error(`[Critical] Error in ${context}:`, error)
+  }
+
   return createUserFriendlyError(error)
 }
 

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { globalProducts, categories, auditLogs } from "@/db/schema"
 import { eq } from "drizzle-orm"
+import { cascadeGlobalProductFieldUpdate } from "@/lib/inventory-cascade"
 
 function parseCsv(content: string) {
   const lines = content.split("\n").map((line) => line.trim()).filter((line) => line.length > 0)
@@ -145,7 +146,9 @@ export async function POST(req: NextRequest) {
           .limit(1)
 
         if (existing.length > 0) {
-          // Update existing product
+          // Update existing product and cascade changes
+          const existingProduct = existing[0]
+
           const [updated] = await db
             .update(globalProducts)
             .set({
@@ -162,6 +165,25 @@ export async function POST(req: NextRequest) {
             })
             .where(eq(globalProducts.id, existing[0].id))
             .returning()
+
+          // Cascade changes to organization inventory
+          const updates = []
+          if (existingProduct.name !== row.name.trim()) {
+            updates.push({ field: 'name' as const, oldValue: existingProduct.name, newValue: row.name.trim() })
+          }
+          if (existingProduct.description !== (row.description?.trim() || null)) {
+            updates.push({ field: 'description' as const, oldValue: existingProduct.description, newValue: row.description?.trim() || null })
+          }
+          if (existingProduct.imageUrl !== (row.imageUrl?.trim() || null)) {
+            updates.push({ field: 'imageUrl' as const, oldValue: existingProduct.imageUrl, newValue: row.imageUrl?.trim() || null })
+          }
+          if (existingProduct.basePrice !== basePrice) {
+            updates.push({ field: 'basePrice' as const, oldValue: existingProduct.basePrice, newValue: basePrice })
+          }
+
+          if (updates.length > 0) {
+            await cascadeGlobalProductFieldUpdate(updated.id, updates, (session.user as any).id)
+          }
 
           importedProductIds.push(updated.id)
         } else {

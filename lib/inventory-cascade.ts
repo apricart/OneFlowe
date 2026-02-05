@@ -25,13 +25,13 @@ export async function cascadeOrgDeletion(
       branchId: branchInventory.branchId,
       organizationId: branchInventory.organizationId,
     })
-    .from(branchInventory)
-    .where(
-      and(
-        eq(branchInventory.organizationInventoryId, organizationInventoryId),
-        isNull(branchInventory.deletedAt)
+      .from(branchInventory)
+      .where(
+        and(
+          eq(branchInventory.organizationInventoryId, organizationInventoryId),
+          isNull(branchInventory.deletedAt)
+        )
       )
-    )
 
     if (branchItems.length === 0) {
       return { deletedCount: 0, affectedBranches: [] }
@@ -40,7 +40,7 @@ export async function cascadeOrgDeletion(
     // Soft delete all branch inventory items
     const now = new Date()
     await db.update(branchInventory)
-      .set({ 
+      .set({
         deletedAt: now,
         updatedAt: now
       })
@@ -96,13 +96,13 @@ export async function cascadeOrgStatusChange(
       branchId: branchInventory.branchId,
       organizationId: branchInventory.organizationId,
     })
-    .from(branchInventory)
-    .where(
-      and(
-        eq(branchInventory.organizationInventoryId, organizationInventoryId),
-        isNull(branchInventory.deletedAt)
+      .from(branchInventory)
+      .where(
+        and(
+          eq(branchInventory.organizationInventoryId, organizationInventoryId),
+          isNull(branchInventory.deletedAt)
+        )
       )
-    )
 
     if (branchItems.length === 0) {
       return { updatedCount: 0, affectedBranches: [] }
@@ -172,13 +172,13 @@ export async function cascadeGlobalProductDeletion(
       id: organizationInventory.id,
       organizationId: organizationInventory.organizationId,
     })
-    .from(organizationInventory)
-    .where(
-      and(
-        eq(organizationInventory.globalProductId, globalProductId),
-        isNull(organizationInventory.deletedAt)
+      .from(organizationInventory)
+      .where(
+        and(
+          eq(organizationInventory.globalProductId, globalProductId),
+          isNull(organizationInventory.deletedAt)
+        )
       )
-    )
 
     if (orgItems.length === 0) {
       return { deletedOrgCount: 0, deletedBranchCount: 0, affectedOrgs: [], affectedBranches: [] }
@@ -201,7 +201,7 @@ export async function cascadeGlobalProductDeletion(
 
       // Then soft delete the organization inventory item
       await db.update(organizationInventory)
-        .set({ 
+        .set({
           deletedAt: new Date(),
           updatedAt: new Date()
         })
@@ -261,13 +261,13 @@ export async function cascadeGlobalProductStatusChange(
       id: organizationInventory.id,
       organizationId: organizationInventory.organizationId,
     })
-    .from(organizationInventory)
-    .where(
-      and(
-        eq(organizationInventory.globalProductId, globalProductId),
-        isNull(organizationInventory.deletedAt)
+      .from(organizationInventory)
+      .where(
+        and(
+          eq(organizationInventory.globalProductId, globalProductId),
+          isNull(organizationInventory.deletedAt)
+        )
       )
-    )
 
     if (orgItems.length === 0) {
       return { updatedOrgCount: 0, updatedBranchCount: 0, affectedOrgs: [], affectedBranches: [] }
@@ -281,7 +281,7 @@ export async function cascadeGlobalProductStatusChange(
     for (const orgItem of orgItems) {
       // First update the organization inventory item
       await db.update(organizationInventory)
-        .set({ 
+        .set({
           isActive: false,
           updatedAt: new Date()
         })
@@ -351,5 +351,90 @@ export function getEffectiveProductData(
     description: orgInventory?.customDescription || globalProduct.description,
     imageUrl: orgInventory?.customImageUrl || globalProduct.imageUrl,
     price: orgInventory?.customPrice || globalProduct.basePrice,
+  }
+}
+
+/**
+ * Cascade global product field updates to organization inventory
+ * Clears organization-level overrides if they match the OLD global value,
+ * allowing the new global value to propagate through.
+ * 
+ * @param globalProductId - The ID of the global product being updated
+ * @param updates - Object containing the fields being updated and their OLD values
+ * @param performedByUserId - User performing the action
+ */
+export async function cascadeGlobalProductFieldUpdate(
+  globalProductId: number,
+  updates: Array<{
+    field: 'name' | 'description' | 'imageUrl' | 'basePrice'
+    oldValue: any
+    newValue: any
+  }>,
+  performedByUserId: string
+) {
+  try {
+    if (updates.length === 0) return { updatedCount: 0 }
+
+    let updatedCount = 0
+
+    // Only proceed if there are actual changes that might have overrides
+    const fieldMapping = {
+      name: 'customName',
+      description: 'customDescription',
+      imageUrl: 'customImageUrl',
+      basePrice: 'customPrice'
+    } as const
+
+    for (const update of updates) {
+      const customField = fieldMapping[update.field]
+      if (!customField) continue
+
+      // Find all organization inventory items where the custom override matches the old global value
+      // This indicates the override was likely a static copy of the old global data
+      let oldValue = update.oldValue
+      if (update.field === 'basePrice' && typeof oldValue === 'number') {
+        // basePrice in globalProducts is in cents, customPrice in organizationInventory is also in cents
+        // Ensure we are comparing same types
+      }
+
+      const result = await db.update(organizationInventory)
+        .set({
+          [customField]: null,
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            eq(organizationInventory.globalProductId, globalProductId),
+            eq(organizationInventory[customField], oldValue),
+            isNull(organizationInventory.deletedAt)
+          )
+        )
+        .returning()
+
+      updatedCount += result.length
+
+      if (result.length > 0) {
+        // Log the cascade override clearing
+        await db.insert(auditLogs).values({
+          userId: performedByUserId,
+          action: "CASCADE_CLEAR_OVERRIDE",
+          entity: "OrganizationInventory",
+          entityId: result.map(r => r.id).join(','),
+          metadata: {
+            triggeredBy: "global_product_update",
+            globalProductId,
+            field: update.field,
+            oldValue: update.oldValue,
+            newValue: update.newValue,
+            affectedOrgs: result.map(r => r.organizationId)
+          },
+        })
+      }
+    }
+
+    return { updatedCount }
+  } catch (error) {
+    console.error("Error in cascadeGlobalProductFieldUpdate:", error)
+    throw error
   }
 }

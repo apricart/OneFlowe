@@ -6,7 +6,7 @@ export function useAPI<T>(url: string | null, options?: any) {
   return useSWR<T>(url, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: true,
-    dedupingInterval: 60000, // 1 minute deduplication
+    dedupingInterval: 100, // Reduced to allow rapid updates
     errorRetryCount: 3,
     ...options,
   })
@@ -37,12 +37,12 @@ export const prefetchData = {
     const { fetcher } = await import('@/lib/fetcher')
     preload('/api/v1/users', fetcher)
   },
-  
+
   async organizations() {
     const { fetcher } = await import('@/lib/fetcher')
     preload('/api/v1/organizations', fetcher)
   },
-  
+
   async roles() {
     const { fetcher } = await import('@/lib/fetcher')
     preload('/api/v1/roles', fetcher)

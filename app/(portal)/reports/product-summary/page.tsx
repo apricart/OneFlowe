@@ -13,9 +13,10 @@ import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { Badge } from "@/components/ui/badge"
-import { GroupFilter } from "@/components/reports/group-filter"
-import { useSession } from "next-auth/react"
 import { Role } from "@/lib/rbac"
+import { useSession } from "next-auth/react"
+
+import { ReportFilters } from "@/components/reports/report-filters"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -122,7 +123,7 @@ export default function ProductSummaryReportPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">{role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue"}</CardTitle>
             <span className="text-blue-500">💰</span>
           </CardHeader>
           <CardContent>
@@ -149,44 +150,22 @@ export default function ProductSummaryReportPage() {
         </Card>
       </div>
 
-      <Card className="p-4">
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[140px] text-xs" suppressHydrationWarning />
-            <span className="text-muted-foreground text-xs">to</span>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[140px] text-xs" suppressHydrationWarning />
-          </div>
-
-          <div className="relative w-full md:w-auto flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search Product, SKU, Branch, or User..."
-              className="pl-9 w-full md:max-w-xs"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              suppressHydrationWarning
-            />
-          </div>
-
-          {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-            <GroupFilter
-              onGroupChange={setGroupId}
-              organizationId={organizationId || undefined}
-            />
-          )}
-
-          <div className="flex gap-2 w-full md:w-auto ml-auto">
-            <Button variant="outline" onClick={() => mutate()} className="flex-1 md:flex-none">
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            <Button className="gap-2 flex-1 md:flex-none" onClick={handleExportPDF} disabled={isLoading || filteredItems.length === 0}>
-              <Download className="h-4 w-4" />
-              PDF
-            </Button>
-          </div>
-        </div>
-      </Card>
+      <ReportFilters
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        startDate={startDate}
+        setStartDate={setStartDate}
+        endDate={endDate}
+        setEndDate={setEndDate}
+        groupId={groupId}
+        setGroupId={setGroupId}
+        onRefresh={() => mutate()}
+        isLoading={isLoading}
+        role={role}
+        organizationId={organizationId || undefined}
+        searchPlaceholder="Search Product, SKU, Branch, or User..."
+        onExport={handleExportPDF}
+      />
 
       <Card className="overflow-hidden">
         <Table>

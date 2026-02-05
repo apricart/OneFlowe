@@ -56,7 +56,6 @@ export async function POST(req: Request) {
   if (err) return err
 
   const body = await readJson<any>(req)
-  console.log("[DEBUG] POST body:", body)
   if (!body) return error("Invalid body", 400)
 
   const firstName = String(body.firstName || "")
@@ -64,17 +63,20 @@ export async function POST(req: Request) {
   const email = String(body.email || "")
   const password = String(body.password || "")
   const role = String(body.role || "") as Role
-  const organizationId = (body.organizationId === null || body.organizationId === undefined) ? null : Number(body.organizationId)
-  const branchId = (body.branchId === null || body.branchId === undefined) ? null : Number(body.branchId)
+  const parseId = (val: any) => {
+    if (val === null || val === undefined || val === "") return null
+    const n = Number(val)
+    return Number.isNaN(n) ? null : n
+  }
 
-  console.log("[DEBUG] Parsed fields:", { firstName, lastName, email, role, organizationId, branchId })
+  const organizationId = parseId(body.organizationId)
+  const branchId = parseId(body.branchId)
 
   if (!firstName || !lastName || !email || !password || !role) {
     return error("firstName, lastName, email, password, role are required", 400)
   }
   // Get the current user's role to determine what roles they can create
   const scope = await getRequestScope()
-  console.log("[DEBUG] Request scope:", scope)
   const currentUserRole = scope?.role
 
   let allowed: Role[] = []
@@ -85,6 +87,7 @@ export async function POST(req: Request) {
   }
 
   if (!allowed.includes(role)) {
+    console.error("[DEBUG] Role not allowed:", { role, currentUserRole, allowed })
     return error(`Only ${allowed.join(" or ")} can be created by ${currentUserRole}`, 400)
   }
 
@@ -106,17 +109,28 @@ export async function POST(req: Request) {
   }
 
   const [roleRow] = await db.select().from(rolesTable).where(eq(rolesTable.name, role)).limit(1)
-  console.log("[DEBUG] Role row:", roleRow)
-  if (!roleRow) return error("Invalid role", 400)
+  if (!roleRow) {
+    console.error("[DEBUG] Role row not found for name:", role)
+    return error("Invalid role", 400)
+  }
 
   // MFA is handled separately through the MFA system
   // No login code generation needed
 
   const passwordHash = await hashPassword(password)
-  console.log("[DEBUG] Password hashed")
+
+  // Pre-emptive check for existing user with the same email to avoid database constraint errors
+  const [existingUser] = await db
+    .select({ id: usersTable.id })
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+    .limit(1)
+
+  if (existingUser) {
+    return error("Email address already exists. Please use a different email.", 400)
+  }
 
   try {
-    console.log("[DEBUG] Attempting user insert...")
     const [item] = await db
       .insert(usersTable)
       .values({
@@ -134,12 +148,10 @@ export async function POST(req: Request) {
       })
       .returning()
 
-    console.log("[DEBUG] User inserted:", item?.id)
     const createdUser = item
 
     // Audit Log
     try {
-      console.log("[DEBUG] Attempting audit log...")
       const headersList = await headers()
       const userAgent = headersList.get("user-agent")
       const forwardedFor = headersList.get("x-forwarded-for")
@@ -163,21 +175,23 @@ export async function POST(req: Request) {
         userAgent: userAgent,
         success: true
       })
-      console.log("[DEBUG] Audit log written")
     } catch (logErr) {
       console.error("[DEBUG] Failed to write audit log:", logErr)
     }
 
     return ok({ item: createdUser }, { status: 201 })
   } catch (err: any) {
-    console.error("[DEBUG] Error creating user (full):", err)
-    // Handle database constraint violations
-    if (err.code === '23505') {
-      if (err.constraint === 'users_email_key' || err.constraint === 'users_email_idx') {
-        return error("Email address already exists. Please use a different email.", 400)
-      }
+    // Check for unique constraint violation (code 23505) if the pre-emptive check missed it due to a race
+    const errorCode = String(err.code || err.cause?.code || "")
+    const errorMsg = String(err.message || "").toLowerCase()
+    const detail = String(err.detail || err.cause?.detail || "").toLowerCase()
+
+    if (errorCode === '23505' || errorMsg.includes('unique constraint') || detail.includes('already exists')) {
+      return error("Email address already exists. Please use a different email.", 400)
     }
-    console.error("Error creating user:", err)
+
+    // Only log actual unexpected errors
+    console.error("[USERS_API] Unexpected error creating user:", err)
     return error(`Failed to create user: ${err.message}`, 500)
   }
 }

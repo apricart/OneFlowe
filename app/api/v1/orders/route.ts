@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds, systemLogs, groupAuditLogs } from "@/db/schema"
+import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds, systemLogs, groupAuditLogs, organizations } from "@/db/schema"
 import { headers } from "next/headers"
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 import { logOrderActivity } from "@/lib/global-logger"
@@ -149,6 +149,7 @@ export async function GET(req: NextRequest) {
         id: orders.id,
         tid: orders.tid,
         organizationId: orders.organizationId,
+        organizationName: organizations.name,
         branchId: orders.branchId,
         status: orders.status,
         statusAtRefund: orders.statusAtRefund,
@@ -156,6 +157,7 @@ export async function GET(req: NextRequest) {
         refundedByUserId: orders.refundedByUserId,
         refundAmountCents: orders.refundAmountCents,
         refundReason: orders.refundReason,
+        rejectionReason: orders.rejectionReason,
         subtotalCents: orders.subtotalCents,
         taxCents: orders.taxCents,
         totalCents: orders.totalCents,
@@ -172,6 +174,7 @@ export async function GET(req: NextRequest) {
       })
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))
+      .leftJoin(organizations, eq(orders.organizationId, organizations.id))
 
     const items = await (conditions.length
       ? selectBase.where(and(...conditions)).orderBy(desc(orders.createdAt))

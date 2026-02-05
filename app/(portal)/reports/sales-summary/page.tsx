@@ -17,6 +17,8 @@ import { GroupFilter } from "@/components/reports/group-filter"
 import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
 
+import { ReportFilters } from "@/components/reports/report-filters"
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function SalesSummaryReportPage() {
@@ -33,32 +35,19 @@ export default function SalesSummaryReportPage() {
 
   // Build query string based on GLOBAL context (AppContext) and LOCAL date filters
   const queryParams = new URLSearchParams()
-  if (branchId) {
-    queryParams.set("branchId", branchId)
-  }
-  if (organizationId) {
-    queryParams.set("organizationId", organizationId)
-  }
-  if (startDate) {
-    queryParams.set("startDate", startDate)
-  }
-  if (endDate) {
-    queryParams.set("endDate", endDate)
-  }
-  if (groupId) {
-    queryParams.set("groupId", groupId)
-  }
+  if (branchId) queryParams.set("branchId", branchId)
+  if (organizationId) queryParams.set("organizationId", organizationId.toString())
+  if (startDate) queryParams.set("startDate", startDate)
+  if (endDate) queryParams.set("endDate", endDate)
+  if (groupId) queryParams.set("groupId", groupId)
 
-  // All hooks must be called before any conditional returns
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${queryParams.toString()}`, fetcher)
 
-  // Set date on mount to avoid hydration mismatch
   useEffect(() => {
     setHasMounted(true)
     setGeneratedDate(new Date().toLocaleString())
   }, [])
 
-  // Now safe to return early after all hooks are called
   if (!hasMounted) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -78,23 +67,17 @@ export default function SalesSummaryReportPage() {
 
   const handleExportPDF = () => {
     const doc = new jsPDF()
-
-    // Header
     doc.setFontSize(20)
     doc.text("Sales Summary Report", 14, 20)
     doc.setFontSize(10)
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
 
-    // Add Context Info to PDF
     let filterText = ""
     if (organizationId) filterText += `Org ID: ${organizationId} `
     if (branchId) filterText += `Branch ID: ${branchId} `
-    if (startDate || endDate) {
-      filterText += `Range: ${startDate || 'Start'} to ${endDate || 'End'}`
-    }
+    if (startDate || endDate) filterText += `Range: ${startDate || 'Start'} to ${endDate || 'End'}`
     if (filterText) doc.text(filterText, 14, 33)
 
-    // Summary Section
     doc.setFillColor(240, 240, 240)
     doc.rect(14, 40, 180, 25, 'F')
     doc.setFontSize(12)
@@ -102,7 +85,6 @@ export default function SalesSummaryReportPage() {
     doc.text(`Total Tax: ${formatPKR(summary.totalTax / 100)}`, 100, 50)
     doc.text(`Total Orders: ${summary.orderCount}`, 20, 60)
 
-    // Table
     const tableData = filteredOrders.map((order: any) => [
       new Date(order.createdAt).toLocaleDateString(),
       order.tid,
@@ -122,144 +104,109 @@ export default function SalesSummaryReportPage() {
     doc.save("sales-summary-report.pdf")
   }
 
+  const handleExportCSV = () => {
+    const headers = ["Date", "Transaction ID", "Branch", "Status", "Amount (PKR)"]
+    const rows = filteredOrders.map((order: any) => [
+      new Date(order.createdAt).toLocaleDateString(),
+      order.tid,
+      order.branchName || `ID: ${order.branchId}`,
+      order.status,
+      (order.totalCents / 100).toString()
+    ])
+
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", `sales-summary-${new Date().getTime()}.csv`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       <SectionHeader title="Product Sales Summary" subtitle="Comprehensive view of sales, taxes, and order volume." />
 
       {/* Context Indicator */}
       {(organizationId || branchId || startDate || endDate) && (
-        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground bg-muted/30 p-2 rounded-md border border-dashed">
-          <span className="font-medium">Active Filters:</span>
+        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+          <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Active Filters:</span>
           {organizationId && (
-            <span className="flex items-center gap-1">
-              <Building className="h-3 w-3" /> Org ID: {organizationId}
-            </span>
+            <Badge variant="outline" className="gap-1 bg-white dark:bg-slate-950 font-medium">
+              <Building className="h-3 w-3 text-blue-500" /> Org: {organizationId}
+            </Badge>
           )}
           {branchId && (
-            <span className="flex items-center gap-1">
-              <Building2 className="h-3 w-3" /> Branch ID: {branchId}
-            </span>
+            <Badge variant="outline" className="gap-1 bg-white dark:bg-slate-950 font-medium">
+              <Building2 className="h-3 w-3 text-indigo-500" /> Branch: {branchId}
+            </Badge>
           )}
           {(startDate || endDate) && (
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" /> {startDate || "..."} — {endDate || "..."}
-            </span>
+            <Badge variant="outline" className="gap-1 bg-white dark:bg-slate-950 font-medium">
+              <Calendar className="h-3 w-3 text-emerald-500" /> {startDate || "..."} — {endDate || "..."}
+            </Badge>
           )}
         </div>
       )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <span className="text-muted-foreground">💰</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : formatPKR((summary.totalSales || 0) / 100)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tax</CardTitle>
-            <span className="text-muted-foreground">🏦</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : formatPKR((summary.totalTax || 0) / 100)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Orders</CardTitle>
-            <span className="text-muted-foreground">📦</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : summary.orderCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Order Value</CardTitle>
-            <span className="text-muted-foreground">📊</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {isLoading ? "..." : formatPKR((summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) : 0) / 100)}
-            </div>
-          </CardContent>
-        </Card>
+        {[
+          { label: role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue", value: formatPKR((summary.totalSales || 0) / 100), icon: "💰", color: "text-emerald-600" },
+          { label: "Total Tax", value: formatPKR((summary.totalTax || 0) / 100), icon: "🏦", color: "text-blue-600" },
+          { label: "Orders", value: summary.orderCount, icon: "📦", color: "text-orange-600" },
+          { label: "Avg Order Value", value: formatPKR((summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) : 0) / 100), icon: "📊", color: "text-indigo-600" }
+        ].map((card, idx) => (
+          <Card key={idx} className="border-none shadow-sm bg-white dark:bg-slate-900">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-500">{card.label}</CardTitle>
+              <span className="text-lg">{card.icon}</span>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-black ${card.color}`}>
+                {isLoading ? "..." : card.value}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <Card className="p-4">
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
+      <ReportFilters
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        startDate={startDate}
+        setStartDate={setStartDate}
+        endDate={endDate}
+        setEndDate={setEndDate}
+        groupId={groupId}
+        setGroupId={setGroupId}
+        onRefresh={() => mutate()}
+        onExport={handleExportCSV}
+        isLoading={isLoading}
+        role={role}
+        organizationId={organizationId || undefined}
+        searchPlaceholder="Filter by ID or Branch..."
+      />
 
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <div className="relative flex-1 md:w-[150px]">
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full text-xs"
-                placeholder="Start Date"
-                suppressHydrationWarning
-              />
-            </div>
-            <span className="text-muted-foreground text-xs">to</span>
-            <div className="relative flex-1 md:w-[150px]">
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full text-xs"
-                placeholder="End Date"
-                suppressHydrationWarning
-              />
-            </div>
-          </div>
-
-          <div className="relative w-full md:w-auto flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search Transaction ID or Branch..."
-              className="pl-9 w-full md:max-w-[300px]"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              suppressHydrationWarning
-            />
-          </div>
-
-          {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-            <GroupFilter
-              onGroupChange={setGroupId}
-              organizationId={organizationId || undefined}
-            />
-          )}
-
-          <div className="flex-1 hidden md:block" />
-
-          <div className="flex gap-2 w-full md:w-auto">
-            <Button variant="outline" onClick={() => mutate()} className="flex-1 md:flex-none">
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-
-            <Button className="gap-2 flex-1 md:flex-none" onClick={handleExportPDF} disabled={isLoading || filteredOrders.length === 0}>
-              <Download className="h-4 w-4" />
-              PDF
-            </Button>
-          </div>
+      <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900 mb-8 pt-6">
+        <div className="px-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+          <h3 className="font-bold text-slate-900 dark:text-white">Transaction Logs</h3>
+          <Button variant="ghost" size="sm" onClick={handleExportPDF} className="text-xs font-bold text-slate-500 hover:text-indigo-600">
+            <Download className="h-3.5 w-3.5 mr-2" />
+            PDF VERSION
+          </Button>
         </div>
-      </Card>
-
-      <Card className="overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
+            <TableRow className="bg-slate-50/50 dark:bg-slate-800/50">
+              <TableHead className="pl-6">Date</TableHead>
               <TableHead>Transaction ID</TableHead>
               <TableHead>Branch</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
+              <TableHead className="text-right pr-6">Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -277,16 +224,20 @@ export default function SalesSummaryReportPage() {
               </TableRow>
             ) : (
               filteredOrders.map((order: any) => (
-                <TableRow key={order.id}>
-                  <TableCell className="font-mono text-xs" suppressHydrationWarning>{new Date(order.createdAt).toLocaleDateString()}</TableCell>
+                <TableRow key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <TableCell className="font-mono text-xs pl-6" suppressHydrationWarning>
+                    {new Date(order.createdAt).toLocaleDateString()}
+                  </TableCell>
                   <TableCell className="font-mono text-xs font-medium">{order.tid}</TableCell>
                   <TableCell className="text-xs text-muted-foreground font-medium">
                     {order.branchName || `ID: ${order.branchId}`}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-[10px]">{order.status}</Badge>
+                    <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-tighter">
+                      {order.status}
+                    </Badge>
                   </TableCell>
-                  <TableCell className="text-right font-mono text-xs">
+                  <TableCell className="text-right font-mono text-xs pr-6">
                     {formatPKR((order.totalCents || 0) / 100)}
                   </TableCell>
                 </TableRow>
@@ -294,11 +245,12 @@ export default function SalesSummaryReportPage() {
             )}
           </TableBody>
         </Table>
+        <div className="p-4 border-t border-slate-100 dark:border-slate-800 text-center">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+            Report Generated: {generatedDate}
+          </p>
+        </div>
       </Card>
-
-      <div className="text-xs text-muted-foreground text-center">
-        Report Generated: {generatedDate}
-      </div>
     </div>
   )
 }

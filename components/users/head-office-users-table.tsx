@@ -10,9 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
-import { Edit, Trash2, Search, User, Mail, Phone, Shield, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff } from "lucide-react"
+import { Edit, Trash2, Search, User, Mail, Phone, Shield, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff, Download, FileText, Table as TableIcon, FileJson } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Switch } from "@/components/ui/switch"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
+import * as XLSX from "xlsx"
 
 type UserRow = {
   id: string
@@ -279,6 +283,87 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
     }
   }
 
+  // Export handlers
+  const exportToCSV = () => {
+    const headers = ["Name", "Email", "Phone", "Role", "Organization", "Branch", "Status", "MFA"]
+    const rows = filteredUsers.map(user => [
+      user.fullName || `${user.firstName} ${user.lastName}`,
+      user.email,
+      user.phone || "—",
+      user.role,
+      getOrganizationName(user.organizationId ?? null) || "—",
+      getBranchName(user.branchId),
+      user.isActive ? "Active" : "Inactive",
+      user.mfaEnabled ? "Enabled" : "Disabled"
+    ])
+
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n")
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.setAttribute("href", url)
+    link.setAttribute("download", `users-export-${new Date().getTime()}.csv`)
+    link.style.visibility = "hidden"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const exportToExcel = () => {
+    const data = filteredUsers.map(user => ({
+      "Name": user.fullName || `${user.firstName} ${user.lastName}`,
+      "Email": user.email,
+      "Phone": user.phone || "—",
+      "Role": user.role,
+      "Organization": getOrganizationName(user.organizationId ?? null) || "—",
+      "Branch": getBranchName(user.branchId),
+      "Status": user.isActive ? "Active" : "Inactive",
+      "MFA": user.mfaEnabled ? "Enabled" : "Disabled"
+    }))
+
+    const worksheet = XLSX.utils.json_to_sheet(data)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Users")
+    XLSX.writeFile(workbook, `users-export-${new Date().getTime()}.xlsx`)
+  }
+
+  const exportToPDF = () => {
+    const doc = new jsPDF()
+    doc.setFontSize(18)
+    doc.text("User Directory Report", 14, 20)
+    doc.setFontSize(10)
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
+    doc.text(`Total Users: ${filteredUsers.length}`, 14, 34)
+
+    const tableData = filteredUsers.map(user => [
+      user.fullName || `${user.firstName} ${user.lastName}`,
+      user.email,
+      user.role,
+      getOrganizationName(user.organizationId ?? null) || "—",
+      getBranchName(user.branchId),
+      user.isActive ? "Active" : "Inactive"
+    ])
+
+    autoTable(doc, {
+      startY: 40,
+      head: [["Name", "Email", "Role", "Organization", "Branch", "Status"]],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] }, // Indigo-600 color
+      styles: { fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 35 },
+        1: { cellWidth: 45 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 30 },
+        5: { cellWidth: 20 }
+      }
+    })
+
+    doc.save(`users-export-${new Date().getTime()}.pdf`)
+  }
+
   return (
     <div className="space-y-4">
       {/* Search and Filter Bar */}
@@ -303,6 +388,31 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
             <SelectItem value="ORDER_PORTAL">Order Portal User</SelectItem>
           </SelectContent>
         </Select>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="gap-2 h-10 border-slate-200 bg-white dark:bg-slate-900 shadow-sm">
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[180px]">
+            <DropdownMenuLabel>Export Directory</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={exportToCSV} className="gap-2 cursor-pointer">
+              <FileText className="h-4 w-4 text-orange-500" />
+              Export as CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportToExcel} className="gap-2 cursor-pointer">
+              <TableIcon className="h-4 w-4 text-green-600" />
+              Export as Excel
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportToPDF} className="gap-2 cursor-pointer">
+              <FileJson className="h-4 w-4 text-red-500" />
+              Export as PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Users Table */}

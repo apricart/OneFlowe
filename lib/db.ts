@@ -40,13 +40,18 @@ function parseDatabaseUrl(url: string | undefined) {
       throw new Error(`Invalid port number: ${port}. Must be between 1 and 65535`)
     }
 
+    const isSupabase = urlObj.hostname.includes('supabase')
+
     return {
       host: urlObj.hostname,
       port,
       database: urlObj.pathname.slice(1), // Remove leading slash
       user: urlObj.username || 'postgres',
       password: urlObj.password || '',
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      // Supabase ALWAYS requires SSL, even in development
+      ssl: isSupabase || process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : false,
     }
   } catch (error) {
     if (error instanceof Error) {
@@ -68,10 +73,10 @@ try {
   throw error
 }
 
-// Validate pool configuration values
-const poolMax = Number(process.env.PGPOOL_MAX || 20)
+// Validate pool configuration values  
+const poolMax = Number(process.env.PGPOOL_MAX || 10)  // Reduced from 20 for Supabase
 const idleTimeout = Number(process.env.PGPOOL_IDLE_MS || 60000)
-const connectionTimeout = Number(process.env.PGPOOL_CONN_TIMEOUT_MS || 10000)
+const connectionTimeout = Number(process.env.PGPOOL_CONN_TIMEOUT_MS || 30000)  // Increased to 30s
 
 if (isNaN(poolMax) || poolMax < 1 || poolMax > 100) {
   console.warn(`Invalid PGPOOL_MAX value: ${process.env.PGPOOL_MAX}. Using default: 20`)

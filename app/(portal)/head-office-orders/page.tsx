@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
-import { Package, Search, Filter, CheckCircle, Clock, AlertTriangle, TrendingDown, RefreshCw, Check, X, Eye, ShieldCheck, ArchiveRestore } from "lucide-react"
+import { Package, Search, Filter, CheckCircle, Clock, AlertTriangle, TrendingDown, RefreshCw, Check, X, Eye, ShieldCheck, ArchiveRestore, MapPin } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
 import Link from "next/link"
+import { useSession } from "next-auth/react"
+import { OrderExport } from "@/components/orders/order-export"
 
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -19,6 +21,7 @@ interface OrderItem {
   id: number
   tid: string
   organizationId: number
+  organizationName?: string | null
   branchId: number
   status: string
   subtotalCents: number
@@ -27,9 +30,13 @@ interface OrderItem {
   createdAt: string
   createdByUserId: string
   branchName?: string | null
+  rejectionReason?: string | null
 }
 
 export default function HeadOfficeOrdersPage() {
+  const { data: session } = useSession()
+  const userRole = (session?.user as any)?.role
+  const isSuperAdmin = userRole === "SUPER_ADMIN"
   const { toast } = useToast()
   const { organizationId, branchId, isInitialized } = useAppContext()
 
@@ -198,6 +205,7 @@ export default function HeadOfficeOrdersPage() {
     pending: orders.filter((o: OrderItem) => o.status.toLowerCase() === "pending").length,
     approved: orders.filter((o: OrderItem) => o.status.toLowerCase() === "approved").length,
     fulfilled: orders.filter((o: OrderItem) => o.status.toLowerCase() === "fulfilled").length,
+    refunded: orders.filter((o: OrderItem) => o.status.toLowerCase() === "refunded").length,
   }
 
   if (!isInitialized || !ordersEndpoint) {
@@ -310,7 +318,7 @@ export default function HeadOfficeOrdersPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {["all", "pending", "approved", "fulfilled"].map((status) => (
+            {["all", "pending", "approved", "fulfilled", "refunded"].map((status) => (
               <Button
                 key={status}
                 onClick={() => setStatusFilter(status)}
@@ -321,83 +329,100 @@ export default function HeadOfficeOrdersPage() {
                 {status}
               </Button>
             ))}
+            <OrderExport orders={filteredOrders} role={userRole} />
           </div>
         </div>
-      </Card>
+      </Card >
 
       {/* Orders Table */}
-      <Card className="overflow-hidden dark:bg-slate-900 dark:border-slate-800">
-        {filteredOrders.length === 0 ? (
-          <div className="p-8 text-center">
-            <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-            <p className="text-muted-foreground">No orders found</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b bg-slate-50 dark:bg-slate-900">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">TID</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Branch</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Status</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Amount</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filteredOrders.map((order: OrderItem) => {
-                  const statusInfo = getStatusColor(order.status)
-                  const StatusIcon = statusInfo.icon
+      < Card className="overflow-hidden dark:bg-slate-900 dark:border-slate-800" >
+        {
+          filteredOrders.length === 0 ? (
+            <div className="p-8 text-center">
+              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <p className="text-muted-foreground">No orders found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b bg-slate-50 dark:bg-slate-900">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">TID</th>
+                    {isSuperAdmin && (
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Organization</th>
+                    )}
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Branch</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Amount</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {filteredOrders.map((order: OrderItem) => {
+                    const statusInfo = getStatusColor(order.status)
+                    const StatusIcon = statusInfo.icon
 
-                  return (
-                    <tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="font-semibold text-slate-900 dark:text-white">{order.tid}</p>
-                          <p className="text-xs text-muted-foreground">ID: {order.id}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="text-sm text-slate-900 dark:text-white">
-                          {order.branchName || `Branch ${order.branchId}`}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
-                          <StatusIcon className="h-3 w-3 mr-1" />
-                          {order.status}
-                        </Badge>
+                    return (
+                      <tr key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-white">{order.tid}</p>
+                            <p className="text-xs text-muted-foreground">ID: {order.id}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {isSuperAdmin && (
+                            <p className="text-sm text-slate-700 dark:text-slate-300 font-medium mb-1">
+                              {order.organizationName || `Org #${order.organizationId}`}
+                            </p>
+                          )}
+                          <p className="text-sm text-slate-900 dark:text-white flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {order.branchName || `Branch ${order.branchId}`}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
+                            <StatusIcon className="h-3 w-3 mr-1" />
+                            {order.status}
+                          </Badge>
+                          {(order.status.toLowerCase() === 'rejected' || order.status === 'REJECTED') && order.rejectionReason && (
+                            <div className="mt-1 text-[10px] text-red-600 dark:text-red-400 max-w-[150px] leading-tight">
+                              {order.rejectionReason}
+                            </div>
+                          )}
 
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="font-bold text-slate-900 dark:text-white">
-                          {formatPKR(order.totalCents / 100)}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {new Date(order.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Button asChild variant="ghost" size="sm" className="gap-1">
-                            <Link href={`/head-office-orders/${order.id}`}>
-                              <Eye className="h-4 w-4" />
-                              View
-                            </Link>
-                          </Button>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="font-bold text-slate-900 dark:text-white">
+                            {formatPKR(order.totalCents / 100)}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {new Date(order.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Button asChild variant="ghost" size="sm" className="gap-1">
+                              <Link href={`/head-office-orders/${order.id}`}>
+                                <Eye className="h-4 w-4" />
+                                View
+                              </Link>
+                            </Button>
 
 
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+      </Card >
 
       {/* Order Detail Dialog removed in favour of dedicated pages */}
 
@@ -495,6 +520,6 @@ export default function HeadOfficeOrdersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   )
 }

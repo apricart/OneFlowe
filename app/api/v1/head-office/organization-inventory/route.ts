@@ -106,9 +106,8 @@ export async function GET(req: NextRequest) {
     const total = totalResult[0].count
 
     // For non-Super Admin users, remove basePrice from response (it's internal)
-    const sanitizedItems = userRole === "SUPER_ADMIN"
-      ? items
-      : items.map(({ basePrice, ...rest }) => rest)
+    // UPDATE: We now expose basePrice as the default cost if no customPrice is set
+    const sanitizedItems = items
 
     return NextResponse.json({ items: sanitizedItems, total, page, limit })
   } catch (error) {

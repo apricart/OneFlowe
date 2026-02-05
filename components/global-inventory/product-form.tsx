@@ -463,7 +463,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   <img src={productData.imageUrl} alt={productData.name || "Product preview"} className="h-10 w-10 rounded-md object-cover" />
                   <div className="flex-1">
                     <p className="font-medium text-foreground">{productData.name || "Preview"}</p>
-                    <p className="truncate">{productData.imageUrl}</p>
+
                   </div>
                   <Button variant="ghost" size="sm" onClick={() => setProductData((prev) => ({ ...prev, imageUrl: "" }))}>
                     Remove

@@ -21,6 +21,7 @@ type GlobalInventoryItem = {
     description?: string
     categoryId?: number
     categoryName?: string
+    parentCategoryName?: string
     imageUrl?: string
     basePrice: number
     unit: string
@@ -154,9 +155,8 @@ export default function GlobalInventoryView() {
                             className="rounded-md border border-input bg-background px-3 py-2 text-sm"
                         >
                             <option value="all">All statuses</option>
-                            <option value="active">Active only</option>
-                            <option value="inactive">Inactive only</option>
-                            <option value="discontinued">Discontinued only</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
                         </select>
                     </div>
 
@@ -165,6 +165,7 @@ export default function GlobalInventoryView() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Product</TableHead>
+                                    <TableHead>Category</TableHead>
                                     <TableHead>Subcategory</TableHead>
                                     <TableHead>Base price</TableHead>
                                     <TableHead>Status</TableHead>
@@ -175,13 +176,13 @@ export default function GlobalInventoryView() {
                             <TableBody>
                                 {isLoading ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                                        <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                                             Loading global inventory…
                                         </TableCell>
                                     </TableRow>
                                 ) : products.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                                        <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                                             No products found. Create your first global product to get started.
                                         </TableCell>
                                     </TableRow>
@@ -208,7 +209,10 @@ export default function GlobalInventoryView() {
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                <Badge variant="outline">{product.categoryName || "Uncategorized"}</Badge>
+                                                <Badge variant="outline">{product.parentCategoryName || "Uncategorized"}</Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="secondary">{product.categoryName || "Uncategorized"}</Badge>
                                             </TableCell>
                                             <TableCell>{formatPKR(product.basePrice / 100)}</TableCell>
                                             <TableCell>

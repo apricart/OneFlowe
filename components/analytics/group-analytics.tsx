@@ -39,7 +39,7 @@ interface GroupStat {
     totalOrders: number
     totalAmountCents: number
     branchCount: number
-    branchNames: string[]
+    branches: { id: number, name: string }[]
     type: 'group' | 'branch'
     organizationName?: string
 }
@@ -76,7 +76,7 @@ export function GroupAnalytics({ role }: { role: string }) {
         // Filter groups by search
         const filteredGroups = groups.filter(item =>
             item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (item.branchNames || []).some(bn => bn.toLowerCase().includes(searchQuery.toLowerCase()))
+            (item.branches || []).some(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()))
         )
 
         // Filter ungrouped by search
@@ -407,14 +407,14 @@ export function GroupAnalytics({ role }: { role: string }) {
                                                         <span className="text-slate-600 dark:text-slate-300">{item.branchCount} nodes</span>
                                                     </div>
                                                     <div className="flex flex-wrap gap-1.5">
-                                                        {(item.branchNames || []).slice(0, 3).map((bn, i) => (
+                                                        {(item.branches || []).slice(0, 3).map((b, i) => (
                                                             <span key={i} className="text-[10px] px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-800 font-bold text-slate-600 dark:text-slate-400">
-                                                                {bn}
+                                                                {b.name}
                                                             </span>
                                                         ))}
-                                                        {(item.branchNames || []).length > 3 && (
+                                                        {(item.branches || []).length > 3 && (
                                                             <span className="text-[10px] px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 font-black text-blue-600 dark:text-blue-400">
-                                                                +{(item.branchNames || []).length - 3} MORE
+                                                                +{(item.branches || []).length - 3} MORE
                                                             </span>
                                                         )}
                                                     </div>

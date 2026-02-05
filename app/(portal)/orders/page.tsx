@@ -31,6 +31,7 @@ import {
 } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
+import { OrderExport } from "@/components/orders/order-export"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -38,6 +39,7 @@ interface OrderItem {
   id: number
   tid: string
   organizationId: number
+  organizationName?: string | null
   branchId: number
   branchName?: string | null
   status: string
@@ -50,6 +52,7 @@ interface OrderItem {
   createdAt: string
   createdByUserId: string
   hasRefundRequests?: number
+  rejectionReason?: string | null
 }
 
 export default function OrdersManagementPage() {
@@ -383,6 +386,7 @@ export default function OrdersManagementPage() {
                 {status}
               </Button>
             ))}
+            <OrderExport orders={filteredOrders} role={userRole} />
           </div>
         </div>
       </Card>
@@ -400,6 +404,9 @@ export default function OrdersManagementPage() {
               <thead className="border-b bg-slate-50 dark:bg-slate-900 dark:border-slate-800">
                 <tr className="bg-slate-50 dark:bg-slate-900">
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">TID</th>
+                  {isSuperAdmin && (
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Organization</th>
+                  )}
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Branch</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Status</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Amount</th>
@@ -421,7 +428,13 @@ export default function OrdersManagementPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 bg-white dark:bg-slate-900">
-                        <p className="text-sm text-slate-700 dark:text-slate-300">
+                        {isSuperAdmin && (
+                          <p className="text-sm text-slate-700 dark:text-slate-300 font-medium mb-1">
+                            {order.organizationName || `Org #${order.organizationId}`}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
                           {order.branchName || `Branch #${order.branchId}`}
                         </p>
                       </td>
@@ -452,6 +465,11 @@ export default function OrdersManagementPage() {
                             <StatusIcon className="h-3 w-3 mr-1" />
                             {order.status}
                           </Badge>
+                        )}
+                        {(order.status.toLowerCase() === 'rejected' || order.status === 'REJECTED') && order.rejectionReason && (
+                          <div className="mt-1 text-[10px] text-red-600 dark:text-red-400 max-w-[150px] leading-tight">
+                            {order.rejectionReason}
+                          </div>
                         )}
                       </td>
                       <td className="px-4 py-3 bg-white dark:bg-slate-900">
@@ -577,7 +595,7 @@ export default function OrdersManagementPage() {
               disabled={isProcessing}
               className="bg-green-600 hover:bg-green-700"
             >
-              {isProcessing ? "Approving..." : "Approve Order"}
+              Approve Order
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -628,7 +646,7 @@ export default function OrdersManagementPage() {
               disabled={isProcessing}
               variant="destructive"
             >
-              {isProcessing ? "Rejecting..." : "Reject Order"}
+              Reject Order
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -749,7 +767,7 @@ export default function OrdersManagementPage() {
               disabled={isProcessing || !fulfillToken.trim()}
               className="bg-green-600 hover:bg-green-700"
             >
-              {isProcessing ? "Verifying..." : "Fulfill Order"}
+              Fulfill Order
             </Button>
           </DialogFooter>
         </DialogContent>

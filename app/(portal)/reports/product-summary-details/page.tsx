@@ -13,6 +13,10 @@ import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { Badge } from "@/components/ui/badge"
+import { Role } from "@/lib/rbac"
+import { useSession } from "next-auth/react"
+
+import { ReportFilters } from "@/components/reports/report-filters"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -21,15 +25,19 @@ export default function ProductSummaryDetailsReportPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [groupId, setGroupId] = useState("")
   const [generatedDate, setGeneratedDate] = useState("")
 
+  const { data: session } = useSession()
+  const role = (session?.user as any)?.role as Role
   const [hasMounted, setHasMounted] = useState(false)
 
   const queryParams = new URLSearchParams()
   if (branchId) queryParams.set("branchId", branchId)
-  if (organizationId) queryParams.set("organizationId", organizationId)
+  if (organizationId) queryParams.set("organizationId", organizationId.toString())
   if (startDate) queryParams.set("startDate", startDate)
   if (endDate) queryParams.set("endDate", endDate)
+  if (groupId) queryParams.set("groupId", groupId)
 
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/products/details?${queryParams.toString()}`, fetcher)
 
@@ -137,37 +145,22 @@ export default function ProductSummaryDetailsReportPage() {
         </Card>
       </div>
 
-      <Card className="p-4">
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-3">
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-[140px] text-xs" suppressHydrationWarning />
-            <span className="text-muted-foreground text-xs">to</span>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-[140px] text-xs" suppressHydrationWarning />
-          </div>
-
-          <div className="relative w-full md:w-auto flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search Product, TID, or User..."
-              className="pl-9 w-full md:max-w-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              suppressHydrationWarning
-            />
-          </div>
-
-          <div className="flex gap-2 w-full md:w-auto ml-auto">
-            <Button variant="outline" onClick={() => mutate()} className="flex-1 md:flex-none">
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-            <Button className="gap-2 flex-1 md:flex-none" onClick={handleExportPDF} disabled={isLoading || filteredDetails.length === 0}>
-              <Download className="h-4 w-4" />
-              PDF
-            </Button>
-          </div>
-        </div>
-      </Card>
+      <ReportFilters
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        startDate={startDate}
+        setStartDate={setStartDate}
+        endDate={endDate}
+        setEndDate={setEndDate}
+        groupId={groupId}
+        setGroupId={setGroupId}
+        onRefresh={() => mutate()}
+        isLoading={isLoading}
+        role={role}
+        organizationId={organizationId || undefined}
+        searchPlaceholder="Search Product, TID, or User..."
+        onExport={handleExportPDF}
+      />
 
       <Card className="overflow-hidden">
         <Table>

@@ -43,6 +43,7 @@ interface Order {
   refundAmountCents?: number | null
   refundedAt?: string | null
   refundReason?: string | null
+  rejectionReason?: string | null
 }
 
 export default function OrderPortalPage() {
@@ -59,7 +60,8 @@ export default function OrderPortalPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [showProductDetail, setShowProductDetail] = useState(false)
   const [tempQuantity, setTempQuantity] = useState(1)
-  const [showOrders, setShowOrders] = useState(false)
+  const [cardQuantities, setCardQuantities] = useState<Record<number, number>>({})
+  const [activeTab, setActiveTab] = useState<"shop" | "orders" | "refunded">("shop")
   const [showOrderDetail, setShowOrderDetail] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [pageSize, setPageSize] = useState(12)
@@ -120,6 +122,12 @@ export default function OrderPortalPage() {
   const { data: branchInventory, mutate: mutateBranchInventory } = useSWR<any>(branchInventoryUrl, fetcher)
   const { data: budget, mutate: mutateBudget } = useSWR<any>(budgetsUrl, fetcher)
   const { data: ordersData, mutate: mutateOrders } = useSWR<any>("/api/v1/orders", fetcher)
+
+  // Fetch full details for selected order to get items
+  const { data: orderDetailsData } = useSWR(
+    selectedOrder ? `/api/v1/orders?id=${selectedOrder.id}` : null,
+    fetcher
+  )
 
   // Fetch names for header context
   const { data: orgsData } = useOrganizations()
@@ -588,24 +596,32 @@ export default function OrderPortalPage() {
         {/* Tabs */}
         <div className="mb-6 flex gap-2 rounded-2xl bg-white/80 p-1 shadow-sm ring-1 ring-black/5 backdrop-blur-md dark:bg-slate-900/80">
           <Button
-            onClick={() => setShowOrders(false)}
-            variant={!showOrders ? "default" : "outline"}
+            onClick={() => setActiveTab("shop")}
+            variant={activeTab === "shop" ? "default" : "outline"}
             className="gap-2"
           >
             <Grid className="h-4 w-4" />
             Shop
           </Button>
           <Button
-            onClick={() => setShowOrders(true)}
-            variant={showOrders ? "default" : "outline"}
+            onClick={() => setActiveTab("orders")}
+            variant={activeTab === "orders" ? "default" : "outline"}
             className="gap-2"
           >
             <Package className="h-4 w-4" />
-            Orders ({ordersData?.items?.length || 0})
+            Active Orders ({ordersData?.items?.filter((o: any) => o.status !== "refunded").length || 0})
+          </Button>
+          <Button
+            onClick={() => setActiveTab("refunded")}
+            variant={activeTab === "refunded" ? "default" : "outline"}
+            className="gap-2"
+          >
+            <TrendingDown className="h-4 w-4" />
+            Refunded ({ordersData?.items?.filter((o: any) => o.status === "refunded").length || 0})
           </Button>
         </div>
 
-        {showOrders ? (
+        {activeTab === "orders" || activeTab === "refunded" ? (
           // Orders View
           <div className="space-y-4">
             {!ordersData ? (
@@ -626,101 +642,132 @@ export default function OrderPortalPage() {
             ) : !ordersData.items || ordersData.items.length === 0 ? (
               <div className="text-center py-16">
                 <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium text-muted-foreground">No orders yet</p>
+                <p className="text-lg font-medium text-muted-foreground">No orders found</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {ordersData.items.map((order: any) => {
-                  const statusColors: Record<string, { bg: string; text: string; icon: any }> = {
-                    pending: { bg: "bg-yellow-50 dark:bg-yellow-950", text: "text-yellow-700 dark:text-yellow-300", icon: Clock },
-                    approved: { bg: "bg-blue-50 dark:bg-blue-950", text: "text-blue-700 dark:text-blue-300", icon: CheckCircle },
-                    fulfilled: { bg: "bg-green-50 dark:bg-green-950", text: "text-green-700 dark:text-green-300", icon: CheckCircle },
-                    rejected: { bg: "bg-red-50 dark:bg-red-950", text: "text-red-700 dark:text-red-300", icon: AlertTriangle },
-                    refunded: { bg: "bg-slate-50 dark:bg-slate-950", text: "text-slate-700 dark:text-slate-300", icon: TrendingDown },
-                  }
-                  const statusInfo = statusColors[order.status?.toLowerCase()] || statusColors.pending
-                  const StatusIcon = statusInfo.icon
+                {ordersData.items
+                  .filter((order: any) =>
+                    activeTab === "refunded"
+                      ? order.status === "refunded"
+                      : order.status !== "refunded"
+                  )
+                  .map((order: any) => {
+                    const statusColors: Record<string, { bg: string; text: string; icon: any }> = {
+                      pending: { bg: "bg-yellow-50 dark:bg-yellow-950", text: "text-yellow-700 dark:text-yellow-300", icon: Clock },
+                      approved: { bg: "bg-blue-50 dark:bg-blue-950", text: "text-blue-700 dark:text-blue-300", icon: CheckCircle },
+                      fulfilled: { bg: "bg-green-50 dark:bg-green-950", text: "text-green-700 dark:text-green-300", icon: CheckCircle },
+                      rejected: { bg: "bg-red-50 dark:bg-red-950", text: "text-red-700 dark:text-red-300", icon: AlertTriangle },
+                      refunded: { bg: "bg-slate-50 dark:bg-slate-950", text: "text-slate-700 dark:text-slate-300", icon: TrendingDown },
+                    }
+                    const statusInfo = statusColors[order.status?.toLowerCase()] || statusColors.pending
+                    const StatusIcon = statusInfo.icon
 
-                  return (
-                    <Card key={order.id} className="p-4 hover:shadow-md transition-shadow dark:bg-slate-900 dark:border-slate-800">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-slate-900 dark:text-white">Order {order.tid}</p>
-                            <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
-                              <StatusIcon className="h-3 w-3 mr-1" />
-                              {order.status || "PENDING"}
-                            </Badge>
+                    return (
+                      <Card key={order.id} className="p-4 hover:shadow-md transition-shadow dark:bg-slate-900 dark:border-slate-800">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-slate-900 dark:text-white">Order {order.tid}</p>
+                              <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
+                                <StatusIcon className="h-3 w-3 mr-1" />
+                                {order.status || "PENDING"}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              <Calendar className="h-3 w-3 inline mr-1" />
+                              {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString()}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+                              ID: #{order.id}
+                            </p>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            <Calendar className="h-3 w-3 inline mr-1" />
-                            {new Date(order.createdAt).toLocaleDateString()} {new Date(order.createdAt).toLocaleTimeString()}
-                          </p>
+                          <div className="text-right">
+                            <p className="font-bold text-lg text-slate-900 dark:text-white">PKR {(order.totalCents / 100).toFixed(2)}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {order.status === "pending" ? "Awaiting Approval" :
+                                order.status === "approved" ? "Approved" :
+                                  order.status === "fulfilled" ? "Completed" :
+                                    order.status === "rejected" ? "Cancelled" :
+                                      order.status === "refunded" ? "Refunded" :
+                                        "In Progress"}
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-lg text-slate-900 dark:text-white">PKR {(order.totalCents / 100).toFixed(2)}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {order.status === "pending" ? "Awaiting Approval" :
-                              order.status === "approved" ? "Approved" :
-                                order.status === "fulfilled" ? "Completed" :
-                                  order.status === "rejected" ? "Cancelled" :
-                                    order.status === "refunded" ? "Refunded" :
-                                      "In Progress"}
-                          </p>
-                        </div>
-                      </div>
 
-                      {/* Order Items Preview */}
-                      <div className="bg-slate-50 dark:bg-slate-800 rounded p-3 text-sm space-y-1">
-                        <p className="font-medium text-muted-foreground">Items</p>
-                        <p className="text-slate-600 dark:text-slate-300">
-                          {order.status === "pending" && "⏳ Waiting for approval..."}
-                          {order.status === "approved" && "✓ Approved - Processing"}
-                          {order.status === "fulfilled" && "🎉 Order completed and delivered"}
-                          {order.status === "rejected" && "❌ Order was rejected"}
-                          {order.status === "refunded" && "💰 Order has been refunded"}
-                        </p>
-                      </div>
-
-                      {/* Order Timeline */}
-                      <div className="mt-3 pt-3 border-t space-y-2">
-                        <div className="flex items-center gap-2 text-xs">
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                          <span className="text-muted-foreground">Order Created</span>
-                          <span className="text-slate-600 dark:text-slate-400">{new Date(order.createdAt).toLocaleDateString()}</span>
-                        </div>
-                        {(order.status === "approved" || order.status === "fulfilled") && (
-                          <div className="flex items-center gap-2 text-xs">
-                            <CheckCircle className="h-4 w-4 text-blue-600" />
-                            <span className="text-muted-foreground">Order Approved</span>
+                        {(order.status.toLowerCase() === 'rejected' || order.status === 'REJECTED') && order.rejectionReason && (
+                          <div className="mb-3 rounded bg-red-50 p-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300 border border-red-100 dark:border-red-900">
+                            <span className="font-semibold mr-1">Reason:</span>
+                            {order.rejectionReason}
                           </div>
                         )}
-                        {order.status === "fulfilled" && (
+
+                        {/* Order Items Preview */}
+                        <div className="bg-slate-50 dark:bg-slate-800 rounded p-3 text-sm space-y-1">
+                          <p className="font-medium text-muted-foreground">Items</p>
+                          <p className="text-slate-600 dark:text-slate-300">
+                            {order.status === "pending" && "⏳ Waiting for approval..."}
+                            {order.status === "approved" && "✓ Approved - Processing"}
+                            {order.status === "fulfilled" && "🎉 Order completed and delivered"}
+                            {order.status === "rejected" && "❌ Order was rejected"}
+                            {order.status === "refunded" && "💰 Order has been refunded"}
+                          </p>
+                        </div>
+
+                        {/* Order Timeline */}
+                        <div className="mt-3 pt-3 border-t space-y-2">
                           <div className="flex items-center gap-2 text-xs">
                             <CheckCircle className="h-4 w-4 text-green-600" />
-                            <span className="text-muted-foreground">Order Fulfilled</span>
+                            <span className="text-muted-foreground">Order Created</span>
+                            <span className="text-slate-600 dark:text-slate-400">{new Date(order.createdAt).toLocaleDateString()}</span>
                           </div>
-                        )}
-                      </div>
+                          {(order.status === "approved" || order.status === "fulfilled") && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <CheckCircle className="h-4 w-4 text-blue-600" />
+                              <span className="text-muted-foreground">Order Approved</span>
+                            </div>
+                          )}
+                          {order.status === "fulfilled" && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span className="text-muted-foreground">Order Fulfilled</span>
+                            </div>
+                          )}
+                        </div>
 
-                      {/* Action Buttons */}
-                      <div className="mt-4 pt-3 border-t flex gap-2">
-                        <Button
-                          onClick={() => {
-                            setSelectedOrder(order)
-                            setShowOrderDetail(true)
-                          }}
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 gap-2"
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                          View Details
-                        </Button>
-                      </div>
-                    </Card>
-                  )
-                })}
+                        {/* Action Buttons */}
+                        <div className="mt-4 pt-3 border-t flex gap-2">
+                          <Button
+                            onClick={() => {
+                              setSelectedOrder(order)
+                              setShowOrderDetail(true)
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 gap-2"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            View Details
+                          </Button>
+                        </div>
+                      </Card>
+                    )
+                  })}
+                {/* Empty State for Specific Filter */}
+                {ordersData.items.filter((order: any) =>
+                  activeTab === "refunded" ? order.status === "refunded" : order.status !== "refunded"
+                ).length === 0 && (
+                    <div className="text-center py-16">
+                      {activeTab === "refunded" ? (
+                        <TrendingDown className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                      ) : (
+                        <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+                      )}
+                      <p className="text-lg font-medium text-muted-foreground">
+                        {activeTab === "refunded" ? "No refunded orders" : "No active orders"}
+                      </p>
+                    </div>
+                  )}
               </div>
             )}
           </div>
@@ -801,109 +848,226 @@ export default function OrderPortalPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {paginatedProducts.map(product => (
-                  <div
-                    key={product.id}
-                    onClick={() => openProductDetail(product)}
-                    className="group cursor-pointer"
-                  >
-                    <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 h-full flex flex-col bg-white dark:bg-slate-900 dark:border-slate-800">
-                      {/* Product Image */}
-                      <div className="relative h-48 overflow-hidden group-hover:bg-gradient-to-tl transition-all bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
-                        {product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.name}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <ShoppingBag className="h-16 w-16 text-slate-400 opacity-30" />
-                          </div>
-                        )}
+                {paginatedProducts.map(product => {
+                  const itemInCart = cart.find(i => i.id === product.id)
+                  const selectionQty = cardQuantities[product.id] ?? itemInCart?.quantity ?? 0
+                  const isModified = selectionQty !== (itemInCart?.quantity || 0)
 
-                        {/* Stock Badge */}
-                        {product.stock !== undefined && (
-                          <Badge
-                            className={`absolute top-2 right-2 ${product.stock > 10
-                              ? "bg-green-500"
-                              : product.stock > 0
-                                ? "bg-yellow-500"
-                                : "bg-red-500"
-                              }`}
-                          >
-                            {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
-                          </Badge>
-                        )}
-
-                        {/* Highlight Badge */}
-                        <Badge
-                          className="absolute top-2 left-2 text-[11px] px-2 py-0.5 font-medium border-0"
-                          style={{
-                            background:
-                              "color-mix(in oklab, var(--color-brand-primary), transparent 10%)",
-                            color: "white",
-                          }}
-                        >
-                          <Zap className="h-3 w-3 mr-1" />
-                          Trending
-                        </Badge>
-                      </div>
-
-                      {/* Product Info */}
-                      <div className="p-4 space-y-3 flex-1 flex flex-col">
-                        {/* Name & Code */}
-                        <div>
-                          <h3 className="font-bold text-sm line-clamp-2 text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                            {product.name}
-                          </h3>
-                          <p className="text-xs text-muted-foreground font-mono">{product.code}</p>
-                        </div>
-
-                        {/* Rating */}
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`h-3 w-3 ${i < Math.floor(product.rating || 0)
-                                ? "fill-yellow-400 text-yellow-400"
-                                : "text-slate-300"
-                                }`}
+                  return (
+                    <div
+                      key={product.id}
+                      onClick={() => openProductDetail(product)}
+                      className="group cursor-pointer"
+                    >
+                      <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 h-full flex flex-col bg-white dark:bg-slate-900 dark:border-slate-800">
+                        {/* Product Image */}
+                        <div className="relative h-48 overflow-hidden group-hover:bg-gradient-to-tl transition-all bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
+                          {product.imageUrl ? (
+                            <img
+                              src={product.imageUrl}
+                              alt={product.name}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                             />
-                          ))}
-                          <span className="text-xs text-muted-foreground ml-1">
-                            {(product.rating || 0).toFixed(1)}
-                          </span>
-                        </div>
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <ShoppingBag className="h-16 w-16 text-slate-400 opacity-30" />
+                            </div>
+                          )}
 
-                        {/* Spacer */}
-                        <div className="flex-1" />
+                          {/* Stock Badge */}
+                          {product.stock !== undefined && (
+                            <Badge
+                              className={`absolute top-2 right-2 ${product.stock > 10
+                                ? "bg-green-500"
+                                : product.stock > 0
+                                  ? "bg-yellow-500"
+                                  : "bg-red-500"
+                                }`}
+                            >
+                              {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+                            </Badge>
+                          )}
 
-                        {/* Price & Unit */}
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-700">
-                          <div>
-                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                              PKR {(product.priceCents / 100).toFixed(2)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">per {product.unit}</p>
-                          </div>
-                          <Button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              addToCart(product)
+                          {/* Highlight Badge */}
+                          <Badge
+                            className="absolute top-2 left-2 text-[11px] px-2 py-0.5 font-medium border-0"
+                            style={{
+                              background:
+                                "color-mix(in oklab, var(--color-brand-primary), transparent 10%)",
+                              color: "white",
                             }}
-                            size="sm"
-                            disabled={product.stock === 0}
-                            className="gap-1"
                           >
-                            <Plus className="h-3 w-3" />
-                            <span className="hidden sm:inline">Add</span>
-                          </Button>
+                            <Zap className="h-3 w-3 mr-1" />
+                            Trending
+                          </Badge>
                         </div>
-                      </div>
-                    </Card>
-                  </div>
-                ))}
+
+                        {/* Product Info */}
+                        <div className="p-4 space-y-3 flex-1 flex flex-col">
+                          {/* Name & Code */}
+                          <div>
+                            <h3 className="font-bold text-sm line-clamp-2 text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                              {product.name}
+                            </h3>
+                            <p className="text-xs text-muted-foreground font-mono">{product.code}</p>
+                          </div>
+
+                          {/* Rating */}
+                          <div className="flex items-center gap-1">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`h-3 w-3 ${i < Math.floor(product.rating || 0)
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-slate-300"
+                                  }`}
+                              />
+                            ))}
+                            <span className="text-xs text-muted-foreground ml-1">
+                              {(product.rating || 0).toFixed(1)}
+                            </span>
+                          </div>
+
+                          {/* Spacer */}
+                          <div className="flex-1" />
+
+                          {/* Price & Unit */}
+                          <div className="flex flex-col gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                  PKR {(product.priceCents / 100).toFixed(2)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">per {product.unit}</p>
+                              </div>
+
+                              {/* Quantity Selector */}
+                              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (selectionQty > 0) {
+                                      setCardQuantities(prev => ({
+                                        ...prev,
+                                        [product.id]: selectionQty - 1
+                                      }))
+                                    }
+                                  }}
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-md hover:bg-white dark:hover:bg-slate-700"
+                                  disabled={product.stock === 0 || selectionQty === 0}
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </Button>
+                                <span className="w-6 text-center text-xs font-bold text-slate-900 dark:text-white">
+                                  {selectionQty}
+                                </span>
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    const maxStock = product.stock || 999
+                                    if (selectionQty < maxStock) {
+                                      setCardQuantities(prev => ({
+                                        ...prev,
+                                        [product.id]: selectionQty + 1
+                                      }))
+                                    } else {
+                                      toast({ title: "Max stock reached", variant: "destructive" })
+                                    }
+                                  }}
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-md hover:bg-white dark:hover:bg-slate-700"
+                                  disabled={product.stock === 0 || selectionQty >= (product.stock || 0)}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+
+                              {/* Remove/Clear Button */}
+                              {(selectionQty > 0 || itemInCart) && (
+                                <Button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    if (itemInCart) {
+                                      removeFromCart(product.id)
+                                      toast({ title: `${product.name} removed from cart` })
+                                    }
+                                    setCardQuantities(prev => {
+                                      const { [product.id]: _, ...rest } = prev
+                                      return rest
+                                    })
+                                  }}
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                  title="Clear All"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+
+                            {itemInCart && !isModified && (
+                              <div className="flex items-center gap-1 text-[10px] font-medium text-green-600 dark:text-green-400">
+                                <CheckCircle className="h-3 w-3" />
+                                <span>{itemInCart.quantity} in cart</span>
+                              </div>
+                            )}
+                            {isModified && (
+                              <div className="flex items-center gap-1 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                <RefreshCw className="h-3 w-3" />
+                                <span>Changes not saved</span>
+                              </div>
+                            )}
+
+                            <Button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (isModified) {
+                                  if (itemInCart) {
+                                    updateQty(product.id, selectionQty)
+                                  } else {
+                                    addToCart(product, selectionQty)
+                                  }
+                                  setCardQuantities(prev => {
+                                    const { [product.id]: _, ...rest } = prev
+                                    return rest
+                                  })
+                                } else if (itemInCart) {
+                                  setShowCart(true)
+                                } else {
+                                  addToCart(product, 1)
+                                }
+                              }}
+                              size="sm"
+                              disabled={product.stock === 0 || (selectionQty === 0 && !itemInCart)}
+                              className={`w-full gap-2 shadow-sm ${itemInCart && !isModified ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                            >
+                              {isModified ? (
+                                <>
+                                  <RefreshCw className="h-4 w-4" />
+                                  <span>{itemInCart ? 'Update Cart' : `Add ${selectionQty} to Cart`}</span>
+                                </>
+                              ) : itemInCart ? (
+                                <>
+                                  <ShoppingBag className="h-4 w-4" />
+                                  <span>Open Cart</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="h-4 w-4" />
+                                  <span>Add to Cart</span>
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -1172,6 +1336,45 @@ export default function OrderPortalPage() {
                   <p className="text-slate-900 dark:text-white">
                     {new Date(selectedOrder.createdAt).toLocaleDateString()}
                   </p>
+                </div>
+              </div>
+
+              {(selectedOrder.status.toLowerCase() === 'rejected' || selectedOrder.status === 'REJECTED') && selectedOrder.rejectionReason && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/20">
+                  <p className="mb-1 text-xs font-semibold uppercase text-red-700 dark:text-red-300">
+                    Rejection Reason
+                  </p>
+                  <p className="text-sm text-red-900 dark:text-red-200">
+                    {selectedOrder.rejectionReason}
+                  </p>
+                </div>
+              )}
+
+              {/* Order Items List */}
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+                <div className="bg-slate-50 dark:bg-slate-800/50 px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+                  <h3 className="font-semibold text-sm">Ordered Items</h3>
+                </div>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {orderDetailsData?.items ? (
+                    orderDetailsData.items.map((item: any) => (
+                      <div key={item.id} className="flex justify-between items-center p-4">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm text-slate-900 dark:text-white">{item.productName}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Qty: <span className="font-semibold">{item.quantity}</span> × {formatPKR(item.priceCents / 100)}
+                          </p>
+                        </div>
+                        <p className="font-semibold text-sm text-slate-900 dark:text-white">
+                          {formatPKR(item.totalCents / 100)}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center text-muted-foreground text-sm">
+                      Loading items...
+                    </div>
+                  )}
                 </div>
               </div>
 

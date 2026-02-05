@@ -4,7 +4,8 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { globalProducts, categories, organizationInventory, organizations, auditLogs } from "@/db/schema"
 import { eq, and, like, or, desc, sql, inArray, isNull } from "drizzle-orm"
-import { cascadeGlobalProductDeletion, cascadeGlobalProductStatusChange } from "@/lib/inventory-cascade"
+import { alias } from "drizzle-orm/pg-core"
+import { cascadeGlobalProductDeletion, cascadeGlobalProductStatusChange, cascadeGlobalProductFieldUpdate } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
 
 // GET /api/v1/admin/global-inventory - List all global products with assignment stats
@@ -112,6 +113,9 @@ export async function GET(req: NextRequest) {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
+    const subCategories = alias(categories, "subCategories")
+    const parentCategories = alias(categories, "parentCategories")
+
     // Fetch products with pagination and category information
     const [items, totalResult] = await Promise.all([
       db.select({
@@ -133,10 +137,12 @@ export async function GET(req: NextRequest) {
         discountActive: globalProducts.discountActive,
         createdAt: globalProducts.createdAt,
         updatedAt: globalProducts.updatedAt,
-        categoryName: categories.name,
+        categoryName: subCategories.name,
+        parentCategoryName: parentCategories.name,
       })
         .from(globalProducts)
-        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+        .leftJoin(subCategories, eq(globalProducts.categoryId, subCategories.id))
+        .leftJoin(parentCategories, eq(subCategories.parentId, parentCategories.id))
         .where(whereClause)
         .orderBy(desc(globalProducts.createdAt))
         .limit(limit)
@@ -316,6 +322,10 @@ export async function PUT(req: NextRequest) {
     const [existingProduct] = await db.select({
       id: globalProducts.id,
       status: globalProducts.status,
+      name: globalProducts.name,
+      description: globalProducts.description,
+      imageUrl: globalProducts.imageUrl,
+      basePrice: globalProducts.basePrice,
     })
       .from(globalProducts)
       .where(eq(globalProducts.id, parseInt(id)))
@@ -373,6 +383,37 @@ export async function PUT(req: NextRequest) {
           performedByRole: "SUPER_ADMIN"
         },
       })
+    }
+
+    // Identify semantic field changes to clear overrides
+    const fieldChanges: Array<{ field: 'name' | 'description' | 'imageUrl' | 'basePrice'; oldValue: any; newValue: any }> = []
+
+    if (name !== undefined && name !== existingProduct.name) {
+      fieldChanges.push({ field: 'name', oldValue: existingProduct.name, newValue: name })
+    }
+    if (description !== undefined && description !== existingProduct.description) {
+      fieldChanges.push({ field: 'description', oldValue: existingProduct.description, newValue: description })
+    }
+    if (imageUrl !== undefined && imageUrl !== existingProduct.imageUrl) {
+      fieldChanges.push({ field: 'imageUrl', oldValue: existingProduct.imageUrl, newValue: imageUrl })
+    }
+    if (basePrice !== undefined) {
+      const newPriceCents = Math.round(parseFloat(basePrice) * 100)
+      if (newPriceCents !== existingProduct.basePrice) {
+        fieldChanges.push({ field: 'basePrice', oldValue: existingProduct.basePrice, newValue: newPriceCents })
+      }
+    }
+
+    if (fieldChanges.length > 0) {
+      const cascadeResult = await cascadeGlobalProductFieldUpdate(
+        parseInt(id),
+        fieldChanges,
+        (session.user as any).id
+      )
+
+      if (cascadeResult.updatedCount > 0) {
+        console.log(`[Cascade] Cleared ${cascadeResult.updatedCount} overrides for global product ${id}`)
+      }
     }
 
     // Log the update

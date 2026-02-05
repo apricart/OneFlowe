@@ -90,16 +90,14 @@ export default function SettingsPage() {
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#121F6F] via-[#2C3AD1] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs tracking-[0.2em] text-white/70">HEAD OFFICE · ACCOUNT</p>
+            <p className="text-xs tracking-[0.2em] text-white/70">
+              {((session?.user as any)?.role || "HEAD_OFFICE").toString().replace(/_/g, " ")} · ACCOUNT
+            </p>
             <h1 className="text-3xl font-semibold">Preferences & security</h1>
             <p className="text-sm text-white/80">
               Review your profile, MFA, and notifications to keep your workspace secure.
             </p>
           </div>
-          <Button variant="secondary" size="sm" className="gap-2 bg-white/15 text-white hover:bg-white/25 border-0">
-            <Settings className="h-4 w-4" />
-            Refresh data
-          </Button>
         </div>
       </div>
 

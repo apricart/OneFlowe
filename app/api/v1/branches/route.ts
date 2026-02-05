@@ -1,4 +1,5 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
+export const dynamic = 'force-dynamic'
 import { db } from "@/lib/db"
 import { branches as branchesTable, organizations } from "@/db/schema"
 import { and, desc, eq, sql } from "drizzle-orm"
@@ -11,7 +12,7 @@ import { logError } from "@/lib/global-logger"
  */
 export async function GET(req: Request) {
   try {
-    const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
+    const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"])
     if (err) return err
 
     const { searchParams } = new URL(req.url)

@@ -9,10 +9,18 @@ import { CommandPalette } from "@/components/ui/command-palette"
 import { ContextSelector } from "@/components/shell/context-selector"
 import Link from "next/link"
 import { NotificationBell } from "@/components/notifications/notification-center"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { LogOut, Settings as SettingsIcon } from "lucide-react"
 
 export function Topbar() {
   const { data: session } = useSession()
-  const [open, setOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
 
@@ -23,7 +31,6 @@ export function Topbar() {
   const userRole = (session?.user as any)?.role
 
   async function logout() {
-    // Clear theme preference so next login starts with light theme
     localStorage.removeItem('theme')
     await signOut({ callbackUrl: "/login", redirect: true })
   }
@@ -43,7 +50,6 @@ export function Topbar() {
       {/* Right Side - Actions & Profile */}
       <div className="flex items-center gap-3">
         {/* Order Portal link */}
-        {/* Order Portal link - Forces logout to switch context */}
         <Button
           variant="outline"
           size="sm"
@@ -76,12 +82,10 @@ export function Topbar() {
             variant="ghost"
             size="icon"
             onClick={() => {
-              // Get resolved theme (if system, check actual preference)
               let resolvedTheme = theme
               if (theme === "system" || !theme) {
                 resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
               }
-              // Toggle to opposite
               const newTheme = resolvedTheme === "dark" ? "light" : "dark"
               setTheme(newTheme)
             }}
@@ -98,45 +102,54 @@ export function Topbar() {
         )}
 
         {/* Profile Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="flex items-center gap-2 rounded-full px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <Image
-              src="/placeholder-user.jpg"
-              alt="avatar"
-              width={32}
-              height={32}
-              className="rounded-full ring-2 ring-slate-200 dark:ring-slate-700"
-            />
-            <span className="text-sm hidden md:inline font-medium text-slate-900 dark:text-white">
-              {(session?.user as any)?.email?.split("@")[0] || "Account"}
-            </span>
-          </button>
-          {open && (
-            <div className="absolute right-0 top-12 z-50 min-w-56 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 shadow-lg dark:shadow-slate-900/50">
-              <div className="px-3 py-2 text-sm">
-                <p className="font-medium text-slate-900 dark:text-white">{(session?.user as any)?.fullName || "User"}</p>
-                <p className="text-xs text-muted-foreground">{(session?.user as any)?.email || "user@example.com"}</p>
-                <p className="text-xs text-muted-foreground mt-1 capitalize">{userRole?.toLowerCase().replace("_", " ")}</p>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex items-center gap-2 rounded-full px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus:outline-none"
+            >
+              <Image
+                src="/placeholder-user.jpg"
+                alt="avatar"
+                width={32}
+                height={32}
+                className="rounded-full ring-2 ring-slate-200 dark:ring-slate-700"
+              />
+              <span className="text-sm hidden md:inline font-medium text-slate-900 dark:text-white">
+                {(session?.user as any)?.email?.split("@")[0] || "Account"}
+              </span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 p-2">
+            <DropdownMenuLabel className="px-3 py-2">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none text-slate-900 dark:text-white">
+                  {(session?.user as any)?.fullName || "User"}
+                </p>
+                <p className="text-xs leading-none text-muted-foreground">
+                  {(session?.user as any)?.email || "user@example.com"}
+                </p>
+                <p className="text-[10px] leading-none text-muted-foreground mt-1 capitalize font-normal bg-slate-100 dark:bg-slate-800 w-fit px-1.5 py-0.5 rounded">
+                  {userRole?.toLowerCase().replace("_", " ")}
+                </p>
               </div>
-              <div className="h-px my-1 bg-slate-200 dark:bg-slate-700" />
-              <button
-                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-900 dark:text-white transition-colors"
-                onClick={() => (window.location.href = "/settings")}
-              >
-                Settings
-              </button>
-              <button
-                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-red-600 dark:text-red-400 transition-colors"
-                onClick={logout}
-              >
-                Logout
-              </button>
-            </div>
-          )}
-        </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="mx-0 my-1" />
+            <DropdownMenuItem
+              onClick={() => (window.location.href = "/settings")}
+              className="gap-2 px-3 py-2 cursor-pointer"
+            >
+              <SettingsIcon className="h-4 w-4" />
+              Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={logout}
+              className="gap-2 px-3 py-2 cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )

@@ -19,7 +19,7 @@ interface PremiumAlertProps {
 export function PremiumAlert({
     message,
     type = "info",
-    duration = 1000,
+    duration = 5000,
     isVisible,
     onClose,
 }: PremiumAlertProps) {

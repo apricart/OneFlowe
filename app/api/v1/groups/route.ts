@@ -59,7 +59,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ groups: allGroups })
     } catch (e: any) {
         console.error("Error fetching groups:", e)
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        return NextResponse.json({
+            error: "Failed to fetch groups",
+            details: process.env.NODE_ENV === 'development' ? e.message : undefined
+        }, { status: 500 })
     }
 }
 
@@ -82,14 +85,11 @@ export async function POST(req: NextRequest) {
 
         // Security: Head Office can only create groups in their own organization
         if (role === "HEAD_OFFICE") {
-            if (!userOrgId) {
-                return NextResponse.json({ error: "User organization context missing" }, { status: 400 })
-            }
             organizationId = userOrgId
         }
 
         if (!organizationId || !name) {
-            return NextResponse.json({ error: "organizationId and name are required" }, { status: 400 })
+            return NextResponse.json({ error: "Organization ID and name are required" }, { status: 400 })
         }
 
         // Check if group already exists for this organization (case-insensitive)
@@ -99,13 +99,14 @@ export async function POST(req: NextRequest) {
             .where(
                 and(
                     eq(groups.organizationId, organizationId),
-                    sql`lower(${groups.name}) = lower(${name})`
+                    sql`lower(${groups.name}) = lower(${name})`,
+                    sql`${groups.status} != 'deleted'`
                 )
             )
             .limit(1)
 
         if (existingGroup) {
-            return NextResponse.json({ error: `A group named "${name}" already exists for this organization.` }, { status: 409 })
+            return NextResponse.json({ error: `A group named "${name}" already exists.` }, { status: 409 })
         }
 
         // Create group
@@ -124,16 +125,15 @@ export async function POST(req: NextRequest) {
             action: "CREATE_GROUP",
             performedByUserId: userId,
             performedByRole: role,
-            metadata: {
-                name,
-                description,
-            },
+            metadata: { name, description },
         })
 
         return NextResponse.json({ group: newGroup })
     } catch (e: any) {
-        console.error("FULL ERROR OBJECT:", e)
-        const errorMessage = e.detail || e.message || "Internal Server Error"
-        return NextResponse.json({ error: errorMessage }, { status: 500 })
+        console.error("Error creating group:", e)
+        return NextResponse.json({
+            error: "Internal Server Error",
+            details: process.env.NODE_ENV === 'development' ? (e.detail || e.message) : undefined
+        }, { status: 500 })
     }
 }

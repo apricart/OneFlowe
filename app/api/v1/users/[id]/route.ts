@@ -104,7 +104,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (err) return err
   const { id } = await params
 
-  // Check if HEAD_OFFICE user can delete this user
   try {
     const scope = await getRequestScope()
     if (scope?.role === "HEAD_OFFICE") {
@@ -116,39 +115,120 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         return error("You can only delete users within your own organization", 403)
       }
     }
-  } catch (scopeError) {
-    console.error("Error getting request scope:", scopeError)
-    return error("Unable to verify permissions", 500)
-  }
 
-  await db.delete(users).where(eq(users.id, id))
+    // Dependency checks - Block deletion if critical data exists
+    const {
+      branches,
+      orders,
+      refunds,
+      restockRequests,
+      groups,
+      globalProducts: globalProductsTable
+    } = await import("@/db/schema")
+    const { count, or } = await import("drizzle-orm")
 
-  // Audit Log
-  try {
-    const scope = await getRequestScope()
-    const headersList = await headers()
-    const userAgent = headersList.get("user-agent")
-    const forwardedFor = headersList.get("x-forwarded-for")
-    const ip = forwardedFor ? forwardedFor.split(',')[0] : "unknown"
+    // 1. Check if user is an admin for any branches
+    const [adminCount] = await db.select({ val: count() }).from(branches).where(eq(branches.adminUserId, id))
+    if (adminCount.val > 0) {
+      return error(`Cannot delete: This user is assigned as the administrator for ${adminCount.val} branch(es). Please reassign branch administration before deleting.`, 400)
+    }
 
-    await db.insert(systemLogs).values({
-      userId: scope?.userId,
-      userRole: scope?.role,
-      organizationId: scope?.organizationId,
-      branchId: undefined,
-      action: "USER_DELETE",
-      resourceType: "user",
-      resourceId: id,
-      details: {
-        deletedUserId: id
-      },
-      ipAddress: ip,
-      userAgent: userAgent,
-      success: true
+    // 2. Check for orders involvement (created, approved, rejected, fulfilled, or refunded)
+    const [orderCount] = await db.select({ val: count() }).from(orders).where(
+      or(
+        eq(orders.createdByUserId, id),
+        eq(orders.approvedByUserId, id),
+        eq(orders.rejectedByUserId, id),
+        eq(orders.fulfilledByUserId, id),
+        eq(orders.refundedByUserId, id)
+      )
+    )
+    if (orderCount.val > 0) {
+      return error(`Cannot delete: This user has historical transaction records (Orders) as a creator or approver. To preserve audit integrity, this user cannot be deleted. Please deactivate the account instead.`, 400)
+    }
+
+    // 3. Check for refunds involvement
+    const [refundCount] = await db.select({ val: count() }).from(refunds).where(
+      or(
+        eq(refunds.requestedByUserId, id),
+        eq(refunds.processedByUserId, id)
+      )
+    )
+    if (refundCount.val > 0) {
+      return error(`Cannot delete: This user has historical refund records as a requester or processor. Please deactivate the account instead.`, 400)
+    }
+
+    // 4. Check for restock requests
+    const [restockCount] = await db.select({ val: count() }).from(restockRequests).where(
+      or(
+        eq(restockRequests.requestedByUserId, id),
+        eq(restockRequests.reviewedByUserId, id)
+      )
+    )
+    if (restockCount.val > 0) {
+      return error(`Cannot delete: This user has historical restock request records. Please deactivate the account instead.`, 400)
+    }
+
+    // 5. Check for groups created
+    const [groupCount] = await db.select({ val: count() }).from(groups).where(eq(groups.createdByUserId, id))
+    if (groupCount.val > 0) {
+      return error(`Cannot delete: This user created ${groupCount.val} group(s). Please reassign group ownership or deactivate.`, 400)
+    }
+
+    // 6. Check for master products created
+    const [productCount] = await db.select({ val: count() }).from(globalProductsTable).where(eq(globalProductsTable.createdByUserId, id))
+    if (productCount.val > 0) {
+      return error(`Cannot delete: This user created ${productCount.val} master products in the global inventory. Please deactivate the account instead.`, 400)
+    }
+
+    // Execute deletion
+    await db.delete(users).where(eq(users.id, id))
+
+    // Audit Log
+    try {
+      const logScope = await getRequestScope()
+      const headersList = await headers()
+      const userAgent = headersList.get("user-agent")
+      const forwardedFor = headersList.get("x-forwarded-for")
+      const ip = forwardedFor ? forwardedFor.split(',')[0] : "unknown"
+
+      await db.insert(systemLogs).values({
+        userId: logScope?.userId,
+        userRole: logScope?.role,
+        organizationId: logScope?.organizationId,
+        branchId: undefined,
+        action: "USER_DELETE",
+        resourceType: "user",
+        resourceId: id,
+        details: {
+          deletedUserId: id
+        },
+        ipAddress: ip,
+        userAgent: userAgent,
+        success: true
+      })
+    } catch (logErr) {
+      console.error("Failed to write audit log:", logErr)
+    }
+
+    return ok({ success: true })
+  } catch (err: any) {
+    console.error("[API/Users] CRITICAL ERROR IN DELETE:", {
+      message: err.message,
+      code: err.code,
+      constraint: err.constraint,
+      detail: err.detail,
+      stack: err.stack
     })
-  } catch (logErr) {
-    console.error("Failed to write audit log:", logErr)
-  }
 
-  return ok({ success: true })
+    // Handle foreign key constraints commonly encountered when deleting users
+    const errorMessage = err.message?.toLowerCase() || ""
+    const errorCode = err.code || ""
+
+    if (errorCode === "23503" || errorMessage.includes("foreign key") || errorMessage.includes("violates")) {
+      return error("Cannot delete: This user is linked to other historical records (audit logs, settings, or assignments). To preserve system history and stability, please Deactivate the user instead.", 400)
+    }
+
+    return error(err.message || "Failed to delete user", 500)
+  }
 }

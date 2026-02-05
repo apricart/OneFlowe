@@ -92,7 +92,7 @@ export function getAutoApprovalCountdown(order: OrderLike | null): string | null
 /**
  * Build status timeline for order
  */
-export function buildStatusTimeline(status: string) {
+export function buildStatusTimeline(status: string, statusAtRefund?: string | null) {
   try {
     // Validate input
     if (!status || typeof status !== 'string') {
@@ -140,6 +140,19 @@ export function buildStatusTimeline(status: string) {
     return STATUS_FLOW.map((step, index) => {
       let state = "upcoming"
 
+      // Special handling for Refunded state skips
+      if (normalized === "refunded" && step.key === "fulfilled") {
+        const refundOrigin = arguments[1]?.toLowerCase()?.trim() // Access second arg safely if not in signature yet, or better to update signature
+        // Actually, let's just use the index logic but override for fulfilled
+        // If we reached "refunded", everything before *should* be complete, EXCEPT...
+        // if we skipped it.
+        const wasFulfilled = refundOrigin === "fulfilled"
+
+        if (!wasFulfilled) {
+          return { ...step, state: "skipped" }
+        }
+      }
+
       if (index < idx) {
         state = "complete"
       } else if (index === idx) {
@@ -148,6 +161,14 @@ export function buildStatusTimeline(status: string) {
           state = "complete"
         } else {
           state = "current"
+        }
+      }
+
+      // Correction for skipped fulfilled if we relied on index < idx
+      if (state === "complete" && step.key === "fulfilled" && normalized === "refunded") {
+        const refundOrigin = arguments[1]?.toLowerCase()?.trim()
+        if (refundOrigin && refundOrigin !== "fulfilled") {
+          state = "skipped"
         }
       }
 

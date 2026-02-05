@@ -116,7 +116,7 @@ export default function BranchInventoryPage() {
                 <TableRow>
                   <TableHead>Product</TableHead>
                   <TableHead>Category</TableHead>
-                  <TableHead>Price</TableHead>
+                  <TableHead>Unit Price</TableHead>
                   <TableHead>Visibility</TableHead>
                 </TableRow>
               </TableHeader>
