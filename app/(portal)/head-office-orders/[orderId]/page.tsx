@@ -9,56 +9,6 @@ import { Badge } from "@/components/ui/badge"
 import { formatPKR } from "@/lib/utils"
 import { buildStatusTimeline } from "@/lib/order-utils"
 import { ArrowLeft, Clock, TrendingDown, CheckCircle, RefreshCw, Package, Ban } from "lucide-react"
-
-// ...
-
-<ol className="space-y-4">
-  {/* @ts-ignore statusAtRefund might be missing from OrderDetail type locally but present in API */}
-  {buildStatusTimeline(order.status, (order as any).statusAtRefund).map((step, index, arr) => {
-    const isLast = index === arr.length - 1
-    const isComplete = step.state === "complete"
-    const isCurrent = step.state === "current"
-    const isSkipped = step.state === "skipped"
-
-    return (
-      <li key={step.key} className="flex gap-3">
-        <div className="flex flex-col items-center">
-          <div
-            className={`flex h-8 w-8 items-center justify-center rounded-full border ${isComplete
-              ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
-              : isCurrent
-                ? "border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
-                : isSkipped
-                  ? "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-dashed"
-                  : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-400"
-              }`}
-          >
-            {isComplete ? (
-              <CheckCircle className="h-4 w-4" />
-            ) : isSkipped ? (
-              <Ban className="h-4 w-4" />
-            ) : (
-              <Clock className="h-4 w-4" />
-            )}
-          </div>
-          {!isLast && (
-            <div
-              className={`mt-1 w-px flex-1 ${isComplete ? "bg-emerald-100 dark:bg-emerald-900" : "bg-slate-200 dark:bg-slate-600"
-                }`}
-            />
-          )}
-        </div>
-        <div className={`flex-1 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-sm ${isSkipped ? 'opacity-60 grayscale' : ''}`}>
-          <p className="text-sm font-semibold dark:text-white">
-            {step.label}
-            {isSkipped && <span className="ml-2 text-[10px] font-normal text-muted-foreground uppercase tracking-wider">(Skipped)</span>}
-          </p>
-          <p className="text-xs text-muted-foreground">{step.description}</p>
-        </div>
-      </li>
-    )
-  })}
-</ol>
 import { formatDistanceToNow } from "date-fns"
 import Image from "next/image"
 
