@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
                 organizationId: groups.organizationId,
                 organizationName: organizations.name,
                 totalOrders: sql<number>`count(${orders.id})::int`,
-                totalAmountCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`,
+                totalAmountCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int`,
                 branchCount: sql<number>`count(distinct ${branches.id})::int`,
                 // Optimization: Aggregate branch data into a JSON array within the main query
                 branches: sql<any>`
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
             ))
             .where(and(...groupConditions))
             .groupBy(groups.id, organizations.id)
-            .orderBy(sql`coalesce(sum(${orders.totalCents}), 0)::int desc`)
+            .orderBy(sql`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int desc`)
 
         // 2. Fetch specific branch-level revenue/order counts separately but in ONE query per group type if needed, 
         // or refine the aggregation above. The current approach above gets branch names but not their individual stats.
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
                     name: branches.name,
                     groupId: branches.groupId,
                     orders: sql<number>`count(${orders.id})::int`,
-                    revenue: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`,
+                    revenue: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int`,
                 })
                 .from(branches)
                 .leftJoin(orders, and(
@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
                 ))
                 .where(sql`${branches.groupId} IN ${groupIds}`)
                 .groupBy(branches.id)
-                .orderBy(sql`coalesce(sum(${orders.totalCents}), 0)::int desc`)
+                .orderBy(sql`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int desc`)
 
             allBranchStats.forEach(bs => {
                 if (bs.groupId) {
@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
                 organizationId: branches.organizationId,
                 organizationName: organizations.name,
                 totalOrders: sql<number>`count(${orders.id})::int`,
-                totalAmountCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)::int`,
+                totalAmountCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int`,
             })
             .from(branches)
             .leftJoin(organizations, eq(branches.organizationId, organizations.id))
@@ -161,7 +161,7 @@ export async function GET(req: NextRequest) {
             ))
             .where(and(...ungroupedConditions))
             .groupBy(branches.id, organizations.id)
-            .orderBy(sql`coalesce(sum(${orders.totalCents}), 0)::int desc`)
+            .orderBy(sql`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int desc`)
 
         return NextResponse.json({
             summary: {

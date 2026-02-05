@@ -384,13 +384,13 @@ export async function POST(req: NextRequest) {
             const newRefundTotal = alreadyRefunded + totalRefundAmount
             const isFullRefund = newRefundTotal >= orderTotal
 
-            // 1. Update order with refund info
+            // 1. Update order with refund info (DON'T change status to REFUNDED)
             await tx
                 .update(orders)
                 .set({
-                    status: isFullRefund ? "REFUNDED" : currentStatus,
-                    statusAtRefund: isFullRefund ? currentStatus : orderData.statusAtRefund,
-                    refundedAt: isFullRefund ? new Date() : orderData.refundedAt,
+                    // Keep original status - track refunds in separate fields
+                    statusAtRefund: currentStatus,
+                    refundedAt: new Date(),
                     refundedByUserId: userId,
                     refundAmountCents: newRefundTotal,
                     refundReason: reason?.trim() || orderData.refundReason,
@@ -411,7 +411,7 @@ export async function POST(req: NextRequest) {
                 .limit(1)
 
             if (budget) {
-                // Credit by reducing the spent amount
+                // Credit by reducing the spent amount AND incrementing credited amount
                 const currentSpent = budget.amountSpentCents || 0
                 const newSpentAmount = Math.max(0, currentSpent - totalRefundAmount)
 
@@ -419,6 +419,7 @@ export async function POST(req: NextRequest) {
                     .update(budgets)
                     .set({
                         amountSpentCents: newSpentAmount,
+                        amountCreditedCents: sql`${budgets.amountCreditedCents} + ${totalRefundAmount}`,
                         updatedAt: new Date(),
                     })
                     .where(eq(budgets.id, budget.id))
@@ -439,7 +440,7 @@ export async function POST(req: NextRequest) {
                 metadata: {
                     tid: orderData.tid,
                     previousStatus: currentStatus,
-                    newStatus: isFullRefund ? "REFUNDED" : currentStatus,
+                    statusPreserved: currentStatus,
                     refundItems: refundDetails,
                     totalRefundAmountCents: totalRefundAmount,
                     totalRefundAmountPKR: (totalRefundAmount / 100).toFixed(2),

@@ -33,7 +33,6 @@ export function useDashboardNotifications() {
     status: "pending",
   })
 
-  const refundedOrdersQuery = useOrders({ status: "refunded" })
   const branchesQuery = useBranches(organizationId || undefined)
   const usersQuery = useUsers(organizationId || undefined)
 
@@ -56,19 +55,7 @@ export function useDashboardNotifications() {
       })
     }
 
-    if (role === "SUPER_ADMIN") {
-      const refundedOrders = refundedOrdersQuery.data?.items || []
-      if (refundedOrders.length > 0) {
-        items.push({
-          id: "refunds",
-          title: "Refunds to audit",
-          message: `${refundedOrders.length} refund${refundedOrders.length === 1 ? "" : "s"} were processed today.`,
-          severity: refundedOrders.length > 5 ? "warning" : "info",
-          cta: { label: "Inspect refunds", href: "/reports/refund-orders" },
-          tag: "finance",
-        })
-      }
-    }
+
 
     if (role === "HEAD_OFFICE") {
       const branches = (branchesQuery.data?.items || []) as Array<{
@@ -118,14 +105,12 @@ export function useDashboardNotifications() {
     role,
     branchesQuery.data?.items,
     pendingOrdersQuery.data?.items,
-    refundedOrdersQuery.data?.items,
     usersQuery.data?.items,
   ])
 
   const isLoading =
     !isInitialized ||
     pendingOrdersQuery.isLoading ||
-    refundedOrdersQuery.isLoading ||
     branchesQuery.isLoading ||
     usersQuery.isLoading
 

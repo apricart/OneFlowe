@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
     const gmvRows = await db
       .select({
         day: dayExpr,
-        totalCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
+        totalCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`,
       })
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))

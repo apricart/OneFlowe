@@ -240,12 +240,10 @@ export function SuperAdminDashboard() {
   startOfToday.setHours(0, 0, 0, 0)
 
   const { data: todaysOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ from: startOfToday.toISOString() }), fetcher)
-  const { data: pendingOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ status: "PENDING" }), fetcher)
   const { data: approvedOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ status: "APPROVED" }), fetcher)
 
   const todaysGMVCents = (todaysOrders?.items || []).reduce((sum, o) => sum + (o.totalCents || 0), 0)
   const todaysGMV = formatPKR(todaysGMVCents / 100, { maximumFractionDigits: 0 })
-  const pendingCount = pendingOrders?.items?.length || 0
   const approvedCount = approvedOrders?.items?.length || 0
 
   const scopeText = branchId ? selectedBranch?.name || `Branch #${branchId}` : organizationId ? selectedOrg?.name || `Organization #${organizationId}` : "All organizations & branches"
@@ -292,7 +290,7 @@ export function SuperAdminDashboard() {
 
       {/* Top 4-Column KPI Grid - Only shown when all branches are selected */}
       {allBranchesSelected && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-slide-down">
+        <div className="grid gap-6 md:grid-cols-2 animate-slide-down">
           <BankingKPICard
             icon={TrendingUp}
             title="Today's GMV"
@@ -311,23 +309,11 @@ export function SuperAdminDashboard() {
             iconBg="text-blue-600 bg-blue-600"
           />
 
-          <BankingKPICard
-            icon={AlertCircle}
-            title="Pending Approvals"
-            value={pendingCount}
-            gradient="from-amber-500 to-orange-600"
-            iconBg="text-amber-600 bg-amber-600"
-          />
 
 
 
-          <BankingKPICard
-            icon={Sparkles}
-            title="System Health"
-            value="99.9%"
-            gradient="from-violet-500 to-purple-600"
-            iconBg="text-violet-600 bg-violet-600"
-          />
+
+
         </div>
       )}
 

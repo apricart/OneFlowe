@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
     .select({
       monthNum: sql<number>`EXTRACT(MONTH FROM (${orders.fulfilledAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')::int`,
       month: sql<string>`TO_CHAR((${orders.fulfilledAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'Mon')`,
-      totalCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
+      totalCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`,
       orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
     })
     .from(orders)

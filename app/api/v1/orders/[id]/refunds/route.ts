@@ -278,22 +278,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             .where(eq(budgets.id, budget.id))
         }
 
+        // Update order refund amount
+        await tx
+          .update(orders)
+          .set({
+            refundAmountCents: sql`COALESCE(${orders.refundAmountCents}, 0) + ${totalRefundAmount}`,
+            updatedAt: new Date()
+          })
+          .where(eq(orders.id, orderId))
+
         // Check if fully refunded
         const newTotalRefunded = totalRefundedAmount + totalRefundAmount
-        if (newTotalRefunded >= orderData.totalCents) {
-          await tx
-            .update(orders)
-            .set({
-              status: "refunded",
-              updatedAt: new Date()
-            })
-            .where(eq(orders.id, orderId))
-        } else {
-          // If unrelated to full refund, maybe update status to PARTIALLY_REFUNDED if we had that status?
-          // Since we don't seem to have PARTIALLY_REFUNDED in enum based on strict strings, we might leave it as FULFILLED.
-          // But the user asked for "Partially Refunded" indication.
-          // The UI handles the display status, but the DB status typically remains FULFILLED or APPROVED until fully refunded.
-        }
+        const isFullRefund = newTotalRefunded >= orderData.totalCents
+
+        // DON'T change order status - keep it as FULFILLED/APPROVED
+        // Refunds will be tracked via refundAmountCents field
+        // (No order status update needed)
 
         await tx.insert(auditLogs).values({
           userId,

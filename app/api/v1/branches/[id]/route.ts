@@ -93,18 +93,17 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
       return error(`Cannot delete: This branch has ${supplierCount.val} supplier record(s).`, 400)
     }
 
-    const [budgetCount] = await db.select({ val: count() }).from(budgets).where(eq(budgets.branchId, branchId))
-    if (budgetCount.val > 0) {
-      return error(`Cannot delete: This branch has budget records.`, 400)
-    }
-
     // Check for restock requests
     const [restockCount] = await db.select({ val: count() }).from(restockRequests).where(eq(restockRequests.branchId, branchId))
     if (restockCount.val > 0) {
       return error(`Cannot delete: This branch has pending or historical restock requests.`, 400)
     }
 
-    // If all clear, delete
+    // 2. Cascade Deletions - Clean up related data that can be safely deleted
+    // Delete budget records (budgets are not critical data and can be recreated)
+    await db.delete(budgets).where(eq(budgets.branchId, branchId))
+
+    // 3. Delete the branch
     await db.delete(branches).where(eq(branches.id, branchId))
     return ok({ ok: true })
 

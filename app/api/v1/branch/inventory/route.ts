@@ -79,7 +79,8 @@ export async function GET(req: NextRequest) {
       eq(branchInventory.organizationId, orgIdNum),
       isNull(branchInventory.deletedAt),
       eq(branchInventory.isVisible, true), // Only show visible products
-      eq(branchInventory.isActive, true),  // Only show active products
+      // Removed branchInventory.isActive check - global status is primary control
+      eq(globalProducts.status, "active"), // Only show globally active products
     ]
 
     if (search) {

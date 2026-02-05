@@ -231,13 +231,6 @@ export default function HeadOfficeOrdersPage() {
       gradient: "from-indigo-500 to-purple-500",
     },
     {
-      label: "Pending review",
-      value: statusCounts.pending,
-      sub: "Auto-approval safety net",
-      icon: Clock,
-      gradient: "from-amber-400 to-orange-500",
-    },
-    {
       label: "Approved",
       value: statusCounts.approved,
       sub: "Ready for fulfillment",
@@ -318,7 +311,7 @@ export default function HeadOfficeOrdersPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {["all", "pending", "approved", "fulfilled", "refunded"].map((status) => (
+            {["all", "approved", "fulfilled", "refunded"].map((status) => (
               <Button
                 key={status}
                 onClick={() => setStatusFilter(status)}

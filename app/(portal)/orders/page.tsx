@@ -345,7 +345,7 @@ export default function OrdersManagementPage() {
             textSecondary: "text-emerald-700 dark:text-emerald-400",
             iconColor: "text-emerald-600 dark:text-emerald-400"
           },
-        ].map((stat) => (
+        ].filter(stat => !(isSuperAdmin || isHeadOffice) || stat.label !== "Pending").map((stat) => (
           <div
             key={stat.label}
             className={`bg-gradient-to-br ${stat.gradient} ${stat.border} rounded-lg p-5 hover:shadow-md transition-shadow`}
@@ -375,7 +375,7 @@ export default function OrdersManagementPage() {
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {["all", "pending", "approved", "fulfilled", "refunded"].map((status) => (
+            {["all", "pending", "approved", "fulfilled", "refunded"].filter(s => !(isSuperAdmin || isHeadOffice) || s !== "pending").map((status) => (
               <Button
                 key={status}
                 onClick={() => setStatusFilter(status)}

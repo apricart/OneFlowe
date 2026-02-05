@@ -184,7 +184,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
     }
 
-    const { branchId, amountAllocatedCents } = body
+    const { branchId, amountAllocatedCents, setAbsolute } = body
 
     // Validate required fields
     if (!branchId) {
@@ -237,13 +237,28 @@ export async function PUT(req: NextRequest) {
 
     if (budget) {
       const oldAmount = budget.amountAllocatedCents
-      const newAmount = oldAmount + amountAllocatedCents // ADD to existing budget
+      let newAmount: number
 
-      // Prevent negative budgets
-      if (newAmount < 0) {
-        return NextResponse.json({
-          error: `Cannot reduce budget below zero. Current: ${(oldAmount / 100).toFixed(2)} PKR, Attempted reduction: ${(Math.abs(amountAllocatedCents) / 100).toFixed(2)} PKR`
-        }, { status: 400 })
+      if (setAbsolute) {
+        // Set to absolute value (allows resetting to 0 or any specific amount)
+        newAmount = amountAllocatedCents
+
+        // Prevent negative budgets
+        if (newAmount < 0) {
+          return NextResponse.json({
+            error: `Budget cannot be negative. Attempted value: ${(amountAllocatedCents / 100).toFixed(2)} PKR`
+          }, { status: 400 })
+        }
+      } else {
+        // ADD to existing budget (default behavior for backward compatibility)
+        newAmount = oldAmount + amountAllocatedCents
+
+        // Prevent negative budgets
+        if (newAmount < 0) {
+          return NextResponse.json({
+            error: `Cannot reduce budget below zero. Current: ${(oldAmount / 100).toFixed(2)} PKR, Attempted reduction: ${(Math.abs(amountAllocatedCents) / 100).toFixed(2)} PKR`
+          }, { status: 400 })
+        }
       }
 
       await db.update(budgets).set({
@@ -256,15 +271,17 @@ export async function PUT(req: NextRequest) {
         await db.insert(auditLogs).values({
           userId,
           organizationId: branch.organizationId,
-          action: "UPDATE_BUDGET_ALLOCATION",
+          action: setAbsolute ? "SET_BUDGET_ALLOCATION" : "UPDATE_BUDGET_ALLOCATION",
           entity: "BUDGET",
           entityId: String(branchId),
           metadata: {
             branchName: branch.name,
             period: currentMonth,
             oldAmount: oldAmount / 100,
-            addedAmount: amountAllocatedCents / 100,
-            newAmount: newAmount / 100,
+            ...(setAbsolute
+              ? { newAmount: newAmount / 100, wasReset: amountAllocatedCents === 0 }
+              : { addedAmount: amountAllocatedCents / 100, newAmount: newAmount / 100 }
+            ),
           },
         })
       } catch (auditError) {
@@ -273,14 +290,16 @@ export async function PUT(req: NextRequest) {
       }
 
       return NextResponse.json({
-        message: "Budget updated successfully",
+        message: setAbsolute ? "Budget set successfully" : "Budget updated successfully",
         budget: {
           branchId,
           branchName: branch.name,
           period: currentMonth,
           oldAmount: oldAmount / 100,
-          addedAmount: amountAllocatedCents / 100,
-          newAmount: newAmount / 100
+          ...(setAbsolute
+            ? { newAmount: newAmount / 100 }
+            : { addedAmount: amountAllocatedCents / 100, newAmount: newAmount / 100 }
+          ),
         }
       })
     } else {

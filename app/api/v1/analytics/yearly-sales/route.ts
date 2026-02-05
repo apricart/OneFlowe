@@ -96,11 +96,12 @@ export async function GET(req: NextRequest) {
   // Query monthly sales for the year based on fulfilledAt date
   // Convert fulfilledAt to Pakistan timezone (Asia/Karachi, UTC+5) before extracting month
   // This ensures orders fulfilled on Tuesday in Pakistan are counted in the correct month
+  // Calculate NET sales: totalCents - refundAmountCents (instead of excluding refunded orders)
   const monthlySalesRows = await db
     .select({
       monthNum: sql<number>`EXTRACT(MONTH FROM (${orders.fulfilledAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')::int`,
       month: sql<string>`TO_CHAR((${orders.fulfilledAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'Mon')`,
-      totalCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
+      totalCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`,
       orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
     })
     .from(orders)

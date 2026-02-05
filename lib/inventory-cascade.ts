@@ -115,8 +115,11 @@ export async function cascadeOrgStatusChange(
     }
 
     // If disabling, also hide from branches
+    // If enabling, restore visibility (isVisible = true)
     if (!isActive) {
       updateData.isVisible = false
+    } else {
+      updateData.isVisible = true
     }
 
     await db.update(branchInventory)
@@ -128,7 +131,7 @@ export async function cascadeOrgStatusChange(
         )
       )
 
-    // Log the cascade update
+    // Log the cascade  update
     await db.insert(auditLogs).values({
       userId: performedByUserId,
       action: "CASCADE_UPDATE",
@@ -251,8 +254,12 @@ export async function cascadeGlobalProductStatusChange(
   performedByRole: string
 ) {
   try {
-    // Only cascade if status is inactive or discontinued
-    if (status !== 'inactive' && status !== 'discontinued') {
+    // Determine the target isActive state based on status
+    const isActive = status === 'active'
+    const shouldCascade = status === 'active' || status === 'inactive' || status === 'discontinued'
+
+    // Only cascade for active, inactive, or discontinued status changes
+    if (!shouldCascade) {
       return { updatedOrgCount: 0, updatedBranchCount: 0, affectedOrgs: [], affectedBranches: [] }
     }
 
@@ -282,15 +289,15 @@ export async function cascadeGlobalProductStatusChange(
       // First update the organization inventory item
       await db.update(organizationInventory)
         .set({
-          isActive: false,
+          isActive,
           updatedAt: new Date()
         })
         .where(eq(organizationInventory.id, orgItem.id))
 
-      // Then cascade to branches
+      // Then cascade to branches (with appropriate visibility settings)
       const branchResult = await cascadeOrgStatusChange(
         orgItem.id,
-        false, // isActive = false
+        isActive,
         performedByUserId,
         performedByRole
       )
@@ -308,6 +315,7 @@ export async function cascadeGlobalProductStatusChange(
         triggeredBy: "global_product_status_change",
         globalProductId,
         status,
+        isActive,
         updatedOrgCount: orgItems.length,
         updatedBranchCount: totalBranchUpdates,
         affectedOrgs,

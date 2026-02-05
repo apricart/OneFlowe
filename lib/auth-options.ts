@@ -1,7 +1,7 @@
 import type { NextAuthOptions } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { db } from "@/lib/db"
-import { users, roles, mfaCodes, employeeCredentials } from "@/db/schema"
+import { users, roles, mfaCodes, employeeCredentials, organizations, branches } from "@/db/schema"
 import { eq, and, gt } from "drizzle-orm"
 import { verifyPassword } from "@/lib/password"
 import { checkMfaCooldown, verifyOTP, clearDailyCount } from "@/lib/mfa"
@@ -30,7 +30,8 @@ export const authOptions: NextAuthOptions = {
             organizationId: users.organizationId,
             branchId: users.branchId,
             fullName: users.fullName,
-            mfaEnabled: users.mfaEnabled
+            mfaEnabled: users.mfaEnabled,
+            isActive: users.isActive
           })
           .from(users)
           .where(eq(users.email, email))
@@ -38,6 +39,37 @@ export const authOptions: NextAuthOptions = {
 
         const ok = await verifyPassword(password, u.hash)
         if (!ok) return null
+
+        // Check organization status
+        if (u.organizationId) {
+          const [org] = await db
+            .select({ status: organizations.status })
+            .from(organizations)
+            .where(eq(organizations.id, u.organizationId))
+            .limit(1)
+
+          if (!org || org.status !== 'active') {
+            throw new Error('ORGANIZATION_INACTIVE')
+          }
+        }
+
+        // Check branch status
+        if (u.branchId) {
+          const [branch] = await db
+            .select({ status: branches.status })
+            .from(branches)
+            .where(eq(branches.id, u.branchId))
+            .limit(1)
+
+          if (!branch || branch.status !== 'active') {
+            throw new Error('BRANCH_INACTIVE')
+          }
+        }
+
+        // Check user status
+        if (!u.isActive) {
+          throw new Error('USER_INACTIVE')
+        }
 
         // Check if MFA is enabled for this user
         if (u.mfaEnabled) {
@@ -86,7 +118,8 @@ export const authOptions: NextAuthOptions = {
             organizationId: users.organizationId,
             branchId: users.branchId,
             fullName: users.fullName,
-            mfaEnabled: users.mfaEnabled
+            mfaEnabled: users.mfaEnabled,
+            isActive: users.isActive
           })
           .from(users)
           .where(eq(users.email, email))
@@ -94,6 +127,37 @@ export const authOptions: NextAuthOptions = {
 
         const ok = await verifyPassword(password, u.hash)
         if (!ok) return null
+
+        // Check organization status
+        if (u.organizationId) {
+          const [org] = await db
+            .select({ status: organizations.status })
+            .from(organizations)
+            .where(eq(organizations.id, u.organizationId))
+            .limit(1)
+
+          if (!org || org.status !== 'active') {
+            throw new Error('ORGANIZATION_INACTIVE')
+          }
+        }
+
+        // Check branch status
+        if (u.branchId) {
+          const [branch] = await db
+            .select({ status: branches.status })
+            .from(branches)
+            .where(eq(branches.id, u.branchId))
+            .limit(1)
+
+          if (!branch || branch.status !== 'active') {
+            throw new Error('BRANCH_INACTIVE')
+          }
+        }
+
+        // Check user status
+        if (!u.isActive) {
+          throw new Error('USER_INACTIVE')
+        }
 
         if (!u.mfaEnabled) return null
 
@@ -152,6 +216,40 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        // Check organization status
+        if (emp.organizationId) {
+          const [org] = await db
+            .select({ status: organizations.status })
+            .from(organizations)
+            .where(eq(organizations.id, emp.organizationId))
+            .limit(1)
+
+          if (!org || org.status !== 'active') {
+            console.log(`❌ Employee login: organization inactive for ${email}`)
+            throw new Error('ORGANIZATION_INACTIVE')
+          }
+        }
+
+        // Check branch status
+        if (emp.branchId) {
+          const [branch] = await db
+            .select({ status: branches.status })
+            .from(branches)
+            .where(eq(branches.id, emp.branchId))
+            .limit(1)
+
+          if (!branch || branch.status !== 'active') {
+            console.log(`❌ Employee login: branch inactive for ${email}`)
+            throw new Error('BRANCH_INACTIVE')
+          }
+        }
+
+        // Check employee status (already filtered by isActive in WHERE, but explicit check for clarity)
+        if (!emp.isActive) {
+          console.log(`❌ Employee login: employee account inactive for ${email}`)
+          throw new Error('USER_INACTIVE')
+        }
+
         console.log(`✓ Employee password matched for ${email}`)
 
         // Check if MFA is enabled
@@ -198,6 +296,37 @@ export const authOptions: NextAuthOptions = {
 
         const passwordMatch = await compare(password, emp.passwordHash)
         if (!passwordMatch) return null
+
+        // Check organization status
+        if (emp.organizationId) {
+          const [org] = await db
+            .select({ status: organizations.status })
+            .from(organizations)
+            .where(eq(organizations.id, emp.organizationId))
+            .limit(1)
+
+          if (!org || org.status !== 'active') {
+            throw new Error('ORGANIZATION_INACTIVE')
+          }
+        }
+
+        // Check branch status
+        if (emp.branchId) {
+          const [branch] = await db
+            .select({ status: branches.status })
+            .from(branches)
+            .where(eq(branches.id, emp.branchId))
+            .limit(1)
+
+          if (!branch || branch.status !== 'active') {
+            throw new Error('BRANCH_INACTIVE')
+          }
+        }
+
+        // Check employee status
+        if (!emp.isActive) {
+          throw new Error('USER_INACTIVE')
+        }
 
         if (!emp.mfaEnabled || !emp.mfaSecret) return null
 

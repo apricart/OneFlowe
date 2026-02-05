@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw } from "lucide-react"
+import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw, Trash2 } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
 
@@ -39,6 +39,9 @@ export default function BudgetsPage() {
   const [newAmount, setNewAmount] = useState("")
   const [bulkAmount, setBulkAmount] = useState("")
   const [showBulkDialog, setShowBulkDialog] = useState(false)
+  const [showEmptyDialog, setShowEmptyDialog] = useState(false)
+  const [showEmptyAllDialog, setShowEmptyAllDialog] = useState(false)
+  const [emptyingBudget, setEmptyingBudget] = useState<BudgetAllocation | null>(null)
 
   // Build endpoint respecting context (organization scope)
   const budgetsEndpoint = useMemo(() => {
@@ -114,6 +117,69 @@ export default function BudgetsPage() {
       })
       setShowDialog(false)
       setEditingBudget(null)
+      mutate()
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" })
+    }
+  }
+
+  const handleEmptyBudget = (budget: BudgetAllocation) => {
+    setEmptyingBudget(budget)
+    setShowEmptyDialog(true)
+  }
+
+  const handleConfirmEmptyBudget = async () => {
+    if (!emptyingBudget) return
+
+    try {
+      const res = await fetch("/api/v1/budgets", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId: emptyingBudget.branchId,
+          amountAllocatedCents: 0,
+          setAbsolute: true,
+        })
+      })
+
+      if (!res.ok) {
+        const json = await res.json()
+        return toast({ title: "Failed", description: json.error, variant: "destructive" })
+      }
+
+      toast({
+        title: "Budget Emptied",
+        description: `Successfully reset budget for ${emptyingBudget.branchName} to ₨0.00`,
+      })
+      setShowEmptyDialog(false)
+      setEmptyingBudget(null)
+      mutate()
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" })
+    }
+  }
+
+  const handleEmptyAllBudgets = async () => {
+    try {
+      let successCount = 0
+      for (const budget of scopedBudgets) {
+        const res = await fetch("/api/v1/budgets", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            branchId: budget.branchId,
+            amountAllocatedCents: 0,
+            setAbsolute: true,
+          })
+        })
+        if (res.ok) successCount++
+      }
+
+      toast({
+        title: "Bulk Empty Complete",
+        description: `Reset ${successCount}/${scopedBudgets.length} branch budgets to ₨0.00`
+      })
+      setShowEmptyAllDialog(false)
       mutate()
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" })
@@ -250,14 +316,24 @@ export default function BudgetsPage() {
         </Card>
         <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
           <label className="text-sm font-medium mb-2 block text-slate-900 dark:text-slate-100">Quick Actions</label>
-          <Button
-            onClick={() => setShowBulkDialog(true)}
-            className="w-full gap-2"
-            variant="outline"
-          >
-            <Zap className="h-4 w-4" />
-            Allocate All
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowBulkDialog(true)}
+              className="flex-1 gap-2"
+              variant="outline"
+            >
+              <Zap className="h-4 w-4" />
+              Allocate All
+            </Button>
+            <Button
+              onClick={() => setShowEmptyAllDialog(true)}
+              className="flex-1 gap-2"
+              variant="destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+              Empty All
+            </Button>
+          </div>
         </Card>
         <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
           <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">Total Branches</p>
@@ -336,10 +412,22 @@ export default function BudgetsPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button size="sm" onClick={() => handleEditBudget(budget)} className="gap-1 whitespace-nowrap">
-                          <Edit2 className="h-3 w-3" />
-                          <span className="hidden sm:inline">Allocate</span>
-                        </Button>
+                        <div className="flex gap-2 justify-end">
+                          <Button size="sm" onClick={() => handleEditBudget(budget)} className="gap-1 whitespace-nowrap">
+                            <Edit2 className="h-3 w-3" />
+                            <span className="hidden sm:inline">Allocate</span>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleEmptyBudget(budget)}
+                            className="gap-1 whitespace-nowrap"
+                            title="Reset budget to zero"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span className="hidden sm:inline">Empty</span>
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   )
@@ -462,6 +550,67 @@ export default function BudgetsPage() {
             <Button onClick={handleBulkAllocate} className="gap-2">
               <Zap className="h-4 w-4" />
               Allocate All Branches
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEmptyDialog} onOpenChange={setShowEmptyDialog}>
+        <DialogContent className="max-w-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 dark:text-white">Empty Budget Confirmation</DialogTitle>
+            <DialogDescription className="text-slate-600 dark:text-slate-400">
+              Are you sure you want to reset the budget for {emptyingBudget?.branchName} to ₨0.00?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-red-900 dark:text-red-100">This will reset the allocated budget to zero</p>
+                  <p className="text-xs text-red-700 dark:text-red-300">Current budget: {formatAmount(emptyingBudget?.amountAllocatedCents || 0)}</p>
+                  <p className="text-xs text-red-700 dark:text-red-300">This action can be reversed by allocating a new budget.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEmptyDialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirmEmptyBudget} className="gap-2">
+              <Trash2 className="h-4 w-4" />
+              Empty Budget
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showEmptyAllDialog} onOpenChange={setShowEmptyAllDialog}>
+        <DialogContent className="max-w-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 dark:text-white">Empty All Budgets Confirmation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to reset ALL {scopedBudgets.length} branch budgets to ₨0.00?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-red-900 dark:text-red-100">This will reset ALL branch budgets in the current view to zero</p>
+                  <p className="text-xs text-red-700 dark:text-red-300">Total allocated: {formatAmount(totalAllocated)}</p>
+                  <p className="text-xs text-red-700 dark:text-red-300">Branches affected: {scopedBudgets.length}</p>
+                  <p className="text-xs text-red-700 dark:text-red-300">This action can be reversed by allocating new budgets.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEmptyAllDialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleEmptyAllBudgets} className="gap-2">
+              <Trash2 className="h-4 w-4" />
+              Empty All Budgets
             </Button>
           </DialogFooter>
         </DialogContent>

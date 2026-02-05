@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
   const weeklySalesRows = await db
     .select({
       day: dayExpr,
-      totalCents: sql<number>`coalesce(sum(${orders.totalCents}), 0)`,
+      totalCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`,
       orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
     })
     .from(orders)
