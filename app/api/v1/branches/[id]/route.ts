@@ -1,6 +1,6 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { db } from "@/lib/db"
-import { branches, users, orders, branchProducts, branchInventory, employeeCredentials, suppliers, budgets, restockRequests } from "@/db/schema"
+import { branches, users, orders, branchProducts, branchInventory, employeeCredentials, suppliers, budgets, restockRequests, inventory, systemLogs, notifications, auditLogs } from "@/db/schema"
 import { eq, count } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 
@@ -102,6 +102,14 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
     // 2. Cascade Deletions - Clean up related data that can be safely deleted
     // Delete budget records (budgets are not critical data and can be recreated)
     await db.delete(budgets).where(eq(budgets.branchId, branchId))
+
+    // Delete system logs, audit logs, and notifications (historical/non-critical data)
+    await db.delete(systemLogs).where(eq(systemLogs.branchId, branchId))
+    await db.delete(auditLogs).where(eq(auditLogs.branchId, branchId))
+    await db.delete(notifications).where(eq(notifications.branchId, branchId))
+
+    // Delete legacy inventory records (if any exist - this is an old table)
+    await db.delete(inventory).where(eq(inventory.branchId, branchId))
 
     // 3. Delete the branch
     await db.delete(branches).where(eq(branches.id, branchId))

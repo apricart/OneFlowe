@@ -261,10 +261,25 @@ export async function PUT(req: NextRequest) {
         }
       }
 
-      await db.update(budgets).set({
-        amountAllocatedCents: newAmount,
-        updatedAt: new Date(),
-      }).where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
+      // When emptying budget (setAbsolute=true and amountAllocatedCents=0), reset ALL fields
+      if (setAbsolute && amountAllocatedCents === 0) {
+        console.log('[BUDGETS] Emptying budget for branch:', branchId, '- Resetting ALL fields to 0')
+        await db.update(budgets).set({
+          amountAllocatedCents: 0,
+          amountSpentCents: 0,
+          amountHeldCents: 0,
+          amountCreditedCents: 0,
+          updatedAt: new Date(),
+        }).where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
+        console.log('[BUDGETS] Successfully reset all budget fields to 0 for branch:', branchId)
+      } else {
+        // Normal update - only update allocated amount
+        console.log('[BUDGETS] Normal budget update for branch:', branchId, '- New amount:', newAmount / 100, 'PKR')
+        await db.update(budgets).set({
+          amountAllocatedCents: newAmount,
+          updatedAt: new Date(),
+        }).where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
+      }
 
       // Log action
       try {

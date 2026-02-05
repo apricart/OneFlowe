@@ -242,7 +242,12 @@ export function SuperAdminDashboard() {
   const { data: todaysOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ from: startOfToday.toISOString() }), fetcher)
   const { data: approvedOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ status: "APPROVED" }), fetcher)
 
-  const todaysGMVCents = (todaysOrders?.items || []).reduce((sum, o) => sum + (o.totalCents || 0), 0)
+  // Filter out PENDING and REJECTED orders from today's metrics (Super Admin only sees approved/fulfilled anyway via API)
+  const validTodaysOrders = (todaysOrders?.items || []).filter(o =>
+    ['APPROVED', 'FULFILLED', 'REFUNDED'].includes(o.status?.toUpperCase())
+  )
+
+  const todaysGMVCents = validTodaysOrders.reduce((sum, o) => sum + (o.totalCents || 0), 0)
   const todaysGMV = formatPKR(todaysGMVCents / 100, { maximumFractionDigits: 0 })
   const approvedCount = approvedOrders?.items?.length || 0
 
@@ -304,7 +309,7 @@ export function SuperAdminDashboard() {
           <BankingKPICard
             icon={Package}
             title="Today's Orders"
-            value={todaysOrders?.items?.length || 0}
+            value={validTodaysOrders.length}
             gradient="from-blue-500 to-indigo-600"
             iconBg="text-blue-600 bg-blue-600"
           />

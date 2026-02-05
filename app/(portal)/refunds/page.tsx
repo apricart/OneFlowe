@@ -290,53 +290,6 @@ export default function RefundsPage() {
                 </CardContent>
             </Card>
 
-            {!order && pendingRefunds.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-amber-600">
-                            <AlertTriangle className="h-5 w-5" />
-                            Pending Refund Requests
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Requested</TableHead>
-                                    <TableHead>Branch</TableHead>
-                                    <TableHead>Transaction ID</TableHead>
-                                    <TableHead>Amount</TableHead>
-                                    <TableHead>Requested By</TableHead>
-                                    <TableHead className="text-right">Action</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {pendingRefunds.map((refund) => (
-                                    <TableRow key={refund.id}>
-                                        <TableCell>{new Date(refund.createdAt).toLocaleDateString()}</TableCell>
-                                        <TableCell>{refund.branchName || "Unknown"}</TableCell>
-                                        <TableCell className="font-mono">{refund.tid}</TableCell>
-                                        <TableCell className="font-bold">PKR {(refund.amountCents / 100).toFixed(2)}</TableCell>
-                                        <TableCell>{refund.requestedByName || "Unknown"}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button
-                                                size="sm"
-                                                onClick={() => {
-                                                    setSearchQuery(refund.tid)
-                                                    performSearch(refund.tid)
-                                                }}
-                                            >
-                                                Review
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-            )}
-
             {order && (
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
