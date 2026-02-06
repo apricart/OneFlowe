@@ -73,7 +73,8 @@ export type YearlySalesSplineChartProps = {
 }
 
 export function YearlySalesSplineChart({ yearlySalesData, avgSales, label = "Purchase" }: YearlySalesSplineChartProps) {
-  const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
 
   // Add null safety checks
   if (!yearlySalesData || yearlySalesData.length === 0) {
@@ -285,7 +286,8 @@ export function ChartTooltip({
         ? `${value.toLocaleString()} orders`
         : value.toLocaleString()
 
-  const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
 
   return (
     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden">
@@ -302,7 +304,8 @@ export function ChartTooltip({
 
 // ----------------- Trend Area Chart -----------------
 export function TrendAreaChart({ data, className, label = "Purchase" }: { data: TrendPoint[]; className?: string; label?: string }) {
-  const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
   const chartData: ChartDatum[] = useMemo(
     () => data?.map((point) => ({ label: point.label, value: point.value })) || [],
     [data]
@@ -456,7 +459,8 @@ export function ComparisonBarChart({
   className?: string
   title?: string
 }) {
-  const isDark = typeof window !== 'undefined' && document.documentElement.classList.contains('dark')
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
   const chartData: ChartDatum[] = useMemo(
     () => data.map((point) => ({ label: point.label, value: point.value })),
     [data]

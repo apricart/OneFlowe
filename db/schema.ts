@@ -865,7 +865,8 @@ export const groups = pgTable(
     orgIdx: index("groups_org_idx").on(t.organizationId),
     nameIdx: index("groups_name_idx").on(t.name),
     statusIdx: index("groups_status_idx").on(t.status),
-    orgNameUq: uniqueIndex("groups_org_name_uq").on(t.organizationId, t.name),
+    // REMOVED: orgNameUq - replaced with partial unique index via SQL migration
+    // This allows recreating groups with same name after deletion (status='deleted')
   }),
 )
 

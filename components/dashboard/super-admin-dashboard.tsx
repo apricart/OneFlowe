@@ -242,11 +242,13 @@ export function SuperAdminDashboard() {
   const { data: todaysOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ from: startOfToday.toISOString() }), fetcher)
   const { data: approvedOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ status: "APPROVED" }), fetcher)
 
-  // Filter out PENDING and REJECTED orders from today's metrics (Super Admin only sees approved/fulfilled anyway via API)
+  // Filter out PENDING, REJECTED, and REFUNDED orders from today's metrics
+  // Refunded orders (partial or full) are excluded entirely from GMV and order count
   const validTodaysOrders = (todaysOrders?.items || []).filter(o =>
-    ['APPROVED', 'FULFILLED', 'REFUNDED'].includes(o.status?.toUpperCase())
+    ['APPROVED', 'FULFILLED'].includes(o.status?.toUpperCase())
   )
 
+  // Calculate GMV from non-refunded orders only
   const todaysGMVCents = validTodaysOrders.reduce((sum, o) => sum + (o.totalCents || 0), 0)
   const todaysGMV = formatPKR(todaysGMVCents / 100, { maximumFractionDigits: 0 })
   const approvedCount = approvedOrders?.items?.length || 0

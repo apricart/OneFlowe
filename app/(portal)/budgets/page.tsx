@@ -60,14 +60,14 @@ export default function BudgetsPage() {
 
   const formatAmount = (cents: number) => formatPKR(cents / 100)
 
-  // First apply org/branch scope from context, then search filter
+  // Filter by organization scope only (not branch) - budgets should show all branches in the org
   const scopedBudgets = useMemo(() => {
     return budgets.filter((b) => {
       if (organizationId && String(b.organizationId) !== organizationId) return false
-      if (branchId && String(b.branchId) !== branchId) return false
+      // Branch-level filtering removed - Head Office needs to see all branches for budget management
       return true
     })
-  }, [budgets, organizationId, branchId])
+  }, [budgets, organizationId])
 
   const filteredBudgets = useMemo(() => {
     return scopedBudgets.filter((b) =>
