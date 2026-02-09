@@ -243,10 +243,11 @@ export function SuperAdminDashboard() {
   const { data: todaysOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ from: startOfToday.toISOString() }), fetcher)
   const { data: approvedOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ status: "APPROVED" }), fetcher)
 
-  // Include APPROVED, FULFILLED, and REFUNDED orders in today's metrics
-  // Calculate net GMV by subtracting refunded amounts
+  // Include APPROVED and FULFILLED orders in today's metrics
+  // Exclude REFUNDED orders from the count (as per user request)
+  // Calculate net GMV by subtracting refunded amounts (partially refunded orders are still included)
   const validTodaysOrders = (todaysOrders?.items || []).filter(o =>
-    ['APPROVED', 'FULFILLED', 'REFUNDED'].includes(o.status?.toUpperCase())
+    ['APPROVED', 'FULFILLED'].includes(o.status?.toUpperCase())
   )
 
   // Calculate GMV with refunds deducted (works for both partial and full refunds)
@@ -299,9 +300,9 @@ export function SuperAdminDashboard() {
 
       <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
 
-      {/* Top 4-Column KPI Grid - Only shown when all branches are selected */}
-      {allBranchesSelected && (
-        <div className="grid gap-6 md:grid-cols-2 animate-slide-down">
+      {/* Consolidated KPI Grid - Today's GMV + Lifetime Statistics */}
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 animate-slide-down">
+        {allBranchesSelected && (
           <BankingKPICard
             icon={TrendingUp}
             title="Today's GMV"
@@ -311,19 +312,8 @@ export function SuperAdminDashboard() {
             trend="up"
             trendValue="12.5%"
           />
+        )}
 
-          <BankingKPICard
-            icon={Package}
-            title="Today's Orders"
-            value={validTodaysOrders.length}
-            gradient="from-blue-500 to-indigo-600"
-            iconBg="text-blue-600 bg-blue-600"
-          />
-        </div>
-      )}
-
-      {/* Lifetime Statistics - 4 Column Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-slide-down">
         <BankingKPICard
           icon={Package}
           title="Total Orders"

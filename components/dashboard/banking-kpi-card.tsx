@@ -5,6 +5,7 @@ type BankingKPICardProps = {
     icon: any
     title: string
     value: string | number
+    subtitle?: string
     trend?: "up" | "down"
     trendValue?: string
     gradient: string
@@ -15,6 +16,7 @@ export const BankingKPICard = ({
     icon: Icon,
     title,
     value,
+    subtitle,
     trend,
     trendValue,
     gradient,
@@ -57,6 +59,11 @@ export const BankingKPICard = ({
                 <p className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
                     {value}
                 </p>
+                {subtitle && (
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-1 opacity-80">
+                        {subtitle}
+                    </p>
+                )}
             </div>
 
             {/* Modern Accent Bar */}
