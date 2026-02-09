@@ -98,19 +98,23 @@ export async function GET(req: NextRequest) {
 
 
 
-    // --- SALES MODE: Weekly / Monthly ---
-    if (status === "FULFILLED") {
-      conditions.push(sql`${orders.fulfilledAt} IS NOT NULL`)
 
-      if (startDate) conditions.push(gte(orders.fulfilledAt, new Date(startDate)))
-      if (endDate) conditions.push(lte(orders.fulfilledAt, new Date(endDate)))
+    // --- SALES MODE: Weekly / Monthly ---
+    // Count orders when APPROVED (GMV style), not when fulfilled
+    if (status === "FULFILLED") {
+      // Include both APPROVED and FULFILLED orders in sales
+      conditions.push(sql`${orders.approvedAt} IS NOT NULL`)
+      conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'REFUNDED')`)
+
+      if (startDate) conditions.push(gte(orders.approvedAt, new Date(startDate)))
+      if (endDate) conditions.push(lte(orders.approvedAt, new Date(endDate)))
 
       // MONTHLY SALES
       if (mode === "monthlySales") {
         const monthlySales = await db
           .select({
-            monthNum: sql<number>`EXTRACT(MONTH FROM ${orders.fulfilledAt})::int`,
-            month: sql<string>`TO_CHAR(${orders.fulfilledAt}, 'Mon')`,
+            monthNum: sql<number>`EXTRACT(MONTH FROM ${orders.approvedAt})::int`,
+            month: sql<string>`TO_CHAR(${orders.approvedAt}, 'Mon')`,
             sales: sql<number>`SUM(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0))::int`,
           })
           .from(orders)
@@ -130,7 +134,7 @@ export async function GET(req: NextRequest) {
       // WEEKLY SALES
       const weeklySales = await db
         .select({
-          day: sql<string>`TO_CHAR(${orders.fulfilledAt}, 'YYYY-MM-DD')`,
+          day: sql<string>`TO_CHAR(${orders.approvedAt}, 'YYYY-MM-DD')`,
           ordersCount: sql<number>`COUNT(*)::int`,
           totalSales: sql<number>`SUM(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0))::int`,
         })
@@ -142,6 +146,7 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json(weeklySales)
     }
+
 
     // --- Base query (non-sales) ---
     const selectBase = db

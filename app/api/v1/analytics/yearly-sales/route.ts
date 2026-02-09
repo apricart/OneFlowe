@@ -67,23 +67,31 @@ export async function GET(req: NextRequest) {
   const nextYearStart = new Date(nextYearStartPK.getTime() - pakistanOffset)
 
   // Build conditions for yearly sales
-  // ONLY include FULFILLED orders with fulfilledAt date (exclude PENDING, REJECTED, REFUNDED, APPROVED)
+  // Count orders when APPROVED (GMV style), not when fulfilled
+  // Include APPROVED, FULFILLED, and REFUNDED orders for the selected year
+  // Use COALESCE to handle history where approvedAt is null
+  const dateField = sql`COALESCE(${orders.approvedAt}, ${orders.fulfilledAt}, ${orders.createdAt})`
+
   const yearConditions: any[] = [
-    sql`${orders.fulfilledAt} IS NOT NULL`,
-    gte(orders.fulfilledAt, yearStart),
-    lt(orders.fulfilledAt, nextYearStart),
+    sql`${dateField} IS NOT NULL`,
+    gte(dateField, yearStart),
+    lt(dateField, nextYearStart),
     or(
+      eq(orders.status, "APPROVED"),
+      eq(orders.status, "approved"),
       eq(orders.status, "FULFILLED"),
-      eq(orders.status, "fulfilled")
-    ), // Only FULFILLED status, not approved
+      eq(orders.status, "fulfilled"),
+      eq(orders.status, "REFUNDED"),
+      eq(orders.status, "refunded")
+    ),
   ]
 
-  // Apply organization filter (if not SUPER_ADMIN or if explicitly selected)
+  // Apply organization filter
   if (organizationId) {
     yearConditions.push(eq(orders.organizationId, organizationId))
   }
 
-  // Apply branch filter (if explicitly selected)
+  // Apply branch filter
   if (branchId) {
     yearConditions.push(eq(orders.branchId, branchId))
   }
@@ -93,14 +101,12 @@ export async function GET(req: NextRequest) {
     yearConditions.push(eq(branches.groupId, groupId))
   }
 
-  // Query monthly sales for the year based on fulfilledAt date
-  // Convert fulfilledAt to Pakistan timezone (Asia/Karachi, UTC+5) before extracting month
-  // This ensures orders fulfilled on Tuesday in Pakistan are counted in the correct month
-  // Calculate NET sales: totalCents - refundAmountCents (instead of excluding refunded orders)
+  // Query yearly sales broken down by month
+  // Convert dateField to Pakistan timezone (Asia/Karachi, UTC+5)
   const monthlySalesRows = await db
     .select({
-      monthNum: sql<number>`EXTRACT(MONTH FROM (${orders.fulfilledAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')::int`,
-      month: sql<string>`TO_CHAR((${orders.fulfilledAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'Mon')`,
+      monthNum: sql<number>`EXTRACT(MONTH FROM (${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')::int`,
+      month: sql<string>`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'Mon')`,
       totalCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`,
       orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
     })

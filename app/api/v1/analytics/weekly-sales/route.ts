@@ -91,16 +91,21 @@ export async function GET(req: NextRequest) {
   const { monday, sunday, nextMonday, mondayInPakistan } = getCurrentWeekRange()
 
   // Build conditions for weekly sales
-  // Only include APPROVED or FULFILLED orders (exclude PENDING, REJECTED, REFUNDED)
-  // Database stores in UTC, so we compare with UTC timestamps
+  // Count orders when APPROVED (GMV style), not when fulfilled
+  // Include APPROVED, FULFILLED, and REFUNDED orders
+  // Use COALESCE for historical data
+  const dateField = sql`COALESCE(${orders.approvedAt}, ${orders.fulfilledAt}, ${orders.createdAt})`
+
   const weekConditions: any[] = [
-    gte(orders.createdAt, monday),
-    lt(orders.createdAt, nextMonday),
+    gte(dateField, monday),
+    lt(dateField, nextMonday),
     or(
       eq(orders.status, "APPROVED"),
       eq(orders.status, "approved"),
       eq(orders.status, "FULFILLED"),
-      eq(orders.status, "fulfilled")
+      eq(orders.status, "fulfilled"),
+      eq(orders.status, "REFUNDED"),
+      eq(orders.status, "refunded")
     ),
   ]
 
@@ -119,24 +124,20 @@ export async function GET(req: NextRequest) {
     weekConditions.push(eq(branches.groupId, groupId))
   }
 
-  // Query daily sales for the current week
-  // Convert UTC timestamps to Pakistan timezone (Asia/Karachi, UTC+5) before extracting date
-  // This ensures orders created on Tuesday in Pakistan are grouped under Tuesday, not Monday
-  const dayExpr = sql`DATE((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')`
+  // Query weekly sales broken down by day
+  // Convert dateField to Pakistan timezone (Asia/Karachi, UTC+5)
+  // This ensures we group by the day it was approved in local time
   const weeklySalesRows = await db
     .select({
-      day: dayExpr,
+      day: sql<string>`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM-DD')`,
       totalCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`,
       orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
     })
     .from(orders)
     .leftJoin(branches, eq(orders.branchId, branches.id))
     .where(and(...(weekConditions as any)))
-    .groupBy(dayExpr)
-    .orderBy(dayExpr)
-
-  // Create a map of day -> sales
-  // PostgreSQL DATE returns as string in format YYYY-MM-DD (already in Pakistan timezone)
+    .groupBy(sql`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM-DD')`)
+    .orderBy(sql`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM-DD')`)
   const salesMap: Record<string, { sales: number; orderCount: number }> = {}
   for (const row of weeklySalesRows) {
     const dateValue = row.day as any

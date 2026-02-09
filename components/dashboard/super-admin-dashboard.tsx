@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useMemo, useState, useRef } from "react"
 import { useOrganizations, useBranches, useUsers } from "@/lib/hooks/use-api"
-import { useMonthlySales, useYearlySales, useDashboardAnalytics } from "@/lib/hooks/use-dashboard-analytics"
+import { useMonthlySales, useYearlySales, useDashboardAnalytics, useLifetimeStats } from "@/lib/hooks/use-dashboard-analytics"
 import { KpiCard } from "@/components/ui/kpi-card"
 import { Card, CardContent } from "@/components/ui/card"
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
@@ -57,6 +57,7 @@ export function SuperAdminDashboard() {
 
   const { data: dashboardData } = useDashboardAnalytics(organizationId, branchId, groupId)
   const branchData = dashboardData?.branchSeries ?? []
+  const { data: lifetimeStats } = useLifetimeStats(organizationId, branchId, groupId)
 
   // Close picker when clicking outside
   useEffect(() => {
@@ -242,14 +243,17 @@ export function SuperAdminDashboard() {
   const { data: todaysOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ from: startOfToday.toISOString() }), fetcher)
   const { data: approvedOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ status: "APPROVED" }), fetcher)
 
-  // Filter out PENDING, REJECTED, and REFUNDED orders from today's metrics
-  // Refunded orders (partial or full) are excluded entirely from GMV and order count
+  // Include APPROVED, FULFILLED, and REFUNDED orders in today's metrics
+  // Calculate net GMV by subtracting refunded amounts
   const validTodaysOrders = (todaysOrders?.items || []).filter(o =>
-    ['APPROVED', 'FULFILLED'].includes(o.status?.toUpperCase())
+    ['APPROVED', 'FULFILLED', 'REFUNDED'].includes(o.status?.toUpperCase())
   )
 
-  // Calculate GMV from non-refunded orders only
-  const todaysGMVCents = validTodaysOrders.reduce((sum, o) => sum + (o.totalCents || 0), 0)
+  // Calculate GMV with refunds deducted (works for both partial and full refunds)
+  const todaysGMVCents = validTodaysOrders.reduce((sum, o) => {
+    const netAmount = (o.totalCents || 0) - (o.refundAmountCents || 0)
+    return sum + netAmount
+  }, 0)
   const todaysGMV = formatPKR(todaysGMVCents / 100, { maximumFractionDigits: 0 })
   const approvedCount = approvedOrders?.items?.length || 0
 
@@ -315,14 +319,47 @@ export function SuperAdminDashboard() {
             gradient="from-blue-500 to-indigo-600"
             iconBg="text-blue-600 bg-blue-600"
           />
-
-
-
-
-
-
         </div>
       )}
+
+      {/* Lifetime Statistics - 4 Column Grid */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-slide-down">
+        <BankingKPICard
+          icon={Package}
+          title="Total Orders"
+          value={lifetimeStats?.totalOrders?.toLocaleString() || "0"}
+          subtitle="All time"
+          gradient="from-violet-500 to-purple-600"
+          iconBg="text-violet-600 bg-violet-600"
+        />
+
+        <BankingKPICard
+          icon={TrendingUp}
+          title="Fulfilled Orders"
+          value={lifetimeStats?.fulfilledOrders?.toLocaleString() || "0"}
+          subtitle="Successfully completed"
+          gradient="from-green-500 to-emerald-600"
+          iconBg="text-green-600 bg-green-600"
+        />
+
+        <BankingKPICard
+          icon={AlertCircle}
+          title="Refunded Orders"
+          value={lifetimeStats?.refundedOrders?.toLocaleString() || "0"}
+          subtitle="Full refunds"
+          gradient="from-orange-500 to-amber-600"
+          iconBg="text-orange-600 bg-orange-600"
+        />
+
+        <BankingKPICard
+          icon={Wallet}
+          title="Total Revenue"
+          value={formatPKR(lifetimeStats?.totalRevenue || 0, { maximumFractionDigits: 0 })}
+          subtitle="After refunds • All years"
+          gradient="from-indigo-500 to-blue-600"
+          iconBg="text-indigo-600 bg-indigo-600"
+        />
+      </div>
 
       {/* Main Analytics Grid - Yearly & Weekly */}
       <div className="grid gap-6 lg:grid-cols-2">

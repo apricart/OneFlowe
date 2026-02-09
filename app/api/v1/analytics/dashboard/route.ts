@@ -18,7 +18,7 @@ function getOrderConditions(role: Role | undefined, organizationId: number | nul
   const conditions = [gte(orders.createdAt, fromDate)]
 
   if (role === "SUPER_ADMIN") {
-    conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED')`)
+    conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'REFUNDED')`)
   }
 
   if (role !== "SUPER_ADMIN" && organizationId) {

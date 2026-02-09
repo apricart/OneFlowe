@@ -173,3 +173,39 @@ export function useMonthlySales(organizationId?: string | null, branchId?: strin
   })
 }
 
+export type LifetimeStatsResponse = {
+  totalOrders: number
+  fulfilledOrders: number
+  refundedOrders: number
+  totalRevenue: number // Net revenue after refunds in PKR
+  grossRevenue: number // Before refunds in PKR
+  totalRefunded: number // Total refunded amount in PKR
+}
+
+export function useLifetimeStats(organizationId?: string | null, branchId?: string | null, groupId?: string | null) {
+  const url = useMemo(() => {
+    const baseUrl = "/api/v1/analytics/lifetime-stats"
+    const params = new URLSearchParams()
+
+    if (organizationId && organizationId !== "null" && organizationId !== "0") {
+      params.set("organizationId", organizationId)
+    }
+
+    if (branchId && branchId !== "null" && branchId !== "0") {
+      params.set("branchId", branchId)
+    }
+
+    if (groupId && groupId !== "all") {
+      params.set("groupId", groupId)
+    }
+
+    const queryString = params.toString()
+    return queryString ? `${baseUrl}?${queryString}` : baseUrl
+  }, [organizationId, branchId, groupId])
+
+  return useSWR<LifetimeStatsResponse>(url, fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: true,
+    refreshInterval: 300000, // Refresh every 5 minutes
+  })
+}
