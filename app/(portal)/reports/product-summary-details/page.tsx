@@ -115,36 +115,6 @@ export default function ProductSummaryDetailsReportPage() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Item Revenue</CardTitle>
-            <span className="text-indigo-500">💰</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : formatPKR(totalRevenue / 100)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Items Processed</CardTitle>
-            <span className="text-muted-foreground">📦</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : totalItems.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
-            <span className="text-muted-foreground">🧾</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : filteredDetails.length.toLocaleString()}</div>
-          </CardContent>
-        </Card>
-      </div>
-
       <ReportFilters
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}

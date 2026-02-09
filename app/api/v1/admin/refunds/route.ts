@@ -383,12 +383,14 @@ export async function POST(req: NextRequest) {
         await db.transaction(async (tx) => {
             const newRefundTotal = alreadyRefunded + totalRefundAmount
             const isFullRefund = newRefundTotal >= orderTotal
+            const refundType = isFullRefund ? "FULL" : "PARTIAL"
 
-            // 1. Update order with refund info (DON'T change status to REFUNDED)
+            // 1. Update order with refund info
             await tx
                 .update(orders)
                 .set({
-                    // Keep original status - track refunds in separate fields
+                    // Change status to REFUNDED if this is a full refund
+                    status: isFullRefund ? "REFUNDED" : currentStatus,
                     statusAtRefund: currentStatus,
                     refundedAt: new Date(),
                     refundedByUserId: userId,
@@ -411,20 +413,16 @@ export async function POST(req: NextRequest) {
                 .limit(1)
 
             if (budget) {
-                // Credit by reducing the spent amount AND incrementing credited amount
-                const currentSpent = budget.amountSpentCents || 0
-                const newSpentAmount = Math.max(0, currentSpent - totalRefundAmount)
-
+                // Credit refund amount back to budget (increases available funds)
                 await tx
                     .update(budgets)
                     .set({
-                        amountSpentCents: newSpentAmount,
                         amountCreditedCents: sql`${budgets.amountCreditedCents} + ${totalRefundAmount}`,
                         updatedAt: new Date(),
                     })
                     .where(eq(budgets.id, budget.id))
 
-                console.log(`[Refunds] Budget updated: ${totalRefundAmount} cents credited back. Spent: ${currentSpent} -> ${newSpentAmount}, branch ${orderData.branchId}, period ${currentMonth}`)
+                console.log(`[Refunds] Budget credited: ${totalRefundAmount} cents added to amountCreditedCents, branch ${orderData.branchId}, period ${currentMonth}`)
             } else {
                 console.warn(`[Refunds] No budget found for branch ${orderData.branchId}, period ${currentMonth}. Refund credit skipped.`)
             }
@@ -457,6 +455,7 @@ export async function POST(req: NextRequest) {
                 amountCents: totalRefundAmount,
                 reason: reason?.trim() || null,
                 status: "APPROVED",
+                refundType,
                 processedByUserId: userId,
             }).returning({ id: refunds.id })
 

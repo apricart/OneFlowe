@@ -152,28 +152,6 @@ export default function SalesSummaryReportPage() {
         </div>
       )}
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
-        {[
-          { label: role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue", value: formatPKR((summary.totalSales || 0) / 100), icon: "💰", color: "text-emerald-600" },
-          { label: "Total Tax", value: formatPKR((summary.totalTax || 0) / 100), icon: "🏦", color: "text-blue-600" },
-          { label: "Orders", value: summary.orderCount, icon: "📦", color: "text-orange-600" },
-          { label: "Avg Order Value", value: formatPKR((summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) : 0) / 100), icon: "📊", color: "text-indigo-600" }
-        ].map((card, idx) => (
-          <Card key={idx} className="border-none shadow-sm bg-white dark:bg-slate-900">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-500">{card.label}</CardTitle>
-              <span className="text-lg">{card.icon}</span>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-black ${card.color}`}>
-                {isLoading ? "..." : card.value}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       <ReportFilters
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}

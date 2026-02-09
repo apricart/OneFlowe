@@ -67,6 +67,7 @@ export default function OrdersManagementPage() {
 
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [refundFilter, setRefundFilter] = useState<string>("all")
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null)
   const [showApprovalDialog, setShowApprovalDialog] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
@@ -80,6 +81,10 @@ export default function OrdersManagementPage() {
   // Fulfillment token state (Super Admin must enter to fulfill)
   const [showFulfillDialog, setShowFulfillDialog] = useState(false)
   const [fulfillToken, setFulfillToken] = useState("")
+
+  // Error dialog state
+  const [showErrorDialog, setShowErrorDialog] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
 
   // Build orders endpoint with context parameters
   const ordersEndpoint = useMemo(() => {
@@ -106,6 +111,20 @@ export default function OrdersManagementPage() {
       filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === statusFilter)
     }
 
+    if (refundFilter !== "all") {
+      if (refundFilter === "full") {
+        filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === "refunded")
+      } else if (refundFilter === "partial") {
+        filtered = filtered.filter((o: OrderItem) =>
+          o.refundAmountCents && o.refundAmountCents > 0 && o.status.toLowerCase() !== "refunded"
+        )
+      } else if (refundFilter === "none") {
+        filtered = filtered.filter((o: OrderItem) =>
+          !o.refundAmountCents || o.refundAmountCents === 0
+        )
+      }
+    }
+
     if (searchQuery) {
       filtered = filtered.filter((o: OrderItem) =>
         o.tid.includes(searchQuery) ||
@@ -116,7 +135,7 @@ export default function OrdersManagementPage() {
     return filtered.sort((a: OrderItem, b: OrderItem) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
-  }, [orders, statusFilter, searchQuery])
+  }, [orders, statusFilter, refundFilter, searchQuery])
 
   // Approve order
   const handleApproveOrder = async (orderId: number) => {
@@ -193,7 +212,8 @@ export default function OrdersManagementPage() {
   // Fulfill order (requires approval token)
   const handleFulfillOrder = async (orderId: number) => {
     if (!fulfillToken.trim()) {
-      toast({ title: "Error", description: "Please enter the approval token", variant: "destructive" })
+      setErrorMessage("Please enter the approval token to fulfill this order")
+      setShowErrorDialog(true)
       return
     }
 
@@ -209,18 +229,26 @@ export default function OrdersManagementPage() {
         })
       })
 
+      const data = await res.json()
+
       if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to fulfill order")
+        setErrorMessage(data.error || "Invalid approval token. Please verify the token and try again.")
+        setShowErrorDialog(true)
+        return
       }
 
-      toast({ title: "Success", description: "Order fulfilled successfully" })
+      toast({
+        title: "✅ Order Fulfilled",
+        description: "The order has been successfully fulfilled",
+        duration: 4000
+      })
       mutateOrders()
       setSelectedOrder(null)
       setShowFulfillDialog(false)
       setFulfillToken("")
     } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+      setErrorMessage(error.message || "Failed to fulfill order. Please try again.")
+      setShowErrorDialog(true)
     } finally {
       setIsProcessing(false)
     }
@@ -388,6 +416,21 @@ export default function OrdersManagementPage() {
             ))}
             <OrderExport orders={filteredOrders} role={userRole} />
           </div>
+
+          <div className="flex gap-2 flex-wrap items-center">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Refund:</span>
+            {["all", "none", "partial", "full"].map((refund) => (
+              <Button
+                key={refund}
+                onClick={() => setRefundFilter(refund)}
+                variant={refundFilter === refund ? "default" : "outline"}
+                size="sm"
+                className="capitalize"
+              >
+                {refund}
+              </Button>
+            ))}
+          </div>
         </div>
       </Card>
 
@@ -403,15 +446,17 @@ export default function OrdersManagementPage() {
             <table className="w-full bg-white dark:bg-slate-900">
               <thead className="border-b bg-slate-50 dark:bg-slate-900 dark:border-slate-800">
                 <tr className="bg-slate-50 dark:bg-slate-900">
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">TID</th>
+                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">TID</th>
                   {isSuperAdmin && (
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Organization</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Org</th>
                   )}
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Branch</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Status</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Amount</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Date</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Actions</th>
+                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Branch</th>
+                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Stage</th>
+                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Status</th>
+                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Refund</th>
+                  <th className="px-2 py-2 text-right text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Amount</th>
+                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Date</th>
+                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-900">
@@ -421,50 +466,55 @@ export default function OrdersManagementPage() {
 
                   return (
                     <tr key={order.id} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="px-4 py-3 bg-white dark:bg-slate-900">
+                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
                         <div>
-                          <p className="font-semibold text-slate-900 dark:text-white">{order.tid}</p>
-                          <p className="text-xs text-muted-foreground">ID: {order.id}</p>
+                          <p className="text-xs font-semibold text-slate-900 dark:text-white">{order.tid}</p>
+                          <p className="text-[10px] text-muted-foreground">#{order.id}</p>
                         </div>
                       </td>
-                      <td className="px-4 py-3 bg-white dark:bg-slate-900">
-                        {isSuperAdmin && (
-                          <p className="text-sm text-slate-700 dark:text-slate-300 font-medium mb-1">
-                            {order.organizationName || `Org #${order.organizationId}`}
+                      {isSuperAdmin && (
+                        <td className="px-2 py-2 bg-white dark:bg-slate-900">
+                          <p className="text-xs text-slate-700 dark:text-slate-300">
+                            {order.organizationName || `#${order.organizationId}`}
                           </p>
-                        )}
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {order.branchName || `Branch #${order.branchId}`}
+                        </td>
+                      )}
+                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
+                        <p className="text-xs text-slate-700 dark:text-slate-300">
+                          {order.branchName || `#${order.branchId}`}
                         </p>
                       </td>
-                      <td className="px-4 py-3 bg-white dark:bg-slate-900">
-                        {order.status.toLowerCase() === "refunded" && order.statusAtRefund ? (
-                          <div className="flex flex-col gap-1">
-                            <Badge variant="outline" className="bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 border-0 w-fit">
-                              <TrendingDown className="h-3 w-3 mr-1" />
-                              REFUNDED
-                            </Badge>
-                            <Badge variant="outline" className="text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-600 w-fit">
-                              Was: {order.statusAtRefund}
-                            </Badge>
-                          </div>
-                        ) : (order.refundAmountCents && order.refundAmountCents > 0) ? (
-                          <div className="flex flex-col gap-1">
-                            <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0 w-fit`}>
-                              <StatusIcon className="h-3 w-3 mr-1" />
-                              {order.status}
-                            </Badge>
-                            <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-600 w-fit">
-                              <TrendingDown className="h-3 w-3 mr-1" />
-                              Partially Refunded
-                            </Badge>
-                          </div>
-                        ) : (
-                          <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
-                            <StatusIcon className="h-3 w-3 mr-1" />
-                            {order.status}
+                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
+                        {order.status.toLowerCase() === "refunded" ? (
+                          <Badge variant="outline" className="bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 border-0 text-[10px] px-1.5 py-0.5">
+                            REFUNDED
                           </Badge>
+                        ) : order.status.toLowerCase() === "fulfilled" ? (
+                          <Badge variant="outline" className="bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border-0 text-[10px] px-1.5 py-0.5">
+                            FULFILLED
+                          </Badge>
+                        ) : order.status.toLowerCase() === "approved" ? (
+                          <Badge variant="outline" className="bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-slate-200 border-0 text-[10px] px-1.5 py-0.5">
+                            APPROVED
+                          </Badge>
+                        ) : order.status.toLowerCase() === "pending" ? (
+                          <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-0 text-[10px] px-1.5 py-0.5">
+                            PENDING
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-0 text-[10px] px-1.5 py-0.5">
+                            REJECTED
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
+                        <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0 text-[10px] px-1.5 py-0.5`}>
+                          {order.status.toUpperCase()}
+                        </Badge>
+                        {order.status.toLowerCase() === 'refunded' && order.statusAtRefund && (
+                          <p className="text-[9px] text-slate-500 dark:text-slate-500 mt-0.5">
+                            Was: {order.statusAtRefund.toUpperCase()}
+                          </p>
                         )}
                         {(order.status.toLowerCase() === 'rejected' || order.status === 'REJECTED') && order.rejectionReason && (
                           <div className="mt-1 text-[10px] text-red-600 dark:text-red-400 max-w-[150px] leading-tight">
@@ -472,15 +522,28 @@ export default function OrdersManagementPage() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 bg-white dark:bg-slate-900">
-                        <p className="font-bold text-slate-900 dark:text-white">
+                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
+                        {order.status.toLowerCase() === "refunded" ? (
+                          <Badge variant="outline" className="bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-0 text-[10px] px-1.5 py-0.5">
+                            FULL
+                          </Badge>
+                        ) : (order.refundAmountCents && order.refundAmountCents > 0) ? (
+                          <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-0 text-[10px] px-1.5 py-0.5">
+                            PARTIAL
+                          </Badge>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-right bg-white dark:bg-slate-900">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white">
                           {formatPKR(order.totalCents / 100)}
                         </p>
                       </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground bg-white dark:bg-slate-900">
-                        {new Date(order.createdAt).toLocaleDateString()}
+                      <td className="px-2 py-2 text-[10px] text-muted-foreground bg-white dark:bg-slate-900">
+                        {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}
                       </td>
-                      <td className="px-4 py-3 bg-white dark:bg-slate-900">
+                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
                         <div className="flex items-center gap-2">
                           <Button
                             asChild
@@ -493,17 +556,6 @@ export default function OrdersManagementPage() {
                               View
                             </Link>
                           </Button>
-
-                          {isSuperAdmin && order.status.toLowerCase() === "fulfilled" && (order.hasRefundRequests || 0) > 0 && (
-                            <Button
-                              onClick={() => router.push(`/orders/${order.id}/refunds`)}
-                              size="sm"
-                              className="gap-1 bg-indigo-600 hover:bg-indigo-700 text-white"
-                            >
-                              <Receipt className="h-4 w-4" />
-                              Refunds {(order.hasRefundRequests || 0) > 0 && `(${order.hasRefundRequests})`}
-                            </Button>
-                          )}
 
                           {order.status.toLowerCase() === "pending" && isBranchAdmin && (
                             <>
@@ -768,6 +820,35 @@ export default function OrdersManagementPage() {
               className="bg-green-600 hover:bg-green-700"
             >
               Fulfill Order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Professional Error Dialog */}
+      <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+        <DialogContent className="max-w-md border-0 shadow-2xl bg-white dark:bg-slate-900">
+          <DialogHeader className="text-center pb-2">
+            <div className="mx-auto w-16 h-16 rounded-full bg-amber-50 dark:bg-amber-950 flex items-center justify-center mb-4">
+              <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+            </div>
+            <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+              Attention Required
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4">
+            <p className="text-center text-slate-600 dark:text-slate-400 leading-relaxed">
+              {errorMessage}
+            </p>
+          </div>
+
+          <DialogFooter className="sm:justify-center">
+            <Button
+              onClick={() => setShowErrorDialog(false)}
+              className="w-full sm:w-auto px-8 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 dark:text-slate-900"
+            >
+              Understood
             </Button>
           </DialogFooter>
         </DialogContent>

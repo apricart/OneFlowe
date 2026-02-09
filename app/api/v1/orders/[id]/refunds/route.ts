@@ -247,6 +247,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await db.transaction(async (tx) => {
       let refundId: number;
 
+      // Check if this is a full refund
+      const newTotalRefunded = totalRefundedAmount + totalRefundAmount
+      const isFullRefund = newTotalRefunded >= orderData.totalCents
+      const refundType = isFullRefund ? "FULL" : "PARTIAL"
+
       if (userRole === "SUPER_ADMIN") {
         // Super Admin: approve/process refund and adjust budgets
         const [insertedRefund] = await tx.insert(refunds).values({
@@ -255,6 +260,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           amountCents: totalRefundAmount,
           reason: reason?.trim() || null,
           status: "APPROVED",
+          refundType,
           processedByUserId: userId,
         }).returning({ id: refunds.id })
 
@@ -278,22 +284,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             .where(eq(budgets.id, budget.id))
         }
 
-        // Update order refund amount
+        // Update order refund amount and preserve original status
         await tx
           .update(orders)
           .set({
             refundAmountCents: sql`COALESCE(${orders.refundAmountCents}, 0) + ${totalRefundAmount}`,
+            statusAtRefund: orderStatus, // Preserve original order status
+            refundedAt: new Date(),
+            refundedByUserId: userId,
+            // Change status to REFUNDED only if this is a full refund
+            status: isFullRefund ? "REFUNDED" : orderStatus,
             updatedAt: new Date()
           })
           .where(eq(orders.id, orderId))
 
-        // Check if fully refunded
-        const newTotalRefunded = totalRefundedAmount + totalRefundAmount
-        const isFullRefund = newTotalRefunded >= orderData.totalCents
-
-        // DON'T change order status - keep it as FULFILLED/APPROVED
-        // Refunds will be tracked via refundAmountCents field
-        // (No order status update needed)
+        // statusAtRefund preserves what the status was before any refund
+        // status will be REFUNDED for full refunds, or remain APPROVED/FULFILLED for partial
 
         await tx.insert(auditLogs).values({
           userId,
@@ -317,6 +323,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           amountCents: totalRefundAmount,
           reason: reason?.trim() || null,
           status: "PENDING",
+          refundType, // Set refund type even for pending requests
           requestedByUserId: userId,
         }).returning({ id: refunds.id })
 

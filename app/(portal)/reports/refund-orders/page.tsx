@@ -117,38 +117,6 @@ export default function RefundOrdersReportPage() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Refunded</CardTitle>
-            <span className="text-red-500">📉</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{isLoading ? "..." : formatPKR(totalRefunded / 100)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Refund Count</CardTitle>
-            <span className="text-muted-foreground">🔄</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{isLoading ? "..." : filteredRefunds.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Refund Value</CardTitle>
-            <span className="text-muted-foreground">📊</span>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {isLoading ? "..." : formatPKR((filteredRefunds.length > 0 ? (totalRefunded / filteredRefunds.length) : 0) / 100)}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       <ReportFilters
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
@@ -211,7 +179,7 @@ export default function RefundOrdersReportPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right text-xs">{formatPKR(refund.orderTotal / 100)}</TableCell>
-                  <TableCell className="text-right text-xs font-bold text-red-600">-{formatPKR(refund.refundAmount / 100)}</TableCell>
+                  <TableCell className="text-right text-xs font-bold text-red-600">{formatPKR(refund.refundAmount / 100)}</TableCell>
                   <TableCell className="text-xs max-w-[200px] truncate">{refund.reason || "-"}</TableCell>
                 </TableRow>
               ))

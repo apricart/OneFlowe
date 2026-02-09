@@ -88,6 +88,9 @@ export function RefundManagement({
         .filter((r: any) => r.status !== 'REJECTED')
         .reduce((sum: number, r: any) => sum + (r.amountCents || 0), 0)
 
+    const fullRefundCount = effectiveRefunds.filter((r: any) => r.refundType === 'FULL' && r.status !== 'REJECTED').length
+    const partialRefundCount = effectiveRefunds.filter((r: any) => r.refundType === 'PARTIAL' && r.status !== 'REJECTED').length
+
     const remainingRefundable = Math.max(0, orderTotalCents - totalRefunded)
     const isFullyRefunded = remainingRefundable === 0
     const hasPendingRefunds = effectiveRefunds.some((r: any) => r.status === 'PENDING')
@@ -228,6 +231,16 @@ export function RefundManagement({
                         </div>
                     )}
                 </div>
+
+                {/* Refund summary stats */}
+                {effectiveRefunds.length > 0 && (
+                    <div className="text-xs text-muted-foreground flex gap-3">
+                        <span>{effectiveRefunds.length} refund{effectiveRefunds.length !== 1 ? 's' : ''}</span>
+                        {fullRefundCount > 0 && <span>• {fullRefundCount} full</span>}
+                        {partialRefundCount > 0 && <span>• {partialRefundCount} partial</span>}
+                        <span>• PKR {(totalRefunded / 100).toFixed(2)} total</span>
+                    </div>
+                )}
             </div>
 
             {/* Refund window explanation */}
@@ -408,33 +421,42 @@ export function RefundManagement({
                                         </p>
                                     </div>
                                 </div>
-                                <Badge variant="outline" className={
-                                    refund.status === 'APPROVED' ? 'text-green-600 border-green-200' :
-                                        refund.status === 'REJECTED' ? 'text-red-600 border-red-200' :
-                                            'text-yellow-600 border-yellow-200'
-                                }>
-                                    {refund.status}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className={
+                                        refund.status === 'APPROVED' ? 'text-green-600 border-green-200' :
+                                            refund.status === 'REJECTED' ? 'text-red-600 border-red-200' :
+                                                'text-yellow-600 border-yellow-200'
+                                    }>
+                                        {refund.status}
+                                    </Badge>
+                                    {refund.refundType && (
+                                        <Badge variant="secondary" className="text-xs">
+                                            {refund.refundType === 'FULL' ? 'Full Refund' : 'Partial Refund'}
+                                        </Badge>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Detailed items list for this refund */}
-                            {refund.items && refund.items.length > 0 && (
-                                <div className="pl-12 text-sm">
-                                    <p className="text-xs font-medium text-muted-foreground mb-1">Refunded Items:</p>
-                                    <ul className="space-y-1">
-                                        {refund.items.map((item: any) => (
-                                            <li key={item.orderItemId} className="flex justify-between text-xs bg-white dark:bg-slate-900 p-2 rounded border">
-                                                <span>{item.quantity}x {item.productName} ({item.unit})</span>
-                                                <span className="font-medium">PKR {(item.amountCents / 100).toFixed(2)}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
+                            {
+                                refund.items && refund.items.length > 0 && (
+                                    <div className="pl-12 text-sm">
+                                        <p className="text-xs font-medium text-muted-foreground mb-1">Refunded Items:</p>
+                                        <ul className="space-y-1">
+                                            {refund.items.map((item: any) => (
+                                                <li key={item.orderItemId} className="flex justify-between text-xs bg-white dark:bg-slate-900 p-2 rounded border">
+                                                    <span>{item.quantity}x {item.productName} ({item.unit})</span>
+                                                    <span className="font-medium">PKR {(item.amountCents / 100).toFixed(2)}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )
+                            }
                         </div>
                     ))
                 )}
             </div>
-        </div>
+        </div >
     )
 }

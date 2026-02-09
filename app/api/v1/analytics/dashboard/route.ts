@@ -104,7 +104,7 @@ export async function GET(req: NextRequest) {
     const branchSelect = db.select({
       id: branches.id,
       name: branches.name,
-      orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
+      orderCount: sql<number>`coalesce(count(CASE WHEN COALESCE(${orders.refundAmountCents}, 0) < ${orders.totalCents} THEN ${orders.id} END), 0)`,
     }).from(branches)
 
     const branchSelectWithFilters = branchFilters.length
@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
       .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))
-      .where(and(...(monthConditions as any)))
+      .where(and(...(monthConditions as any), sql`COALESCE(${orders.refundAmountCents}, 0) < ${orders.totalCents}`))
 
     const ordersThisMonth = Number(((ordersMonthRow as any)[0]?.count) || 0)
 

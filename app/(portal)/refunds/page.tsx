@@ -20,6 +20,8 @@ type OrderItem = {
     quantity: number
     priceCents: number
     unit: string
+    refundedQuantity?: number // Added by API
+    remainingQuantity?: number // Added by API
 }
 
 type OrderData = {
@@ -39,6 +41,7 @@ type OrderData = {
     refundAmountCents: number | null
     createdByUserName: string
     items: OrderItem[]
+    refundedQuantities?: Record<number, number> // Refunded quantities per order item ID
 }
 
 import { useSearchParams } from "next/navigation"
@@ -142,12 +145,20 @@ export default function RefundsPage() {
     const handleSelectAll = () => {
         if (!order) return
 
-        if (selectedItems.size === order.items.length) {
+        const refundedQtys = order.refundedQuantities || {}
+        const refundableItems = order.items.filter(item => {
+            const alreadyRefunded = refundedQtys[item.id] || 0
+            return item.quantity > alreadyRefunded
+        })
+
+        if (selectedItems.size === refundableItems.length) {
             setSelectedItems(new Map())
         } else {
             const newMap = new Map<number, number>()
-            order.items.forEach(item => {
-                newMap.set(item.id, item.quantity)
+            refundableItems.forEach(item => {
+                const alreadyRefunded = refundedQtys[item.id] || 0
+                const remainingQty = item.quantity - alreadyRefunded
+                newMap.set(item.id, remainingQty)
             })
             setSelectedItems(newMap)
         }
@@ -167,7 +178,12 @@ export default function RefundsPage() {
 
     const openRefundDialog = () => {
         if (selectedItems.size === 0) {
-            toast({ title: "Error", description: "Please select at least one item to refund", variant: "destructive" })
+            toast({
+                title: "⚠️ No Items Selected",
+                description: "Please select at least one item to refund",
+                variant: "destructive",
+                duration: 3000
+            })
             return
         }
         setRefundReason("")
@@ -197,13 +213,20 @@ export default function RefundsPage() {
             const data = await response.json()
 
             if (!response.ok) {
-                toast({ title: "Refund Failed", description: data.error, variant: "destructive" })
+                // Show detailed error message from backend
+                toast({
+                    title: "Refund Failed",
+                    description: data.error || "Failed to process refund. Please try again.",
+                    variant: "destructive",
+                    duration: 5000
+                })
                 return
             }
 
             toast({
-                title: "Refund Processed",
-                description: `Successfully refunded PKR ${(refundAmountCents / 100).toFixed(2)}`,
+                title: "✅ Refund Processed Successfully",
+                description: `Refunded PKR ${(refundAmountCents / 100).toFixed(2)} for ${selectedItems.size} item(s)`,
+                duration: 4000
             })
 
             setRefundDialogOpen(false)
@@ -211,7 +234,12 @@ export default function RefundsPage() {
             searchOrder()
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Failed to process refund"
-            toast({ title: "Error", description: message, variant: "destructive" })
+            toast({
+                title: "❌ Error",
+                description: message,
+                variant: "destructive",
+                duration: 5000
+            })
         } finally {
             setProcessing(false)
         }
@@ -396,22 +424,36 @@ export default function RefundsPage() {
                                     </TableHeader>
                                     <TableBody>
                                         {order.items.map((item) => {
+                                            const refundedQty = (order.refundedQuantities && order.refundedQuantities[item.id]) || 0
+                                            const remainingQty = Math.max(0, item.quantity - refundedQty)
+                                            const isFullyRefunded = remainingQty === 0
+
                                             const isSelected = selectedItems.has(item.id)
-                                            const refundQty = selectedItems.get(item.id) || item.quantity
+                                            const refundQty = selectedItems.get(item.id) || remainingQty
                                             const lineTotal = isSelected ? item.priceCents * refundQty : 0
 
                                             return (
                                                 <TableRow
                                                     key={item.id}
-                                                    className={isSelected ? "bg-red-50 dark:bg-red-950/20" : ""}
+                                                    className={isSelected ? "bg-red-50 dark:bg-red-950/20" : isFullyRefunded ? "opacity-50" : ""}
                                                 >
                                                     <TableCell>
                                                         <Checkbox
                                                             checked={isSelected}
-                                                            onCheckedChange={() => handleItemToggle(item.id, item.quantity)}
+                                                            onCheckedChange={() => handleItemToggle(item.id, remainingQty)}
+                                                            disabled={isFullyRefunded}
                                                         />
                                                     </TableCell>
-                                                    <TableCell className="font-medium">{item.productName}</TableCell>
+                                                    <TableCell className="font-medium">
+                                                        <div>
+                                                            {item.productName}
+                                                            {refundedQty > 0 && (
+                                                                <span className="text-xs text-amber-600 block mt-1">
+                                                                    ({refundedQty} already refunded)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
                                                     <TableCell>
                                                         <Badge variant="outline">{item.productCode}</Badge>
                                                     </TableCell>
@@ -419,19 +461,21 @@ export default function RefundsPage() {
                                                         PKR {(item.priceCents / 100).toFixed(2)}
                                                     </TableCell>
                                                     <TableCell className="text-right">
-                                                        {item.quantity} {item.unit}
+                                                        {remainingQty} {item.unit}
                                                     </TableCell>
                                                     <TableCell className="text-right">
                                                         {isSelected ? (
                                                             <Input
                                                                 type="number"
                                                                 min="1"
-                                                                max={item.quantity}
+                                                                max={remainingQty}
                                                                 value={refundQty}
-                                                                onChange={(e) => handleQuantityChange(item.id, e.target.value, item.quantity)}
+                                                                onChange={(e) => handleQuantityChange(item.id, e.target.value, remainingQty)}
                                                                 className="w-20 h-8 text-right"
                                                                 onClick={(e) => e.stopPropagation()}
                                                             />
+                                                        ) : isFullyRefunded ? (
+                                                            <Badge variant="secondary" className="text-xs">Fully Refunded</Badge>
                                                         ) : (
                                                             <span className="text-muted-foreground">-</span>
                                                         )}
