@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items })
   } catch (error: any) {
     console.error("Error fetching branch products:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -93,6 +93,12 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    // RBAC: Only SUPER_ADMIN, HEAD_OFFICE, and BRANCH_ADMIN can update branch products
+    const userRole = (session.user as any).role
+    if (userRole !== "SUPER_ADMIN" && userRole !== "HEAD_OFFICE" && userRole !== "BRANCH_ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
     const body = await req.json()
     const { branchProductId, isAvailable, customNotes } = body
 
@@ -100,7 +106,23 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Branch product ID is required" }, { status: 400 })
     }
 
-    // Update branch product
+    const userOrgId = (session.user as any).organizationId
+    const userBranchId = (session.user as any).branchId
+
+    // Build ownership-scoped where clause
+    const conditions = [eq(branchProducts.id, branchProductId)]
+
+    // BOLA: Non-Super-Admin users must own the resource
+    if (userRole === "HEAD_OFFICE") {
+      if (!userOrgId) return NextResponse.json({ error: "Organization context required" }, { status: 400 })
+      conditions.push(eq(branchProducts.organizationId, Number(userOrgId)))
+    } else if (userRole === "BRANCH_ADMIN") {
+      if (!userOrgId || !userBranchId) return NextResponse.json({ error: "Organization and branch context required" }, { status: 400 })
+      conditions.push(eq(branchProducts.organizationId, Number(userOrgId)))
+      conditions.push(eq(branchProducts.branchId, Number(userBranchId)))
+    }
+
+    // Update branch product with ownership check in WHERE clause
     const [updated] = await db.update(branchProducts)
       .set({
         ...(isAvailable !== undefined && { isAvailable }),
@@ -108,8 +130,12 @@ export async function PUT(req: NextRequest) {
         updatedByUserId: (session.user as any).id,
         updatedAt: new Date()
       })
-      .where(eq(branchProducts.id, branchProductId))
+      .where(and(...conditions))
       .returning()
+
+    if (!updated) {
+      return NextResponse.json({ error: "Branch product not found or access denied" }, { status: 404 })
+    }
 
     // Log audit
     await db.insert(auditLogs).values({
@@ -125,7 +151,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ product: updated })
   } catch (error: any) {
     console.error("Error updating branch product:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 

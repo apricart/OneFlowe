@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthSessionProvider } from '@/components/session-provider'
 import { Toaster } from '@/components/ui/toaster'
 import { ThemeProvider } from '@/components/theme-provider'
+import { SWRProvider } from '@/components/swr-provider'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -49,12 +50,14 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
+      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
         <ThemeProvider>
           <AuthSessionProvider>
-            {children}
-            <Toaster />
-            <Analytics />
+            <SWRProvider>
+              {children}
+              <Toaster />
+              <Analytics />
+            </SWRProvider>
           </AuthSessionProvider>
         </ThemeProvider>
       </body>

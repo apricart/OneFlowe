@@ -48,16 +48,24 @@ export async function GET(req: NextRequest) {
   let branchId: number | null = null
   let groupId: number | null = null
 
-  if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") {
-    organizationId = Number(orgIdParam)
-  } else if (role !== "SUPER_ADMIN" && scope?.organizationId) {
-    organizationId = scope.organizationId
-  }
-
-  if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
-    branchId = Number(branchIdParam)
-  } else if (role === "BRANCH_ADMIN" && scope?.branchId) {
-    branchId = scope.branchId
+  // BOLA: BRANCH_ADMIN must always use session values, never query params
+  if (role === "BRANCH_ADMIN") {
+    organizationId = scope?.organizationId ?? null
+    branchId = scope?.branchId ?? null
+  } else if (role === "HEAD_OFFICE") {
+    // HEAD_OFFICE is scoped to their org, but can filter by branch
+    organizationId = scope?.organizationId ?? null
+    if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
+      branchId = Number(branchIdParam)
+    }
+  } else {
+    // SUPER_ADMIN can use query params freely
+    if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") {
+      organizationId = Number(orgIdParam)
+    }
+    if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
+      branchId = Number(branchIdParam)
+    }
   }
 
   if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") {

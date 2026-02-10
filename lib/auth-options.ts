@@ -8,7 +8,7 @@ import { checkMfaCooldown, verifyOTP, clearDailyCount } from "@/lib/mfa"
 import { compare } from "bcryptjs"
 
 export const authOptions: NextAuthOptions = {
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 8 * 60 * 60 },  // 8-hour expiry (bank-grade)
   providers: [
     Credentials({
       name: "credentials",
@@ -194,7 +194,6 @@ export const authOptions: NextAuthOptions = {
         const email = String(credentials?.email || "").toLowerCase()
         const password = String(credentials?.password || "")
         if (!email || !password) {
-          console.log("❌ Employee login: missing email or password")
           return null
         }
 
@@ -204,15 +203,13 @@ export const authOptions: NextAuthOptions = {
           .where(and(eq(employeeCredentials.email, email), eq(employeeCredentials.isActive, true)))
 
         if (!emp) {
-          console.log(`❌ Employee login: no active employee found for ${email}`)
           return null
         }
 
-        console.log(`✓ Employee found: ${emp.email}`)
+
 
         const passwordMatch = await compare(password, emp.passwordHash)
         if (!passwordMatch) {
-          console.log(`❌ Employee login: password mismatch for ${email}`)
           return null
         }
 
@@ -225,7 +222,6 @@ export const authOptions: NextAuthOptions = {
             .limit(1)
 
           if (!org || org.status !== 'active') {
-            console.log(`❌ Employee login: organization inactive for ${email}`)
             throw new Error('ORGANIZATION_INACTIVE')
           }
         }
@@ -239,26 +235,22 @@ export const authOptions: NextAuthOptions = {
             .limit(1)
 
           if (!branch || branch.status !== 'active') {
-            console.log(`❌ Employee login: branch inactive for ${email}`)
             throw new Error('BRANCH_INACTIVE')
           }
         }
 
         // Check employee status (already filtered by isActive in WHERE, but explicit check for clarity)
         if (!emp.isActive) {
-          console.log(`❌ Employee login: employee account inactive for ${email}`)
           throw new Error('USER_INACTIVE')
         }
 
-        console.log(`✓ Employee password matched for ${email}`)
+
 
         // Check if MFA is enabled
         if (emp.mfaEnabled) {
-          console.log(`✓ Employee MFA required for ${email}`)
           throw new Error("MFA_REQUIRED")
         }
 
-        console.log(`✓ Employee login successful for ${email}`)
         return {
           id: `emp_${emp.id}`,
           email: emp.email,

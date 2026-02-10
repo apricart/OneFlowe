@@ -35,10 +35,11 @@ export async function GET() {
       { status: 200 }
     )
   } catch (error: unknown) {
+    console.error(`[Health Check] Database failed:`, error)
     return NextResponse.json(
       {
         status: "error",
-        checks: { database: { ok: false, error: (error as Error).message } },
+        checks: { database: { ok: false, error: "Database connection failed" } },
         details,
       },
       { status: 503 }

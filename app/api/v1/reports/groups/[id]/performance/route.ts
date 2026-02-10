@@ -151,6 +151,6 @@ export async function GET(
 
     } catch (e: any) {
         console.error("Reporting API Error:", e)
-        return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 })
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }

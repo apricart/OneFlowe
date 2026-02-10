@@ -192,6 +192,6 @@ export async function POST(req: Request) {
 
     // Only log actual unexpected errors
     console.error("[USERS_API] Unexpected error creating user:", err)
-    return error(`Failed to create user: ${err.message}`, 500)
+    return error("Failed to create user", 500)
   }
 }

@@ -371,7 +371,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Referenced order or user not found' }, { status: 404 })
     }
     return NextResponse.json({
-      error: e.message || 'Internal server error while processing refund'
+      error: 'Internal server error while processing refund'
     }, { status: 500 })
   }
 }

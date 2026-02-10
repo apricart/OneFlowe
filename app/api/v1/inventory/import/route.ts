@@ -36,6 +36,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid import data" }, { status: 400 })
     }
 
+    // Security: Limit number of rows to prevent DoS/Memory issues
+    const MAX_IMPORT_ROWS = 1000
+    if (rows.length > MAX_IMPORT_ROWS) {
+      return NextResponse.json({
+        error: `Import payload too large. Maximum ${MAX_IMPORT_ROWS} rows allowed per batch.`
+      }, { status: 400 })
+    }
+
     // Create import batch record
     const [batch] = await db.insert(productImportBatches).values({
       fileName,
@@ -145,7 +153,7 @@ export async function POST(req: NextRequest) {
 
     // Update batch status
     const batchStatus = failedRows === 0 ? "completed" : (successfulRows === 0 ? "failed" : "partial")
-    
+
     await db.update(productImportBatches)
       .set({
         successfulRows,
@@ -181,7 +189,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (error: any) {
     console.error("Error importing products:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -220,7 +228,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ batch })
   } catch (error: any) {
     console.error("Error fetching import batch:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 

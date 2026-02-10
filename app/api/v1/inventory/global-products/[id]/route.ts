@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ product })
   } catch (error: any) {
     console.error("Error fetching product:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -81,7 +81,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ product: updatedProduct })
   } catch (error: any) {
     console.error("Error updating product:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -125,7 +125,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return NextResponse.json({ message: "Product deleted successfully" })
   } catch (error: any) {
     console.error("Error deleting product:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 

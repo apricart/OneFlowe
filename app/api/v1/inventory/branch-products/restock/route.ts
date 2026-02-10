@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     )
   } catch (error: any) {
     console.error("Error restocking product:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 

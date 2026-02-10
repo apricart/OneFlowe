@@ -9,20 +9,20 @@ export async function GET(req: NextRequest) {
   if (authErr) return authErr
 
   const roleId = req.nextUrl.searchParams.get("roleId")
-  
+
   if (roleId) {
     const permissions = await db
       .select()
       .from(rolePermissions)
       .where(eq(rolePermissions.roleId, parseInt(roleId)))
-    
+
     return ok({ data: permissions })
   }
 
   const allRoles = await db.select().from(roles)
   const allPermissions = await db.select().from(rolePermissions)
-  
-  return ok({ 
+
+  return ok({
     data: {
       roles: allRoles,
       permissions: allPermissions,
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       .from(rolePermissions)
       .where(eq(rolePermissions.roleId, roleId))
       .limit(1)
-    
+
     // Insert new permission
     const [newPermission] = await db
       .insert(rolePermissions)
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     return ok({ data: newPermission })
   } catch (error: any) {
-    return err(error.message || "Failed to create permission", 500)
+    return err("Failed to create permission", 500)
   }
 }
 
@@ -107,7 +107,7 @@ export async function PUT(req: NextRequest) {
 
     await db
       .update(roles)
-      .set({ 
+      .set({
         permissions: permissionsObj,
         updatedAt: new Date(),
       })
@@ -123,7 +123,7 @@ export async function PUT(req: NextRequest) {
 
     return ok({ message: "Permissions updated successfully" })
   } catch (error: any) {
-    return err(error.message || "Failed to update permissions", 500)
+    return err("Failed to update permissions", 500)
   }
 }
 
@@ -150,7 +150,7 @@ export async function DELETE(req: NextRequest) {
 
     return ok({ message: "Permission deleted successfully" })
   } catch (error: any) {
-    return err(error.message || "Failed to delete permission", 500)
+    return err("Failed to delete permission", 500)
   }
 }
 

@@ -176,6 +176,6 @@ export async function GET(req: NextRequest) {
 
     } catch (e: any) {
         console.error("Error in group analytics API:", e)
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }

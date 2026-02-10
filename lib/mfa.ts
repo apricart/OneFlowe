@@ -187,7 +187,7 @@ export async function generateAndSendOTP(
       }
     }
 
-    console.log(`[MFA] generateAndSendOTP: userId=${userId}, email=${email}, type=${type}`)
+
 
     // Check cooldown
     const cooldown = await checkCooldown(userId, 'OTP_REQUEST')
@@ -569,7 +569,7 @@ export async function clearDailyCount(userId: string): Promise<void> {
     const today = new Date().toISOString().split('T')[0]
     const key = REDIS_KEYS.MFA_DAILY_COUNT(userId, today)
     await redis.del(key)
-    console.log("MFA - Daily count cleared for user:", userId)
+
   } catch (error) {
     console.error("Error clearing daily count:", error)
   }

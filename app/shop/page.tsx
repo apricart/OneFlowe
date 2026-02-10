@@ -151,7 +151,7 @@ export default function OrderPortalPage() {
       unit: it.unit,
       imageUrl: it.productImageUrl,
       stock: it.stockQuantity,
-      rating: Math.random() * 2 + 3.5,
+      rating: ((it.organizationInventoryId * 7) % 20) / 10 + 3.0, // Deterministic rating based on ID to fix hydration
     })) || []
   }, [branchInventory?.items])
 
@@ -785,6 +785,7 @@ export default function OrderPortalPage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9 h-11 text-base"
+                    suppressHydrationWarning
                   />
                 </div>
                 <select

@@ -75,7 +75,7 @@ async function POST(req: NextRequest) {
     return ok({ credential: credential }, { status: 201 })
   } catch (err: any) {
     console.error("POST /employee-credentials error:", err)
-    return error(err.message, 500)
+    return error("Internal Server Error", 500)
   }
 }
 
@@ -115,7 +115,7 @@ async function GET(req: NextRequest) {
     return ok({ credentials: credentials }, { status: 200 })
   } catch (err: any) {
     console.error("GET /employee-credentials error:", err)
-    return error(err.message, 500)
+    return error("Internal Server Error", 500)
   }
 }
 
@@ -173,7 +173,7 @@ async function PUT(req: NextRequest) {
     return ok({ credential: updated }, { status: 200 })
   } catch (err: any) {
     console.error("PUT /employee-credentials error:", err)
-    return error(err.message, 500)
+    return error("Internal Server Error", 500)
   }
 }
 
@@ -226,7 +226,7 @@ async function DELETE(req: NextRequest) {
     return ok({ message: "Credential deactivated" }, { status: 200 })
   } catch (err: any) {
     console.error("DELETE /employee-credentials error:", err)
-    return error(err.message, 500)
+    return error("Internal Server Error", 500)
   }
 }
 

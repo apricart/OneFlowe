@@ -10,6 +10,12 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const { id } = await params
   const [item] = await db.select().from(branches).where(eq(branches.id, Number(id)))
   if (!item) return error("Not found", 404)
+
+  // BOLA Protection: verify user has access to this branch's organization
+  const { verifyResourceAccess } = await import("@/lib/auth")
+  const hasAccess = await verifyResourceAccess(item.organizationId, item.id)
+  if (!hasAccess) return error("Forbidden: You do not have access to this branch", 403)
+
   return ok({ item })
 }
 
@@ -41,7 +47,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const [item] = await db.update(branches).set(patch).where(eq(branches.id, Number(id))).returning()
     return ok({ item })
   } catch (e: any) {
-    return error(e?.message || "Update failed", 400)
+    console.error("Update branch failed:", e)
+    return error("Update failed", 400)
   }
 }
 
@@ -117,6 +124,6 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
   } catch (e: any) {
     console.error("Delete branch failed:", e)
-    return error("Failed to delete branch: " + (e.message || "Unknown error"), 500)
+    return error("Failed to delete branch", 500)
   }
 }

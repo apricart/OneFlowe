@@ -15,17 +15,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = await readJson<any>(req)
     if (!body) return error("Invalid body", 400)
 
-    // Check if HEAD_OFFICE user can edit this user
-    const scope = await getRequestScope()
-    if (scope?.role === "HEAD_OFFICE") {
-      const [targetUser] = await db.select({ organizationId: users.organizationId }).from(users).where(eq(users.id, id)).limit(1)
-      if (!targetUser) {
-        return error("User not found", 404)
-      }
-      if (targetUser.organizationId !== scope.organizationId) {
-        return error("You can only edit users within your own organization", 403)
-      }
-    }
+    // Check if HEAD_OFFICE user can edit this user (BOLA Protection)
+    const { verifyResourceAccess } = await import("@/lib/auth")
+    const [targetUser] = await db.select({ organizationId: users.organizationId }).from(users).where(eq(users.id, id)).limit(1)
+    if (!targetUser) return error("User not found", 404)
+
+    const hasAccess = await verifyResourceAccess(targetUser.organizationId)
+    if (!hasAccess) return error("Forbidden: You do not have access to this user", 403)
 
     const patch: any = { updatedAt: new Date() }
 
@@ -105,16 +101,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params
 
   try {
-    const scope = await getRequestScope()
-    if (scope?.role === "HEAD_OFFICE") {
-      const [targetUser] = await db.select({ organizationId: users.organizationId }).from(users).where(eq(users.id, id)).limit(1)
-      if (!targetUser) {
-        return error("User not found", 404)
-      }
-      if (targetUser.organizationId !== scope.organizationId) {
-        return error("You can only delete users within your own organization", 403)
-      }
-    }
+    const { verifyResourceAccess } = await import("@/lib/auth")
+    const [targetUser] = await db.select({ organizationId: users.organizationId }).from(users).where(eq(users.id, id)).limit(1)
+    if (!targetUser) return error("User not found", 404)
+
+    const hasAccess = await verifyResourceAccess(targetUser.organizationId)
+    if (!hasAccess) return error("Forbidden: You do not have access to this user", 403)
 
     // Dependency checks - Block deletion if critical data exists
     const {

@@ -140,6 +140,7 @@ function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="bg-white/80 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500"
+                suppressHydrationWarning
               />
             </div>
             <div className="grid gap-2">
@@ -154,11 +155,13 @@ function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="bg-white/80 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500 pr-10"
+                  suppressHydrationWarning
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 focus:outline-none"
+                  suppressHydrationWarning
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />

@@ -23,7 +23,7 @@ export async function GET(
 
         return NextResponse.json({ branches: assignedBranches })
     } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }
 
@@ -111,6 +111,6 @@ export async function PUT(
 
         return NextResponse.json({ message: "Branch assignments updated" })
     } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }

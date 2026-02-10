@@ -6,6 +6,7 @@ import { and, desc, eq, sql } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
+import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 /**
  * GET /api/v1/branches - List branches with access control
@@ -57,32 +58,35 @@ export async function GET(req: Request) {
       return error("Branch context required", 403)
     }
 
-    const items = await db
-      .select({
-        id: branchesTable.id,
-        organizationId: branchesTable.organizationId,
-        name: branchesTable.name,
-        code: branchesTable.code,
-        status: branchesTable.status,
-        groupId: branchesTable.groupId,
-        adminUserId: branchesTable.adminUserId,
-        createdAt: branchesTable.createdAt,
-        updatedAt: branchesTable.updatedAt,
-        groupName: sql<string | null>`(
-          SELECT name FROM groups WHERE id = ${branchesTable.groupId}
-        )`,
-      })
-      .from(branchesTable)
-      .where(and(
-        scopedOrgId ? eq(branchesTable.organizationId, scopedOrgId) : undefined,
-        scopedBranchId ? eq(branchesTable.id, scopedBranchId) : undefined
-      ))
-      .orderBy(desc(branchesTable.createdAt))
+    const cacheKey = scopedCacheKey('branches', { orgId: scopedOrgId, branchId: scopedBranchId })
 
-    return ok({
-      items,
-      count: items.length
-    })
+    const result = await getCached(cacheKey, async () => {
+      const items = await db
+        .select({
+          id: branchesTable.id,
+          organizationId: branchesTable.organizationId,
+          name: branchesTable.name,
+          code: branchesTable.code,
+          status: branchesTable.status,
+          groupId: branchesTable.groupId,
+          adminUserId: branchesTable.adminUserId,
+          createdAt: branchesTable.createdAt,
+          updatedAt: branchesTable.updatedAt,
+          groupName: sql<string | null>`(
+            SELECT name FROM groups WHERE id = ${branchesTable.groupId}
+          )`,
+        })
+        .from(branchesTable)
+        .where(and(
+          scopedOrgId ? eq(branchesTable.organizationId, scopedOrgId) : undefined,
+          scopedBranchId ? eq(branchesTable.id, scopedBranchId) : undefined
+        ))
+        .orderBy(desc(branchesTable.createdAt))
+
+      return { items, count: items.length }
+    }, CACHE_TTL.LISTING)
+
+    return ok(result)
   } catch (e: any) {
     logError(e, 'BRANCHES_GET')
     return handleError(e, 'BRANCHES_GET')
@@ -178,6 +182,9 @@ export async function POST(req: Request) {
         status,
       })
       .returning()
+
+    // Invalidate branches cache
+    await invalidateByPrefix('branches')
 
     return ok({
       item,

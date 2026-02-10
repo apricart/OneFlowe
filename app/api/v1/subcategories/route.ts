@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { categories, globalProducts } from "@/db/schema"
 import { eq, and, like, desc, sql, isNotNull } from "drizzle-orm"
+import { getCached, invalidateByPrefix, CACHE_TTL } from "@/lib/cache-utils"
 
 // GET /api/v1/subcategories - List subcategories
 export async function GET(req: NextRequest) {
@@ -29,7 +30,8 @@ export async function GET(req: NextRequest) {
     const conditions = [isNotNull(categories.parentId)]
 
     if (search) {
-      conditions.push(like(categories.name, `%${search}%`))
+      const { escapeLikePattern } = await import("@/lib/utils")
+      conditions.push(like(categories.name, `%${escapeLikePattern(search)}%`))
     }
 
     if (categoryId) {
@@ -38,61 +40,61 @@ export async function GET(req: NextRequest) {
 
     const whereClause = and(...conditions)
 
-    // Fetch subcategories with parent category name and product count
-    const [items, totalResult] = await Promise.all([
-      db
-        .select({
-          id: categories.id,
-          name: categories.name,
-          parentId: categories.parentId,
-          createdAt: categories.createdAt,
-          updatedAt: categories.updatedAt,
-          productsCount: sql<number>`(
-            SELECT COALESCE(COUNT(*), 0)::int 
-            FROM global_products gp
-            WHERE gp.category_id = categories.id
-          )`,
-        })
-        .from(categories)
-        .where(whereClause)
-        .orderBy(desc(categories.createdAt))
-        .limit(limit)
-        .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)` })
-        .from(categories)
-        .where(whereClause)
-    ])
+    const cacheKey = `cache:subcategories:search=${search}&cat=${categoryId || ''}&page=${page}&limit=${limit}`
 
-    // Get parent category names
-    const parentIds = [...new Set(items.map(item => item.parentId).filter(Boolean))] as number[]
-    let parentCategories: { id: number; name: string }[] = []
+    const result = await getCached(cacheKey, async () => {
+      const [items, totalResult] = await Promise.all([
+        db
+          .select({
+            id: categories.id,
+            name: categories.name,
+            parentId: categories.parentId,
+            createdAt: categories.createdAt,
+            updatedAt: categories.updatedAt,
+            productsCount: sql<number>`(
+              SELECT COALESCE(COUNT(*), 0)::int 
+              FROM global_products gp
+              WHERE gp.category_id = categories.id
+            )`,
+          })
+          .from(categories)
+          .where(whereClause)
+          .orderBy(desc(categories.createdAt))
+          .limit(limit)
+          .offset(offset),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(categories)
+          .where(whereClause)
+      ])
 
-    if (parentIds.length > 0) {
-      parentCategories = await db
-        .select({ id: categories.id, name: categories.name })
-        .from(categories)
-        .where(sql`${categories.id} IN (${sql.join(parentIds.map(id => sql`${id}`), sql`, `)})`)
-    }
+      // Get parent category names
+      const parentIds = [...new Set(items.map(item => item.parentId).filter(Boolean))] as number[]
+      let parentCategories: { id: number; name: string }[] = []
 
-    const parentMap = new Map(parentCategories.map(c => [c.id, c.name]))
+      if (parentIds.length > 0) {
+        parentCategories = await db
+          .select({ id: categories.id, name: categories.name })
+          .from(categories)
+          .where(sql`${categories.id} IN (${sql.join(parentIds.map(id => sql`${id}`), sql`, `)})`)
+      }
 
-    const enrichedItems = items.map(item => ({
-      ...item,
-      categoryName: item.parentId ? parentMap.get(item.parentId) || "Unknown" : null,
-    }))
+      const parentMap = new Map(parentCategories.map(c => [c.id, c.name]))
 
-    const total = totalResult[0]?.count || 0
+      const enrichedItems = items.map(item => ({
+        ...item,
+        categoryName: item.parentId ? parentMap.get(item.parentId) || "Unknown" : null,
+      }))
 
-    return NextResponse.json({
-      items: enrichedItems,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    })
+      const total = totalResult[0]?.count || 0
+
+      return {
+        items: enrichedItems,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      }
+    }, CACHE_TTL.SETTINGS)
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Subcategories GET error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -156,6 +158,9 @@ export async function POST(req: NextRequest) {
         organizationId: null,
       })
       .returning()
+
+    await invalidateByPrefix('subcategories')
+    await invalidateByPrefix('categories')
 
     return NextResponse.json({ item: newSubcategory[0] }, { status: 201 })
   } catch (error) {
@@ -229,6 +234,9 @@ export async function PUT(req: NextRequest) {
       .where(eq(categories.id, id))
       .returning()
 
+    await invalidateByPrefix('subcategories')
+    await invalidateByPrefix('categories')
+
     return NextResponse.json({ item: updated[0] })
   } catch (error) {
     console.error("Subcategories PUT error:", error)
@@ -285,6 +293,9 @@ export async function DELETE(req: NextRequest) {
     await db
       .delete(categories)
       .where(eq(categories.id, parseInt(id)))
+
+    await invalidateByPrefix('subcategories')
+    await invalidateByPrefix('categories')
 
     return NextResponse.json({ message: "Subcategory deleted successfully" })
   } catch (error) {

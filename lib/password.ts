@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs"
+import { randomInt } from "crypto"
 
-const MIN_PASSWORD_LENGTH = 6
+const MIN_PASSWORD_LENGTH = 12
 const MAX_PASSWORD_LENGTH = 128
 const DEFAULT_SALT_ROUNDS = 12
 
@@ -14,7 +15,7 @@ const SALT_ROUNDS = (() => {
 })()
 
 /**
- * Validate password meets minimum requirements
+ * Validate password meets bank-grade requirements
  */
 export function validatePassword(password: string): { valid: boolean; errors: string[] } {
   const errors: string[] = []
@@ -30,6 +31,20 @@ export function validatePassword(password: string): { valid: boolean; errors: st
 
   if (password.length > MAX_PASSWORD_LENGTH) {
     errors.push(`Password must not exceed ${MAX_PASSWORD_LENGTH} characters`)
+  }
+
+  // Mandatory complexity for bank-grade security
+  if (!/[a-z]/.test(password)) {
+    errors.push('Password must contain at least one lowercase letter')
+  }
+  if (!/[A-Z]/.test(password)) {
+    errors.push('Password must contain at least one uppercase letter')
+  }
+  if (!/\d/.test(password)) {
+    errors.push('Password must contain at least one number')
+  }
+  if (!/[^a-zA-Z0-9]/.test(password)) {
+    errors.push('Password must contain at least one special character (!@#$%^&*)')
   }
 
   // Check for common weak passwords (basic check)
@@ -160,7 +175,8 @@ export async function verifyPassword(plain: string, hash: string): Promise<boole
 }
 
 /**
- * Generate a random password
+ * Generate a cryptographically secure random password
+ * Uses crypto.randomInt() instead of Math.random() for bank-grade security
  * @param length - Length of password (default: 16)
  * @returns string - Random password
  */
@@ -177,21 +193,26 @@ export function generateRandomPassword(length: number = 16): string {
       special: '!@#$%^&*()_+-=[]{}|;:,.<>?'
     }
 
-    // Ensure at least one character from each set
+    // Ensure at least one character from each set (cryptographically secure)
     let password = ''
-    password += charset.lowercase[Math.floor(Math.random() * charset.lowercase.length)]
-    password += charset.uppercase[Math.floor(Math.random() * charset.uppercase.length)]
-    password += charset.numbers[Math.floor(Math.random() * charset.numbers.length)]
-    password += charset.special[Math.floor(Math.random() * charset.special.length)]
+    password += charset.lowercase[randomInt(charset.lowercase.length)]
+    password += charset.uppercase[randomInt(charset.uppercase.length)]
+    password += charset.numbers[randomInt(charset.numbers.length)]
+    password += charset.special[randomInt(charset.special.length)]
 
     // Fill remaining length with random characters from all sets
     const allChars = charset.lowercase + charset.uppercase + charset.numbers + charset.special
     for (let i = password.length; i < length; i++) {
-      password += allChars[Math.floor(Math.random() * allChars.length)]
+      password += allChars[randomInt(allChars.length)]
     }
 
-    // Shuffle the password
-    return password.split('').sort(() => Math.random() - 0.5).join('')
+    // Fisher-Yates shuffle using crypto.randomInt (not Math.random)
+    const arr = password.split('')
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = randomInt(i + 1)
+        ;[arr[i], arr[j]] = [arr[j], arr[i]]
+    }
+    return arr.join('')
   } catch (error) {
     console.error('[Password] Error generating random password:', error)
     throw new Error('Failed to generate random password')

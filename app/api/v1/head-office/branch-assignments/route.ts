@@ -393,37 +393,25 @@ export async function POST(req: NextRequest) {
       branchCount: branchIds.length
     })
   } catch (error: any) {
-    console.error("Error creating branch assignments:")
-    console.error("Error message:", error.message)
-    console.error("Error code:", error.code)
-    console.error("Error detail:", error.detail)
-    console.error("Error constraint:", error.constraint)
-    console.error("Error stack:", error.stack)
+    console.error("Error creating branch assignments:", error)
 
     // Check for duplicate key constraint
     if (error.message?.includes('duplicate key') || error.code === '23505') {
       return NextResponse.json({
-        error: "Some products are already assigned to these branches",
-        details: error.detail || error.message
+        error: "Some products are already assigned to these branches"
       }, { status: 400 })
     }
 
     // Check for foreign key constraint violation
     if (error.code === '23503') {
       return NextResponse.json({
-        error: "Invalid reference: One or more IDs do not exist in the database",
-        details: error.detail || "Check that organization inventory items, branches, and user exist",
-        constraint: error.constraint
+        error: "Invalid reference: One or more IDs do not exist in the database"
       }, { status: 400 })
     }
 
-    // Return detailed error for debugging
+    // Don't expose internal error details
     return NextResponse.json({
-      error: error.message || "Internal Server Error",
-      code: error.code,
-      detail: error.detail,
-      hint: error.hint,
-      constraint: error.constraint
+      error: "Internal Server Error"
     }, { status: 500 })
   }
 }
@@ -579,7 +567,7 @@ export async function DELETE(req: NextRequest) {
     })
   } catch (error: any) {
     console.error("Error deleting branch assignments:", error)
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -657,7 +645,7 @@ export async function PUT(req: NextRequest) {
     })
   } catch (error: any) {
     console.error("Error updating branch assignment:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { groups, groupAuditLogs, branches, organizations } from "@/db/schema"
 import { and, eq, sql } from "drizzle-orm"
+import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 export async function GET(req: NextRequest) {
     try {
@@ -27,34 +28,37 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Organization ID required" }, { status: 400 })
         }
 
-        // Fetch groups with branch count and organization name
-        const allGroups = await db
-            .select({
-                id: groups.id,
-                organizationId: groups.organizationId,
-                organizationName: organizations.name,
-                name: groups.name,
-                description: groups.description,
-                status: sql<string>`CASE 
-                    WHEN ${groups.status} = 'deleted' THEN 'deleted'
-                    WHEN count(${branches.id}) > 0 THEN 'connected'
-                    ELSE 'not connected'
-                END`,
-                createdAt: groups.createdAt,
-                updatedAt: groups.updatedAt,
-                branchCount: sql<number>`count(${branches.id})::int`,
-            })
-            .from(groups)
-            .innerJoin(organizations, eq(groups.organizationId, organizations.id))
-            .leftJoin(branches, eq(branches.groupId, groups.id))
-            .where(
-                and(
-                    orgId ? eq(groups.organizationId, orgId) : undefined,
-                    sql`${groups.status} != 'deleted'` // Only exclude deleted groups
+        const cacheKey = scopedCacheKey('groups', { orgId: orgId })
+
+        const allGroups = await getCached(cacheKey, async () => {
+            return db
+                .select({
+                    id: groups.id,
+                    organizationId: groups.organizationId,
+                    organizationName: organizations.name,
+                    name: groups.name,
+                    description: groups.description,
+                    status: sql<string>`CASE 
+                        WHEN ${groups.status} = 'deleted' THEN 'deleted'
+                        WHEN count(${branches.id}) > 0 THEN 'connected'
+                        ELSE 'not connected'
+                    END`,
+                    createdAt: groups.createdAt,
+                    updatedAt: groups.updatedAt,
+                    branchCount: sql<number>`count(${branches.id})::int`,
+                })
+                .from(groups)
+                .innerJoin(organizations, eq(groups.organizationId, organizations.id))
+                .leftJoin(branches, eq(branches.groupId, groups.id))
+                .where(
+                    and(
+                        orgId ? eq(groups.organizationId, orgId) : undefined,
+                        sql`${groups.status} != 'deleted'`
+                    )
                 )
-            )
-            .groupBy(groups.id, organizations.id)
-            .orderBy(groups.name)
+                .groupBy(groups.id, organizations.id)
+                .orderBy(groups.name)
+        }, CACHE_TTL.LISTING)
 
         return NextResponse.json({ groups: allGroups })
     } catch (e: any) {
@@ -127,6 +131,9 @@ export async function POST(req: NextRequest) {
             performedByRole: role,
             metadata: { name, description },
         })
+
+        // Invalidate groups cache
+        await invalidateByPrefix('groups')
 
         return NextResponse.json({ group: newGroup })
     } catch (e: any) {

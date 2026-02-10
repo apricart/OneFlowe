@@ -2,12 +2,22 @@ import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { db } from "@/lib/db"
 import { suppliers } from "@/db/schema"
 import { and, desc, eq } from "drizzle-orm"
+import { getRequestScope } from "@/lib/auth"
 
 export async function GET(req: Request) {
-  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"]) 
+  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
   if (err) return err
   const { searchParams } = new URL(req.url)
-  const organizationId = searchParams.get("organizationId")
+
+  // BOLA: HEAD_OFFICE must be scoped to their own organization
+  const scope = await getRequestScope()
+  let organizationId = searchParams.get("organizationId")
+  if (scope?.role === "HEAD_OFFICE") {
+    // Force org from session, ignore query param
+    organizationId = scope.organizationId ? String(scope.organizationId) : null
+    if (!organizationId) return error("Organization context required", 400)
+  }
+
   const branchId = searchParams.get("branchId")
   const where = [
     organizationId ? eq(suppliers.organizationId, Number(organizationId)) : undefined,
@@ -30,7 +40,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"]) 
+  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
   if (err) return err
   const body = await readJson<any>(req)
   if (!body?.organizationId || !body?.branchId || !body?.name) {

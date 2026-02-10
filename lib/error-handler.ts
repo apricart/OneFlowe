@@ -36,7 +36,7 @@ export const ERROR_MESSAGES = {
   // Validation errors
   REQUIRED_FIELD: (field: string) => `${field} is required`,
   INVALID_EMAIL: 'Please enter a valid email address',
-  INVALID_PASSWORD: 'Password must be at least 6 characters long',
+  INVALID_PASSWORD: 'Password must be at least 12 characters long, with uppercase, lowercase, number, and special character',
   INVALID_ROLE: 'Please select a valid role',
   INVALID_INPUT: 'Invalid input provided',
   INVALID_FORMAT: (field: string) => `${field} has an invalid format`,

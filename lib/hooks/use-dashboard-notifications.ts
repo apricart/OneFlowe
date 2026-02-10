@@ -71,8 +71,6 @@ export function useDashboardNotifications() {
       )
 
       const inactiveBranches = branches.filter((b) => (b.status || "inactive").toLowerCase() !== "active")
-      const orphanBranches = branches.filter((b) => !adminsByBranch.has(String(b.id)))
-
       if (inactiveBranches.length > 0) {
         items.push({
           id: "inactive-branches",
@@ -82,18 +80,6 @@ export function useDashboardNotifications() {
           severity: "warning",
           cta: { label: "View branches", href: "/branches" },
           tag: "ops",
-        })
-      }
-
-      if (orphanBranches.length > 0) {
-        items.push({
-          id: "orphan-branches",
-          title: "Assign branch admins",
-          message: `${orphanBranches.length} branch${orphanBranches.length === 1 ? "" : "es"
-            } do not have an assigned admin.`,
-          severity: "critical",
-          cta: { label: "Assign owners", href: "/users" },
-          tag: "staffing",
         })
       }
     }

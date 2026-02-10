@@ -350,6 +350,8 @@ export const orders = pgTable(
     createdIdx: index("orders_created_idx").on(t.createdAt),
     ordersOrgIdx: index("orders_org_idx").on(t.organizationId),
     ordersOrgBranchStatusIdx: index("orders_org_branch_status_idx").on(t.organizationId, t.branchId, t.status),
+    ordersBranchStatusCreatedIdx: index("orders_branch_status_created_idx").on(t.branchId, t.status, t.createdAt),
+    ordersOrgCreatedIdx: index("orders_org_created_idx").on(t.organizationId, t.createdAt),
   }),
 )
 
@@ -376,6 +378,7 @@ export const orderItems = pgTable(
     orderIdx: index("order_items_order_idx").on(t.orderId),
     orderItemsOrgIdx: index("order_items_org_idx").on(t.organizationId),
     globalProductIdx: index("order_items_product_idx").on(t.globalProductId),
+    orderItemsProductOrderIdx: index("order_items_product_order_idx").on(t.globalProductId, t.orderId),
   }),
 )
 
@@ -465,6 +468,7 @@ export const auditLogs = pgTable(
     entityIdx: index("audit_entity_idx").on(t.entity),
     auditOrgIdx: index("audit_org_idx").on(t.organizationId),
     auditBranchIdx: index("audit_branch_idx").on(t.branchId),
+    auditCreatedActionIdx: index("audit_created_action_idx").on(t.createdAt, t.action),
   }),
 )
 
@@ -526,6 +530,8 @@ export const globalProducts = pgTable(
     nameIdx: index("global_products_name_idx").on(t.name),
     categoryIdx: index("global_products_category_idx").on(t.categoryId),
     statusIdx: index("global_products_status_idx").on(t.status),
+    globalProductsCatStatusIdx: index("global_products_cat_status_idx").on(t.categoryId, t.status),
+    globalProductsStatusCreatedIdx: index("global_products_status_created_idx").on(t.status, t.createdAt),
   }),
 )
 
@@ -779,6 +785,7 @@ export const branchInventory = pgTable(
     visibleIdx: index("branch_inventory_visible_idx").on(t.isVisible),
     activeIdx: index("branch_inventory_active_idx").on(t.isActive),
     deletedAtIdx: index("branch_inventory_deleted_at_idx").on(t.deletedAt),
+    branchInventoryStatusIdx: index("branch_inventory_status_idx").on(t.branchId, t.isVisible, t.isActive),
   }),
 )
 

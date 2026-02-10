@@ -56,6 +56,14 @@ export function error(message: string, status = 400) {
       message = 'An error occurred'
     }
 
+    // Sanitize message for non-development environments to prevent information leakage
+    // Always sanitize 5xx errors — bank-grade: never expose internals
+    const isCritical = String(status).startsWith('5')
+    if (isCritical) {
+      console.error(`[API ERROR] Internal server error:`, message)
+      message = "An unexpected error occurred. Please try again later."
+    }
+
     // Validate status code
     const validStatus = typeof status === 'number' && status >= 400 && status <= 599
       ? status
@@ -161,9 +169,7 @@ export async function requireApiRole(allowed: Role[]) {
       return NextResponse.json(
         {
           error: "Forbidden",
-          message: errorMessage,
-          requiredRoles: allowed,
-          userRole: current.role
+          message: "Insufficient permissions"
         },
         { status: 403 }
       )

@@ -6,6 +6,7 @@ import { and, desc, eq } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
+import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 /**
  * GET /api/v1/organizations - List organizations
@@ -35,16 +36,19 @@ export async function GET() {
       return error("Organization context required", 403)
     }
 
-    const items = await db
-      .select()
-      .from(orgsTable)
-      .where(where)
-      .orderBy(desc(orgsTable.createdAt))
+    const cacheKey = scopedCacheKey('organizations', { role: scope.role, orgId: scope.organizationId })
 
-    return ok({
-      items,
-      count: items.length
-    })
+    const result = await getCached(cacheKey, async () => {
+      const items = await db
+        .select()
+        .from(orgsTable)
+        .where(where)
+        .orderBy(desc(orgsTable.createdAt))
+
+      return { items, count: items.length }
+    }, CACHE_TTL.LISTING)
+
+    return ok(result)
   } catch (e: any) {
     logError(e, 'ORGANIZATIONS_GET')
     return handleError(e, 'ORGANIZATIONS_GET')
@@ -126,6 +130,9 @@ export async function POST(req: Request) {
         status
       })
       .returning()
+
+    // Invalidate organizations cache
+    await invalidateByPrefix('organizations')
 
     return ok({
       item,

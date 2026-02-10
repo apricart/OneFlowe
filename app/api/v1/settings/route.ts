@@ -5,6 +5,8 @@ import { ok, err, requireApiRole } from "@/lib/api"
 import { NextRequest } from "next/server"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
+import { getRequestScope } from "@/lib/auth"
+import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 // Valid setting keys
 const VALID_SETTING_KEYS = new Set([
@@ -34,7 +36,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = req.nextUrl
-    const organizationIdParam = searchParams.get("organizationId")
+    let organizationIdParam = searchParams.get("organizationId")
+
+    // BOLA: HEAD_OFFICE must be scoped to their own organization
+    const scope = await getRequestScope()
+    if (scope?.role === "HEAD_OFFICE") {
+      organizationIdParam = scope.organizationId ? String(scope.organizationId) : null
+      if (!organizationIdParam) return err("Organization context required", 400)
+    }
 
     if (organizationIdParam) {
       // Validate organization ID
@@ -43,16 +52,25 @@ export async function GET(req: NextRequest) {
         return err("Invalid organization ID", 400)
       }
 
-      const settings = await db
-        .select()
-        .from(organizationSettings)
-        .where(eq(organizationSettings.organizationId, organizationId))
+      const cacheKey = scopedCacheKey('settings', { orgId: organizationId })
+
+      const settings = await getCached(cacheKey, () =>
+        db
+          .select()
+          .from(organizationSettings)
+          .where(eq(organizationSettings.organizationId, organizationId)),
+        CACHE_TTL.SETTINGS
+      )
 
       return ok({ data: settings })
     }
 
-    // Return all settings
-    const allSettings = await db.select().from(organizationSettings)
+    // Return all settings (SUPER_ADMIN only path)
+    const cacheKeyAll = 'cache:settings:all'
+    const allSettings = await getCached(cacheKeyAll, () =>
+      db.select().from(organizationSettings),
+      CACHE_TTL.SETTINGS
+    )
     return ok({ data: allSettings })
   } catch (e) {
     logError(e, 'SETTINGS_GET')
@@ -74,6 +92,12 @@ export async function POST(req: NextRequest) {
     // Validate required fields
     if (!organizationId) {
       return err("organizationId is required", 400)
+    }
+
+    // BOLA: HEAD_OFFICE must only modify their own org's settings
+    const scope = await getRequestScope()
+    if (scope?.role === "HEAD_OFFICE" && Number(organizationId) !== scope.organizationId) {
+      return err("Forbidden: Cannot modify settings for other organizations", 403)
     }
 
     if (!key || typeof key !== 'string') {
@@ -162,6 +186,9 @@ export async function POST(req: NextRequest) {
       logError(auditError, 'SETTINGS_AUDIT_LOG')
     }
 
+    // Invalidate settings cache
+    await invalidateByPrefix('settings')
+
     return ok({
       data: result,
       message: existing.length > 0 ? "Setting updated successfully" : "Setting created successfully"
@@ -171,7 +198,7 @@ export async function POST(req: NextRequest) {
       return err("Invalid JSON in request body", 400)
     }
     logError(error, 'SETTINGS_POST')
-    return err(error.message || "Failed to save setting", 500)
+    return err("Failed to save setting", 500)
   }
 }
 
@@ -232,6 +259,6 @@ export async function DELETE(req: NextRequest) {
     })
   } catch (error: any) {
     logError(error, 'SETTINGS_DELETE')
-    return err(error.message || "Failed to delete setting", 500)
+    return err("Failed to delete setting", 500)
   }
 }

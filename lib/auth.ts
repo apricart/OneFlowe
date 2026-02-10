@@ -224,6 +224,48 @@ export function getSafeUserRole(session: any): Role {
   }
 }
 
-// Convenience: create SUPER_ADMIN role and first user if not exists (optional bootstrap)
-// Optionally implement bootstrap via a separate script using Drizzle directly
+/**
+ * Log error safely
+ */
+function logErrorOnly(error: any, context: string, meta?: any) {
+  try {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[Auth] Error in ${context}:`, { message, ...meta })
+  } catch (e) {
+    console.error(`[Auth] Error in ${context}`)
+  }
+}
+
+/**
+ * Verify if the current user has access to a specific resource scope (BOLA protection)
+ * @returns boolean indicating if access is allowed
+ */
+export async function verifyResourceAccess(organizationId?: number | null, branchId?: number | null): Promise<boolean> {
+  const scope = await getRequestScope()
+  if (!scope) return false
+
+  // Super Admin can access everything
+  if (scope.role === "SUPER_ADMIN") return true
+
+  // Check organization isolation
+  if (organizationId !== undefined && organizationId !== null) {
+    if (scope.organizationId !== organizationId) {
+      console.warn(`[Security] BOLA Attempt: User ${scope.userId} (${scope.role}) tried to access Org ${organizationId} but belongs to Org ${scope.organizationId}`)
+      return false
+    }
+  }
+
+  // Check branch isolation
+  if (branchId !== undefined && branchId !== null) {
+    if (scope.branchId !== branchId) {
+      // Note: HEAD_OFFICE users usually have access to all branches in their org
+      if (scope.role === "HEAD_OFFICE") return true
+
+      console.warn(`[Security] BOLA Attempt: User ${scope.userId} (${scope.role}) tried to access Branch ${branchId} but belongs to Branch ${scope.branchId}`)
+      return false
+    }
+  }
+
+  return true
+}
 

@@ -8,8 +8,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
   if (err) return err
   const { id } = await params
-  const [item] = await db.select().from(orders).where(eq(orders.id, Number(id)))
+  const orderId = Number(id)
+
+  const [item] = await db.select().from(orders).where(eq(orders.id, orderId))
   if (!item) return error("Not found", 404)
+
+  // BOLA Protection: Verify user belongs to the same organization/branch as the order
+  const { verifyResourceAccess } = await import("@/lib/auth")
+  const hasAccess = await verifyResourceAccess(item.organizationId, item.branchId)
+  if (!hasAccess) return error("Forbidden: You do not have access to this order", 403)
+
   return ok({ item })
 }
 
@@ -19,6 +27,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (err) return err
 
   const { id } = await params
+  const orderId = Number(id)
+
+  // Check existence and ownership first
+  const [ord] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+  if (!ord) return error("Order not found", 404)
+
+  // BOLA Protection
+  const { verifyResourceAccess } = await import("@/lib/auth")
+  const hasAccess = await verifyResourceAccess(ord.organizationId, ord.branchId)
+  if (!hasAccess) return error("Forbidden: You do not have access to this order", 403)
+
   const body = await readJson<any>(req)
   if (!body) return error("Invalid body", 400)
 
@@ -33,8 +52,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.status) {
     patch.status = body.status
   }
-console.log('body.status', body.status);
-  // ✅ VERY IMPORTANT PART
   // Store in UTC (PostgreSQL NOW() returns UTC by default)
   if (body.status === "FULFILLED") {
     patch.fulfilledAt = sql`NOW()`
@@ -43,7 +60,7 @@ console.log('body.status', body.status);
   const [item] = await db
     .update(orders)
     .set(patch)
-    .where(eq(orders.id, Number(id)))
+    .where(eq(orders.id, orderId))
     .returning()
 
   return ok({ item })
@@ -54,7 +71,18 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
   const err = await requireApiRole(["SUPER_ADMIN"])
   if (err) return err
   const { id } = await params
-  await db.delete(orders).where(eq(orders.id, Number(id)))
+  const orderId = Number(id)
+
+  // Fetch order first to verify it exists
+  const [ord] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+  if (!ord) return error("Order not found", 404)
+
+  // BOLA Protection: verify resource access
+  const { verifyResourceAccess } = await import("@/lib/auth")
+  const hasAccess = await verifyResourceAccess(ord.organizationId, ord.branchId)
+  if (!hasAccess) return error("Forbidden: You do not have access to this order", 403)
+
+  await db.delete(orders).where(eq(orders.id, orderId))
   return ok({ success: true })
 }
 

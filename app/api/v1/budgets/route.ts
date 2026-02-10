@@ -52,8 +52,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid session data" }, { status: 400 })
     }
 
-    // For admin users using context selector, accept organizationId from query param
-    if (orgIdParam && (role === "HEAD_OFFICE" || role === "SUPER_ADMIN")) {
+    // For SUPER_ADMIN using context selector, accept organizationId from query param
+    // HEAD_OFFICE must always be scoped to their own organization
+    if (orgIdParam && role === "SUPER_ADMIN") {
       const parsedOrgId = validateNumericId(orgIdParam, "organizationId")
       if (parsedOrgId) {
         orgId = parsedOrgId
@@ -112,7 +113,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ budgets: budgetsWithRemaining })
       } catch (err: any) {
         logError(err, 'BUDGETS_GET_ALL')
-        return NextResponse.json({ error: err.message || "Failed to fetch budgets" }, { status: 500 })
+        return NextResponse.json({ error: "Failed to fetch budgets" }, { status: 500 })
       }
     }
 
@@ -367,7 +368,7 @@ export async function PUT(req: NextRequest) {
     }
   } catch (e: any) {
     logError(e, 'BUDGETS_PUT')
-    return NextResponse.json({ error: e.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 

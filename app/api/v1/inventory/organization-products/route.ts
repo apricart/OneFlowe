@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items })
   } catch (error: any) {
     console.error("Error fetching organization products:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -87,7 +87,16 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Organization product ID is required" }, { status: 400 })
     }
 
-    // Update organization product
+    // BOLA: Scope update to user's organization for non-SUPER_ADMIN
+    const userOrgId = (session.user as any).organizationId
+    const conditions = [eq(organizationProducts.id, organizationProductId)]
+
+    if (userRole === "HEAD_OFFICE") {
+      if (!userOrgId) return NextResponse.json({ error: "Organization context required" }, { status: 400 })
+      conditions.push(eq(organizationProducts.organizationId, Number(userOrgId)))
+    }
+
+    // Update organization product with ownership scope
     const [updated] = await db.update(organizationProducts)
       .set({
         ...(isEnabled !== undefined && { isEnabled }),
@@ -100,8 +109,12 @@ export async function PUT(req: NextRequest) {
         updatedByUserId: (session.user as any).id,
         updatedAt: new Date()
       })
-      .where(eq(organizationProducts.id, organizationProductId))
+      .where(and(...conditions))
       .returning()
+
+    if (!updated) {
+      return NextResponse.json({ error: "Organization product not found or access denied" }, { status: 404 })
+    }
 
     // Log audit
     await db.insert(auditLogs).values({
@@ -117,7 +130,7 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ product: updated })
   } catch (error: any) {
     console.error("Error updating organization product:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 

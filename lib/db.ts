@@ -48,10 +48,13 @@ function parseDatabaseUrl(url: string | undefined) {
       database: urlObj.pathname.slice(1), // Remove leading slash
       user: urlObj.username || 'postgres',
       password: urlObj.password || '',
-      // Supabase ALWAYS requires SSL, even in development
-      ssl: isSupabase || process.env.NODE_ENV === 'production'
+      // Supabase pooler requires rejectUnauthorized: false
+      // For non-Supabase production, enforce certificate verification
+      ssl: isSupabase
         ? { rejectUnauthorized: false }
-        : false,
+        : process.env.NODE_ENV === 'production'
+          ? { rejectUnauthorized: true }
+          : false,
     }
   } catch (error) {
     if (error instanceof Error) {
@@ -74,8 +77,8 @@ try {
 }
 
 // Validate pool configuration values  
-const poolMax = Number(process.env.PGPOOL_MAX || 10)  // Reduced from 20 for Supabase
-const idleTimeout = Number(process.env.PGPOOL_IDLE_MS || 60000)
+const poolMax = Number(process.env.PGPOOL_MAX || 20)  // 20 for 1000+ concurrent users
+const idleTimeout = Number(process.env.PGPOOL_IDLE_MS || 30000)  // 30s to recycle faster under load
 const connectionTimeout = Number(process.env.PGPOOL_CONN_TIMEOUT_MS || 30000)  // Increased to 30s
 
 if (isNaN(poolMax) || poolMax < 1 || poolMax > 100) {
@@ -126,7 +129,7 @@ pool.on("remove", (client) => {
   }
 })
 
-export const db = drizzle(pool, { logger: true })
+export const db = drizzle(pool, { logger: process.env.NODE_ENV === 'development' })
 
 /**
  * Test database connection

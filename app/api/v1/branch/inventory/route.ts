@@ -6,6 +6,7 @@ import { branchInventory, globalProducts, organizationInventory, categories, aud
 import { eq, and, like, or, desc, sql, isNull, SQL } from "drizzle-orm"
 import { getEffectiveProductData } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
+import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 // GET /api/v1/branch/inventory - List products in branch inventory
 export async function GET(req: NextRequest) {
@@ -102,62 +103,60 @@ export async function GET(req: NextRequest) {
 
     const whereClause = and(...conditions)
 
-    console.log(`[Branch Inventory API] Query params - branchId: ${branchId}, orgId: ${orgIdNum}, visibility: ${visibility}`)
+    const cacheKey = scopedCacheKey('branch-inv', { branchId, orgId: orgIdNum }, {
+      search, visibility, page: pageNum, limit: limitNum
+    })
 
-    const [items, totalResult] = await Promise.all([
-      db.select({
-        // Use branch inventory ID as the primary ID
-        id: branchInventory.id,
-        branchId: branchInventory.branchId,
-        organizationId: branchInventory.organizationId,
-        organizationInventoryId: branchInventory.organizationInventoryId,
-        isVisible: branchInventory.isVisible,
-        isActive: branchInventory.isActive,
-        // Stock comes from global products (single source of truth)
-        stockQuantity: globalProducts.stockQuantity,
-        // Reorder threshold no longer used – always 0 for compatibility
-        reorderThreshold: sql<number>`0`,
-        assignedAt: branchInventory.assignedAt,
-        updatedAt: branchInventory.updatedAt,
-        // Global product details
-        productName: globalProducts.name,
-        productCode: globalProducts.productCode,
-        productImageUrl: globalProducts.imageUrl,
-        basePrice: globalProducts.basePrice,
-        unit: globalProducts.unit,
-        status: globalProducts.status,
-        categoryName: categories.name,
-        // Organization overrides
-        customName: organizationInventory.customName,
-        customPrice: organizationInventory.customPrice,
-        customDescription: organizationInventory.customDescription,
-        customImageUrl: organizationInventory.customImageUrl,
-      })
-        .from(branchInventory)
-        .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
-        .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
-        .where(whereClause)
-        .orderBy(desc(branchInventory.assignedAt))
-        .limit(limitNum)
-        .offset(offset),
+    const result = await getCached(cacheKey, async () => {
+      const [items, totalResult] = await Promise.all([
+        db.select({
+          id: branchInventory.id,
+          branchId: branchInventory.branchId,
+          organizationId: branchInventory.organizationId,
+          organizationInventoryId: branchInventory.organizationInventoryId,
+          isVisible: branchInventory.isVisible,
+          isActive: branchInventory.isActive,
+          stockQuantity: globalProducts.stockQuantity,
+          reorderThreshold: sql<number>`0`,
+          assignedAt: branchInventory.assignedAt,
+          updatedAt: branchInventory.updatedAt,
+          productName: globalProducts.name,
+          productCode: globalProducts.productCode,
+          productImageUrl: globalProducts.imageUrl,
+          basePrice: globalProducts.basePrice,
+          unit: globalProducts.unit,
+          status: globalProducts.status,
+          categoryName: categories.name,
+          customName: organizationInventory.customName,
+          customPrice: organizationInventory.customPrice,
+          customDescription: organizationInventory.customDescription,
+          customImageUrl: organizationInventory.customImageUrl,
+        })
+          .from(branchInventory)
+          .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+          .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+          .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+          .where(whereClause)
+          .orderBy(desc(branchInventory.assignedAt))
+          .limit(limitNum)
+          .offset(offset),
 
-      db
-        .select({ count: sql<number>`cast(count(*) as integer)` })
-        .from(branchInventory)
-        .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
-        .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-        .where(whereClause),
-    ])
+        db
+          .select({ count: sql<number>`cast(count(*) as integer)` })
+          .from(branchInventory)
+          .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+          .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+          .where(whereClause),
+      ])
 
-    const total = Number(totalResult[0]?.count || 0)
+      const total = Number(totalResult[0]?.count || 0)
+      return { items, total, page: pageNum, limit: limitNum }
+    }, CACHE_TTL.INVENTORY)
 
-    console.log(`[Branch Inventory API] Found ${items.length} items, total: ${total}`)
-
-    return NextResponse.json({ items, total, page: pageNum, limit: limitNum })
+    return NextResponse.json(result)
   } catch (error: any) {
     console.error("Error fetching branch inventory:", error)
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -250,13 +249,16 @@ export async function PUT(req: NextRequest) {
       },
     })
 
+    // Invalidate branch inventory cache
+    await invalidateByPrefix('branch-inv')
+
     return NextResponse.json({
       message: "Inventory updated successfully",
       inventory: updatedInventory
     })
   } catch (error: any) {
     console.error("Error updating branch inventory:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 

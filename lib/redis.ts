@@ -141,9 +141,7 @@ export class RedisMFA {
       attempts: 0,
       isUsed: false,
     }
-    console.log("Redis - Setting OTP with key:", key, "data:", otpData, "TTL:", ttlSeconds)
     await redis.setex(key, ttlSeconds, JSON.stringify(otpData))
-    console.log("Redis - OTP set successfully")
   }
 
   // Get OTP data
@@ -224,12 +222,10 @@ export class RedisMFA {
   static async incrementDailyCount(userId: string): Promise<number> {
     const today = new Date().toISOString().split('T')[0]
     const key = REDIS_KEYS.MFA_DAILY_COUNT(userId, today)
-    console.log("Redis - Incrementing daily count for key:", key)
     const count = await redis.incr(key)
     // Set expiry to end of day (24 hours from now)
     const ttl = Math.ceil((new Date().setHours(23, 59, 59, 999) - Date.now()) / 1000)
     await redis.expire(key, ttl)
-    console.log("Redis - Daily count incremented to:", count)
     return count
   }
 
@@ -252,6 +248,6 @@ export class RedisMFA {
   // Clean up expired keys (optional maintenance function)
   static async cleanupExpiredKeys(): Promise<void> {
     // Redis automatically handles TTL, but we can add cleanup logic here if needed
-    console.log('Redis cleanup completed - TTL handled automatically')
+    // Redis automatically handles TTL — no manual cleanup needed
   }
 }

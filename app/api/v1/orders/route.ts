@@ -221,7 +221,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ items: filtered })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -461,7 +461,7 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     console.error("Order creation error:", e)
     console.error("Error stack:", e.stack)
-    return NextResponse.json({ error: e.message || "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -665,7 +665,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ message: 'Order updated' })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 

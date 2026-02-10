@@ -30,7 +30,14 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
   if (err) return err
   const { id } = await params
-  const [item] = await db.select().from(organizations).where(eq(organizations.id, Number(id)))
+
+  // BOLA Protection
+  const orgId = Number(id)
+  const { verifyResourceAccess } = await import("@/lib/auth")
+  const hasAccess = await verifyResourceAccess(orgId)
+  if (!hasAccess) return error("Forbidden: You do not have access to this organization", 403)
+
+  const [item] = await db.select().from(organizations).where(eq(organizations.id, orgId))
   if (!item) return error("Not found", 404)
   return ok({ item })
 }
@@ -155,6 +162,6 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
       return error("Cannot delete: A database dependency (foreign key) is still blocking deletion. Ensure all branches, users, and groups are removed.", 400)
     }
 
-    return error("Failed to delete organization: " + (e.message || "Unknown error"), 500)
+    return error("Failed to delete organization", 500)
   }
 }

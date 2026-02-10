@@ -32,14 +32,14 @@ export async function GET(
             return NextResponse.json({ error: "Group not found" }, { status: 404 })
         }
 
-        // Security check: Head Office can only see groups in their org
-        if (role === "HEAD_OFFICE" && group.organizationId !== orgId) {
+        // Security check: Non-SUPER_ADMIN can only see groups in their org
+        if (role !== "SUPER_ADMIN" && group.organizationId !== orgId) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
         return NextResponse.json({ group })
     } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }
 
@@ -127,7 +127,7 @@ export async function PUT(
 
         return NextResponse.json({ group: updated })
     } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }
 
@@ -193,6 +193,6 @@ export async function DELETE(
 
         return NextResponse.json({ message: "Group deleted successfully" })
     } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 })
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }

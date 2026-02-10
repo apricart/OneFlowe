@@ -9,57 +9,57 @@ import { logError } from '@/lib/global-logger'
 
 // Email configuration from environment variables
 const EMAIL_CONFIG = {
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-    from: process.env.SMTP_USER || 'noreply@example.com',
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  user: process.env.SMTP_USER,
+  pass: process.env.SMTP_PASS,
+  from: process.env.SMTP_USER || 'noreply@example.com',
 } as const
 
 // Validate email configuration
 function validateEmailConfig(): boolean {
-    if (!EMAIL_CONFIG.user || !EMAIL_CONFIG.pass) {
-        console.error('[Email] SMTP credentials not configured. Please set SMTP_USER and SMTP_PASS in .env.local')
-        return false
-    }
-    return true
+  if (!EMAIL_CONFIG.user || !EMAIL_CONFIG.pass) {
+    console.error('[Email] SMTP credentials not configured. Please set SMTP_USER and SMTP_PASS in .env.local')
+    return false
+  }
+  return true
 }
 
 // Create transporter instance (singleton)
 let transporter: Transporter | null = null
 
 function getTransporter(): Transporter | null {
-    if (!validateEmailConfig()) {
-        return null
-    }
+  if (!validateEmailConfig()) {
+    return null
+  }
 
-    if (!transporter) {
-        try {
-            transporter = nodemailer.createTransport({
-                host: EMAIL_CONFIG.host,
-                port: EMAIL_CONFIG.port,
-                secure: EMAIL_CONFIG.port === 465, // true for 465, false for other ports
-                auth: {
-                    user: EMAIL_CONFIG.user,
-                    pass: EMAIL_CONFIG.pass,
-                },
-            })
-        } catch (error) {
-            logError(error, 'EMAIL_CREATE_TRANSPORTER')
-            return null
-        }
+  if (!transporter) {
+    try {
+      transporter = nodemailer.createTransport({
+        host: EMAIL_CONFIG.host,
+        port: EMAIL_CONFIG.port,
+        secure: EMAIL_CONFIG.port === 465, // true for 465, false for other ports
+        auth: {
+          user: EMAIL_CONFIG.user,
+          pass: EMAIL_CONFIG.pass,
+        },
+      })
+    } catch (error) {
+      logError(error, 'EMAIL_CREATE_TRANSPORTER')
+      return null
     }
+  }
 
-    return transporter
+  return transporter
 }
 
 /**
  * Generate HTML email template for OTP
  */
 function generateOTPEmailHTML(code: string, type: string): string {
-    const typeText = type === 'LOGIN' ? 'Login' : type === 'VERIFY_EMAIL' ? 'Email Verification' : 'Password Reset'
+  const typeText = type === 'LOGIN' ? 'Login' : type === 'VERIFY_EMAIL' ? 'Email Verification' : 'Password Reset'
 
-    return `
+  return `
     <!DOCTYPE html>
     <html>
     <head>
@@ -135,9 +135,9 @@ function generateOTPEmailHTML(code: string, type: string): string {
  * Generate plain text email for OTP (fallback)
  */
 function generateOTPEmailText(code: string, type: string): string {
-    const typeText = type === 'LOGIN' ? 'Login' : type === 'VERIFY_EMAIL' ? 'Email Verification' : 'Password Reset'
+  const typeText = type === 'LOGIN' ? 'Login' : type === 'VERIFY_EMAIL' ? 'Email Verification' : 'Password Reset'
 
-    return `
+  return `
 OneFlowe - ${typeText} Verification
 
 Hello,
@@ -160,61 +160,61 @@ This is an automated message, please do not reply.
  * Send OTP email to user
  */
 export async function sendOTPEmail(
-    to: string,
-    code: string,
-    type: 'LOGIN' | 'VERIFY_EMAIL' | 'RESET_PASSWORD'
+  to: string,
+  code: string,
+  type: 'LOGIN' | 'VERIFY_EMAIL' | 'RESET_PASSWORD'
 ): Promise<boolean> {
-    try {
-        // Validate inputs
-        if (!to || !code || !type) {
-            console.error('[Email] Invalid parameters for sendOTPEmail')
-            return false
-        }
-
-        // Get transporter
-        const transport = getTransporter()
-        if (!transport) {
-            console.error('[Email] Failed to create email transporter. Check SMTP configuration.')
-            return false
-        }
-
-        // Prepare email subject
-        const typeText = type === 'LOGIN' ? 'Login' : type === 'VERIFY_EMAIL' ? 'Email Verification' : 'Password Reset'
-        const subject = `Your OneFlowe ${typeText} Code`
-
-        // Send email
-        const info = await transport.sendMail({
-            from: `"OneFlowe" <${EMAIL_CONFIG.from}>`,
-            to,
-            subject,
-            text: generateOTPEmailText(code, type),
-            html: generateOTPEmailHTML(code, type),
-        })
-
-        console.log(`[Email] OTP email sent successfully to ${to} - Message ID: ${info.messageId}`)
-        return true
-
-    } catch (error) {
-        logError(error, 'EMAIL_SEND_OTP', { to, type })
-        return false
+  try {
+    // Validate inputs
+    if (!to || !code || !type) {
+      console.error('[Email] Invalid parameters for sendOTPEmail')
+      return false
     }
+
+    // Get transporter
+    const transport = getTransporter()
+    if (!transport) {
+      console.error('[Email] Failed to create email transporter. Check SMTP configuration.')
+      return false
+    }
+
+    // Prepare email subject
+    const typeText = type === 'LOGIN' ? 'Login' : type === 'VERIFY_EMAIL' ? 'Email Verification' : 'Password Reset'
+    const subject = `Your OneFlowe ${typeText} Code`
+
+    // Send email
+    const info = await transport.sendMail({
+      from: `"OneFlowe" <${EMAIL_CONFIG.from}>`,
+      to,
+      subject,
+      text: generateOTPEmailText(code, type),
+      html: generateOTPEmailHTML(code, type),
+    })
+
+
+    return true
+
+  } catch (error) {
+    logError(error, 'EMAIL_SEND_OTP', { to, type })
+    return false
+  }
 }
 
 /**
  * Verify email service configuration
  */
 export async function verifyEmailConfig(): Promise<boolean> {
-    try {
-        const transport = getTransporter()
-        if (!transport) {
-            return false
-        }
-
-        await transport.verify()
-        console.log('[Email] SMTP configuration verified successfully')
-        return true
-    } catch (error) {
-        logError(error, 'EMAIL_VERIFY_CONFIG')
-        return false
+  try {
+    const transport = getTransporter()
+    if (!transport) {
+      return false
     }
+
+    await transport.verify()
+    console.log('[Email] SMTP configuration verified successfully')
+    return true
+  } catch (error) {
+    logError(error, 'EMAIL_VERIFY_CONFIG')
+    return false
+  }
 }

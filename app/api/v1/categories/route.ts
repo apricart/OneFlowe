@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { categories, globalProducts } from "@/db/schema"
 import { eq, and, like, or, desc, sql, isNull, isNotNull } from "drizzle-orm"
 import { escapeLikePattern } from "@/lib/utils"
+import { getCached, invalidateByPrefix, CACHE_TTL } from "@/lib/cache-utils"
 
 // GET /api/v1/categories - List all categories with optional filtering
 export async function GET(req: NextRequest) {
@@ -35,51 +36,50 @@ export async function GET(req: NextRequest) {
 
     const whereClause = and(...conditions)
 
-    // Fetch categories with product count and subcategory count
-    const [items, totalResult] = await Promise.all([
-      db
-        .select({
-          id: categories.id,
-          name: categories.name,
-          createdAt: categories.createdAt,
-          updatedAt: categories.updatedAt,
-          subcategoriesCount: sql<number>`(
-            SELECT COALESCE(COUNT(*), 0)::int 
-            FROM categories sub
-            WHERE sub.parent_id = categories.id
-          )`,
-          productsCount: sql<number>`(
-            SELECT COALESCE(COUNT(*), 0)::int 
-            FROM global_products gp
-            WHERE gp.category_id IN (
-              SELECT sub.id 
-              FROM categories sub 
+    const cacheKey = `cache:categories:search=${search}&page=${page}&limit=${limit}`
+
+    const result = await getCached(cacheKey, async () => {
+      const [items, totalResult] = await Promise.all([
+        db
+          .select({
+            id: categories.id,
+            name: categories.name,
+            createdAt: categories.createdAt,
+            updatedAt: categories.updatedAt,
+            subcategoriesCount: sql<number>`(
+              SELECT COALESCE(COUNT(*), 0)::int 
+              FROM categories sub
               WHERE sub.parent_id = categories.id
-            )
-          )`,
-        })
-        .from(categories)
-        .where(whereClause)
-        .orderBy(desc(categories.createdAt))
-        .limit(limit)
-        .offset(offset),
-      db
-        .select({ count: sql<number>`count(*)` })
-        .from(categories)
-        .where(whereClause)
-    ])
+            )`,
+            productsCount: sql<number>`(
+              SELECT COALESCE(COUNT(*), 0)::int 
+              FROM global_products gp
+              WHERE gp.category_id IN (
+                SELECT sub.id 
+                FROM categories sub 
+                WHERE sub.parent_id = categories.id
+              )
+            )`,
+          })
+          .from(categories)
+          .where(whereClause)
+          .orderBy(desc(categories.createdAt))
+          .limit(limit)
+          .offset(offset),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(categories)
+          .where(whereClause)
+      ])
 
-    const total = totalResult[0]?.count || 0
+      const total = totalResult[0]?.count || 0
+      return {
+        items,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      }
+    }, CACHE_TTL.STATIC)
 
-    return NextResponse.json({
-      items,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    })
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Categories GET error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -128,6 +128,9 @@ export async function POST(req: NextRequest) {
         organizationId: null, // Global categories for Super Admin
       })
       .returning()
+
+    await invalidateByPrefix('categories')
+    await invalidateByPrefix('subcategories')
 
     return NextResponse.json({ item: newCategory[0] }, { status: 201 })
   } catch (error) {
@@ -214,6 +217,9 @@ export async function PUT(req: NextRequest) {
       .where(eq(categories.id, id))
       .returning()
 
+    await invalidateByPrefix('categories')
+    await invalidateByPrefix('subcategories')
+
     return NextResponse.json({ item: updatedCategory[0] })
   } catch (error) {
     console.error("Categories PUT error:", error)
@@ -283,6 +289,9 @@ export async function DELETE(req: NextRequest) {
     await db
       .delete(categories)
       .where(eq(categories.id, parseInt(id)))
+
+    await invalidateByPrefix('categories')
+    await invalidateByPrefix('subcategories')
 
     return NextResponse.json({ message: "Category deleted successfully" })
   } catch (error) {
