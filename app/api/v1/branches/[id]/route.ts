@@ -1,4 +1,5 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
+import { invalidateByPrefix } from "@/lib/cache-utils"
 import { db } from "@/lib/db"
 import { branches, users, orders, branchProducts, branchInventory, employeeCredentials, suppliers, budgets, restockRequests, inventory, systemLogs, notifications, auditLogs } from "@/db/schema"
 import { eq, count } from "drizzle-orm"
@@ -42,9 +43,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const patch: any = {}
     if (body.name !== undefined) patch.name = String(body.name)
     if (body.code !== undefined) patch.code = String(body.code)
-    if (body.status !== undefined) patch.status = String(body.status)
+    if (body.status !== undefined) {
+      const normalized = String(body.status).toLowerCase()
+      const validStatuses = ['active', 'inactive', 'suspended']
+      if (!validStatuses.includes(normalized)) {
+        return error(`Status must be one of: ${validStatuses.join(', ')}`, 400)
+      }
+      patch.status = normalized
+    }
     if (body.groupId !== undefined) patch.groupId = body.groupId === null ? null : Number(body.groupId)
+    patch.updatedAt = new Date()
     const [item] = await db.update(branches).set(patch).where(eq(branches.id, Number(id))).returning()
+
+    // Invalidate branches cache so GET returns fresh data immediately
+    await invalidateByPrefix('branches')
+
     return ok({ item })
   } catch (e: any) {
     console.error("Update branch failed:", e)
@@ -120,6 +133,10 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
 
     // 3. Delete the branch
     await db.delete(branches).where(eq(branches.id, branchId))
+
+    // 4. Invalidate caches
+    await invalidateByPrefix('branches')
+
     return ok({ ok: true })
 
   } catch (e: any) {

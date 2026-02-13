@@ -32,6 +32,7 @@ import {
 import { formatPKR } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
 import { OrderExport } from "@/components/orders/order-export"
+import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -545,6 +546,8 @@ export default function OrdersManagementPage() {
                       </td>
                       <td className="px-2 py-2 bg-white dark:bg-slate-900">
                         <div className="flex items-center gap-2">
+                          <ReceiptIconButton orderId={order.id} />
+
                           <Button
                             asChild
                             variant="ghost"

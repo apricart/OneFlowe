@@ -1,0 +1,19 @@
+❌ No WAF (Web Application Firewall)
+
+❌ No monitoring alerts
+
+❌ No proper IAM restrictions
+
+❌ No database backup strategy
+
+❌ No disaster recovery plan
+
+❌ No staging environment
+
+❌ No log retention policy
+
+❌ No documented architecture
+
+❌ No access control documentation
+
+❌ No vulnerability scanning in CI/CD

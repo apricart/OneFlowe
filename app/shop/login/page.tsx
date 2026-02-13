@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect } from "react"
-import { signIn } from "next-auth/react"
+import { signIn, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,9 +18,10 @@ export default function ShopLoginPage() {
   const router = useRouter()
   const { toast } = useToast()
 
-  // Reset theme to light on mount
+  // Reset theme to light on mount and sign out any existing session
   useEffect(() => {
     localStorage.removeItem("theme")
+    signOut({ redirect: false })
   }, [])
 
   const [providerType, setProviderType] = useState<"user" | "employee" | null>(null)
@@ -70,12 +71,12 @@ export default function ShopLoginPage() {
         } else {
           // Employee Login Success
           toast({ title: "Logged in successfully" })
-          router.push("/shop")
+          window.location.replace("/shop")
         }
       } else {
         // Standard User Login Success
         toast({ title: "Logged in successfully" })
-        router.push("/shop")
+        window.location.replace("/shop")
       }
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" })
@@ -106,10 +107,13 @@ export default function ShopLoginPage() {
       })
 
       if (result?.error) {
-        toast({ title: "MFA verification failed", description: result.error, variant: "destructive" })
+        const errorMessage = result.error === "CredentialsSignin"
+          ? "Invalid or expired OTP code. Please check and try again."
+          : result.error
+        toast({ title: "MFA verification failed", description: errorMessage, variant: "destructive" })
       } else {
         toast({ title: "Logged in successfully" })
-        router.push("/shop")
+        window.location.replace("/shop")
       }
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" })
@@ -229,7 +233,7 @@ export default function ShopLoginPage() {
           <Button
             variant="outline"
             className="w-full gap-2 border-slate-300 text-slate-700 hover:bg-slate-50"
-            onClick={() => router.push("/login")}
+            onClick={() => window.location.replace("/login")}
           >
             <ChevronLeft className="h-4 w-4" />
             Back to Dashboard Login

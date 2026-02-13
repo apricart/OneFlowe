@@ -415,6 +415,31 @@ export async function POST(req: NextRequest) {
           .where(eq(globalProducts.id, ci.globalProductId))
       }
 
+      // 6. Generate and store receipt data
+      const { generateReceiptData } = await import('@/lib/receipt-generator')
+      try {
+        const receiptData = await generateReceiptData({
+          orderId: ord.id,
+          orderTid: tid,
+          organizationId: Number(organizationId),
+          branchId: Number(branchId),
+          orderItemsData: calculatedItems,
+          subtotalCents: subtotal,
+          taxCents: tax,
+          totalCents: total,
+          discountCents: 0,
+          deliveryChargesCents: 0,
+        })
+
+        // Update order with receipt data
+        await tx.update(orders)
+          .set({ receiptData })
+          .where(eq(orders.id, ord.id))
+      } catch (receiptErr) {
+        console.error("Receipt generation failed during order creation", receiptErr)
+        // Don't fail the order if receipt generation fails
+      }
+
       const budgetId = budget?.id
       if (!budgetId) throw new Error("Budget ID missing")
 

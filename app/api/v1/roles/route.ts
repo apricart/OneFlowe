@@ -4,7 +4,8 @@ import { ok, requireApiRole } from "@/lib/api"
 import { getCached, CACHE_TTL } from "@/lib/cache-utils"
 
 export async function GET() {
-  // Allow all authenticated users to view roles
+  // Allow all authenticated administrative users to view roles
+  // Restricted from ORDER_PORTAL as they don't need role management visibility
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
   if (err) return err
 

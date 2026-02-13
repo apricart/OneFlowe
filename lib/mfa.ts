@@ -566,12 +566,10 @@ export async function clearAllMFACooldowns(userId: string): Promise<void> {
  */
 export async function clearDailyCount(userId: string): Promise<void> {
   try {
-    const today = new Date().toISOString().split('T')[0]
-    const key = REDIS_KEYS.MFA_DAILY_COUNT(userId, today)
-    await redis.del(key)
-
+    await RedisMFA.deleteDailyCount(userId)
   } catch (error) {
-    console.error("Error clearing daily count:", error)
+    // Only log error, don't throw as this is a non-critical cleanup operation
+    console.error(`[MFA] Error clearing daily count for user ${userId}:`, error)
   }
 }
 

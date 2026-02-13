@@ -342,6 +342,35 @@ export const orders = pgTable(
     statusAtRefund: varchar("status_at_refund", { length: 32 }), // Status before refund (e.g., "APPROVED", "FULFILLED")
     refundAmountCents: integer("refund_amount_cents"), // Total refund amount
     refundReason: text("refund_reason"),
+    // Receipt data - complete snapshot for historical accuracy
+    receiptData: jsonb("receipt_data").$type<{
+      invoiceNumber: string
+      date: string
+      buyerName: string
+      buyerAddress: string
+      buyerPhone?: string
+      organizationName: string
+      organizationContact?: string
+      items: Array<{
+        categoryName: string
+        items: Array<{
+          id: number
+          description: string
+          quantity: number
+          rate: number
+          tax: number
+          total: number
+          unit: string
+        }>
+        subtotal: number
+      }>
+      subtotal: number
+      discount: number
+      tax: number
+      deliveryCharges: number
+      refund: number
+      totalAmount: number
+    }>(),
   },
   (t) => ({
     tidIdx: uniqueIndex("orders_tid_idx").on(t.tid),

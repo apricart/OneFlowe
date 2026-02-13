@@ -3,7 +3,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { signOut, useSession } from "next-auth/react"
 import Image from "next/image"
-import { Moon, Sun, ShoppingBag, BarChart3 } from "lucide-react"
+import { Moon, Sun, BarChart3 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { CommandPalette } from "@/components/ui/command-palette"
 import { ContextSelector } from "@/components/shell/context-selector"
@@ -32,8 +32,10 @@ export function Topbar() {
 
   async function logout() {
     localStorage.removeItem('theme')
-    await signOut({ callbackUrl: "/login", redirect: true })
+    await signOut({ redirect: false })
+    window.location.replace("/login")
   }
+
 
   return (
     <header
@@ -49,16 +51,6 @@ export function Topbar() {
 
       {/* Right Side - Actions & Profile */}
       <div className="flex items-center gap-3">
-        {/* Order Portal link */}
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2 hidden sm:flex"
-          onClick={() => signOut({ callbackUrl: "/shop" })}
-        >
-          <ShoppingBag className="h-4 w-4" />
-          Order Portal
-        </Button>
 
         {/* Group Analytics link */}
         {(userRole === "SUPER_ADMIN" || userRole === "HEAD_OFFICE") && (
@@ -135,7 +127,7 @@ export function Topbar() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="mx-0 my-1" />
             <DropdownMenuItem
-              onClick={() => (window.location.href = "/settings")}
+              onClick={() => (window.location.replace("/settings"))}
               className="gap-2 px-3 py-2 cursor-pointer"
             >
               <SettingsIcon className="h-4 w-4" />

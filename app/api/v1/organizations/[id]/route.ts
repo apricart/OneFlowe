@@ -1,4 +1,5 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
+import { invalidateByPrefix } from "@/lib/cache-utils"
 import { db } from "@/lib/db"
 import {
   organizations,
@@ -70,8 +71,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (exists.length > 0) return error(`Organization with code '${code}' already exists`, 400)
       patch.code = code
     }
-    if (body.status !== undefined) patch.status = String(body.status)
+    if (body.status !== undefined) {
+      const normalized = String(body.status).toLowerCase()
+      const validStatuses = ['active', 'inactive', 'suspended']
+      if (!validStatuses.includes(normalized)) {
+        return error(`Status must be one of: ${validStatuses.join(', ')}`, 400)
+      }
+      patch.status = normalized
+      console.log(`[Org Update] PATCH /api/v1/organizations/${id} - New status: ${patch.status}`)
+    }
+    patch.updatedAt = new Date()
     const [item] = await db.update(organizations).set(patch).where(eq(organizations.id, Number(id))).returning()
+
+    // Invalidate organizations cache so GET returns fresh data immediately
+    await invalidateByPrefix('organizations')
+
     return ok({ item })
   } catch (e: any) {
     return error(e?.message || "Update failed", 400)
@@ -107,9 +121,9 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
       return error(`Cannot delete: Historical order records were found. Organizations with financial transaction history cannot be deleted.`, 400)
     }
 
-    const [groupCount] = await db.select({ val: count() }).from(groups).where(eq(groups.organizationId, orgId))
+    const [groupCount] = await db.select({ val: count() }).from(groups).where(and(eq(groups.organizationId, orgId), ne(groups.status, 'deleted')))
     if (groupCount.val > 0) {
-      return error(`Cannot delete: This organization has ${groupCount.val} group(s) defined. Please delete the organization's groups first.`, 400)
+      return error(`Cannot delete: This organization has ${groupCount.val} active group(s) defined. Please delete the organization's groups first.`, 400)
     }
 
     const [hoCount] = await db.select({ val: count() }).from(headOffices).where(eq(headOffices.organizationId, orgId))
@@ -145,10 +159,15 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ id: str
       await tx.delete(suppliers).where(eq(suppliers.organizationId, orgId))
       await tx.delete(budgets).where(eq(budgets.organizationId, orgId))
       await tx.delete(employeeCredentials).where(eq(employeeCredentials.organizationId, orgId))
+      await tx.delete(groups).where(eq(groups.organizationId, orgId))
 
       // 3. Final Step: Delete the Organization
       await tx.delete(organizations).where(eq(organizations.id, orgId))
     })
+
+    // 4. Invalidate caches
+    await invalidateByPrefix('organizations')
+    await invalidateByPrefix('branches')
 
     return ok({ ok: true })
   } catch (e: any) {

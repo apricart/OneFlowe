@@ -18,14 +18,14 @@ import { useSession } from "next-auth/react"
 
 import { ReportFilters } from "@/components/reports/report-filters"
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+import { fetcher } from "@/lib/fetcher"
 
 export default function RefundOrdersReportPage() {
   const { organizationId, branchId } = useAppContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [groupId, setGroupId] = useState("")
+  const [selectedBranchId, setSelectedBranchId] = useState("")
   const [generatedDate, setGeneratedDate] = useState("")
 
   const { data: session } = useSession()
@@ -33,11 +33,12 @@ export default function RefundOrdersReportPage() {
   const [hasMounted, setHasMounted] = useState(false)
 
   const queryParams = new URLSearchParams()
-  if (branchId) queryParams.set("branchId", branchId)
-  if (organizationId) queryParams.set("organizationId", organizationId)
+  // Preference order: Selected filter > App context
+  const targetBranchId = selectedBranchId || branchId
+  if (targetBranchId) queryParams.set("branchId", String(targetBranchId))
+  if (organizationId) queryParams.set("organizationId", String(organizationId))
   if (startDate) queryParams.set("startDate", startDate)
   if (endDate) queryParams.set("endDate", endDate)
-  if (groupId) queryParams.set("groupId", groupId)
 
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/refunds?${queryParams.toString()}`, fetcher)
 
@@ -124,12 +125,14 @@ export default function RefundOrdersReportPage() {
         setStartDate={setStartDate}
         endDate={endDate}
         setEndDate={setEndDate}
-        groupId={groupId}
-        setGroupId={setGroupId}
+        branchId={selectedBranchId}
+        setBranchId={setSelectedBranchId}
         onRefresh={() => mutate()}
         isLoading={isLoading}
         role={role}
         organizationId={organizationId || undefined}
+        showGroupFilter={false}
+        showBranchFilter={true}
         searchPlaceholder="Search TID, Branch, or Reason..."
         onExport={handleExportPDF}
       />

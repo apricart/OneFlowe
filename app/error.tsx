@@ -48,7 +48,7 @@ export default function Error({
             Try Again
           </Button>
           <Button
-            onClick={() => window.location.href = "/"}
+            onClick={() => window.location.replace("/")}
             variant="outline"
             className="flex-1 gap-2"
           >

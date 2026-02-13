@@ -65,11 +65,13 @@ export async function getCached<T>(
 // Uses SCAN-based KEYS to find and delete all keys matching a prefix
 export async function invalidateByPrefix(prefix: string): Promise<void> {
     try {
-        const pattern = `cache:${prefix}:*`
+        const pattern = `cache:${prefix}*`
         const keys = await redis.keys(pattern)
         if (keys.length > 0) {
             await redis.del(...keys)
         }
+        // Also ensure the base prefix without colon is checked if pattern missed it
+        await redis.del(`cache:${prefix}`)
     } catch {
         // Invalidation failure is non-fatal — data will expire via TTL
     }

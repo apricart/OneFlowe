@@ -47,8 +47,12 @@ export async function isRedisAvailable(): Promise<boolean> {
   try {
     await redis.ping()
     return true
-  } catch (error) {
-    console.error('[Redis] Connection check failed:', error)
+  } catch (error: any) {
+    if (error.message?.includes('WRONGPASS') || error.message?.includes('unauthorized')) {
+      console.error('[Redis] Authentication failed. Please check UPSTASH_REDIS_REST_TOKEN.')
+    } else {
+      console.error('[Redis] Connection check failed:', error)
+    }
     return false
   }
 }
@@ -243,6 +247,21 @@ export class RedisMFA {
       return count
     }
     return 0
+  }
+
+  // Delete daily count
+  static async deleteDailyCount(userId: string): Promise<void> {
+    try {
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('Invalid userId for deleteDailyCount')
+      }
+      const today = new Date().toISOString().split('T')[0]
+      const key = REDIS_KEYS.MFA_DAILY_COUNT(userId, today)
+      await redis.del(key)
+    } catch (error) {
+      console.error('[Redis] Failed to delete daily count:', error)
+      throw error
+    }
   }
 
   // Clean up expired keys (optional maintenance function)

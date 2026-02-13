@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense } from "react"
 import type React from "react"
 
 import { useRouter, useSearchParams } from "next/navigation"
-import { signIn, getSession } from "next-auth/react"
+import { signIn, signOut, getSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
@@ -26,11 +26,12 @@ function LoginForm() {
   const [pendingUser, setPendingUser] = useState<{ email: string; password: string } | null>(null)
   const [isProcessingMFA, setIsProcessingMFA] = useState(false)
 
-  // Clear theme preference on mount and FORCE light mode
+  // Clear theme preference on mount and FORCE light mode, and sign out any existing session
   useEffect(() => {
     localStorage.removeItem("theme")
     document.documentElement.classList.remove("dark")
     document.documentElement.style.colorScheme = "light"
+    signOut({ redirect: false })
   }, [])
 
   async function onSubmit(e: React.FormEvent) {
@@ -54,6 +55,15 @@ function LoginForm() {
         if (result.error === "CredentialsSignin") {
           throw new Error("Invalid credentials. Please check your email and password.")
         }
+        if (result.error === "ORGANIZATION_INACTIVE") {
+          throw new Error("Your organization is currently inactive. Please contact support.")
+        }
+        if (result.error === "BRANCH_INACTIVE") {
+          throw new Error("Your branch is currently inactive. Please contact your administrator.")
+        }
+        if (result.error === "USER_INACTIVE") {
+          throw new Error("Your account has been deactivated. Please contact support.")
+        }
         throw new Error(result.error)
       }
 
@@ -68,10 +78,10 @@ function LoginForm() {
       const userRole = (session?.user as any)?.role
 
       if (userRole === "ORDER_PORTAL") {
-        router.replace("/shop")
+        window.location.replace("/shop")
       } else {
         const cb = searchParams.get("callbackUrl")
-        router.replace(cb || "/dashboard")
+        window.location.replace(cb || "/dashboard")
       }
     } catch (err: any) {
       setError(err.message || "An error occurred during login")
@@ -90,10 +100,10 @@ function LoginForm() {
     const userRole = (session?.user as any)?.role
 
     if (userRole === "ORDER_PORTAL") {
-      router.replace("/shop")
+      window.location.replace("/shop")
     } else {
       const cb = searchParams.get("callbackUrl")
-      router.replace(cb || "/dashboard")
+      window.location.replace(cb || "/dashboard")
     }
   }
 
@@ -194,12 +204,7 @@ function LoginForm() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="text-xs text-slate-600">
-          <span className="mr-2">Forgot password?</span>
-          <a href="#" className="underline text-blue-600 hover:text-blue-700 font-medium">
-            Recover
-          </a>
-        </CardFooter>
+
       </Card>
 
 

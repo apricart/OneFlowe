@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { GroupFilter } from "./group-filter"
+import { BranchFilter } from "./branch-filter"
 import { Role } from "@/lib/rbac"
 
 interface ReportFiltersProps {
@@ -16,6 +17,8 @@ interface ReportFiltersProps {
     setEndDate: (value: string) => void
     groupId?: string
     setGroupId?: (value: string) => void
+    branchId?: string
+    setBranchId?: (value: string) => void
     onRefresh: () => void
     onExport?: () => void
     isLoading: boolean
@@ -23,6 +26,7 @@ interface ReportFiltersProps {
     organizationId?: string | number
     searchPlaceholder?: string
     showGroupFilter?: boolean
+    showBranchFilter?: boolean
 }
 
 export function ReportFilters({
@@ -34,13 +38,16 @@ export function ReportFilters({
     setEndDate,
     groupId,
     setGroupId,
+    branchId,
+    setBranchId,
     onRefresh,
     onExport,
     isLoading,
     role,
     organizationId,
     searchPlaceholder = "Search...",
-    showGroupFilter = true
+    showGroupFilter = true,
+    showBranchFilter = false
 }: ReportFiltersProps) {
     return (
         <Card className="p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
@@ -85,6 +92,16 @@ export function ReportFilters({
                     <div className="w-full md:w-auto">
                         <GroupFilter
                             onGroupChange={setGroupId}
+                            organizationId={organizationId}
+                        />
+                    </div>
+                )}
+
+                {/* Branch Filter */}
+                {showBranchFilter && setBranchId && (role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                    <div className="w-full md:w-auto">
+                        <BranchFilter
+                            onBranchChange={setBranchId}
                             organizationId={organizationId}
                         />
                     </div>

@@ -10,7 +10,7 @@ import { headers } from "next/headers"
 // Rate limit configurations for different endpoint types
 const RATE_LIMITS = {
     // Login/auth endpoints - strict limits
-    login: { requests: 5, windowSeconds: 60 * 15 },     // 5 per 15 minutes
+    login: { requests: 15, windowSeconds: 60 * 15 },    // 15 per 15 minutes
 
     // Standard API endpoints
     api: { requests: 100, windowSeconds: 60 },           // 100 per minute
@@ -87,12 +87,14 @@ export async function getClientIdentifier(userId?: string): Promise<string> {
  * Basic IP validation (supports IPv4 and basic IPv6)
  */
 function isValidIP(ip: string): boolean {
+    // IPv4-mapped IPv6 pattern (e.g., ::ffff:127.0.0.1)
+    const ipv4MappedIpv6Pattern = /^::ffff:(\d{1,3}\.){3}\d{1,3}$/
     // IPv4 pattern
     const ipv4Pattern = /^(\d{1,3}\.){3}\d{1,3}$/
     // Basic IPv6 pattern (simplified)
     const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/
 
-    return ipv4Pattern.test(ip) || ipv6Pattern.test(ip)
+    return ipv4Pattern.test(ip) || ipv6Pattern.test(ip) || ipv4MappedIpv6Pattern.test(ip)
 }
 
 /**
@@ -141,9 +143,13 @@ export async function checkRateLimit(
             remaining: Math.max(0, config.requests - current),
             resetIn: validTTL
         }
-    } catch (error) {
-        // If Redis fails, allow the request but log the error
-        console.error("[RateLimit] Rate limit check failed:", error)
+    } catch (error: any) {
+        // If Redis fails, allow the request but log the error gracefully
+        if (error.message?.includes('WRONGPASS') || error.message?.includes('unauthorized')) {
+            console.warn("[RateLimit] Redis authentication failed. Please check UPSTASH_REDIS_REST_TOKEN. Allowing request (fail-open).")
+        } else {
+            console.error("[RateLimit] Rate limit check failed:", error)
+        }
         // Return permissive values to avoid blocking legitimate traffic during Redis outage
         return { allowed: true, remaining: 0, resetIn: 0 }
     }

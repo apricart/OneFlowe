@@ -138,6 +138,12 @@ export default function OrganizationsPage() {
       const data = await res.json()
 
       if (!res.ok) {
+        if (res.status === 404) {
+          // If already deleted, just sync UI
+          await removeOrganizationOptimistic(id)
+          showFeedback("Organization already deleted. Syncing state.", "success")
+          return
+        }
         throw new Error(data.error || "Failed to delete organization")
       }
 
@@ -159,6 +165,12 @@ export default function OrganizationsPage() {
       const data = await res.json()
 
       if (!res.ok) {
+        if (res.status === 404) {
+          // If already deleted, just sync UI
+          await removeBranchOptimistic(id)
+          showFeedback("Branch already deleted. Syncing state.", "success")
+          return
+        }
         throw new Error(data.error || "Failed to delete branch")
       }
 
@@ -460,7 +472,7 @@ export default function OrganizationsPage() {
 }
 
 function isActiveStatus(status: unknown): boolean {
-  if (typeof status === "string") return status.toLowerCase() === "active"
+  if (typeof status === "string") return status.toLowerCase().trim() === "active"
   if (typeof status === "number") return status === 1
   return Boolean(status)
 }
@@ -582,6 +594,7 @@ function OrganizationListItem({
       role="button"
       tabIndex={0}
       onClick={onClick}
+      suppressHydrationWarning
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault()
@@ -888,13 +901,13 @@ function EditOrgDialog({ org, onSave }: { org: Organization; onSave: (payload: P
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(org.name)
   const [code, setCode] = useState(org.code)
-  const [status, setStatus] = useState<boolean>(((org as any).status || "active") === "active")
+  const [status, setStatus] = useState<boolean>(isActiveStatus(org.status))
 
   useEffect(() => {
     setName(org.name)
     setCode(org.code)
-    setStatus(((org as any).status || "active") === "active")
-  }, [org.name, org.code, (org as any).status])
+    setStatus(isActiveStatus(org.status))
+  }, [org.name, org.code, org.status])
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -956,13 +969,13 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(branch.name)
   const [code, setCode] = useState(branch.code)
-  const [status, setStatus] = useState<boolean>(((branch as any).status || "active") === "active")
+  const [status, setStatus] = useState<boolean>(isActiveStatus(branch.status))
 
   useEffect(() => {
     setName(branch.name)
     setCode(branch.code)
-    setStatus(((branch as any).status || "active") === "active")
-  }, [branch.name, branch.code, (branch as any).status])
+    setStatus(isActiveStatus(branch.status))
+  }, [branch.name, branch.code, branch.status])
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>

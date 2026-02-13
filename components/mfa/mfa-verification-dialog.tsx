@@ -71,13 +71,13 @@ export function MFAVerificationDialog({
       console.log("MFA Dialog: Already sending OTP, skipping")
       return // Prevent multiple simultaneous sends
     }
-    
+
     console.log("MFA Dialog: Starting OTP send for", userEmail)
     isSendingRef.current = true
     setIsSending(true)
     setError(null)
     setOtp("")
-    
+
     try {
       const response = await jsonFetcher("/api/v1/mfa/login/send-otp", {
         method: "POST",
@@ -128,7 +128,12 @@ export function MFAVerificationDialog({
         })
 
         if (result?.error) {
-          throw new Error(result.error)
+          // NextAuth returns generic error codes like "CredentialsSignin"
+          // Map them to user-friendly messages
+          const errorMessage = result.error === "CredentialsSignin"
+            ? "Invalid or expired OTP code. Please check and try again."
+            : result.error
+          throw new Error(errorMessage)
         }
 
         toast({
@@ -139,7 +144,7 @@ export function MFAVerificationDialog({
 
         // Show loading state while dashboard compiles
         setIsRedirecting(true)
-        
+
         // Delay redirect to allow dashboard compilation (5 seconds for better UX)
         setTimeout(() => {
           console.log("MFA Dialog - Calling onSuccess with OTP:", otpCode ? "***" : "undefined")
@@ -171,7 +176,7 @@ export function MFAVerificationDialog({
     } catch (error: any) {
       const { message, field } = handleError(error, "verify OTP")
       setError(message)
-      
+
       // Handle specific error responses
       if (error.remainingAttempts !== undefined) {
         setRemainingAttempts(error.remainingAttempts)
@@ -222,24 +227,24 @@ export function MFAVerificationDialog({
                 <CheckCircle className="h-6 w-6 text-green-600" />
               </div>
             </div>
-            
+
             <div className="text-center space-y-3">
               <h3 className="text-xl font-semibold text-gray-900">Login Successful!</h3>
               <p className="text-sm text-gray-600">
                 Preparing your personalized dashboard...
               </p>
-              
+
               {/* Progress Bar */}
               <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full animate-pulse"></div>
               </div>
-              
+
               <div className="flex items-center justify-center space-x-1 text-xs text-gray-500">
                 <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce"></div>
                 <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                 <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
               </div>
-              
+
               <p className="text-xs text-gray-400">
                 This may take a few moments...
               </p>
@@ -249,101 +254,101 @@ export function MFAVerificationDialog({
 
         {/* Normal MFA Content */}
         {!isRedirecting && (
-        <div className="space-y-6 py-4">
-          {/* Email Display */}
-          {userEmail && (
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">
-                Code sent to <span className="font-medium">{userEmail}</span>
-              </p>
-            </div>
-          )}
+          <div className="space-y-6 py-4">
+            {/* Email Display */}
+            {userEmail && (
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">
+                  Code sent to <span className="font-medium">{userEmail}</span>
+                </p>
+              </div>
+            )}
 
-          {/* OTP Input */}
-          <div className="space-y-4">
-            <div className="text-center">
-              <label className="text-sm font-medium">Enter OTP Code</label>
+            {/* OTP Input */}
+            <div className="space-y-4">
+              <div className="text-center">
+                <label className="text-sm font-medium">Enter OTP Code</label>
+              </div>
+              <OTPInput
+                value={otp}
+                onChange={setOtp}
+                onComplete={verifyOTP}
+                disabled={isVerifying || isSending}
+                error={!!error}
+              />
             </div>
-            <OTPInput
-              value={otp}
-              onChange={setOtp}
-              onComplete={verifyOTP}
-              disabled={isVerifying || isSending}
-              error={!!error}
-            />
-          </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <div className="text-sm text-red-700">
-                <p>{error}</p>
-                {remainingAttempts !== null && (
-                  <p className="text-xs mt-1">
-                    {remainingAttempts} attempts remaining
-                  </p>
+            {/* Error Message */}
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+                <div className="text-sm text-red-700">
+                  <p>{error}</p>
+                  {remainingAttempts !== null && (
+                    <p className="text-xs mt-1">
+                      {remainingAttempts} attempts remaining
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Timer and Resend */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Clock className="h-4 w-4" />
+                {timeLeft > 0 ? (
+                  <span>Code expires in {formatTime(timeLeft)}</span>
+                ) : (
+                  <span>Code has expired</span>
                 )}
               </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResend}
+                disabled={!canResend || isSending}
+                className="flex items-center gap-2"
+              >
+                {isSending ? (
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3 w-3" />
+                )}
+                Resend OTP
+              </Button>
             </div>
-          )}
 
-          {/* Timer and Resend */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              {timeLeft > 0 ? (
-                <span>Code expires in {formatTime(timeLeft)}</span>
-              ) : (
-                <span>Code has expired</span>
-              )}
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={onClose}
+                className="flex-1"
+                disabled={isVerifying}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => verifyOTP(otp)}
+                disabled={otp.length !== 6 || isVerifying || isSending}
+                className="flex-1"
+              >
+                {isVerifying ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Verify
+                  </>
+                )}
+              </Button>
             </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleResend}
-              disabled={!canResend || isSending}
-              className="flex items-center gap-2"
-            >
-              {isSending ? (
-                <RefreshCw className="h-3 w-3 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3 w-3" />
-              )}
-              Resend OTP
-            </Button>
           </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="flex-1"
-              disabled={isVerifying}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => verifyOTP(otp)}
-              disabled={otp.length !== 6 || isVerifying || isSending}
-              className="flex-1"
-            >
-              {isVerifying ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Verify
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
         )}
       </DialogContent>
     </Dialog>

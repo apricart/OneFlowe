@@ -17,6 +17,7 @@ import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, 
 import { Skeleton } from "@/components/ui/skeleton"
 import Image from "next/image"
 import { RefundManagement } from "@/components/refund-management"
+import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -75,7 +76,7 @@ export default function OrderPortalPage() {
     }
 
     if (status === "unauthenticated") {
-      router.push("/shop/login")
+      window.location.replace("/shop/login")
       return
     }
 
@@ -91,7 +92,7 @@ export default function OrderPortalPage() {
       }
 
       // Redirect unauthorized users
-      router.push("/")
+      window.location.replace("/")
     }
   }, [status, session, router])
 
@@ -452,13 +453,15 @@ export default function OrderPortalPage() {
 
             {/* Home / Logout Button */}
             <Button
-              onClick={() => {
+              onClick={async () => {
                 if (isAdmin) {
-                  router.push("/dashboard")
+                  // Admin going back to dashboard - sign out of shop context and use replace to prevent back nav
+                  await signOut({ redirect: false })
+                  window.location.replace("/login")
                 } else {
                   // For Order Portal users, "Home" means exiting the portal -> Logout
-                  // Using signOut to clear session and redirect to login
-                  signOut({ callbackUrl: "/shop/login" })
+                  await signOut({ redirect: false })
+                  window.location.replace("/shop/login")
                 }
               }}
               variant="ghost"
@@ -750,6 +753,7 @@ export default function OrderPortalPage() {
                             <RefreshCw className="h-4 w-4" />
                             View Details
                           </Button>
+                          <ReceiptIconButton orderId={order.id} />
                         </div>
                       </Card>
                     )

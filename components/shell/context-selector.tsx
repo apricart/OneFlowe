@@ -125,7 +125,9 @@ export function ContextSelector() {
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                <SelectItem value="all">All Branches</SelectItem>
+                {userRole !== "HEAD_OFFICE" && (
+                  <SelectItem value="all">All Branches</SelectItem>
+                )}
                 {branches.map((branch: any) => (
                   <SelectItem key={branch.id} value={branch.id.toString()}>
                     {branch.name}

@@ -58,7 +58,7 @@ export async function GET(req: Request) {
       return error("Branch context required", 403)
     }
 
-    const cacheKey = scopedCacheKey('branches', { orgId: scopedOrgId, branchId: scopedBranchId })
+    const cacheKey = scopedCacheKey('branches', { role: scope.role, orgId: scopedOrgId, branchId: scopedBranchId })
 
     const result = await getCached(cacheKey, async () => {
       const items = await db

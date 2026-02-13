@@ -48,7 +48,7 @@ export const authOptions: NextAuthOptions = {
             .where(eq(organizations.id, u.organizationId))
             .limit(1)
 
-          if (!org || org.status !== 'active') {
+          if (!org || org.status?.toLowerCase() !== 'active') {
             throw new Error('ORGANIZATION_INACTIVE')
           }
         }
@@ -61,7 +61,7 @@ export const authOptions: NextAuthOptions = {
             .where(eq(branches.id, u.branchId))
             .limit(1)
 
-          if (!branch || branch.status !== 'active') {
+          if (!branch || branch.status?.toLowerCase() !== 'active') {
             throw new Error('BRANCH_INACTIVE')
           }
         }
@@ -136,7 +136,7 @@ export const authOptions: NextAuthOptions = {
             .where(eq(organizations.id, u.organizationId))
             .limit(1)
 
-          if (!org || org.status !== 'active') {
+          if (!org || org.status?.toLowerCase() !== 'active') {
             throw new Error('ORGANIZATION_INACTIVE')
           }
         }
@@ -149,7 +149,7 @@ export const authOptions: NextAuthOptions = {
             .where(eq(branches.id, u.branchId))
             .limit(1)
 
-          if (!branch || branch.status !== 'active') {
+          if (!branch || branch.status?.toLowerCase() !== 'active') {
             throw new Error('BRANCH_INACTIVE')
           }
         }
@@ -221,7 +221,7 @@ export const authOptions: NextAuthOptions = {
             .where(eq(organizations.id, emp.organizationId))
             .limit(1)
 
-          if (!org || org.status !== 'active') {
+          if (!org || org.status?.toLowerCase() !== 'active') {
             throw new Error('ORGANIZATION_INACTIVE')
           }
         }
@@ -234,7 +234,7 @@ export const authOptions: NextAuthOptions = {
             .where(eq(branches.id, emp.branchId))
             .limit(1)
 
-          if (!branch || branch.status !== 'active') {
+          if (!branch || branch.status?.toLowerCase() !== 'active') {
             throw new Error('BRANCH_INACTIVE')
           }
         }
@@ -297,7 +297,7 @@ export const authOptions: NextAuthOptions = {
             .where(eq(organizations.id, emp.organizationId))
             .limit(1)
 
-          if (!org || org.status !== 'active') {
+          if (!org || org.status?.toLowerCase() !== 'active') {
             throw new Error('ORGANIZATION_INACTIVE')
           }
         }
@@ -310,7 +310,7 @@ export const authOptions: NextAuthOptions = {
             .where(eq(branches.id, emp.branchId))
             .limit(1)
 
-          if (!branch || branch.status !== 'active') {
+          if (!branch || branch.status?.toLowerCase() !== 'active') {
             throw new Error('BRANCH_INACTIVE')
           }
         }

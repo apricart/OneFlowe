@@ -30,21 +30,16 @@ export default function NotFound() {
             </Button>
           </Link>
 
-          <Button
-            onClick={() => window.history.back()}
-            variant="outline"
-            className="w-full gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Go Back
-          </Button>
-
           <Link href="/login" className="w-full">
-            <Button variant="outline" className="w-full gap-2">
-              <Search className="h-4 w-4" />
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
               Back to Login
             </Button>
           </Link>
+
         </div>
 
         <div className="space-y-2 text-xs text-muted-foreground border-t pt-4">

@@ -385,7 +385,23 @@ export async function POST(req: NextRequest) {
             const isFullRefund = newRefundTotal >= orderTotal
             const refundType = isFullRefund ? "FULL" : "PARTIAL"
 
-            // 1. Update order with refund info
+            // 1. Update order with refund info and update receipt data
+            const [currentOrder] = await tx
+                .select({ receiptData: orders.receiptData })
+                .from(orders)
+                .where(eq(orders.id, orderId))
+                .limit(1)
+
+            let updatedReceiptData = currentOrder?.receiptData as any
+            if (updatedReceiptData) {
+                // Update receipt with new refund amount
+                const { updateReceiptWithRefund } = await import('@/lib/receipt-generator')
+                updatedReceiptData = updateReceiptWithRefund(
+                    updatedReceiptData,
+                    totalRefundAmount
+                )
+            }
+
             await tx
                 .update(orders)
                 .set({
@@ -396,6 +412,7 @@ export async function POST(req: NextRequest) {
                     refundedByUserId: userId,
                     refundAmountCents: newRefundTotal,
                     refundReason: reason?.trim() || orderData.refundReason,
+                    receiptData: updatedReceiptData || currentOrder?.receiptData,
                     updatedAt: new Date(),
                 })
                 .where(eq(orders.id, orderId))

@@ -342,26 +342,6 @@ export default function BranchesPage() {
                       </div>
                       <div className="mt-4 flex flex-wrap items-center gap-2">
                         <Button
-                          variant={isActive ? "outline" : "default"}
-                          size="sm"
-                          className="gap-2"
-                          onClick={() => handleStatusToggle(branch.id, branch.status)}
-                          disabled={updatingBranchId === branch.id}
-                        >
-                          {updatingBranchId === branch.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <RefreshCcw className="h-4 w-4" />
-                          )}
-                          Mark {isActive ? "Inactive" : "Active"}
-                        </Button>
-                        <Button asChild variant="secondary" size="sm" className="gap-2">
-                          <Link href={`/inventory?branchId=${branch.id}`}>
-                            <Boxes className="h-4 w-4" />
-                            Inventory
-                          </Link>
-                        </Button>
-                        <Button
                           variant="ghost"
                           size="sm"
                           className="gap-2"

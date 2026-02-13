@@ -175,14 +175,7 @@ export function HeadOfficeDashboard() {
             </div>
           </div>
           <div className="hidden md:flex items-center gap-3">
-            <div className="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></div>
-              <span className="text-xs font-bold text-white uppercase tracking-wider">System Live</span>
-            </div>
-            <GroupFilter
-              onGroupChange={handleGroupChange}
-              organizationId={organizationId || undefined}
-            />
+
           </div>
         </div>
       </div>
@@ -271,7 +264,7 @@ export function HeadOfficeDashboard() {
                   </div>
                   <div>
                     <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Weekly Performance</h3>
-                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">7-Day Sales Trend</p>
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">7-Day Purchase Trend</p>
                   </div>
                 </div>
               </div>

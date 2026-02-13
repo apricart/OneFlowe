@@ -13,6 +13,7 @@ import { useAppContext } from "@/components/context/app-context"
 import Link from "next/link"
 import { useSession } from "next-auth/react"
 import { OrderExport } from "@/components/orders/order-export"
+import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -31,6 +32,7 @@ interface OrderItem {
   createdByUserId: string
   branchName?: string | null
   rejectionReason?: string | null
+  refundAmountCents?: number | null
 }
 
 export default function HeadOfficeOrdersPage() {
@@ -347,6 +349,7 @@ export default function HeadOfficeOrdersPage() {
                     <th className="px-4 py-3 text-left text-sm font-semibold">Branch</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Status</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Amount</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Refund</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
                   </tr>
@@ -392,11 +395,25 @@ export default function HeadOfficeOrdersPage() {
                             {formatPKR(order.totalCents / 100)}
                           </p>
                         </td>
+                        <td className="px-4 py-3">
+                          {order.refundAmountCents && order.refundAmountCents > 0 ? (
+                            <Badge variant="outline" className={order.refundAmountCents === order.totalCents
+                              ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-900"
+                              : "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-900"
+                            }>
+                              {order.refundAmountCents === order.totalCents ? "Full" : "Partial"}
+                            </Badge>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground">
                           {new Date(order.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
+                            <ReceiptIconButton orderId={order.id} />
+
                             <Button asChild variant="ghost" size="sm" className="gap-1">
                               <Link href={`/head-office-orders/${order.id}`}>
                                 <Eye className="h-4 w-4" />

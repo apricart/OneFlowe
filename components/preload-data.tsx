@@ -7,23 +7,24 @@ import { prefetchData } from '@/lib/hooks/use-api'
 // Preload critical data when component mounts
 export function PreloadData() {
   const { data: session } = useSession()
-  
+
   useEffect(() => {
     if (!session?.user) return
-    
+
     const userRole = (session.user as any).role
-    
+
     // Prefetch critical data in parallel based on role
     const preloadCritical = async () => {
       try {
+        const canViewUsersAndRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"].includes(userRole)
+
         const commonPrefetch = [
           prefetchData.organizations(),
-          prefetchData.users(),
-          prefetchData.roles(),
+          ...(canViewUsersAndRoles ? [prefetchData.users(), prefetchData.roles()] : []),
           prefetchData.branches(),
           prefetchData.orders(),
         ]
-        
+
         // Only SUPER_ADMIN and HEAD_OFFICE can access these
         if (userRole === 'SUPER_ADMIN' || userRole === 'HEAD_OFFICE') {
           await Promise.all([
@@ -49,16 +50,18 @@ export function PreloadData() {
 // Preload data for specific routes
 export function PreloadDashboardData() {
   const { data: session } = useSession()
-  
+
   useEffect(() => {
     if (!session?.user) return
-    
+
+    const userRole = (session.user as any).role
+    const canViewUsersAndRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"].includes(userRole)
+
     const preload = async () => {
       try {
         await Promise.all([
           prefetchData.organizations(),
-          prefetchData.users(),
-          prefetchData.roles(),
+          ...(canViewUsersAndRoles ? [prefetchData.users(), prefetchData.roles()] : []), // Roles GET handler
         ])
       } catch (error) {
         console.warn('Failed to prefetch dashboard data:', error)

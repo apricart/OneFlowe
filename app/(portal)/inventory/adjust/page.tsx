@@ -8,7 +8,7 @@ export default function AdjustInventoryPage() {
   const [saving, setSaving] = useState(false)
   function setItem(idx: number, field: string, value: any) {
     const items = [...form.items]
-    ;(items[idx] as any)[field] = value
+      ; (items[idx] as any)[field] = value
     setForm({ ...form, items })
   }
   async function onSave() {
@@ -43,7 +43,7 @@ export default function AdjustInventoryPage() {
         </div>
       </div>
       <div className="flex gap-2">
-        <Button variant="secondary" onClick={() => history.back()}>Back</Button>
+        <Button variant="secondary" onClick={() => window.location.replace("/inventory")}>Back</Button>
         <Button onClick={onSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
       </div>
     </div>
