@@ -29,7 +29,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
   const [submitting, setSubmitting] = useState(false)
   const [step, setStep] = useState(1)
   const [showPassword, setShowPassword] = useState(false)
-  const { organizationId, userRole } = useAppContext()
+  const { organizationId, branchId, userRole, isInitialized } = useAppContext()
   const { toast } = useToast()
 
   const [form, setForm] = useState({
@@ -71,7 +71,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
   const organizations = (organizationsData as any)?.items || []
   const branches = (branchesData as any)?.items || []
 
-  // Initialize form with context when dialog opens
+  // Initialize form when dialog opens
   useEffect(() => {
     if (open) {
       setForm({
@@ -88,23 +88,27 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
       })
       setErrors({})
       setStep(1)
-    } else {
-      setForm({
-        firstName: "",
-        lastName: "",
-        email: "",
-        password: "",
-        phone: "",
-        role: "",
-        organizationId: "",
-        branchId: "",
-        mfaEnabled: false,
-        isActive: true
-      })
-      setErrors({})
-      setStep(1)
     }
-  }, [open, organizationId])
+  }, [open])
+
+  // Sync context changes to form if not manually edited or if forced by role
+  useEffect(() => {
+    if (open && isInitialized) {
+      if (userRole === "HEAD_OFFICE" || userRole === "BRANCH_ADMIN") {
+        setForm(prev => ({
+          ...prev,
+          organizationId: organizationId || prev.organizationId,
+          branchId: userRole === "BRANCH_ADMIN" ? (branchId || prev.branchId) : prev.branchId
+        }))
+      } else if (userRole === "SUPER_ADMIN" && organizationId && !form.organizationId) {
+        // Only pre-fill for Super Admin if it's currently empty
+        setForm(prev => ({
+          ...prev,
+          organizationId: organizationId
+        }))
+      }
+    }
+  }, [open, isInitialized, organizationId, branchId, userRole])
 
   // Validate specific field
   const validateField = (name: string, value: string) => {
@@ -134,8 +138,9 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
   }
 
   // Validate form
-  const validateForm = () => {
+  const validateForm = (autoJump = false) => {
     const newErrors: Record<string, string> = {}
+    console.debug("[DEBUG] Validating form:", form)
 
     if (!form.firstName.trim()) newErrors.firstName = "First name is required"
     if (!form.lastName.trim()) newErrors.lastName = "Last name is required"
@@ -152,8 +157,12 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     }
 
     if (!form.password) newErrors.password = "Password is required"
-    if (form.password && form.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters"
+    if (form.password) {
+      if (form.password.length < 12) {
+        newErrors.password = "Password must be at least 12 characters"
+      } else if (!/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password) || !/\d/.test(form.password) || !/[^a-zA-Z0-9]/.test(form.password)) {
+        newErrors.password = "Password must include uppercase, lowercase, number, and special character"
+      }
     }
     if (!form.role) newErrors.role = "Role is required"
     if ((form.role === "HEAD_OFFICE" || form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && !form.organizationId) {
@@ -164,14 +173,33 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     }
 
     setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    const isValid = Object.keys(newErrors).length === 0
+    console.debug("[DEBUG] Validation result:", { isValid, errors: newErrors })
+
+    if (!isValid && autoJump) {
+      if (newErrors.firstName || newErrors.lastName || newErrors.email || newErrors.password || newErrors.phone) {
+        setStep(1)
+      } else if (newErrors.role || newErrors.organizationId || newErrors.branchId) {
+        setStep(2)
+      }
+    }
+
+    return isValid
   }
 
   // Handle form submission
   const handleSubmit = async () => {
-    if (!validateForm()) return
+    if (!validateForm(true)) {
+      setFeedback({
+        message: "Please fix the errors before submitting.",
+        type: "warning",
+        visible: true
+      })
+      return
+    }
 
     setSubmitting(true)
+    console.debug("[DEBUG] handleSubmit - form data:", { ...form, password: "***" })
     try {
       const response = await jsonFetcher("/api/v1/users", {
         method: "POST",
@@ -378,7 +406,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                       onChange={e => {
                         const val = e.target.value
                         setForm({ ...form, password: val })
-                        if (val.length >= 6) {
+                        if (val.length >= 12) {
                           setErrors(prev => {
                             const next = { ...prev }
                             delete next.password
@@ -388,7 +416,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                           setErrors(prev => ({ ...prev, password: "Password must be at least 6 characters" }))
                         }
                       }}
-                      placeholder="Enter password (min 6 characters)"
+                      placeholder="Enter password (min 12 chars, mixed case, symbols)"
                       className={cn("pr-10", errors.password ? 'border-red-500' : '')}
                     />
                     <Button
@@ -449,13 +477,22 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                 )}
 
                 {/* Show current context for non-Super Admin users */}
-                {userRole !== "SUPER_ADMIN" && form.organizationId && (
-                  <div className="p-3 bg-muted/50 rounded-md border">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Organization:</span>
-                      <span className="text-muted-foreground">{getSelectedOrganizationName()}</span>
+                {userRole !== "SUPER_ADMIN" && (
+                  <div className="p-3 bg-muted/50 rounded-md border space-y-2">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">Organization:</span>
+                      </div>
+                      <span className={form.organizationId ? "text-muted-foreground" : "text-amber-600 font-medium"}>
+                        {form.organizationId ? getSelectedOrganizationName() : (isInitialized ? "No Organization Found" : "Loading...")}
+                      </span>
                     </div>
+                    {!form.organizationId && isInitialized && (
+                      <p className="text-[10px] text-amber-600">
+                        Please select an organization in the header if available.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -621,14 +658,20 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
             {step < 3 ? (
               <Button
                 onClick={() => {
-                  if (step === 1 && form.firstName && form.lastName && form.email && form.password && !errors.email && !errors.phone && !errors.password) {
-                    setStep(2)
-                  } else if (step === 2 && form.role && ((form.role !== "BRANCH_ADMIN" && form.role !== "ORDER_PORTAL") || form.branchId)) {
-                    setStep(3)
+                  if (step === 1) {
+                    // Check step 1 fields only
+                    const step1Valid = form.firstName && form.lastName && form.email && form.password && !errors.email && !errors.phone && !errors.password;
+                    if (step1Valid) setStep(2);
+                    else validateForm(); // show errors
+                  } else if (step === 2) {
+                    // Check step 2 fields
+                    const step2Valid = form.role && ((form.role !== "BRANCH_ADMIN" && form.role !== "ORDER_PORTAL") || form.branchId);
+                    if (step2Valid) setStep(3);
+                    else validateForm(); // show errors
                   }
                 }}
                 disabled={
-                  (step === 1 && (!form.firstName || !form.lastName || !form.email || !form.password || !!errors.email || !!errors.phone || !!errors.password)) ||
+                  (step === 1 && (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.password)) ||
                   (step === 2 && (!form.role || ((form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && !form.branchId)))
                 }
               >

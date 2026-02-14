@@ -117,20 +117,22 @@ export async function POST(req: Request) {
   // MFA is handled separately through the MFA system
   // No login code generation needed
 
-  const passwordHash = await hashPassword(password)
-
-  // Pre-emptive check for existing user with the same email to avoid database constraint errors
-  const [existingUser] = await db
-    .select({ id: usersTable.id })
-    .from(usersTable)
-    .where(eq(usersTable.email, email))
-    .limit(1)
-
-  if (existingUser) {
-    return error("Email address already exists. Please use a different email.", 400)
-  }
-
   try {
+    console.log("[USERS_API] Starting user creation for email:", email)
+    const passwordHash = await hashPassword(password)
+    console.log("[USERS_API] Password hashed successfully")
+
+    // Pre-emptive check for existing user with the same email
+    const [existingUser] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, email))
+      .limit(1)
+
+    if (existingUser) {
+      return error("Email address already exists. Please use a different email.", 400)
+    }
+
     const [item] = await db
       .insert(usersTable)
       .values({
@@ -158,7 +160,7 @@ export async function POST(req: Request) {
       const ip = forwardedFor ? forwardedFor.split(',')[0] : "unknown"
 
       await db.insert(systemLogs).values({
-        userId: scope?.userId, // The generic/admin user who created this action
+        userId: scope?.userId,
         userRole: currentUserRole,
         organizationId: scope?.organizationId,
         branchId: branchId || undefined,
@@ -181,13 +183,18 @@ export async function POST(req: Request) {
 
     return ok({ item: createdUser }, { status: 201 })
   } catch (err: any) {
-    // Check for unique constraint violation (code 23505) if the pre-emptive check missed it due to a race
+    // Catch validation errors from password hashing or unique constraints
     const errorCode = String(err.code || err.cause?.code || "")
     const errorMsg = String(err.message || "").toLowerCase()
     const detail = String(err.detail || err.cause?.detail || "").toLowerCase()
 
     if (errorCode === '23505' || errorMsg.includes('unique constraint') || detail.includes('already exists')) {
       return error("Email address already exists. Please use a different email.", 400)
+    }
+
+    // Pass through validation errors as 400
+    if (errorMsg.includes("invalid password") || errorMsg.includes("must contain")) {
+      return error(err.message, 400)
     }
 
     // Only log actual unexpected errors
