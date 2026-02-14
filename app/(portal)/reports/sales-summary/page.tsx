@@ -128,7 +128,7 @@ export default function SalesSummaryReportPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <SectionHeader title="Product Sales Summary" subtitle="Comprehensive view of sales, taxes, and order volume." />
+      <SectionHeader title="Product Purchase Summary" subtitle="Comprehensive view of purchase, taxes, and order volume." />
 
       {/* Context Indicator */}
       {(organizationId || branchId || startDate || endDate) && (

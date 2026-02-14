@@ -584,19 +584,24 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden - Head Office or Super Admin access required" }, { status: 403 })
     }
 
-    const organizationId = (session.user as any).organizationId
-    if (!organizationId) {
-      return NextResponse.json({ error: "Organization not found in session" }, { status: 400 })
-    }
-
     const body = await req.json()
     const {
       id,
       isVisible,
       isActive,
       stockQuantity,
-      reorderThreshold
+      reorderThreshold,
+      organizationId: bodyOrgId
     } = body
+
+    let organizationId = (session.user as any).organizationId
+    if (userRole === "SUPER_ADMIN" && bodyOrgId) {
+      organizationId = bodyOrgId
+    }
+
+    if (!organizationId) {
+      return NextResponse.json({ error: "Organization ID is required" }, { status: 400 })
+    }
 
     if (!id) {
       return NextResponse.json({ error: "Assignment ID is required" }, { status: 400 })

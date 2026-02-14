@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { globalProducts, categories, organizationInventory, organizations, auditLogs } from "@/db/schema"
-import { eq, and, like, or, desc, sql, inArray, isNull } from "drizzle-orm"
+import { eq, and, like, or, desc, sql, inArray, isNull, ne } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { cascadeGlobalProductDeletion, cascadeGlobalProductStatusChange, cascadeGlobalProductFieldUpdate } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
@@ -318,6 +318,25 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Product ID is required" }, { status: 400 })
     }
 
+    const productId = parseInt(id)
+
+    // Check if product code already exists for another product
+    if (productCode) {
+      const [existingProductWithCode] = await db.select()
+        .from(globalProducts)
+        .where(
+          and(
+            eq(globalProducts.productCode, productCode.toString().trim()),
+            ne(globalProducts.id, productId)
+          )
+        )
+        .limit(1)
+
+      if (existingProductWithCode) {
+        return NextResponse.json({ error: "Product code already exists" }, { status: 400 })
+      }
+    }
+
     // Check if product exists and get current status
     const [existingProduct] = await db.select({
       id: globalProducts.id,
@@ -431,11 +450,25 @@ export async function PUT(req: NextRequest) {
     })
   } catch (error: any) {
     console.error("Error updating product:", error)
+
+    // Handle unique constraint violation (Postgres code 23505)
+    // Handle unique constraint violation (Postgres code 23505)
+    // Drizzle/pg may wrap the error in a cause property, so we check both
+    const errorCode = error.code || (error.cause && error.cause.code)
+    const errorMessage = error.message || (error.cause && error.cause.message) || ""
+
+    if (
+      errorCode === '23505' ||
+      (errorMessage.includes('unique constraint') && errorMessage.includes('product_code'))
+    ) {
+      return NextResponse.json({ error: "Product code already exists" }, { status: 400 })
+    }
+
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
 
-// DELETE /api/v1/admin/global-inventory - Delete global product
+// DELETE /api/v1/admin/global-inventory - Delete global product (Soft Delete)
 export async function DELETE(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
@@ -455,43 +488,52 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Product ID is required" }, { status: 400 })
     }
 
+    const productId = parseInt(id)
+
     // Check if product exists
     const [existingProduct] = await db.select({
       id: globalProducts.id,
       productCode: globalProducts.productCode,
       name: globalProducts.name,
+      status: globalProducts.status,
     })
       .from(globalProducts)
-      .where(eq(globalProducts.id, parseInt(id)))
+      .where(eq(globalProducts.id, productId))
       .limit(1)
 
     if (!existingProduct) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
-    // Cascade deletion to organization and branch inventory
-    const cascadeResult = await cascadeGlobalProductDeletion(
-      parseInt(id),
+    // Soft delete by marking as discontinued
+    await db.update(globalProducts)
+      .set({
+        status: "discontinued",
+        updatedAt: new Date()
+      })
+      .where(eq(globalProducts.id, productId))
+
+    // Cascade status change to organization and branch inventory
+    const cascadeResult = await cascadeGlobalProductStatusChange(
+      productId,
+      "discontinued",
       (session.user as any).id,
       "SUPER_ADMIN"
     )
 
-    // Hard delete the global product (cascade will handle org/branch inventory)
-    await db.delete(globalProducts)
-      .where(eq(globalProducts.id, parseInt(id)))
-
-    // Log the deletion
+    // Log the soft deletion
     await db.insert(auditLogs).values({
       userId: (session.user as any).id,
-      action: "DELETE",
+      action: "DELETE", // Keeping DELETE action for audit trail, but functionality is soft delete
       entity: "GlobalProduct",
       entityId: id.toString(),
       metadata: {
         productCode: existingProduct.productCode,
         productName: existingProduct.name,
+        type: "soft_delete",
         cascadeResult: {
-          deletedOrgCount: cascadeResult.deletedOrgCount,
-          deletedBranchCount: cascadeResult.deletedBranchCount,
+          updatedOrgCount: cascadeResult.updatedOrgCount,
+          updatedBranchCount: cascadeResult.updatedBranchCount,
           affectedOrgs: cascadeResult.affectedOrgs,
           affectedBranches: cascadeResult.affectedBranches
         }
@@ -501,12 +543,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({
       message: "Product deleted successfully",
       product: existingProduct,
-      cascadeResult: {
-        deletedOrgCount: cascadeResult.deletedOrgCount,
-        deletedBranchCount: cascadeResult.deletedBranchCount,
-        affectedOrgs: cascadeResult.affectedOrgs,
-        affectedBranches: cascadeResult.affectedBranches
-      }
+      cascadeResult
     })
   } catch (error: any) {
     console.error("Error deleting product:", error)

@@ -376,7 +376,11 @@ export function RefundManagement({
                                 value={reason}
                                 onChange={e => setReason(e.target.value)}
                                 rows={2}
+                                maxLength={255}
                             />
+                            <div className="text-xs text-muted-foreground text-right">
+                                {reason.length}/255
+                            </div>
                         </div>
 
                         <div className="flex items-center justify-end gap-2">

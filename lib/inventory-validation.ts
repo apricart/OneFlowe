@@ -5,7 +5,7 @@
 
 import { db } from "@/lib/db"
 import { organizationInventory, branchInventory, globalProducts, organizations, branches } from "@/db/schema"
-import { eq, and, isNull } from "drizzle-orm"
+import { eq, and, isNull, ne } from "drizzle-orm"
 
 /**
  * Validate that an organization exists and is active
@@ -16,7 +16,7 @@ export async function validateOrganization(organizationId: number): Promise<bool
       .from(organizations)
       .where(eq(organizations.id, organizationId))
       .limit(1)
-    
+
     return org.length > 0
   } catch (error) {
     console.error("Error validating organization:", error)
@@ -38,7 +38,7 @@ export async function validateBranch(branchId: number, organizationId: number): 
         )
       )
       .limit(1)
-    
+
     return branch.length > 0
   } catch (error) {
     console.error("Error validating branch:", error)
@@ -47,7 +47,7 @@ export async function validateBranch(branchId: number, organizationId: number): 
 }
 
 /**
- * Validate that a global product exists and is active
+ * Validate that a global product exists and is active (or at least not discontinued)
  */
 export async function validateGlobalProduct(globalProductId: number): Promise<boolean> {
   try {
@@ -56,11 +56,11 @@ export async function validateGlobalProduct(globalProductId: number): Promise<bo
       .where(
         and(
           eq(globalProducts.id, globalProductId),
-          eq(globalProducts.status, "active")
+          ne(globalProducts.status, "discontinued")
         )
       )
       .limit(1)
-    
+
     return product.length > 0
   } catch (error) {
     console.error("Error validating global product:", error)
@@ -72,7 +72,7 @@ export async function validateGlobalProduct(globalProductId: number): Promise<bo
  * Validate that an organization inventory item exists and belongs to the organization
  */
 export async function validateOrganizationInventory(
-  organizationInventoryId: number, 
+  organizationInventoryId: number,
   organizationId: number
 ): Promise<boolean> {
   try {
@@ -86,7 +86,7 @@ export async function validateOrganizationInventory(
         )
       )
       .limit(1)
-    
+
     return orgInventory.length > 0
   } catch (error) {
     console.error("Error validating organization inventory:", error)
@@ -114,7 +114,7 @@ export async function validateBranchInventory(
         )
       )
       .limit(1)
-    
+
     return branchInv.length > 0
   } catch (error) {
     console.error("Error validating branch inventory:", error)
@@ -175,7 +175,7 @@ export async function checkDuplicateOrganizationAssignment(
         )
       )
       .limit(1)
-    
+
     return existing.length > 0
   } catch (error) {
     console.error("Error checking duplicate organization assignment:", error)
@@ -201,7 +201,7 @@ export async function checkDuplicateBranchAssignment(
         )
       )
       .limit(1)
-    
+
     return existing.length > 0
   } catch (error) {
     console.error("Error checking duplicate branch assignment:", error)
