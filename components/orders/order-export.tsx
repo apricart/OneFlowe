@@ -8,7 +8,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Download, FileSpreadsheet, FileIcon as FilePdf } from "lucide-react"
+import { Download, FileSpreadsheet, FileIcon as FilePdf, FileText } from "lucide-react"
 import * as XLSX from "xlsx"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -116,6 +116,7 @@ export function OrderExport({ orders, role }: OrderExportProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={handleExportCSV}>
+                    <FileText className="mr-2 h-4 w-4" />
                     CSV
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleExportExcel}>
