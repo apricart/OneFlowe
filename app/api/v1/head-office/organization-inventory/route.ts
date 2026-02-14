@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { organizationInventory, globalProducts, categories, auditLogs } from "@/db/schema"
-import { eq, and, like, or, desc, sql, isNull, SQL } from "drizzle-orm"
+import { eq, and, like, or, desc, sql, isNull, SQL, ne } from "drizzle-orm"
 import { cascadeOrgStatusChange } from "@/lib/inventory-cascade"
 
 // GET /api/v1/head-office/organization-inventory - List products in organization inventory
@@ -43,7 +43,8 @@ export async function GET(req: NextRequest) {
 
     const conditions: (SQL | undefined)[] = [
       eq(organizationInventory.organizationId, parseInt(organizationId)),
-      isNull(organizationInventory.deletedAt)
+      isNull(organizationInventory.deletedAt),
+      ne(globalProducts.status, "discontinued")
     ]
 
     if (search) {
