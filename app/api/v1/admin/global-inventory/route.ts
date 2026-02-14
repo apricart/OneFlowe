@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { globalProducts, categories, organizationInventory, organizations, auditLogs } from "@/db/schema"
-import { eq, and, like, or, desc, sql, inArray, isNull } from "drizzle-orm"
+import { eq, and, like, or, desc, sql, inArray, isNull, ne } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { cascadeGlobalProductDeletion, cascadeGlobalProductStatusChange, cascadeGlobalProductFieldUpdate } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
@@ -318,6 +318,25 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Product ID is required" }, { status: 400 })
     }
 
+    const productId = parseInt(id)
+
+    // Check if product code already exists for another product
+    if (productCode) {
+      const [existingProductWithCode] = await db.select()
+        .from(globalProducts)
+        .where(
+          and(
+            eq(globalProducts.productCode, productCode.toString().trim()),
+            ne(globalProducts.id, productId)
+          )
+        )
+        .limit(1)
+
+      if (existingProductWithCode) {
+        return NextResponse.json({ error: "Product code already exists" }, { status: 400 })
+      }
+    }
+
     // Check if product exists and get current status
     const [existingProduct] = await db.select({
       id: globalProducts.id,
@@ -431,6 +450,20 @@ export async function PUT(req: NextRequest) {
     })
   } catch (error: any) {
     console.error("Error updating product:", error)
+
+    // Handle unique constraint violation (Postgres code 23505)
+    // Handle unique constraint violation (Postgres code 23505)
+    // Drizzle/pg may wrap the error in a cause property, so we check both
+    const errorCode = error.code || (error.cause && error.cause.code)
+    const errorMessage = error.message || (error.cause && error.cause.message) || ""
+
+    if (
+      errorCode === '23505' ||
+      (errorMessage.includes('unique constraint') && errorMessage.includes('product_code'))
+    ) {
+      return NextResponse.json({ error: "Product code already exists" }, { status: 400 })
+    }
+
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
