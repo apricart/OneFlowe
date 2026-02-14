@@ -531,8 +531,11 @@ export default function RefundsPage() {
                                 onChange={(e) => setRefundReason(e.target.value)}
                                 placeholder="Enter reason for refund..."
                                 rows={3}
-                                maxLength={500}
+                                maxLength={255}
                             />
+                            <div className="text-xs text-muted-foreground text-right">
+                                {refundReason.length}/255
+                            </div>
                         </div>
 
                         <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
