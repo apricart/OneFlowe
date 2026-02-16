@@ -6,7 +6,7 @@ async function diagnose() {
     const allUsers = await db.select({
         id: users.id,
         email: users.email,
-        role: users.role,
+        roleId: users.roleId,
         organizationId: users.organizationId,
         branchId: users.branchId
     }).from(users).limit(20);

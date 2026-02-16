@@ -137,14 +137,14 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
     return map
   }, [branches])
 
-  const getBranchName = (branchId: number | null) => {
+  const getBranchName = (branchId: number | null | undefined) => {
     if (!branchId) return "—"
-    return branchMap.get(branchId) || "Unknown"
+    return branchMap.get(branchId as number) || "Unknown"
   }
 
   const getOrganizationName = (organizationId: number | null | undefined) => {
-    if (!organizationId) return null
-    return organizationMap.get(organizationId) || "Unknown"
+    if (!organizationId) return "—"
+    return organizationMap.get(organizationId as number) || "Unknown"
   }
 
   // Open edit dialog
@@ -291,7 +291,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       user.email,
       user.phone || "—",
       user.role,
-      getOrganizationName(user.organizationId ?? null) || "—",
+      getOrganizationName(user.organizationId) || "—",
       getBranchName(user.branchId),
       user.isActive ? "Active" : "Inactive",
       user.mfaEnabled ? "Enabled" : "Disabled"
@@ -315,7 +315,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       "Email": user.email,
       "Phone": user.phone || "—",
       "Role": user.role,
-      "Organization": getOrganizationName(user.organizationId ?? null) || "—",
+      "Organization": getOrganizationName(user.organizationId) || "—",
       "Branch": getBranchName(user.branchId),
       "Status": user.isActive ? "Active" : "Inactive",
       "MFA": user.mfaEnabled ? "Enabled" : "Disabled"
@@ -339,7 +339,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       user.fullName || `${user.firstName} ${user.lastName}`,
       user.email,
       user.role,
-      getOrganizationName(user.organizationId ?? null) || "—",
+      getOrganizationName(user.organizationId) || "—",
       getBranchName(user.branchId),
       user.isActive ? "Active" : "Inactive"
     ])

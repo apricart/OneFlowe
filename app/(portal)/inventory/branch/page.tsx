@@ -54,7 +54,7 @@ export default function ViewBranchProductsPage() {
     )
 
     // Fetch products for selected group
-    const { data: productsData, isLoading } = useSWR<{ items: BranchProduct[] }>(
+    const { data: productsData, isLoading, mutate } = useSWR<{ items: BranchProduct[] }>(
         selectedOrgId && selectedGroupId
             ? `/api/v1/head-office/branch-assignments?organizationId=${selectedOrgId}&groupId=${selectedGroupId}`
             : null,
@@ -67,6 +67,7 @@ export default function ViewBranchProductsPage() {
     // Search filtering
     const filteredProducts = useMemo(() => {
         if (!searchQuery) return branchProducts
+
         const q = searchQuery.toLowerCase()
         return branchProducts.filter(p =>
             p.productName.toLowerCase().includes(q) ||
@@ -78,6 +79,8 @@ export default function ViewBranchProductsPage() {
     const handleGroupChange = (value: string) => {
         setSelectedGroupId(value)
     }
+
+
 
     // Removed handleBranchChange as individual branch selection is no longer supported
 
@@ -188,7 +191,6 @@ export default function ViewBranchProductsPage() {
                                         <TableHead>Code</TableHead>
                                         <TableHead>Branch</TableHead>
                                         <TableHead>Price</TableHead>
-                                        <TableHead>Visible</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Assigned</TableHead>
                                     </TableRow>
@@ -202,7 +204,7 @@ export default function ViewBranchProductsPage() {
                                         </TableRow>
                                     ) : filteredProducts.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                                            <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
                                                 {branchProducts.length === 0
                                                     ? "No products assigned to branches in this group yet."
                                                     : "No products match your search."}
@@ -242,11 +244,6 @@ export default function ViewBranchProductsPage() {
                                                         : <span className="text-muted-foreground">-</span>}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={product.isVisible ? "default" : "secondary"}>
-                                                        {product.isVisible ? "Visible" : "Hidden"}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell>
                                                     <Badge variant={product.isActive ? "default" : "secondary"}>
                                                         {product.isActive ? "Active" : "Inactive"}
                                                     </Badge>
@@ -262,7 +259,8 @@ export default function ViewBranchProductsPage() {
                         </div>
                     </CardContent>
                 </Card>
-            )}
-        </div>
+            )
+            }
+        </div >
     )
 }

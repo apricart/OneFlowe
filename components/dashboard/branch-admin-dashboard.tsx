@@ -1,16 +1,17 @@
 "use client"
 import { useMemo, useState, useEffect, useRef } from "react"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts"
-import { Building2, AlertCircle, ShoppingCart, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3, Activity, Sparkles } from "lucide-react"
+import { Building2, AlertCircle, ShoppingCart, TrendingUp, TrendingDown, Calendar, ArrowUpRight, ArrowDownRight, BarChart3, Activity, Sparkles } from "lucide-react"
 import { useBranches } from "@/lib/hooks/use-api"
 import { NotificationRail } from "@/components/notifications/notification-center"
-import { useDashboardAnalytics, useWeeklySales, useYearlySales, useMonthlySales } from "@/lib/hooks/use-dashboard-analytics"
+import { useDashboardAnalytics, useWeeklySales, useYearlySales, useMonthlySales, useLifetimeStats } from "@/lib/hooks/use-dashboard-analytics"
 import { useAppContext } from "@/components/context/app-context"
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
 import { YearPicker } from "@/components/ui/YearPicker"
 import SalesBarChart, { YearlySalesSplineChart, TrendAreaChart } from "@/components/dashboard/charts"
 import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
 import { Card, CardContent } from "@/components/ui/card"
+import { formatPKR } from "@/lib/utils"
 
 
 const monthNames: Record<string, string> = {
@@ -35,6 +36,7 @@ export function BranchAdminDashboard() {
   const selectedBranch = branchId ? branches.find(b => b.id?.toString() === branchId) : null
 
   const { data } = useDashboardAnalytics(organizationId, branchId)
+  const { data: lifetimeStats } = useLifetimeStats(organizationId, branchId)
   const { data: weeklySalesData } = useWeeklySales(organizationId, branchId)
   const currentYear = new Date().getFullYear()
 
@@ -193,6 +195,14 @@ export function BranchAdminDashboard() {
           value={`₨${(weeklySalesData?.totalSales ?? 0).toLocaleString()}`}
           gradient="from-emerald-500 to-teal-600"
           iconBg="text-emerald-600 bg-emerald-600"
+        />
+
+        <BankingKPICard
+          icon={TrendingDown}
+          title="Total Refunded"
+          value={formatPKR(lifetimeStats?.totalRefunded || 0, { maximumFractionDigits: 0 })}
+          gradient="from-red-500 to-rose-600"
+          iconBg="text-red-600 bg-red-600"
         />
 
         <BankingKPICard

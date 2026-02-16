@@ -1,5 +1,6 @@
 import { ok, error, requireApiRole, readJson } from "@/lib/api"
 export const dynamic = 'force-dynamic'
+import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { organizations as orgsTable } from "@/db/schema"
 import { and, desc, eq } from "drizzle-orm"
@@ -51,7 +52,9 @@ export async function GET() {
     return ok(result)
   } catch (e: any) {
     logError(e, 'ORGANIZATIONS_GET')
-    return handleError(e, 'ORGANIZATIONS_GET')
+    logError(e, 'ORGANIZATIONS_GET')
+    const { status, ...errorBody } = handleError(e, 'ORGANIZATIONS_GET')
+    return NextResponse.json(errorBody, { status })
   }
 }
 
@@ -146,6 +149,8 @@ export async function POST(req: Request) {
     }
 
     logError(e, 'ORGANIZATIONS_POST')
-    return handleError(e, 'ORGANIZATIONS_POST')
+    logError(e, 'ORGANIZATIONS_POST')
+    const { status, ...errorBody } = handleError(e, 'ORGANIZATIONS_POST')
+    return NextResponse.json(errorBody, { status })
   }
 }

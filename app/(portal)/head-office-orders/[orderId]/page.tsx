@@ -19,6 +19,7 @@ type OrderItem = {
   productName: string
   productCode?: string | null
   quantity: number
+  quantityRefunded?: number
   priceCents: number
   unit: string
   globalProductId: number
@@ -31,6 +32,10 @@ type OrderDetail = {
   branchId: number
   branchName?: string | null
   status: string
+  statusAtRefund?: string | null
+  refundedAt?: string | null
+  refundAmountCents?: number | null
+  refundReason?: string | null
   subtotalCents: number
   taxCents: number
   totalCents: number
@@ -45,10 +50,13 @@ export default function HeadOfficeOrderDetailsPage() {
   const rawId = Array.isArray(params?.orderId) ? params?.orderId[0] : params?.orderId
   const numericId = rawId && /^\d+$/.test(rawId) ? Number(rawId) : null
 
-  const { data, error, isLoading, mutate } = useSWR(numericId ? `/api/v1/orders?id=${numericId}` : null, fetcher)
-  const order: OrderDetail | undefined = data?.items?.[0]
+  const { data, error, isLoading, mutate } = useSWR<{ item: OrderDetail & { orderItems: OrderItem[] } }>(
+    numericId ? `/api/v1/orders/${numericId}` : null,
+    fetcher
+  )
+  const order: OrderDetail | undefined = data?.item
 
-
+  const visibleItems = order?.orderItems?.filter(item => (item.quantityRefunded || 0) < item.quantity) || []
 
   return (
     <div className="space-y-6">
@@ -91,7 +99,15 @@ export default function HeadOfficeOrderDetailsPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span>
-              <span className="uppercase font-bold text-slate-900 dark:text-white">{order.status}</span>
+              <span className="uppercase font-bold text-slate-900 dark:text-white">
+                {order.status.toUpperCase() === "REFUNDED" ? (
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="text-slate-400 border-slate-300">{order.statusAtRefund}</Badge>
+                    <span className="text-slate-300">→</span>
+                    <Badge variant="destructive">Refunded</Badge>
+                  </div>
+                ) : order.status}
+              </span>
             </div>
           </div>
         )}
@@ -123,6 +139,19 @@ export default function HeadOfficeOrderDetailsPage() {
               </div>
             )}
           </Card>
+
+          {order.refundAmountCents !== null && order.refundAmountCents !== undefined && order.refundAmountCents > 0 && (
+            <Card className="rounded-2xl border-0 bg-yellow-50 dark:bg-yellow-950/50 border-yellow-200 dark:border-yellow-800 p-4 shadow-md">
+              <p className="text-sm text-yellow-700 dark:text-yellow-300">Refund amount</p>
+              <p className="text-2xl font-semibold text-yellow-900 dark:text-yellow-200">
+                {formatPKR(order.refundAmountCents / 100)}
+              </p>
+              <p className="text-xs text-yellow-600 dark:text-yellow-400">
+                {order.status.toUpperCase() === "REFUNDED" ? "Full refund" : "Partial refund"}
+              </p>
+            </Card>
+          )}
+
           <Card className="rounded-2xl border-0 bg-white dark:bg-slate-900 dark:border-slate-800 p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Branch</p>
             <p className="text-2xl font-semibold text-slate-900 dark:text-white">
@@ -131,6 +160,70 @@ export default function HeadOfficeOrderDetailsPage() {
             <p className="text-xs text-muted-foreground">Order ID #{order.id}</p>
           </Card>
         </div>
+      )}
+
+      {/* Refund Information Card */}
+      {order && (order.refundAmountCents && order.refundAmountCents > 0) && (
+        <Card className="border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-950/20 p-6">
+          <div className="flex items-start gap-4">
+            <div className="rounded-full bg-yellow-100 dark:bg-yellow-900 p-2 text-yellow-600 dark:text-yellow-400">
+              <TrendingDown className="h-5 w-5" />
+            </div>
+            <div className="flex-1 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100">Refund Information</h3>
+                <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                  {order.status.toLowerCase() === "refunded"
+                    ? "This order has been fully refunded"
+                    : "This order has been partially refunded"}
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
+                  <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300">Refunded Amount</p>
+                  <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200">
+                    {formatPKR(order.refundAmountCents / 100)}
+                  </p>
+                </div>
+
+                {order.status.toLowerCase() !== "refunded" && (
+                  <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
+                    <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300">Remaining Balance</p>
+                    <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200">
+                      {formatPKR((order.totalCents - order.refundAmountCents) / 100)}
+                    </p>
+                  </div>
+                )}
+
+                {order.statusAtRefund && (
+                  <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
+                    <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300">Status Before Refund</p>
+                    <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200 uppercase">
+                      {order.statusAtRefund}
+                    </p>
+                  </div>
+                )}
+
+                {order.refundedAt && (
+                  <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
+                    <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300">Refunded At</p>
+                    <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-200">
+                      {formatDistanceToNow(new Date(order.refundedAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {order.refundReason && (
+                <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
+                  <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300 mb-1">Refund Reason</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-300">{order.refundReason}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
       )}
 
       {!numericId && (
@@ -192,14 +285,12 @@ export default function HeadOfficeOrderDetailsPage() {
                   </div>
                 </div>
 
-
-
                 {/* Order Items */}
-                {order.orderItems && order.orderItems.length > 0 && (
+                {visibleItems.length > 0 && (
                   <div className="mx-6 mb-6 space-y-4">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Order Items</h3>
                     <div className="space-y-3">
-                      {order.orderItems.map((item) => (
+                      {visibleItems.map((item) => (
                         <div
                           key={item.id}
                           className="flex items-center gap-4 rounded-lg border bg-white dark:bg-slate-800 dark:border-slate-700 p-4"
@@ -248,10 +339,11 @@ export default function HeadOfficeOrderDetailsPage() {
                   </Badge>
                 </div>
                 <ol className="space-y-4">
-                  {buildStatusTimeline(order.status).map((step, index, arr) => {
+                  {buildStatusTimeline(order.status, order.statusAtRefund).map((step, index, arr) => {
                     const isLast = index === arr.length - 1
                     const isComplete = step.state === "complete"
                     const isCurrent = step.state === "current"
+                    const isSkipped = step.state === "skipped"
                     return (
                       <li key={step.key} className="flex gap-3">
                         <div className="flex flex-col items-center">
@@ -260,10 +352,12 @@ export default function HeadOfficeOrderDetailsPage() {
                               ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
                               : isCurrent
                                 ? "border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
-                                : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-400"
+                                : isSkipped
+                                  ? "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-dashed"
+                                  : "border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-400 dark:text-slate-400"
                               }`}
                           >
-                            {isComplete ? <CheckCircle className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+                            {isComplete ? <CheckCircle className="h-4 w-4" /> : isSkipped ? <Ban className="h-4 w-4" /> : isCurrent ? <Clock className="h-4 w-4" /> : null}
                           </div>
                           {!isLast && (
                             <div
@@ -272,8 +366,11 @@ export default function HeadOfficeOrderDetailsPage() {
                             />
                           )}
                         </div>
-                        <div className="flex-1 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-sm">
-                          <p className="text-sm font-semibold dark:text-white">{step.label}</p>
+                        <div className={`flex-1 rounded-xl border dark:border-slate-700 bg-white dark:bg-slate-800 p-3 shadow-sm ${isSkipped ? 'opacity-60 grayscale' : ''}`}>
+                          <p className="text-sm font-semibold dark:text-white">
+                            {step.label}
+                            {isSkipped && <span className="ml-2 text-[10px] font-normal text-muted-foreground uppercase tracking-wider">(Skipped)</span>}
+                          </p>
                           <p className="text-xs text-muted-foreground">{step.description}</p>
                         </div>
                       </li>

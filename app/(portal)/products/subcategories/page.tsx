@@ -373,7 +373,6 @@ export default function SubcategoriesPage() {
                             onClick={dialogMode === "create" ? handleCreate : handleEdit}
                             disabled={isSubmitting || !subcategoryName.trim() || !selectedCategoryId}
                         >
-                            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                             {dialogMode === "create" ? "Create" : "Save Changes"}
                         </Button>
                     </DialogFooter>
@@ -403,7 +402,6 @@ export default function SubcategoriesPage() {
                             onClick={handleDelete}
                             disabled={isSubmitting}
                         >
-                            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                             Delete
                         </Button>
                     </DialogFooter>

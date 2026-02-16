@@ -10,11 +10,11 @@ interface CascadeImpactPreviewProps {
   className?: string
 }
 
-export function CascadeImpactPreview({ 
-  type, 
-  affectedOrgs, 
-  affectedBranches, 
-  className 
+export function CascadeImpactPreview({
+  type,
+  affectedOrgs,
+  affectedBranches,
+  className
 }: CascadeImpactPreviewProps) {
   const getActionDescription = () => {
     switch (type) {
@@ -31,12 +31,12 @@ export function CascadeImpactPreview({
 
   const getSeverity = () => {
     if (affectedBranches > 50 || affectedOrgs > 10) return "destructive"
-    if (affectedBranches > 10 || affectedOrgs > 3) return "warning"
+    if (affectedBranches > 10 || affectedOrgs > 3) return "default"
     return "default"
   }
 
   return (
-    <Alert 
+    <Alert
       variant={getSeverity()}
       className={cn("border-l-4", className)}
     >

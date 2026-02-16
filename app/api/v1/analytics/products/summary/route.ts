@@ -142,7 +142,7 @@ export async function GET(req: NextRequest) {
                     branchName: branches.name,
                     quantity: orderItems.quantity,
                     priceCents: orderItems.priceCents,
-                    totalAmount: sql<number>`${orderItems.priceCents} * ${orderItems.quantity}`.mapWith(Number),
+                    totalAmount: sql<number>`(${orderItems.priceCents} * ${orderItems.quantity})`.mapWith(Number),
                     orderStatus: orders.status,
                     orderId: orders.id
                 })
@@ -160,7 +160,7 @@ export async function GET(req: NextRequest) {
             return data
         }
 
-        const data = await getCached(cacheKey, fetchData, { ttl: 300 })
+        const data = await getCached(cacheKey, fetchData, 300)
 
         return NextResponse.json({
             items: data,

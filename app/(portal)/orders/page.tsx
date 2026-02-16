@@ -374,6 +374,15 @@ export default function OrdersManagementPage() {
             textSecondary: "text-emerald-700 dark:text-emerald-400",
             iconColor: "text-emerald-600 dark:text-emerald-400"
           },
+          {
+            label: "Refunded",
+            count: statusCounts.refunded,
+            gradient: "from-rose-50 to-rose-100 dark:from-rose-900/30 dark:to-rose-800/20",
+            border: "border-rose-200 dark:border-rose-800",
+            textColor: "text-rose-900 dark:text-rose-200",
+            textSecondary: "text-rose-700 dark:text-rose-400",
+            iconColor: "text-rose-600 dark:text-rose-400"
+          },
         ].filter(stat => !(isSuperAdmin || isHeadOffice) || stat.label !== "Pending").map((stat) => (
           <div
             key={stat.label}

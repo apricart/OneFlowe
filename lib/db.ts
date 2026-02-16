@@ -129,7 +129,9 @@ pool.on("remove", (client) => {
   }
 })
 
-export const db = drizzle(pool, { logger: process.env.NODE_ENV === 'development' })
+import * as schema from "@/db/schema"
+
+export const db = drizzle(pool, { schema, logger: process.env.NODE_ENV === 'development' })
 
 /**
  * Test database connection

@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
     const gmvRows = await db
       .select({
         day: dayExpr,
-        totalCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`,
+        totalCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`.mapWith(Number),
       })
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
     const branchSelect = db.select({
       id: branches.id,
       name: branches.name,
-      orderCount: sql<number>`coalesce(count(CASE WHEN COALESCE(${orders.refundAmountCents}, 0) < ${orders.totalCents} THEN ${orders.id} END), 0)`,
+      orderCount: sql<number>`coalesce(count(CASE WHEN COALESCE(${orders.refundAmountCents}, 0) < ${orders.totalCents} THEN ${orders.id} END), 0)`.mapWith(Number),
     }).from(branches)
 
     const branchSelectWithFilters = branchFilters.length
@@ -223,6 +223,6 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const data = await getCached(cacheKey, fetchDashboardData, { ttl: 180 })
+  const data = await getCached(cacheKey, fetchDashboardData, 180)
   return ok(data)
 }

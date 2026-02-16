@@ -11,7 +11,27 @@ import { YearPicker } from "@/components/ui/YearPicker"
 import useSWR from "swr"
 import { NotificationRail } from "@/components/notifications/notification-center"
 import { formatPKR } from "@/lib/utils"
-import { Building2, GitBranch, Users, Package, Warehouse, Wallet, BarChart3, ShieldCheck, TrendingUp, ArrowUpRight, ArrowDownRight, Sparkles, Calendar, Activity, AlertCircle } from "lucide-react"
+import {
+  Users,
+  Building2,
+  AlertCircle,
+  TrendingDown,
+  ShoppingCart,
+  TrendingUp,
+  Activity,
+  Calendar,
+  Wallet,
+  Building,
+  ArrowUpRight,
+  ArrowDownRight,
+  Sparkles,
+  BarChart3,
+  FileText,
+  GitBranch,
+  Warehouse,
+  Package,
+  ShieldCheck
+} from "lucide-react"
 import SalesBarChart, { TrendAreaChart, YearlySalesSplineChart, ComparisonBarChart } from "@/components/dashboard/charts"
 import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
 import { GroupFilter } from "@/components/reports/group-filter"
@@ -339,6 +359,15 @@ export function SuperAdminDashboard() {
           subtitle="Full refunds"
           gradient="from-orange-500 to-amber-600"
           iconBg="text-orange-600 bg-orange-600"
+        />
+
+        <BankingKPICard
+          icon={TrendingDown}
+          title="Total Refunded"
+          value={formatPKR(lifetimeStats?.totalRefunded || 0, { maximumFractionDigits: 0 })}
+          subtitle="Cumulative refunds"
+          gradient="from-red-500 to-rose-600"
+          iconBg="text-red-600 bg-red-600"
         />
 
         <BankingKPICard

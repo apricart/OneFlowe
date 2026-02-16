@@ -48,7 +48,7 @@ async function run() {
                 for (const col of commonCols) {
                     try {
                         const res = await client.query(`UPDATE "${table}" SET "${col}" = $1 WHERE "${col}" = $2`, [targetId, adminId]);
-                        if (res.rowCount > 0) console.log(`Reassigned ${res.rowCount} records in ${table}.${col}`);
+                        if (res.rowCount && res.rowCount > 0) console.log(`Reassigned ${res.rowCount} records in ${table}.${col}`);
                     } catch (e: any) {
                         // Ignore missing columns
                     }

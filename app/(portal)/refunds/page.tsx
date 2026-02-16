@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, RefreshCcw, AlertTriangle, Building2, Calendar, User, DollarSign } from "lucide-react"
+import { Search, RefreshCcw, Loader2, AlertTriangle, Building2, Calendar, User, DollarSign } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 type OrderItem = {
@@ -293,13 +293,8 @@ export default function RefundsPage() {
                             onKeyDown={(e) => e.key === "Enter" && searchOrder()}
                             className="max-w-md"
                         />
-                        <Button onClick={searchOrder} disabled={searching}>
-                            {searching ? (
-                                <>
-                                    <RefreshCcw className="h-4 w-4 mr-2 animate-spin" />
-                                    Searching...
-                                </>
-                            ) : (
+                        <Button onClick={searchOrder}>
+                            {searching ? "Searching..." : (
                                 <>
                                     <Search className="h-4 w-4 mr-2" />
                                     Search
@@ -531,8 +526,11 @@ export default function RefundsPage() {
                                 onChange={(e) => setRefundReason(e.target.value)}
                                 placeholder="Enter reason for refund..."
                                 rows={3}
-                                maxLength={500}
+                                maxLength={255}
                             />
+                            <div className="text-xs text-muted-foreground text-right">
+                                {refundReason.length}/255
+                            </div>
                         </div>
 
                         <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">

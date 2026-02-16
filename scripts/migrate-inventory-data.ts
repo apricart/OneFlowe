@@ -1,9 +1,9 @@
 import { db } from "@/lib/db"
-import { 
-  globalProducts, 
-  organizationProducts, 
-  branchProducts, 
-  organizationInventory, 
+import {
+  globalProducts,
+  organizationProducts,
+  branchProducts,
+  organizationInventory,
   branchInventory,
   organizations,
   branches
@@ -16,7 +16,7 @@ async function migrateInventoryData() {
   try {
     // Step 1: Migrate organization_products to organization_inventory
     console.log("Migrating organization products to organization inventory...")
-    
+
     const orgProducts = await db.select().from(organizationProducts)
     console.log(`Found ${orgProducts.length} organization products to migrate`)
 
@@ -43,7 +43,7 @@ async function migrateInventoryData() {
 
     // Step 2: Migrate branch_products to branch_inventory
     console.log("Migrating branch products to branch inventory...")
-    
+
     const branchProductsData = await db.select().from(branchProducts)
     console.log(`Found ${branchProductsData.length} branch products to migrate`)
 
@@ -67,14 +67,12 @@ async function migrateInventoryData() {
           organizationId: branchProduct.organizationId,
           organizationInventoryId: orgInventoryItem.id,
           globalProductId: branchProduct.globalProductId,
-          assignedByUserId: branchProduct.updatedByUserId || "00000000-0000-0000-0000-000000000000", // Default UUID for migration
-          isVisible: branchProduct.isAvailable, // Map isAvailable to isVisible
+          assignedByUserId: branchProduct.updatedByUserId || "00000000-0000-0000-0000-000000000000",
+          isVisible: branchProduct.isAvailable,
           isActive: branchProduct.isAvailable,
-          stockQuantity: branchProduct.stockQuantity,
-          reorderThreshold: branchProduct.reorderThreshold,
           assignedAt: branchProduct.createdAt || new Date(),
           updatedAt: branchProduct.updatedAt || new Date(),
-        })
+        } as any)
       } catch (error) {
         console.error(`Error migrating branch product ${branchProduct.id}:`, error)
       }
@@ -84,15 +82,15 @@ async function migrateInventoryData() {
 
     // Step 3: Verify migration
     console.log("Verifying migration...")
-    
+
     const [orgInventoryCount] = await db.select({ count: sql<number>`count(*)` }).from(organizationInventory)
     const [branchInventoryCount] = await db.select({ count: sql<number>`count(*)` }).from(branchInventory)
-    
+
     console.log(`Organization inventory items: ${orgInventoryCount.count}`)
     console.log(`Branch inventory items: ${branchInventoryCount.count}`)
 
     console.log("Migration completed successfully!")
-    
+
   } catch (error) {
     console.error("Migration failed:", error)
     throw error

@@ -137,7 +137,7 @@ export function ModifierTags({
             <div className="flex items-center gap-2">
               <Plus size={16} />
               <span>
-                {maxTags && value.length >= maxTags 
+                {maxTags && value.length >= maxTags
                   ? `Maximum ${maxTags} modifiers selected`
                   : placeholder
                 }
@@ -155,7 +155,7 @@ export function ModifierTags({
             />
             <CommandList>
               <CommandEmpty>No modifiers found.</CommandEmpty>
-              
+
               {/* Group by type */}
               {Object.entries(
                 filteredModifiers.reduce((acc, modifier) => {
@@ -169,8 +169,8 @@ export function ModifierTags({
                 <CommandGroup key={type} heading={getTypeLabel(type)}>
                   {typeModifiers.map((modifier) => {
                     const isSelected = value.includes(modifier.id)
-                    const isDisabled = maxTags && !isSelected && value.length >= maxTags
-                    
+                    const isDisabled = maxTags ? (!isSelected && value.length >= maxTags) : false
+
                     return (
                       <CommandItem
                         key={modifier.id}

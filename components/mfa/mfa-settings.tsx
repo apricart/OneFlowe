@@ -29,7 +29,7 @@ export function MFASettings({ userEmail }: MFASettingsProps) {
 
   const loadMFAStatus = async () => {
     try {
-      const response = await jsonFetcher("/api/v1/mfa/status")
+      const response = await jsonFetcher<any>("/api/v1/mfa/status")
       if (response.error) {
         throw new Error(response.error)
       }
@@ -58,19 +58,19 @@ export function MFASettings({ userEmail }: MFASettingsProps) {
     }
   }
 
-  const handleVerificationSuccess = async (otpCode: string) => {
+  const handleVerificationSuccess = async (otpCode?: string) => {
     if (!pendingAction) return
 
-    console.log("MFA Settings - Verification success:", { 
-      action: pendingAction, 
+    console.log("MFA Settings - Verification success:", {
+      action: pendingAction,
       otpCode: otpCode ? "***" : "undefined",
       otpCodeType: typeof otpCode,
       otpCodeLength: otpCode ? otpCode.length : 0
     })
-    
+
     setIsToggling(true)
     try {
-      const response = await jsonFetcher("/api/v1/mfa/toggle", {
+      const response = await jsonFetcher<any>("/api/v1/mfa/toggle", {
         method: "POST",
         body: JSON.stringify({ action: pendingAction, otpCode })
       })
@@ -148,7 +148,7 @@ export function MFASettings({ userEmail }: MFASettingsProps) {
                 )}
               </div>
               <p className="text-sm text-muted-foreground">
-                {mfaEnabled 
+                {mfaEnabled
                   ? "Your account is protected with OTP verification"
                   : "Enable MFA to secure your account with OTP verification"
                 }

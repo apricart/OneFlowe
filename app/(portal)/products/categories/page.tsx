@@ -314,7 +314,6 @@ export default function CategoriesPage() {
                             onClick={dialogMode === "create" ? handleCreateCategory : handleEditCategory}
                             disabled={isSubmitting || !categoryName.trim()}
                         >
-                            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                             {dialogMode === "create" ? "Create" : "Save Changes"}
                         </Button>
                     </DialogFooter>
@@ -352,7 +351,6 @@ export default function CategoriesPage() {
                             onClick={handleDeleteCategory}
                             disabled={isSubmitting}
                         >
-                            {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                             Delete
                         </Button>
                     </DialogFooter>

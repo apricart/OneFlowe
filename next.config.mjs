@@ -6,7 +6,7 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    // ignoreBuildErrors: false,
   },
   images: {
     // Enabled for better performance (WebP, resizing)

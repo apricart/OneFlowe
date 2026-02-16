@@ -5,12 +5,16 @@ import { db } from "@/lib/db"
 import { refunds, orders, budgets, auditLogs, users, orderItems, refundItems } from "@/db/schema"
 import { eq, sql, desc, inArray } from "drizzle-orm"
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  req: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { id } = await params
+    const params = await props.params
+    const { id } = params
     const orderId = parseInt(id)
     if (!Number.isFinite(orderId)) return NextResponse.json({ error: "Invalid order ID" }, { status: 400 })
 
@@ -260,7 +264,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           amountCents: totalRefundAmount,
           reason: reason?.trim() || null,
           status: "APPROVED",
-          refundType,
           processedByUserId: userId,
         }).returning({ id: refunds.id })
 
@@ -323,7 +326,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           amountCents: totalRefundAmount,
           reason: reason?.trim() || null,
           status: "PENDING",
-          refundType, // Set refund type even for pending requests
           requestedByUserId: userId,
         }).returning({ id: refunds.id })
 

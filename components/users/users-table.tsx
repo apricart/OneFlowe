@@ -18,10 +18,10 @@ type UsersResp = { items: UserRow[] }
 
 export function UsersTable() {
   const { data, error, mutate, isLoading } = useSWR<UsersResp>("/api/v1/users", jsonFetcher)
-  const { data: orgsData } = useSWR("/api/v1/organizations", jsonFetcher)
-  const { data: branchesData } = useSWR("/api/v1/branches", jsonFetcher)
+  const { data: orgsData } = useSWR<any>("/api/v1/organizations", jsonFetcher)
+  const { data: branchesData } = useSWR<any>("/api/v1/branches", jsonFetcher)
   const { toast } = useToast()
-  
+
   const PAGE_SIZE = 20
   const [filter, setFilter] = useState("")
   const [page, setPage] = useState(1)
@@ -45,8 +45,8 @@ export function UsersTable() {
   async function deleteUser(u: UserRow) {
     if (!confirm("Delete this user?")) return
     try {
-      const response = await jsonFetcher(`/api/v1/users/${u.id}`, { method: "DELETE" })
-      
+      const response = await jsonFetcher<any>(`/api/v1/users/${u.id}`, { method: "DELETE" })
+
       if (response.error) {
         throw new Error(response.error)
       }
@@ -56,11 +56,11 @@ export function UsersTable() {
         description: "User deleted successfully.",
         variant: "default",
       })
-      
+
       mutate()
     } catch (error: any) {
       const { message } = handleError(error, "delete user")
-      
+
       toast({
         title: "Error",
         description: message,
@@ -103,7 +103,7 @@ export function UsersTable() {
 
   async function saveEdit() {
     if (!editingUser) return
-    
+
     try {
       const body: any = {
         firstName: editForm.firstName,
@@ -136,7 +136,7 @@ export function UsersTable() {
         body.password = editForm.password
       }
 
-      const response = await jsonFetcher(`/api/v1/users/${editingUser.id}`, {
+      const response = await jsonFetcher<any>(`/api/v1/users/${editingUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
@@ -152,11 +152,11 @@ export function UsersTable() {
         variant: "default",
       })
 
-    mutate()
+      mutate()
       closeEditDialog()
     } catch (error: any) {
       const { message } = handleError(error, "update user")
-      
+
       toast({
         title: "Error",
         description: message,
@@ -412,9 +412,9 @@ export function UsersTable() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeEditDialog}>Cancel</Button>
-            <Button 
+            <Button
               onClick={saveEdit}
-              disabled={showPasswordReset && editForm.password && editForm.password !== editForm.confirmPassword}
+              disabled={!!(showPasswordReset && editForm.password && editForm.password !== editForm.confirmPassword)}
             >
               Save Changes
             </Button>

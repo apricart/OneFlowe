@@ -472,7 +472,6 @@ export async function POST(req: NextRequest) {
                 amountCents: totalRefundAmount,
                 reason: reason?.trim() || null,
                 status: "APPROVED",
-                refundType,
                 processedByUserId: userId,
             }).returning({ id: refunds.id })
 
