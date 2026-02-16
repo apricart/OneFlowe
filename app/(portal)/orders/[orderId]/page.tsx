@@ -25,6 +25,7 @@ type OrderItem = {
   productName: string
   productCode?: string | null
   quantity: number
+  quantityRefunded?: number
   priceCents: number
   unit: string
   globalProductId: number
@@ -57,13 +58,18 @@ export default function SuperAdminOrderDetailsPage() {
   const rawId = Array.isArray(params?.orderId) ? params?.orderId[0] : params?.orderId
   const numericId = rawId && /^\d+$/.test(rawId) ? Number(rawId) : null
 
-  const { data, error, isLoading, mutate } = useSWR(
-    numericId ? `/api/v1/orders?id=${numericId}` : null,
+  const { data, error, isLoading, mutate } = useSWR<{ item: OrderDetail & { orderItems: OrderItem[] } }>(
+    numericId ? `/api/v1/orders/${numericId}` : null,
     fetcher
   )
-  const order: OrderDetail | undefined = data?.items?.[0]
 
+  const order: OrderDetail | undefined = data?.item
+  const orderItems = order?.orderItems || []
 
+  // Hide items that have been fully refunded
+  const visibleItems = orderItems.filter(item => (item.quantityRefunded || 0) < item.quantity)
+
+  if (isLoading) return <div className="p-8 text-center text-slate-500 font-medium">Loading order details...</div>
 
   return (
     <div className="space-y-6">
@@ -302,11 +308,11 @@ export default function SuperAdminOrderDetailsPage() {
 
 
                 {/* Order Items */}
-                {order.orderItems && order.orderItems.length > 0 && (
+                {visibleItems.length > 0 && (
                   <div className="mx-6 mb-6 space-y-4">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Order Items</h3>
                     <div className="space-y-3">
-                      {order.orderItems.map((item) => (
+                      {visibleItems.map((item) => (
                         <div
                           key={item.id}
                           className="flex items-center gap-4 rounded-lg border bg-white dark:bg-slate-800 dark:border-slate-700 p-4"
@@ -416,9 +422,9 @@ export default function SuperAdminOrderDetailsPage() {
                               <CheckCircle className="h-4 w-4" />
                             ) : isSkipped ? (
                               <Ban className="h-4 w-4" />
-                            ) : (
+                            ) : isCurrent ? (
                               <Clock className="h-4 w-4" />
-                            )}
+                            ) : null}
                           </div>
                           {!isLast && (
                             <div

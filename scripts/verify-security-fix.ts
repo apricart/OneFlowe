@@ -1,5 +1,5 @@
-import { db } from "./lib/db"
-import { users, organizations, orders, branches } from "./db/schema"
+import { db } from "../lib/db"
+import { users, organizations, orders, branches } from "../db/schema"
 import { eq } from "drizzle-orm"
 
 /**

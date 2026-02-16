@@ -303,19 +303,20 @@ export function parseError(error: any): ErrorDetails {
 /**
  * Create a user-friendly error message for frontend display
  */
-export function createUserFriendlyError(error: any): { message: string; field?: string; type: ErrorType } {
+export function createUserFriendlyError(error: any): { message: string; field?: string; type: ErrorType; status: number } {
   const errorDetails = parseError(error)
   return {
     message: errorDetails.message,
     field: errorDetails.field,
-    type: errorDetails.type
+    type: errorDetails.type,
+    status: errorDetails.statusCode
   }
 }
 
 /**
  * Log error for debugging while returning user-friendly message
  */
-export function handleError(error: any, context: string): { message: string; field?: string; type: ErrorType } {
+export function handleError(error: any, context: string): { message: string; field?: string; type: ErrorType; status: number } {
   const errorDetails = parseError(error)
   const isValidationError = errorDetails.statusCode >= 400 && errorDetails.statusCode < 500
 

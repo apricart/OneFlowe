@@ -1,4 +1,4 @@
-import { hashPassword } from './lib/password.ts';
+import { hashPassword } from './lib/password';
 
 async function test() {
     const password = "kh12345";

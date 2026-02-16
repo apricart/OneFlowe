@@ -9,7 +9,7 @@ import { jsPDF } from "jspdf"
 
 export async function GET(
     req: NextRequest,
-    { params }: { params: { orderId: string } }
+    props: { params: Promise<{ orderId: string }> }
 ) {
     try {
         const session = await getServerSession(authOptions)
@@ -17,6 +17,7 @@ export async function GET(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
+        const params = await props.params
         const orderId = parseInt(params.orderId)
         if (isNaN(orderId)) {
             return NextResponse.json({ error: "Invalid order ID" }, { status: 400 })

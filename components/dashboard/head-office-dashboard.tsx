@@ -2,13 +2,14 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area } from "recharts"
 import { Card, CardContent } from "@/components/ui/card"
-import { useDashboardAnalytics, useWeeklySales, useYearlySales, useMonthlySales } from "@/lib/hooks/use-dashboard-analytics"
+import { useDashboardAnalytics, useWeeklySales, useYearlySales, useMonthlySales, useLifetimeStats } from "@/lib/hooks/use-dashboard-analytics"
 import { useAppContext } from "@/components/context/app-context"
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
 import { YearPicker } from "@/components/ui/YearPicker"
+import { formatPKR } from "@/lib/utils"
 import SalesBarChart, { YearlySalesSplineChart, TrendAreaChart, ComparisonBarChart } from "@/components/dashboard/charts"
 import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
-import { Building2, AlertCircle, ShoppingCart, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, BarChart3, Activity, FileCheck, Wallet, Sparkles } from "lucide-react"
+import { Building2, AlertCircle, ShoppingCart, TrendingUp, TrendingDown, Calendar, ArrowUpRight, ArrowDownRight, BarChart3, Activity, FileCheck, Wallet, Sparkles } from "lucide-react"
 import { useOrganizations } from "@/lib/hooks/use-api"
 import { NotificationRail } from "@/components/notifications/notification-center"
 import { GroupFilter } from "@/components/reports/group-filter"
@@ -39,6 +40,7 @@ export function HeadOfficeDashboard() {
   )
 
   const { data } = useDashboardAnalytics(organizationId, branchId, groupId)
+  const { data: lifetimeStats } = useLifetimeStats(organizationId, branchId, groupId)
   const { data: weeklySalesData } = useWeeklySales(organizationId, branchId, groupId)
   const currentYear = new Date().getFullYear()
 
@@ -204,15 +206,23 @@ export function HeadOfficeDashboard() {
           <BankingKPICard
             icon={FileCheck}
             title="Total Orders"
-            value={yearlySalesData?.totalOrders?.toLocaleString() ?? "—"}
+            value={lifetimeStats?.totalOrders?.toLocaleString() ?? "—"}
             gradient="from-emerald-500 to-teal-600"
             iconBg="text-emerald-600 bg-emerald-600"
           />
 
           <BankingKPICard
+            icon={TrendingDown}
+            title="Total Refunded"
+            value={formatPKR(lifetimeStats?.totalRefunded || 0, { maximumFractionDigits: 0 })}
+            gradient="from-red-500 to-rose-600"
+            iconBg="text-red-600 bg-red-600"
+          />
+
+          <BankingKPICard
             icon={Wallet}
             title="Total Purchase Cost"
-            value={yearlySalesData?.totalSales ? `₨${(yearlySalesData.totalSales / 1000).toFixed(0)}K` : "—"}
+            value={lifetimeStats?.totalRevenue ? formatPKR(lifetimeStats.totalRevenue, { maximumFractionDigits: 0 }) : "—"}
             gradient="from-amber-500 to-orange-600"
             iconBg="text-amber-600 bg-amber-600"
           />

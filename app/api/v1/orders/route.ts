@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds, systemLogs, groupAuditLogs, organizations } from "@/db/schema"
+import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds, systemLogs, groupAuditLogs, organizations, refundItems } from "@/db/schema"
 import { headers } from "next/headers"
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 import { logOrderActivity } from "@/lib/global-logger"
@@ -210,6 +210,13 @@ export async function GET(req: NextRequest) {
             unit: orderItems.unit,
             globalProductId: orderItems.globalProductId,
             imageUrl: globalProducts.imageUrl,
+            quantityRefunded: sql<number>`COALESCE((
+              SELECT SUM(${refundItems.quantity})::int
+              FROM ${refundItems}
+              JOIN ${refunds} ON ${refundItems.refundId} = ${refunds.id}
+              WHERE ${refundItems.orderItemId} = ${orderItems.id}
+              AND UPPER(${refunds.status}) = 'APPROVED'
+            ), 0)`.mapWith(Number),
           })
           .from(orderItems)
           .leftJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
@@ -433,7 +440,7 @@ export async function POST(req: NextRequest) {
 
         // Update order with receipt data
         await tx.update(orders)
-          .set({ receiptData })
+          .set({ receiptData: receiptData as any })
           .where(eq(orders.id, ord.id))
       } catch (receiptErr) {
         console.error("Receipt generation failed during order creation", receiptErr)

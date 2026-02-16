@@ -6,8 +6,13 @@ import { globalProducts, auditLogs } from "@/db/schema"
 import { eq, and, ne } from "drizzle-orm"
 
 // GET /api/v1/inventory/global-products/[id] - Get single product
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  req: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
   try {
+    const params = await props.params
+    const { id } = params
     const session = await getServerSession(authOptions)
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -28,18 +33,17 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // PUT /api/v1/inventory/global-products/[id] - Update product (Super Admin)
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(
+  req: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userRole = (session.user as any).role
-    if (userRole !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Forbidden - Super Admin access required" }, { status: 403 })
-    }
-
+    const params = await props.params
     const productId = parseInt(params.id)
     const body = await req.json()
     const { productCode, name, description, categoryId, imageUrl, basePrice, unit, status, metadata } = body
@@ -112,18 +116,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 // DELETE /api/v1/inventory/global-products/[id] - Delete product (Super Admin)
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  req: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userRole = (session.user as any).role
-    if (userRole !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Forbidden - Super Admin access required" }, { status: 403 })
-    }
-
+    const params = await props.params
     const productId = parseInt(params.id)
 
     // Check if product exists

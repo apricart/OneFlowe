@@ -7,11 +7,15 @@ import { ok, error, requireApiRole, readJson } from "@/lib/api"
 import { getRequestScope } from "@/lib/auth"
 import { headers } from "next/headers"
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  req: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
   try {
     const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
     if (err) return err
-    const { id } = await params
+    const params = await props.params
+    const { id } = params
     const body = await readJson<any>(req)
     if (!body) return error("Invalid body", 400)
 
@@ -95,10 +99,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  req: NextRequest,
+  props: { params: Promise<{ id: string }> }
+) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
   if (err) return err
-  const { id } = await params
+  const params = await props.params
+  const { id } = params
 
   try {
     const { verifyResourceAccess } = await import("@/lib/auth")

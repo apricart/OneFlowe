@@ -44,6 +44,7 @@ export default function HeadOfficeOrdersPage() {
 
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [refundFilter, setRefundFilter] = useState<string>("all")
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null)
   const [showApprovalDialog, setShowApprovalDialog] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
@@ -74,6 +75,20 @@ export default function HeadOfficeOrdersPage() {
       filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === statusFilter)
     }
 
+    if (refundFilter !== "all") {
+      if (refundFilter === "full") {
+        filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === "refunded")
+      } else if (refundFilter === "partial") {
+        filtered = filtered.filter((o: OrderItem) =>
+          o.refundAmountCents && o.refundAmountCents > 0 && o.status.toLowerCase() !== "refunded"
+        )
+      } else if (refundFilter === "none") {
+        filtered = filtered.filter((o: OrderItem) =>
+          !o.refundAmountCents || o.refundAmountCents === 0
+        )
+      }
+    }
+
     if (searchQuery) {
       filtered = filtered.filter((o: OrderItem) =>
         o.tid.includes(searchQuery) ||
@@ -85,7 +100,7 @@ export default function HeadOfficeOrdersPage() {
     return filtered.sort((a: OrderItem, b: OrderItem) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
-  }, [orders, statusFilter, searchQuery])
+  }, [orders, statusFilter, refundFilter, searchQuery])
 
   // Approve order
   const handleApproveOrder = async (orderId: number) => {
@@ -326,6 +341,21 @@ export default function HeadOfficeOrdersPage() {
             ))}
             <OrderExport orders={filteredOrders} role={userRole} />
           </div>
+
+          <div className="flex gap-2 flex-wrap items-center">
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Refund:</span>
+            {["all", "none", "partial", "full"].map((refund) => (
+              <Button
+                key={refund}
+                onClick={() => setRefundFilter(refund)}
+                variant={refundFilter === refund ? "default" : "outline"}
+                size="sm"
+                className="capitalize"
+              >
+                {refund}
+              </Button>
+            ))}
+          </div>
         </div>
       </Card >
 
@@ -396,15 +426,16 @@ export default function HeadOfficeOrdersPage() {
                           </p>
                         </td>
                         <td className="px-4 py-3">
-                          {order.refundAmountCents && order.refundAmountCents > 0 ? (
-                            <Badge variant="outline" className={order.refundAmountCents === order.totalCents
-                              ? "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:border-rose-900"
-                              : "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-900"
-                            }>
-                              {order.refundAmountCents === order.totalCents ? "Full" : "Partial"}
+                          {order.status.toLowerCase() === "refunded" ? (
+                            <Badge variant="outline" className="bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-0 text-[10px] px-1.5 py-0.5">
+                              FULL
+                            </Badge>
+                          ) : (order.refundAmountCents && order.refundAmountCents > 0) ? (
+                            <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-0 text-[10px] px-1.5 py-0.5">
+                              PARTIAL
                             </Badge>
                           ) : (
-                            <span className="text-slate-400">—</span>
+                            <span className="text-[10px] text-muted-foreground">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-muted-foreground">

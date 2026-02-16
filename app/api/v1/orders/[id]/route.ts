@@ -4,10 +4,14 @@ import { orders } from "@/db/schema"
 import { eq, sql } from "drizzle-orm"
 type OrderStatus = "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED"
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  _: Request,
+  props: { params: Promise<{ id: string }> }
+) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
   if (err) return err
-  const { id } = await params
+  const params = await props.params
+  const { id } = params
   const orderId = Number(id)
 
   const [item] = await db.select().from(orders).where(eq(orders.id, orderId))
@@ -21,12 +25,16 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   return ok({ item })
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  req: Request,
+  props: { params: Promise<{ id: string }> }
+) {
   // Head Office approves/rejects; Super Admin can mark fulfilled
   const err = await requireApiRole(["HEAD_OFFICE", "SUPER_ADMIN"])
   if (err) return err
 
-  const { id } = await params
+  const params = await props.params
+  const { id } = params
   const orderId = Number(id)
 
   // Check existence and ownership first
@@ -67,10 +75,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 
-export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  _: Request,
+  props: { params: Promise<{ id: string }> }
+) {
   const err = await requireApiRole(["SUPER_ADMIN"])
   if (err) return err
-  const { id } = await params
+  const params = await props.params
+  const { id } = params
   const orderId = Number(id)
 
   // Fetch order first to verify it exists

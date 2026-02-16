@@ -27,7 +27,7 @@ async function diagnose() {
         const groupRes = await pool.query("SELECT id, name FROM groups WHERE organization_id = $1 AND name = $2", [orgId, groupName]);
         console.log("Conflicting group check:", groupRes.rows.length > 0 ? `CONFLICT FOUND: ID ${groupRes.rows[0].id}` : "No conflicts found");
 
-    } catch (e) {
+    } catch (e: any) {
         console.error("Diagnosis failed:", e.message);
     } finally {
         await pool.end();
@@ -35,3 +35,5 @@ async function diagnose() {
 }
 
 diagnose();
+
+export { }

@@ -14,14 +14,14 @@ interface OTPInputProps {
   className?: string
 }
 
-export function OTPInput({ 
-  length = 6, 
-  value, 
-  onChange, 
+export function OTPInput({
+  length = 6,
+  value,
+  onChange,
   onComplete,
   disabled = false,
   error = false,
-  className 
+  className
 }: OTPInputProps) {
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -40,7 +40,7 @@ export function OTPInput({
     const newValue = value.split('')
     newValue[index] = inputValue
     const updatedValue = newValue.join('').slice(0, length)
-    
+
     onChange(updatedValue)
 
     // Auto-focus next input
@@ -74,13 +74,13 @@ export function OTPInput({
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault()
     const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, length)
-    
+
     if (pastedData.length > 0) {
       onChange(pastedData)
       const nextIndex = Math.min(pastedData.length, length - 1)
       setActiveIndex(nextIndex)
       inputRefs.current[nextIndex]?.focus()
-      
+
       if (pastedData.length === length && onComplete) {
         onComplete(pastedData)
       }
@@ -99,7 +99,7 @@ export function OTPInput({
       {Array.from({ length }, (_, index) => (
         <Input
           key={index}
-          ref={(el) => (inputRefs.current[index] = el)}
+          ref={(el) => { inputRefs.current[index] = el }}
           type="text"
           inputMode="numeric"
           maxLength={1}
@@ -112,8 +112,8 @@ export function OTPInput({
           className={cn(
             "w-12 h-12 text-center text-lg font-semibold",
             "border-2 transition-colors",
-            error 
-              ? "border-red-500 bg-red-50 focus:border-red-500" 
+            error
+              ? "border-red-500 bg-red-50 focus:border-red-500"
               : activeIndex === index
                 ? "border-blue-500 focus:border-blue-500"
                 : "border-gray-300 focus:border-blue-500",

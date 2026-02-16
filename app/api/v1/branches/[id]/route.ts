@@ -5,10 +5,14 @@ import { branches, users, orders, branchProducts, branchInventory, employeeCrede
 import { eq, count } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  _: Request,
+  props: { params: Promise<{ id: string }> }
+) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
   if (err) return err
-  const { id } = await params
+  const params = await props.params
+  const { id } = params
   const [item] = await db.select().from(branches).where(eq(branches.id, Number(id)))
   if (!item) return error("Not found", 404)
 
@@ -20,13 +24,17 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   return ok({ item })
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  req: Request,
+  props: { params: Promise<{ id: string }> }
+) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
   if (err) return err
   const body = await readJson<any>(req)
   if (!body) return error("Invalid body", 400)
   try {
-    const { id } = await params
+    const params = await props.params
+    const { id } = params
 
     const scope = await getRequestScope()
     if (scope?.role === "HEAD_OFFICE") {
@@ -65,10 +73,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  _: Request,
+  props: { params: Promise<{ id: string }> }
+) {
   const err = await requireApiRole(["SUPER_ADMIN"])
   if (err) return err
-  const { id } = await params
+  const params = await props.params
+  const { id } = params
   const branchId = Number(id)
 
   try {

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, RefreshCcw, AlertTriangle, Building2, Calendar, User, DollarSign } from "lucide-react"
+import { Search, RefreshCcw, Loader2, AlertTriangle, Building2, Calendar, User, DollarSign } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 type OrderItem = {
@@ -293,13 +293,8 @@ export default function RefundsPage() {
                             onKeyDown={(e) => e.key === "Enter" && searchOrder()}
                             className="max-w-md"
                         />
-                        <Button onClick={searchOrder} disabled={searching}>
-                            {searching ? (
-                                <>
-                                    <RefreshCcw className="h-4 w-4 mr-2 animate-spin" />
-                                    Searching...
-                                </>
-                            ) : (
+                        <Button onClick={searchOrder}>
+                            {searching ? "Searching..." : (
                                 <>
                                     <Search className="h-4 w-4 mr-2" />
                                     Search

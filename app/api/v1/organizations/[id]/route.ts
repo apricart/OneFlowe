@@ -27,10 +27,14 @@ import {
 } from "@/db/schema"
 import { eq, count, and, ne } from "drizzle-orm"
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  _: Request,
+  props: { params: Promise<{ id: string }> }
+) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
   if (err) return err
-  const { id } = await params
+  const params = await props.params
+  const { id } = params
 
   // BOLA Protection
   const orgId = Number(id)
@@ -43,13 +47,17 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   return ok({ item })
 }
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  req: Request,
+  props: { params: Promise<{ id: string }> }
+) {
   const err = await requireApiRole(["SUPER_ADMIN"])
   if (err) return err
   const body = await readJson<any>(req)
   if (!body) return error("Invalid body", 400)
   try {
-    const { id } = await params
+    const params = await props.params
+    const { id } = params
     const patch: any = {}
     if (body.name !== undefined) {
       const name = String(body.name).trim()
@@ -92,10 +100,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  _: Request,
+  props: { params: Promise<{ id: string }> }
+) {
   const err = await requireApiRole(["SUPER_ADMIN"])
   if (err) return err
-  const { id } = await params
+  const params = await props.params
+  const { id } = params
   const orgId = Number(id)
 
   try {

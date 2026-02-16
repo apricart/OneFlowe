@@ -16,12 +16,12 @@ import { eq, and, isNull } from "drizzle-orm"
 
 async function migrateOrganizationProducts() {
   console.log("🔄 Migrating organization products...")
-  
+
   try {
     // Get all organization products that don't have a corresponding organization inventory
     const orgProducts = await db.select()
       .from(organizationProducts)
-      .leftJoin(organizationInventory, 
+      .leftJoin(organizationInventory,
         and(
           eq(organizationProducts.organizationId, organizationInventory.organizationId),
           eq(organizationProducts.globalProductId, organizationInventory.globalProductId)
@@ -37,15 +37,15 @@ async function migrateOrganizationProducts() {
     }
 
     // Migrate each organization product
-    for (const orgProduct of orgProducts) {
-      const { organizationProducts: product, organizationInventory: existing } = orgProduct
-      
+    for (const orgProduct of orgProducts as any[]) {
+      const { organization_products: product, organization_inventory: existing } = orgProduct
+
       if (existing) continue // Skip if already migrated
 
       await db.insert(organizationInventory).values({
         organizationId: product.organizationId,
         globalProductId: product.globalProductId,
-        assignedByUserId: product.updatedByUserId || "00000000-0000-0000-0000-000000000000", // Default UUID for migrated data
+        assignedByUserId: product.updatedByUserId || "00000000-0000-0000-0000-000000000000",
         isActive: product.isEnabled,
         customName: product.customName,
         customPrice: product.customPrice,
@@ -65,12 +65,12 @@ async function migrateOrganizationProducts() {
 
 async function migrateBranchProducts() {
   console.log("🔄 Migrating branch products...")
-  
+
   try {
     // Get all branch products that don't have a corresponding branch inventory
     const branchProductsList = await db.select()
       .from(branchProducts)
-      .leftJoin(branchInventory, 
+      .leftJoin(branchInventory,
         and(
           eq(branchProducts.branchId, branchInventory.branchId),
           eq(branchProducts.organizationProductId, branchInventory.organizationInventoryId)
@@ -86,9 +86,9 @@ async function migrateBranchProducts() {
     }
 
     // Migrate each branch product
-    for (const branchProduct of branchProductsList) {
-      const { branchProducts: product, branchInventory: existing } = branchProduct
-      
+    for (const branchProduct of branchProductsList as any[]) {
+      const { branch_products: product, branch_inventory: existing } = branchProduct
+
       if (existing) continue // Skip if already migrated
 
       // Find the corresponding organization inventory
@@ -110,15 +110,13 @@ async function migrateBranchProducts() {
       await db.insert(branchInventory).values({
         branchId: product.branchId,
         organizationId: product.organizationId,
-        organizationInventoryId: orgInventory[0].id,
-        assignedByUserId: product.updatedByUserId || "00000000-0000-0000-0000-000000000000", // Default UUID for migrated data
+        organizationInventoryId: (orgInventory[0] as any).id,
+        assignedByUserId: product.updatedByUserId || "00000000-0000-0000-0000-000000000000",
         isVisible: product.isVisible,
         isActive: product.isAvailable,
-        stockQuantity: product.stockQuantity,
-        reorderThreshold: product.reorderThreshold,
         assignedAt: product.createdAt,
         updatedAt: product.updatedAt,
-      })
+      } as any)
     }
 
     console.log(`✅ Migrated ${branchProductsList.length} branch products`)
@@ -130,12 +128,12 @@ async function migrateBranchProducts() {
 
 async function cleanupOldTables() {
   console.log("🧹 Cleaning up old tables...")
-  
+
   try {
     // Drop old tables (be careful in production!)
     await db.execute(`DROP TABLE IF EXISTS branch_products CASCADE`)
     await db.execute(`DROP TABLE IF EXISTS organization_products CASCADE`)
-    
+
     console.log("✅ Old tables cleaned up")
   } catch (error) {
     console.error("❌ Error cleaning up old tables:", error)
@@ -145,18 +143,18 @@ async function cleanupOldTables() {
 
 async function main() {
   console.log("🚀 Starting inventory migration...")
-  
+
   try {
     await migrateOrganizationProducts()
     await migrateBranchProducts()
-    
+
     // Only cleanup in development - comment out for production
     if (process.env.NODE_ENV === 'development') {
       await cleanupOldTables()
     } else {
       console.log("⚠️  Skipping table cleanup in production environment")
     }
-    
+
     console.log("✅ Migration completed successfully!")
   } catch (error) {
     console.error("❌ Migration failed:", error)

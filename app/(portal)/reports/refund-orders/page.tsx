@@ -40,7 +40,7 @@ export default function RefundOrdersReportPage() {
   if (startDate) queryParams.set("startDate", startDate)
   if (endDate) queryParams.set("endDate", endDate)
 
-  const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/refunds?${queryParams.toString()}`, fetcher)
+  const { data, isLoading, mutate } = useSWR<any>(`/api/v1/analytics/refunds?${queryParams.toString()}`, fetcher)
 
   useEffect(() => {
     setHasMounted(true)

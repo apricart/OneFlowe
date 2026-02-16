@@ -142,7 +142,7 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
 
       // Special handling for Refunded state skips
       if (normalized === "refunded" && step.key === "fulfilled") {
-        const refundOrigin = arguments[1]?.toLowerCase()?.trim() // Access second arg safely if not in signature yet, or better to update signature
+        const refundOrigin = statusAtRefund?.toLowerCase()?.trim()
         // Actually, let's just use the index logic but override for fulfilled
         // If we reached "refunded", everything before *should* be complete, EXCEPT...
         // if we skipped it.
@@ -166,7 +166,7 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
 
       // Correction for skipped fulfilled if we relied on index < idx
       if (state === "complete" && step.key === "fulfilled" && normalized === "refunded") {
-        const refundOrigin = arguments[1]?.toLowerCase()?.trim()
+        const refundOrigin = statusAtRefund?.toLowerCase()?.trim()
         if (refundOrigin && refundOrigin !== "fulfilled") {
           state = "skipped"
         }

@@ -14,7 +14,7 @@ export default function EmployeeManagementPage() {
   const isBranchAdmin = userRole === "BRANCH_ADMIN"
 
   // Fetch employee credentials data for statistics
-  const { data: credentialsData } = useSWR("/api/v1/employee-credentials", fetcher)
+  const { data: credentialsData } = useSWR<any>("/api/v1/employee-credentials", fetcher)
   const credentials = credentialsData?.credentials || []
 
   // Calculate statistics

@@ -46,6 +46,7 @@ interface Order {
   refundedAt?: string | null
   refundReason?: string | null
   rejectionReason?: string | null
+  statusAtRefund?: string | null
 }
 
 export default function OrderPortalPage() {
@@ -613,7 +614,7 @@ export default function OrderPortalPage() {
             className="gap-2"
           >
             <Package className="h-4 w-4" />
-            Active Orders ({ordersData?.items?.filter((o: any) => o.status !== "refunded").length || 0})
+            Active Orders ({ordersData?.items?.filter((o: any) => (o.status || "").toLowerCase() !== "refunded").length || 0})
           </Button>
           <Button
             onClick={() => setActiveTab("refunded")}
@@ -621,7 +622,10 @@ export default function OrderPortalPage() {
             className="gap-2"
           >
             <TrendingDown className="h-4 w-4" />
-            Refunded ({ordersData?.items?.filter((o: any) => o.status === "refunded").length || 0})
+            Refunded ({ordersData?.items?.filter((o: any) => {
+              const s = (o.status || "").toLowerCase()
+              return s === "refunded" || (o.refundAmountCents && o.refundAmountCents > 0)
+            }).length || 0})
           </Button>
         </div>
 
@@ -651,11 +655,12 @@ export default function OrderPortalPage() {
             ) : (
               <div className="space-y-3">
                 {ordersData.items
-                  .filter((order: any) =>
-                    activeTab === "refunded"
-                      ? order.status === "refunded"
-                      : order.status !== "refunded"
-                  )
+                  .filter((order: any) => {
+                    const status = (order.status || "").toLowerCase()
+                    return activeTab === "refunded"
+                      ? status === "refunded" || (order.refundAmountCents && order.refundAmountCents > 0)
+                      : status !== "refunded" && !(order.refundAmountCents && order.refundAmountCents > 0)
+                  })
                   .map((order: any) => {
                     const statusColors: Record<string, { bg: string; text: string; icon: any }> = {
                       pending: { bg: "bg-yellow-50 dark:bg-yellow-950", text: "text-yellow-700 dark:text-yellow-300", icon: Clock },
@@ -689,12 +694,21 @@ export default function OrderPortalPage() {
                           <div className="text-right">
                             <p className="font-bold text-lg text-slate-900 dark:text-white">PKR {(order.totalCents / 100).toFixed(2)}</p>
                             <p className="text-xs text-muted-foreground">
-                              {order.status === "pending" ? "Awaiting Approval" :
-                                order.status === "approved" ? "Approved" :
-                                  order.status === "fulfilled" ? "Completed" :
-                                    order.status === "rejected" ? "Cancelled" :
-                                      order.status === "refunded" ? "Refunded" :
-                                        "In Progress"}
+                              {(() => {
+                                const s = (order.status || "").toLowerCase()
+                                if (s === "pending") return "Awaiting Approval"
+                                if (s === "approved") {
+                                  if (order.refundAmountCents && order.refundAmountCents > 0) return "Partially Refunded"
+                                  return "Approved"
+                                }
+                                if (s === "fulfilled") {
+                                  if (order.refundAmountCents && order.refundAmountCents > 0) return "Partially Refunded"
+                                  return "Completed"
+                                }
+                                if (s === "rejected") return "Cancelled"
+                                if (s === "refunded") return "Refunded"
+                                return s.charAt(0).toUpperCase() + s.slice(1)
+                              })()}
                             </p>
                           </div>
                         </div>
@@ -710,11 +724,15 @@ export default function OrderPortalPage() {
                         <div className="bg-slate-50 dark:bg-slate-800 rounded p-3 text-sm space-y-1">
                           <p className="font-medium text-muted-foreground">Items</p>
                           <p className="text-slate-600 dark:text-slate-300">
-                            {order.status === "pending" && "⏳ Waiting for approval..."}
-                            {order.status === "approved" && "✓ Approved - Processing"}
-                            {order.status === "fulfilled" && "🎉 Order completed and delivered"}
-                            {order.status === "rejected" && "❌ Order was rejected"}
-                            {order.status === "refunded" && "💰 Order has been refunded"}
+                            {(() => {
+                              const s = (order.status || "").toLowerCase()
+                              if (s === "pending") return "⏳ Waiting for approval..."
+                              if (s === "approved") return "✓ Approved - Processing"
+                              if (s === "fulfilled") return "🎉 Order completed and delivered"
+                              if (s === "rejected") return "❌ Order was rejected"
+                              if (s === "refunded") return "💰 Order has been refunded"
+                              return null
+                            })()}
                           </p>
                         </div>
 
@@ -725,16 +743,24 @@ export default function OrderPortalPage() {
                             <span className="text-muted-foreground">Order Created</span>
                             <span className="text-slate-600 dark:text-slate-400">{new Date(order.createdAt).toLocaleDateString()}</span>
                           </div>
-                          {(order.status === "approved" || order.status === "fulfilled") && (
+                          {(order.status === "approved" || order.status === "fulfilled" || order.status === "refunded") && (
                             <div className="flex items-center gap-2 text-xs">
                               <CheckCircle className="h-4 w-4 text-blue-600" />
                               <span className="text-muted-foreground">Order Approved</span>
                             </div>
                           )}
-                          {order.status === "fulfilled" && (
+                          {(order.status === "fulfilled" || (order.status === "refunded" && order.statusAtRefund?.toLowerCase() === "fulfilled")) && (
                             <div className="flex items-center gap-2 text-xs">
                               <CheckCircle className="h-4 w-4 text-green-600" />
                               <span className="text-muted-foreground">Order Fulfilled</span>
+                            </div>
+                          )}
+                          {(order.status === "refunded" || (order.refundAmountCents && order.refundAmountCents > 0)) && (
+                            <div className="flex items-center gap-2 text-xs">
+                              <TrendingDown className="h-4 w-4 text-red-600" />
+                              <span className="text-muted-foreground">
+                                {order.status === "refunded" ? "Fully Refunded" : "Partially Refunded"}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -759,9 +785,12 @@ export default function OrderPortalPage() {
                     )
                   })}
                 {/* Empty State for Specific Filter */}
-                {ordersData.items.filter((order: any) =>
-                  activeTab === "refunded" ? order.status === "refunded" : order.status !== "refunded"
-                ).length === 0 && (
+                {ordersData.items.filter((order: any) => {
+                  const status = (order.status || "").toLowerCase()
+                  return activeTab === "refunded"
+                    ? status === "refunded" || (order.refundAmountCents && order.refundAmountCents > 0)
+                    : status !== "refunded" && !(order.refundAmountCents && order.refundAmountCents > 0)
+                }).length === 0 && (
                     <div className="text-center py-16">
                       {activeTab === "refunded" ? (
                         <TrendingDown className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
@@ -1363,19 +1392,21 @@ export default function OrderPortalPage() {
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
                   {orderDetailsData?.items ? (
-                    orderDetailsData.items.map((item: any) => (
-                      <div key={item.id} className="flex justify-between items-center p-4">
-                        <div className="flex-1">
-                          <p className="font-medium text-sm text-slate-900 dark:text-white">{item.productName}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Qty: <span className="font-semibold">{item.quantity}</span> × {formatPKR(item.priceCents / 100)}
+                    orderDetailsData.items
+                      .filter((item: any) => (item.quantityRefunded || 0) < item.quantity)
+                      .map((item: any) => (
+                        <div key={item.id} className="flex justify-between items-center p-4">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-slate-900 dark:text-white">{item.productName}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Qty: <span className="font-semibold">{item.quantity}</span> × {formatPKR(item.priceCents / 100)}
+                            </p>
+                          </div>
+                          <p className="font-semibold text-sm text-slate-900 dark:text-white">
+                            {formatPKR(item.totalCents / 100)}
                           </p>
                         </div>
-                        <p className="font-semibold text-sm text-slate-900 dark:text-white">
-                          {formatPKR(item.totalCents / 100)}
-                        </p>
-                      </div>
-                    ))
+                      ))
                   ) : (
                     <div className="p-8 text-center text-muted-foreground text-sm">
                       Loading items...

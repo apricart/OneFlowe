@@ -24,7 +24,7 @@ async function testQuery() {
                 or(
                     eq(branchInventory.isVisible, true),
                     isNull(branchInventory.id)
-                )
+                ) as any
             )
         }
 

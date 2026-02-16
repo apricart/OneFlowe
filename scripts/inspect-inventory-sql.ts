@@ -19,7 +19,7 @@ async function inspectSql() {
                 or(
                     eq(branchInventory.isVisible, true),
                     isNull(branchInventory.id)
-                )
+                ) as any
             )
         }
 

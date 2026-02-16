@@ -2,7 +2,7 @@ import { db } from "@/lib/db"
 import { organizationSettings, auditLogs } from "@/db/schema"
 import { eq, and } from "drizzle-orm"
 import { ok, err, requireApiRole } from "@/lib/api"
-import { NextRequest } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
 import { getRequestScope } from "@/lib/auth"
@@ -72,9 +72,10 @@ export async function GET(req: NextRequest) {
       CACHE_TTL.SETTINGS
     )
     return ok({ data: allSettings })
-  } catch (e) {
+  } catch (e: any) {
     logError(e, 'SETTINGS_GET')
-    return handleError(e, 'SETTINGS_GET')
+    const { status, ...errorBody } = handleError(e, 'Settings API')
+    return NextResponse.json(errorBody, { status })
   }
 }
 
