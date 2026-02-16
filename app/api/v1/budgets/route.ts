@@ -262,24 +262,27 @@ export async function PUT(req: NextRequest) {
         }
       }
 
-      // When emptying budget (setAbsolute=true and amountAllocatedCents=0), reset ALL fields
-      if (setAbsolute && amountAllocatedCents === 0) {
-        console.log('[BUDGETS] Emptying budget for branch:', branchId, '- Resetting ALL fields to 0')
-        await db.update(budgets).set({
-          amountAllocatedCents: 0,
-          amountSpentCents: 0,
-          amountHeldCents: 0,
-          amountCreditedCents: 0,
-          updatedAt: new Date(),
-        }).where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
-        console.log('[BUDGETS] Successfully reset all budget fields to 0 for branch:', branchId)
+      // Prepare update object
+      const updateData: any = {
+        amountAllocatedCents: newAmount,
+        updatedAt: new Date(),
+      }
+
+      console.log(`[BUDGETS] Processing PUT request for branchId: ${branchId}, amount: ${amountAllocatedCents / 100} PKR, setAbsolute: ${setAbsolute}`)
+
+      const isReset = setAbsolute && amountAllocatedCents === 0
+
+      if (isReset) {
+        console.log(`[BUDGETS] DEBUG: Deleting budget record. Branch: ${branchId}, Period: ${currentMonth}`)
+        const result = await db.delete(budgets)
+          .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
+        console.log(`[BUDGETS] Successfully deleted budget record for branch: ${branchId}. Result:`, result)
       } else {
-        // Normal update - only update allocated amount
-        console.log('[BUDGETS] Normal budget update for branch:', branchId, '- New amount:', newAmount / 100, 'PKR')
-        await db.update(budgets).set({
-          amountAllocatedCents: newAmount,
-          updatedAt: new Date(),
-        }).where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
+        console.log(`[BUDGETS] DEBUG: Updating budget. Branch: ${branchId}, Period: ${currentMonth}, New Amount: ${newAmount / 100} PKR`)
+        await db.update(budgets)
+          .set(updateData)
+          .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
+        console.log(`[BUDGETS] Successfully updated budget record for branch: ${branchId}`)
       }
 
       // Log action
@@ -295,7 +298,7 @@ export async function PUT(req: NextRequest) {
             period: currentMonth,
             oldAmount: oldAmount / 100,
             ...(setAbsolute
-              ? { newAmount: newAmount / 100, wasReset: amountAllocatedCents === 0 }
+              ? { newAmount: newAmount / 100, wasReset: isReset }
               : { addedAmount: amountAllocatedCents / 100, newAmount: newAmount / 100 }
             ),
           },
@@ -306,16 +309,14 @@ export async function PUT(req: NextRequest) {
       }
 
       return NextResponse.json({
-        message: setAbsolute ? "Budget set successfully" : "Budget updated successfully",
+        message: setAbsolute ? (isReset ? "Budget emptied successfully" : "Budget set successfully") : "Budget updated successfully",
         budget: {
           branchId,
           branchName: branch.name,
           period: currentMonth,
           oldAmount: oldAmount / 100,
-          ...(setAbsolute
-            ? { newAmount: newAmount / 100 }
-            : { addedAmount: amountAllocatedCents / 100, newAmount: newAmount / 100 }
-          ),
+          newAmount: newAmount / 100,
+          wasReset: isReset
         }
       })
     } else {

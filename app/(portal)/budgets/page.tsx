@@ -282,11 +282,10 @@ export default function BudgetsPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[
           { label: "Total allocated", value: formatAmount(totalAllocated), icon: Wallet, gradient: "from-indigo-500 to-purple-500", sub: currentMonth },
-          { label: "Total spent", value: formatAmount(totalSpent), icon: PieChart, gradient: "from-orange-400 to-pink-500", sub: "Across branches" },
-          { label: "On hold", value: formatAmount(totalHeld), icon: AlertTriangle, gradient: "from-amber-400 to-yellow-500", sub: "Pending fulfillment" },
+          { label: "Total spent", value: formatAmount(totalSpent + totalHeld), icon: PieChart, gradient: "from-orange-400 to-pink-500", sub: "Includes pending orders" },
           { label: "Remaining", value: formatAmount(totalRemaining), icon: CheckCircle2, gradient: "from-emerald-400 to-teal-500", sub: "Available balance" },
         ].map((metric) => {
           const Icon = metric.icon
@@ -346,10 +345,9 @@ export default function BudgetsPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
-                <TableHead className="font-semibold text-slate-900 dark:text-slate-200">Branch</TableHead>
+                <TableHead className="font-semibold text-slate-900 dark:text-slate-200">Branch (ID / Org)</TableHead>
                 <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Monthly Budget</TableHead>
                 <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Spent</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Pending</TableHead>
                 <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Remaining</TableHead>
                 <TableHead className="text-center font-semibold text-slate-900 dark:text-slate-200">Usage</TableHead>
                 <TableHead className="text-center font-semibold text-slate-900 dark:text-slate-200">Status</TableHead>
@@ -379,15 +377,17 @@ export default function BudgetsPage() {
 
                   return (
                     <TableRow key={budget.branchId} className={isUnderutilized ? "bg-gray-50 dark:bg-gray-900" : isNearLimit ? "bg-red-50 dark:bg-red-950/20" : isMedium ? "bg-yellow-50 dark:bg-yellow-950/20" : ""}>
-                      <TableCell className="font-semibold text-slate-900 dark:text-white">{budget.branchName}</TableCell>
+                      <TableCell className="font-semibold text-slate-900 dark:text-white">
+                        <div>{budget.branchName}</div>
+                        <div className="text-[10px] text-muted-foreground font-normal">ID: {budget.branchId} · Org: {budget.organizationId}</div>
+                      </TableCell>
                       <TableCell className="text-right font-bold text-lg">
                         <span className="text-blue-600 dark:text-blue-400">{formatAmount(budget.amountAllocatedCents)}</span>
                       </TableCell>
                       <TableCell className="text-right">
-                        <span className="text-orange-600">{formatAmount(budget.amountSpentCents)}</span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className="text-yellow-600 dark:text-yellow-400">{formatAmount(budget.amountHeldCents)}</span>
+                        <span className="text-orange-600" title={`Actual Spent: ${formatAmount(budget.amountSpentCents)}, Pending: ${formatAmount(budget.amountHeldCents)}`}>
+                          {formatAmount(budget.amountSpentCents + budget.amountHeldCents)}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         <span className={budget.remainingCents < 0 ? "text-red-600" : "text-green-600"}>{formatAmount(budget.remainingCents)}</span>
@@ -436,7 +436,7 @@ export default function BudgetsPage() {
             </TableBody>
           </Table>
         </div>
-      </Card>
+      </Card >
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-6 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
@@ -446,15 +446,11 @@ export default function BudgetsPage() {
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-700 dark:text-slate-300">Spent</span>
-              <span className="font-bold text-slate-900 dark:text-white">{totalAllocated > 0 ? ((totalSpent / totalAllocated) * 100).toFixed(1) : 0}%</span>
+              <span className="text-sm text-slate-700 dark:text-slate-300">Spent (Inc. Pending)</span>
+              <span className="font-bold text-slate-900 dark:text-white">{totalAllocated > 0 ? (((totalSpent + totalHeld) / totalAllocated) * 100).toFixed(1) : 0}%</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-700 dark:text-slate-300">Pending (On Hold)</span>
-              <span className="font-bold text-slate-900 dark:text-white">{totalAllocated > 0 ? ((totalHeld / totalAllocated) * 100).toFixed(1) : 0}%</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-700 dark:text-slate-300">Available</span>
+              <span className="text-sm text-slate-700 dark:text-slate-300">Available Remaining</span>
               <span className="font-bold text-green-600">{totalAllocated > 0 ? ((totalRemaining / totalAllocated) * 100).toFixed(1) : 0}%</span>
             </div>
           </div>
@@ -487,12 +483,12 @@ export default function BudgetsPage() {
           <div className="space-y-4">
             <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-lg space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Current Monthly Budget</span>
+                <span className="text-muted-foreground">Monthly Budget</span>
                 <span className="font-semibold">{formatAmount(editingBudget?.amountAllocatedCents || 0)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Already Spent</span>
-                <span className="font-semibold text-orange-600">{formatAmount(editingBudget?.amountSpentCents || 0)}</span>
+                <span className="text-muted-foreground">Spent (Incl. Pending)</span>
+                <span className="font-semibold text-orange-600">{formatAmount((editingBudget?.amountSpentCents || 0) + (editingBudget?.amountHeldCents || 0))}</span>
               </div>
               <div className="h-px bg-border" />
               <div className="flex justify-between font-bold">
@@ -615,6 +611,6 @@ export default function BudgetsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   )
 }
