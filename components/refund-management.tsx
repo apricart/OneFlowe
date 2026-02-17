@@ -280,6 +280,7 @@ export function RefundManagement({
                                         <TableHead className="w-[50px]"></TableHead>
                                         <TableHead>Product</TableHead>
                                         <TableHead className="text-right">Price</TableHead>
+                                        <TableHead className="text-right">Remaining</TableHead>
                                         <TableHead className="text-center w-[120px]">Qty to Refund</TableHead>
                                         <TableHead className="text-right">Total</TableHead>
                                     </TableRow>
@@ -326,6 +327,9 @@ export function RefundManagement({
                                                     <TableCell className="text-right">
                                                         {(item.priceCents / 100).toFixed(2)}
                                                     </TableCell>
+                                                    <TableCell className="text-right font-semibold">
+                                                        {remainingQty}
+                                                    </TableCell>
                                                     <TableCell>
                                                         {isSelected ? (
                                                             <Input
@@ -344,7 +348,7 @@ export function RefundManagement({
                                                             </div>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell className="text-right font-medium">
+                                                    <TableCell className="text-right font-medium text-red-600">
                                                         {isSelected
                                                             ? ((item.priceCents * selectedItems[item.id]) / 100).toFixed(2)
                                                             : "0.00"

@@ -1,9 +1,15 @@
 "use client"
 
-import { Search, RotateCcw, Download } from "lucide-react"
+import { Search, RotateCcw, Upload, FileText, FileSpreadsheet, FileIcon as FilePdf } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { GroupFilter } from "./group-filter"
 import { BranchFilter } from "./branch-filter"
 import { Role } from "@/lib/rbac"
@@ -20,7 +26,7 @@ interface ReportFiltersProps {
     branchId?: string
     setBranchId?: (value: string) => void
     onRefresh: () => void
-    onExport?: () => void
+    onExport?: (format: 'csv' | 'excel' | 'pdf') => void
     isLoading: boolean
     role?: Role
     organizationId?: string | number
@@ -120,14 +126,31 @@ export function ReportFilters({
                     </Button>
 
                     {onExport && (
-                        <Button
-                            className="gap-2 flex-1 md:flex-none h-10 bg-indigo-600 hover:bg-indigo-700 text-white"
-                            onClick={onExport}
-                            disabled={isLoading}
-                        >
-                            <Download className="h-4 w-4" />
-                            Export
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    className="gap-2 flex-1 md:flex-none h-10 bg-indigo-600 hover:bg-indigo-700 text-white"
+                                    disabled={isLoading}
+                                >
+                                    <Upload className="h-4 w-4" />
+                                    Export
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => onExport('csv')} className="cursor-pointer">
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onExport('excel')} className="cursor-pointer">
+                                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                                    Excel
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => onExport('pdf')} className="cursor-pointer">
+                                    <FilePdf className="mr-2 h-4 w-4" />
+                                    PDF
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     )}
                 </div>
             </div>

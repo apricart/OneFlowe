@@ -8,10 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Download, RefreshCw, Loader2, Building, ChevronDown, ChevronRight, Users } from "lucide-react"
+import { Search, Download, Upload, RefreshCw, Loader2, Building, ChevronDown, ChevronRight, Users } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import * as XLSX from "xlsx"
 import { Badge } from "@/components/ui/badge"
 import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
@@ -95,116 +96,31 @@ export default function GroupsReportPage() {
         })
     }
 
-    const handleExportPDF = () => {
-        const doc = new jsPDF()
-
-        doc.setFontSize(20)
-        doc.text("Groups Report", 14, 20)
-        doc.setFontSize(10)
-        doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
-
-        let filterText = ""
-        if (organizationId) filterText += `Org ID: ${organizationId} `
-        if (filterText) doc.text(filterText, 14, 33)
-
-        // Summary Section
-        doc.setFillColor(240, 240, 240)
-        doc.rect(14, 40, 180, 30, 'F')
-        doc.setFontSize(12)
-        doc.text(`Total Groups: ${summary.totalGroups}`, 20, 50)
-        doc.text(`Total Orders: ${summary.totalOrders}`, 100, 50)
-        doc.text(`${role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue"}: ${formatPKR(summary.totalRevenue / 100)}`, 20, 60)
-        doc.text(`${role === "HEAD_OFFICE" ? "Avg Expense/Group" : "Avg Revenue/Group"}: ${formatPKR(summary.avgRevenuePerGroup / 100)}`, 100, 60)
-
-        let currentY = 75
-
-        // Add each group with its branches
-        filteredGroups.forEach((group, index) => {
-            // Group header
-            if (index > 0) currentY += 10 // Add spacing between groups
-
-            doc.setFontSize(14)
-            doc.setTextColor(59, 130, 246)
-            doc.text(`${group.name}`, 14, currentY)
-            currentY += 6
-
-            doc.setFontSize(10)
-            doc.setTextColor(100, 100, 100)
-            doc.text(`Organization: ${group.organizationName} | Branches: ${group.branchCount} | Orders: ${group.totalOrders} | ${role === "HEAD_OFFICE" ? "Expense" : "Revenue"}: ${formatPKR(group.totalAmountCents / 100)}`, 14, currentY)
-            currentY += 8
-
-            // Branch details table
-            if (group.branches && group.branches.length > 0) {
-                const branchData = group.branches.map(branch => [
-                    branch.name,
-                    branch.orders.toString(),
-                    formatPKR(branch.revenue / 100)
-                ])
-
-                autoTable(doc, {
-                    startY: currentY,
-                    head: [["Branch Name", "Orders", role === "HEAD_OFFICE" ? "Expense" : "Revenue"]],
-                    body: branchData,
-                    theme: 'striped',
-                    headStyles: { fillColor: [100, 100, 100], fontSize: 9 },
-                    bodyStyles: { fontSize: 8 },
-                    margin: { left: 20 },
-                    tableWidth: 170
-                })
-
-                currentY = (doc as any).lastAutoTable.finalY + 5
-            } else {
-                doc.setFontSize(9)
-                doc.setTextColor(150, 150, 150)
-                doc.text("No branches in this group", 20, currentY)
-                currentY += 8
-            }
-
-            // Add new page if needed
-            if (currentY > 270 && index < filteredGroups.length - 1) {
-                doc.addPage()
-                currentY = 20
-            }
-        })
-
-        doc.save("groups-report.pdf")
-    }
-
-    const handleExportCSV = () => {
-        // Helper function to escape CSV values
-        const escapeCSV = (value: string | number) => {
-            const str = String(value)
-            // If value contains comma, quote, or newline, wrap in quotes and escape quotes
-            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-                return `"${str.replace(/"/g, '""')}"`
-            }
-            return str
-        }
-
+    const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
         const headers = ["Group Name", "Organization", "Branch Count", "Total Orders", role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue", "Branch Name", "Branch Orders", role === "HEAD_OFFICE" ? "Branch Expense" : "Branch Revenue"]
-        const rows: string[][] = []
+        const dataRows: any[][] = []
 
         filteredGroups.forEach((group) => {
             if (group.branches && group.branches.length > 0) {
                 group.branches.forEach((branch, idx) => {
-                    rows.push([
-                        idx === 0 ? escapeCSV(group.name) : "",
-                        idx === 0 ? escapeCSV(group.organizationName) : "",
-                        idx === 0 ? escapeCSV(group.branchCount) : "",
-                        idx === 0 ? escapeCSV(group.totalOrders) : "",
-                        idx === 0 ? escapeCSV(formatPKR(group.totalAmountCents / 100)) : "",
-                        escapeCSV(branch.name),
-                        escapeCSV(branch.orders),
-                        escapeCSV(formatPKR(branch.revenue / 100))
+                    dataRows.push([
+                        idx === 0 ? group.name : "",
+                        idx === 0 ? group.organizationName : "",
+                        idx === 0 ? group.branchCount : "",
+                        idx === 0 ? group.totalOrders : "",
+                        idx === 0 ? (group.totalAmountCents / 100).toFixed(2) : "",
+                        branch.name,
+                        branch.orders,
+                        (branch.revenue / 100).toFixed(2)
                     ])
                 })
             } else {
-                rows.push([
-                    escapeCSV(group.name),
-                    escapeCSV(group.organizationName),
-                    escapeCSV(group.branchCount),
-                    escapeCSV(group.totalOrders),
-                    escapeCSV(formatPKR(group.totalAmountCents / 100)),
+                dataRows.push([
+                    group.name,
+                    group.organizationName,
+                    group.branchCount,
+                    group.totalOrders,
+                    (group.totalAmountCents / 100).toFixed(2),
                     "-",
                     "-",
                     "-"
@@ -212,15 +128,34 @@ export default function GroupsReportPage() {
             }
         })
 
-        // Create CSV content with proper formatting
-        const csvContent = [headers.map(h => escapeCSV(h)), ...rows].map(row => row.join(",")).join("\n")
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = "groups-report.csv"
-        a.click()
-        window.URL.revokeObjectURL(url)
+        if (format === 'pdf') {
+            const doc = new jsPDF()
+            doc.setFontSize(20)
+            doc.text("Groups Report", 14, 20)
+            doc.setFontSize(10)
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
+
+            autoTable(doc, {
+                startY: 40,
+                head: [headers],
+                body: dataRows,
+                theme: 'grid',
+                headStyles: { fillColor: [66, 66, 66], fontSize: 7 },
+                styles: { fontSize: 7 }
+            })
+            doc.save(`groups-report-${new Date().getTime()}.pdf`)
+            return
+        }
+
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...dataRows])
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Groups")
+
+        if (format === 'excel') {
+            XLSX.writeFile(workbook, `groups-report-${new Date().getTime()}.xlsx`)
+        } else {
+            XLSX.writeFile(workbook, `groups-report-${new Date().getTime()}.csv`)
+        }
     }
 
     return (
@@ -290,7 +225,7 @@ export default function GroupsReportPage() {
                 role={role}
                 organizationId={organizationId || undefined}
                 searchPlaceholder="Search groups or organizations..."
-                onExport={handleExportPDF}
+                onExport={handleExport}
                 showGroupFilter={true}
             />
 

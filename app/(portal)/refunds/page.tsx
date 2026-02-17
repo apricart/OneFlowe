@@ -145,9 +145,8 @@ export default function RefundsPage() {
     const handleSelectAll = () => {
         if (!order) return
 
-        const refundedQtys = order.refundedQuantities || {}
         const refundableItems = order.items.filter(item => {
-            const alreadyRefunded = refundedQtys[item.id] || 0
+            const alreadyRefunded = item.refundedQuantity || 0
             return item.quantity > alreadyRefunded
         })
 
@@ -156,8 +155,7 @@ export default function RefundsPage() {
         } else {
             const newMap = new Map<number, number>()
             refundableItems.forEach(item => {
-                const alreadyRefunded = refundedQtys[item.id] || 0
-                const remainingQty = item.quantity - alreadyRefunded
+                const remainingQty = item.remainingQuantity ?? (item.quantity - (item.refundedQuantity || 0))
                 newMap.set(item.id, remainingQty)
             })
             setSelectedItems(newMap)
@@ -413,14 +411,15 @@ export default function RefundsPage() {
                                             <TableHead>Code</TableHead>
                                             <TableHead className="text-right">Unit Price</TableHead>
                                             <TableHead className="text-right">Ordered Qty</TableHead>
+                                            <TableHead className="text-right">Remaining Qty</TableHead>
                                             <TableHead className="text-right">Refund Qty</TableHead>
                                             <TableHead className="text-right">Line Total</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {order.items.map((item) => {
-                                            const refundedQty = (order.refundedQuantities && order.refundedQuantities[item.id]) || 0
-                                            const remainingQty = Math.max(0, item.quantity - refundedQty)
+                                            const refundedQty = item.refundedQuantity || 0
+                                            const remainingQty = item.remainingQuantity ?? Math.max(0, item.quantity - refundedQty)
                                             const isFullyRefunded = remainingQty === 0
 
                                             const isSelected = selectedItems.has(item.id)
@@ -455,7 +454,10 @@ export default function RefundsPage() {
                                                     <TableCell className="text-right">
                                                         PKR {(item.priceCents / 100).toFixed(2)}
                                                     </TableCell>
-                                                    <TableCell className="text-right">
+                                                    <TableCell className="text-right text-muted-foreground">
+                                                        {item.quantity} {item.unit}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-semibold">
                                                         {remainingQty} {item.unit}
                                                     </TableCell>
                                                     <TableCell className="text-right">

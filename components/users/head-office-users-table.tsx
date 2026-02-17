@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
-import { Edit, Trash2, Search, User, Mail, Phone, Shield, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff, Download, FileText, Table as TableIcon, FileJson } from "lucide-react"
+import { Edit, Trash2, Search, User, Mail, Phone, Shield, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff, Upload, FileText, Table as TableIcon, FileJson } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Switch } from "@/components/ui/switch"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -285,7 +285,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
 
   // Export handlers
   const exportToCSV = () => {
-    const headers = ["Name", "Email", "Phone", "Role", "Organization", "Branch", "Status", "MFA"]
+    const headers = ["Name", "Email", "Phone", "Role", "Organization", "Branch", "Company Status", "User Status", "Security (MFA)"]
     const rows = filteredUsers.map(user => [
       user.fullName || `${user.firstName} ${user.lastName}`,
       user.email,
@@ -293,6 +293,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       user.role,
       getOrganizationName(user.organizationId) || "—",
       getBranchName(user.branchId),
+      orgStatusMap.get(user.organizationId as number) || "—",
       user.isActive ? "Active" : "Inactive",
       user.mfaEnabled ? "Enabled" : "Disabled"
     ])
@@ -317,8 +318,9 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       "Role": user.role,
       "Organization": getOrganizationName(user.organizationId) || "—",
       "Branch": getBranchName(user.branchId),
-      "Status": user.isActive ? "Active" : "Inactive",
-      "MFA": user.mfaEnabled ? "Enabled" : "Disabled"
+      "Company Status": orgStatusMap.get(user.organizationId as number) || "—",
+      "User Status": user.isActive ? "Active" : "Inactive",
+      "Security (MFA)": user.mfaEnabled ? "Enabled" : "Disabled"
     }))
 
     const worksheet = XLSX.utils.json_to_sheet(data)
@@ -328,37 +330,33 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   }
 
   const exportToPDF = () => {
-    const doc = new jsPDF()
+    const doc = new jsPDF({ orientation: "landscape" })
     doc.setFontSize(18)
     doc.text("User Directory Report", 14, 20)
     doc.setFontSize(10)
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
     doc.text(`Total Users: ${filteredUsers.length}`, 14, 34)
 
+    const headers = ["Name", "Email", "Phone", "Role", "Org", "Branch", "Co. Status", "User Status", "MFA"]
     const tableData = filteredUsers.map(user => [
       user.fullName || `${user.firstName} ${user.lastName}`,
       user.email,
+      user.phone || "—",
       user.role,
       getOrganizationName(user.organizationId) || "—",
       getBranchName(user.branchId),
-      user.isActive ? "Active" : "Inactive"
+      orgStatusMap.get(user.organizationId as number) || "—",
+      user.isActive ? "Active" : "Inactive",
+      user.mfaEnabled ? "Enabled" : "Disabled"
     ])
 
     autoTable(doc, {
       startY: 40,
-      head: [["Name", "Email", "Role", "Organization", "Branch", "Status"]],
+      head: [headers],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [79, 70, 229] }, // Indigo-600 color
-      styles: { fontSize: 8 },
-      columnStyles: {
-        0: { cellWidth: 35 },
-        1: { cellWidth: 45 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 30 },
-        4: { cellWidth: 30 },
-        5: { cellWidth: 20 }
-      }
+      headStyles: { fillColor: [66, 66, 66] },
+      styles: { fontSize: 8 }
     })
 
     doc.save(`users-export-${new Date().getTime()}.pdf`)
@@ -392,7 +390,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="gap-2 h-10 border-slate-200 bg-white dark:bg-slate-900 shadow-sm">
-              <Download className="h-4 w-4" />
+              <Upload className="h-4 w-4" />
               Export
             </Button>
           </DropdownMenuTrigger>

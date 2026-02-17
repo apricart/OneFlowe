@@ -133,7 +133,11 @@ export async function GET(req: NextRequest) {
             .innerJoin(refunds, eq(refunds.id, refundItems.refundId))
             .where(and(
                 eq(refunds.orderId, orderData.id),
-                or(eq(refunds.status, "APPROVED"), eq(refunds.status, "COMPLETED"))
+                or(
+                    eq(refunds.status, "APPROVED"),
+                    eq(refunds.status, "COMPLETED"),
+                    eq(refunds.status, "PENDING")
+                )
             ))
 
         // Aggregate refunded quantities
@@ -318,7 +322,11 @@ export async function POST(req: NextRequest) {
             .innerJoin(refunds, eq(refunds.id, refundItems.refundId))
             .where(and(
                 eq(refunds.orderId, orderId),
-                or(eq(refunds.status, "APPROVED"), eq(refunds.status, "COMPLETED"))
+                or(
+                    eq(refunds.status, "APPROVED"),
+                    eq(refunds.status, "COMPLETED"),
+                    eq(refunds.status, "PENDING")
+                )
             ))
 
         const refundedQuantityMap = new Map<number, number>()

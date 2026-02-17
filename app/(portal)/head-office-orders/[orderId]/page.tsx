@@ -339,7 +339,11 @@ export default function HeadOfficeOrderDetailsPage() {
                   </Badge>
                 </div>
                 <ol className="space-y-4">
-                  {buildStatusTimeline(order.status, order.statusAtRefund).map((step, index, arr) => {
+                  {buildStatusTimeline(
+                    order.status,
+                    order.statusAtRefund,
+                    (order.refundAmountCents || 0) > 0 && order.status.toUpperCase() !== "REFUNDED"
+                  ).map((step, index, arr) => {
                     const isLast = index === arr.length - 1
                     const isComplete = step.state === "complete"
                     const isCurrent = step.state === "current"

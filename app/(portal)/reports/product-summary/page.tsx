@@ -8,10 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Download, RefreshCw, Loader2, Building, Building2, Calendar, Package } from "lucide-react"
+import { Search, Download, Upload, RefreshCw, Loader2, Building, Building2, Calendar, Package } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import * as XLSX from "xlsx"
 import { Badge } from "@/components/ui/badge"
 import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
@@ -66,21 +67,13 @@ export default function ProductSummaryReportPage() {
   const totalRevenue = filteredItems.reduce((sum: number, item: any) => sum + (item.totalAmount || 0), 0)
   const totalVolume = filteredItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)
 
-  const handleExportPDF = () => {
-    const doc = new jsPDF({ orientation: "landscape" })
+  const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
+    const headers = [
+      "Order Date", "Employee ID", "Group", "Item Name", "Category",
+      "Sub-Category", "Item Code", "Branch", "Qty", "Price", "Total", "Status"
+    ]
 
-    doc.setFontSize(20)
-    doc.text("Summary Report", 14, 20)
-    doc.setFontSize(10)
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
-
-    let filterText = ""
-    if (organizationId) filterText += `Org ID: ${organizationId} `
-    if (branchId) filterText += `Branch ID: ${branchId} `
-    if (startDate || endDate) filterText += `Range: ${startDate || 'Start'} to ${endDate || 'End'}`
-    if (filterText) doc.text(filterText, 14, 33)
-
-    const tableData = filteredItems.map((item: any) => [
+    const rows = filteredItems.map((item: any) => [
       new Date(item.orderDate).toLocaleDateString(),
       item.employeeId || "N/A",
       item.groupName || "null",
@@ -90,21 +83,39 @@ export default function ProductSummaryReportPage() {
       item.productCode || "N/A",
       item.branchName,
       item.quantity,
-      formatPKR(item.priceCents / 100),
-      formatPKR(item.totalAmount / 100),
+      (item.priceCents / 100).toFixed(2),
+      (item.totalAmount / 100).toFixed(2),
       item.orderStatus
     ])
 
-    autoTable(doc, {
-      startY: 40,
-      head: [["Order Date", "Employee ID", "Group", "Item Name", "Category", "Sub-Category", "Item Code", "Branch", "Qty", "Price", "Total", "Status"]],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [0, 102, 204], fontSize: 7 },
-      styles: { fontSize: 7 }
-    })
+    if (format === 'pdf') {
+      const doc = new jsPDF({ orientation: "landscape" })
+      doc.setFontSize(20)
+      doc.text("Product Summary Report", 14, 20)
+      doc.setFontSize(10)
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
 
-    doc.save("summary-report.pdf")
+      autoTable(doc, {
+        startY: 40,
+        head: [headers],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [66, 66, 66], fontSize: 8 },
+        styles: { fontSize: 8 }
+      })
+      doc.save(`product-summary-${new Date().getTime()}.pdf`)
+      return
+    }
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Product Summary")
+
+    if (format === 'excel') {
+      XLSX.writeFile(workbook, `product-summary-${new Date().getTime()}.xlsx`)
+    } else {
+      XLSX.writeFile(workbook, `product-summary-${new Date().getTime()}.csv`)
+    }
   }
 
   return (
@@ -134,7 +145,7 @@ export default function ProductSummaryReportPage() {
         role={role}
         organizationId={organizationId || undefined}
         searchPlaceholder="Search Product, SKU, Branch, or User..."
-        onExport={handleExportPDF}
+        onExport={handleExport}
       />
 
       <Card className="overflow-hidden">

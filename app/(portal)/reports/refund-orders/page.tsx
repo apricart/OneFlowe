@@ -8,10 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Download, RefreshCw, Loader2, Building, Building2, Calendar, AlertCircle, MapPin } from "lucide-react"
+import { Search, Download, Upload, RefreshCw, Loader2, Building, Building2, Calendar, AlertCircle, MapPin } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import * as XLSX from "xlsx"
 import { Badge } from "@/components/ui/badge"
 import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
@@ -65,44 +66,57 @@ export default function RefundOrdersReportPage() {
 
   const totalRefunded = filteredRefunds.reduce((sum: number, r: any) => sum + (r.refundAmount || 0), 0)
 
-  const handleExportPDF = () => {
-    const doc = new jsPDF({ orientation: "landscape" })
+  const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
+    const isSuperAdmin = role === "SUPER_ADMIN"
+    const headers = ["Refund Date", "Transaction ID"]
+    if (isSuperAdmin) headers.push("Organization")
+    headers.push("Branch", "Refund Type", "Status at Refund", "Order Total", "Refund Amount", "Reason")
 
-    doc.setFontSize(20)
-    doc.text("Refund Order Report", 14, 20)
-    doc.setFontSize(10)
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
-
-    const tableHead = ["Refund Date", "Transaction ID"]
-    if (role === "SUPER_ADMIN") tableHead.push("Organization")
-    tableHead.push("Branch", "Refund Type", "Previous Status", "Order Total", "Refund Amount", "Reason")
-
-    const tableData = filteredRefunds.map((r: any) => {
+    const rows = filteredRefunds.map((r: any) => {
       const row = [
         new Date(r.refundedAt || r.createdAt).toLocaleDateString(),
         r.tid,
       ]
-      if (role === "SUPER_ADMIN") row.push(r.organizationName || `Org #${r.organizationId}`)
+      if (isSuperAdmin) row.push(r.organizationName || `Org #${r.organizationId}`)
       row.push(
         r.branchName,
-        r.refundType || "N/A",
+        r.refundType || "PARTIAL",
         r.statusAtRefund || r.status,
-        formatPKR(r.orderTotal / 100),
-        formatPKR(r.refundAmount / 100),
+        (r.orderTotal / 100).toFixed(2),
+        (r.refundAmount / 100).toFixed(2),
         r.reason || "N/A"
       )
       return row
     })
 
-    autoTable(doc, {
-      startY: 40,
-      head: [tableHead],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [153, 0, 0] }
-    })
+    if (format === 'pdf') {
+      const doc = new jsPDF({ orientation: "landscape" })
+      doc.setFontSize(20)
+      doc.text("Refund Order Report", 14, 20)
+      doc.setFontSize(10)
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
 
-    doc.save("refund-order-report.pdf")
+      autoTable(doc, {
+        startY: 40,
+        head: [headers],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [66, 66, 66], fontSize: 8 },
+        styles: { fontSize: 8 }
+      })
+      doc.save(`refund-orders-${new Date().getTime()}.pdf`)
+      return
+    }
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Refund Orders")
+
+    if (format === 'excel') {
+      XLSX.writeFile(workbook, `refund-orders-${new Date().getTime()}.xlsx`)
+    } else {
+      XLSX.writeFile(workbook, `refund-orders-${new Date().getTime()}.csv`)
+    }
   }
 
   return (
@@ -134,7 +148,7 @@ export default function RefundOrdersReportPage() {
         showGroupFilter={false}
         showBranchFilter={true}
         searchPlaceholder="Search TID, Branch, or Reason..."
-        onExport={handleExportPDF}
+        onExport={handleExport}
       />
 
       <Card className="overflow-hidden">

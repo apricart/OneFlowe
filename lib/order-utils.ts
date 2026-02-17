@@ -92,7 +92,7 @@ export function getAutoApprovalCountdown(order: OrderLike | null): string | null
 /**
  * Build status timeline for order
  */
-export function buildStatusTimeline(status: string, statusAtRefund?: string | null) {
+export function buildStatusTimeline(status: string, statusAtRefund?: string | null, isPartialRefund?: boolean) {
   try {
     // Validate input
     if (!status || typeof status !== 'string') {
@@ -139,6 +139,12 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
     // Build timeline
     return STATUS_FLOW.map((step, index) => {
       let state = "upcoming"
+      let label: string = step.label
+
+      // Dynamic label for partial refund
+      if (step.key === "refunded" && isPartialRefund) {
+        label = "Partially Refunded"
+      }
 
       // Special handling for Refunded state skips
       if (normalized === "refunded" && step.key === "fulfilled") {
@@ -149,7 +155,7 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
         const wasFulfilled = refundOrigin === "fulfilled"
 
         if (!wasFulfilled) {
-          return { ...step, state: "skipped" }
+          return { ...step, label, state: "skipped" }
         }
       }
 
@@ -172,7 +178,7 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
         }
       }
 
-      return { ...step, state }
+      return { ...step, label, state }
     })
   } catch (error) {
     console.error('[OrderUtils] Error in buildStatusTimeline:', error)

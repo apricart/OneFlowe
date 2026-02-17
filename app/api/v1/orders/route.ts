@@ -174,6 +174,11 @@ export async function GET(req: NextRequest) {
           FROM ${refunds}
           WHERE ${refunds.orderId} = ${orders.id}
         )`,
+        itemCount: sql<number>`(
+          SELECT SUM(${orderItems.quantity})::int
+          FROM ${orderItems}
+          WHERE ${orderItems.orderId} = ${orders.id}
+        )`,
         approvedByUserId: orders.approvedByUserId,
         approvalToken: orders.approvalToken, // Will be filtered before return
       })

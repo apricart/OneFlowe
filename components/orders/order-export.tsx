@@ -8,7 +8,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Download, FileSpreadsheet, FileIcon as FilePdf, FileText } from "lucide-react"
+import { Upload, FileSpreadsheet, FileIcon as FilePdf, FileText } from "lucide-react"
 import * as XLSX from "xlsx"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -22,26 +22,54 @@ interface OrderExportProps {
 export function OrderExport({ orders, role }: OrderExportProps) {
     const [isExporting, setIsExporting] = useState(false)
 
-    const formatDataForExcel = () => {
-        return orders.map(order => ({
-            "Order ID": order.id,
-            "Example TID": order.tid,
+    const formatDataForExport = (order: any) => {
+        const isSuperAdmin = role === "SUPER_ADMIN"
+
+        // Derive refund status like in the UI
+        let refundStatus = "None"
+        if (order.status?.toLowerCase() === "refunded") {
+            refundStatus = "Full"
+        } else if (order.refundAmountCents && order.refundAmountCents > 0) {
+            refundStatus = "Partial"
+        }
+
+        const data: any = {
+            "ID": order.id,
+            "TID": order.tid,
             "Date": new Date(order.createdAt).toLocaleDateString(),
-            "Status": order.status,
-            "Organization": order.organizationName || "-",
             "Branch": order.branchName || "-",
-            "Items": order.items?.length || "-", // If items are loaded
-            "Subtotal": (order.subtotalCents / 100).toFixed(2),
-            "Tax": (order.taxCents / 100).toFixed(2),
-            "Total": (order.totalCents / 100).toFixed(2),
+            "Status": order.status?.toUpperCase() || "-",
+            "Refund Status": refundStatus,
+            "Amount (PKR)": (order.totalCents / 100).toFixed(2),
+            "Items Count": order.itemCount || "-",
+        }
+
+        // Add Org for Super Admin
+        if (isSuperAdmin) {
+            return {
+                "ID": data.ID,
+                "TID": data.TID,
+                "Organization": order.organizationName || "-",
+                "Branch": data.Branch,
+                "Status": data.Status,
+                "Refund Status": data["Refund Status"],
+                "Amount (PKR)": data["Amount (PKR)"],
+                "Date": data.Date,
+                "Items Count": data["Items Count"],
+                "Rejection Reason": order.rejectionReason || "-",
+            }
+        }
+
+        return {
+            ...data,
             "Rejection Reason": order.rejectionReason || "-",
-        }))
+        }
     }
 
     const handleExportCSV = () => {
         try {
             setIsExporting(true)
-            const data = formatDataForExcel()
+            const data = orders.map(o => formatDataForExport(o))
             const worksheet = XLSX.utils.json_to_sheet(data)
             const workbook = XLSX.utils.book_new()
             XLSX.utils.book_append_sheet(workbook, worksheet, "Orders")
@@ -56,7 +84,7 @@ export function OrderExport({ orders, role }: OrderExportProps) {
     const handleExportExcel = () => {
         try {
             setIsExporting(true)
-            const data = formatDataForExcel()
+            const data = orders.map(o => formatDataForExport(o))
             const worksheet = XLSX.utils.json_to_sheet(data)
             const workbook = XLSX.utils.book_new()
             XLSX.utils.book_append_sheet(workbook, worksheet, "Orders")
@@ -71,7 +99,7 @@ export function OrderExport({ orders, role }: OrderExportProps) {
     const handleExportPDF = () => {
         try {
             setIsExporting(true)
-            const doc = new jsPDF()
+            const doc = new jsPDF('l', 'mm', 'a4') // Landscape for better column fit
 
             // Header
             doc.setFontSize(18)
@@ -80,22 +108,39 @@ export function OrderExport({ orders, role }: OrderExportProps) {
             doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30)
             if (role) doc.text(`Role: ${role}`, 14, 36)
 
-            const tableData = orders.map(order => [
-                order.id,
-                new Date(order.createdAt).toLocaleDateString(),
-                order.organizationName || "-",
-                order.branchName || "-",
-                order.status,
-                formatPKR(order.totalCents / 100),
-                order.rejectionReason || "-"
-            ])
+            const isSuperAdmin = role === "SUPER_ADMIN"
+            const headers = ["ID", "TID", "Date", "Branch", "Status", "Refund", "Amount", "Items", "Reason"]
+            if (isSuperAdmin) headers.splice(2, 0, "Organization")
+
+            const tableData = orders.map(order => {
+                let refundStatus = "None"
+                if (order.status?.toLowerCase() === "refunded") {
+                    refundStatus = "Full"
+                } else if (order.refundAmountCents && order.refundAmountCents > 0) {
+                    refundStatus = "Partial"
+                }
+
+                const row = [
+                    order.id,
+                    order.tid,
+                    new Date(order.createdAt).toLocaleDateString(),
+                    order.branchName || "-",
+                    order.status?.toUpperCase() || "-",
+                    refundStatus,
+                    formatPKR(order.totalCents / 100),
+                    order.itemCount || "-",
+                    order.rejectionReason || "-"
+                ]
+                if (isSuperAdmin) row.splice(2, 0, order.organizationName || "-")
+                return row
+            })
 
             autoTable(doc, {
-                head: [["ID", "Date", "Org", "Branch", "Status", "Total", "Reason"]],
+                head: [headers],
                 body: tableData,
                 startY: 44,
                 styles: { fontSize: 8 },
-                headStyles: { fillColor: [66, 66, 66] },
+                headStyles: { fillColor: [15, 23, 42] }, // Slate-900
             })
 
             doc.save(`orders-export-${new Date().toISOString().split('T')[0]}.pdf`)
@@ -110,7 +155,7 @@ export function OrderExport({ orders, role }: OrderExportProps) {
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2" disabled={isExporting || orders.length === 0}>
-                    <Download className="h-4 w-4" />
+                    <Upload className="h-4 w-4" />
                     Export
                 </Button>
             </DropdownMenuTrigger>

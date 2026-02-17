@@ -8,10 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Download, RefreshCw, Loader2, Building, Building2, Calendar, User } from "lucide-react"
+import { Search, Download, Upload, RefreshCw, Loader2, Building, Building2, Calendar, User } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import * as XLSX from "xlsx"
 import { Badge } from "@/components/ui/badge"
 import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
@@ -66,21 +67,10 @@ export default function ProductSummaryDetailsReportPage() {
   const totalRevenue = filteredDetails.reduce((sum: number, d: any) => sum + (d.priceCents * d.quantity || 0), 0)
   const totalItems = filteredDetails.reduce((sum: number, d: any) => sum + (d.quantity || 0), 0)
 
-  const handleExportPDF = () => {
-    const doc = new jsPDF({ orientation: "landscape" })
+  const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
+    const headers = ["Date", "Product", "SKU", "Transaction ID", "Branch", "Processed By", "Qty", "Total (PKR)"]
 
-    doc.setFontSize(20)
-    doc.text("Product Summary Details Report", 14, 20)
-    doc.setFontSize(10)
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
-
-    let filterText = ""
-    if (organizationId) filterText += `Org ID: ${organizationId} `
-    if (branchId) filterText += `Branch ID: ${branchId} `
-    if (startDate || endDate) filterText += `Range: ${startDate || 'Start'} to ${endDate || 'End'}`
-    if (filterText) doc.text(filterText, 14, 33)
-
-    const tableData = filteredDetails.map((d: any) => [
+    const rows = filteredDetails.map((d: any) => [
       new Date(d.orderDate).toLocaleDateString(),
       d.productName,
       d.productCode || "-",
@@ -88,18 +78,37 @@ export default function ProductSummaryDetailsReportPage() {
       d.branchName,
       d.createdByName || d.createdByEmail,
       d.quantity,
-      formatPKR((d.priceCents * d.quantity) / 100)
+      ((d.priceCents * d.quantity) / 100).toFixed(2)
     ])
 
-    autoTable(doc, {
-      startY: 40,
-      head: [["Date", "Product", "SKU", "Transaction ID", "Branch", "User", "Qty", "Total"]],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [79, 70, 229] }
-    })
+    if (format === 'pdf') {
+      const doc = new jsPDF({ orientation: "landscape" })
+      doc.setFontSize(20)
+      doc.text("Product Summary Details Report", 14, 20)
+      doc.setFontSize(10)
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
 
-    doc.save("product-summary-details-report.pdf")
+      autoTable(doc, {
+        startY: 40,
+        head: [headers],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [66, 66, 66], fontSize: 8 },
+        styles: { fontSize: 8 }
+      })
+      doc.save(`product-details-${new Date().getTime()}.pdf`)
+      return
+    }
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Product Details")
+
+    if (format === 'excel') {
+      XLSX.writeFile(workbook, `product-details-${new Date().getTime()}.xlsx`)
+    } else {
+      XLSX.writeFile(workbook, `product-details-${new Date().getTime()}.csv`)
+    }
   }
 
   return (
@@ -129,7 +138,7 @@ export default function ProductSummaryDetailsReportPage() {
         role={role}
         organizationId={organizationId || undefined}
         searchPlaceholder="Search Product, TID, or User..."
-        onExport={handleExportPDF}
+        onExport={handleExport}
       />
 
       <Card className="overflow-hidden">

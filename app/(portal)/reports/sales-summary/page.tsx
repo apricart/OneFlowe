@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Download, RefreshCw, Loader2, Building, Building2, Calendar } from "lucide-react"
+import { Search, Download, Upload, RefreshCw, Loader2, Building, Building2, Calendar } from "lucide-react"
+import * as XLSX from "xlsx"
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -104,26 +105,43 @@ export default function SalesSummaryReportPage() {
     doc.save("sales-summary-report.pdf")
   }
 
-  const handleExportCSV = () => {
+  const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
     const headers = ["Date", "Transaction ID", "Branch", "Status", "Amount (PKR)"]
     const rows = filteredOrders.map((order: any) => [
       new Date(order.createdAt).toLocaleDateString(),
       order.tid,
       order.branchName || `ID: ${order.branchId}`,
-      order.status,
-      (order.totalCents / 100).toString()
+      order.status?.toUpperCase(),
+      (order.totalCents / 100).toFixed(2)
     ])
 
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n")
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `sales-summary-${new Date().getTime()}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    if (format === 'pdf') {
+      const doc = new jsPDF()
+      doc.setFontSize(20)
+      doc.text("Sales Summary Report", 14, 20)
+      doc.setFontSize(10)
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
+
+      autoTable(doc, {
+        startY: 40,
+        head: [headers],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [66, 66, 66] }
+      })
+      doc.save(`sales-summary-${new Date().getTime()}.pdf`)
+      return
+    }
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Summary")
+
+    if (format === 'excel') {
+      XLSX.writeFile(workbook, `sales-summary-${new Date().getTime()}.xlsx`)
+    } else {
+      XLSX.writeFile(workbook, `sales-summary-${new Date().getTime()}.csv`)
+    }
   }
 
   return (
@@ -162,7 +180,7 @@ export default function SalesSummaryReportPage() {
         groupId={groupId}
         setGroupId={setGroupId}
         onRefresh={() => mutate()}
-        onExport={handleExportCSV}
+        onExport={handleExport}
         isLoading={isLoading}
         role={role}
         organizationId={organizationId || undefined}
@@ -172,8 +190,8 @@ export default function SalesSummaryReportPage() {
       <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900 mb-8 pt-6">
         <div className="px-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
           <h3 className="font-bold text-slate-900 dark:text-white">Transaction Logs</h3>
-          <Button variant="ghost" size="sm" onClick={handleExportPDF} className="text-xs font-bold text-slate-500 hover:text-indigo-600">
-            <Download className="h-3.5 w-3.5 mr-2" />
+          <Button variant="ghost" size="sm" onClick={() => handleExport('pdf')} className="text-xs font-bold text-slate-500 hover:text-indigo-600">
+            <Upload className="h-3.5 w-3.5 mr-2" />
             PDF VERSION
           </Button>
         </div>
