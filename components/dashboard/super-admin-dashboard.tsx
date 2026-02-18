@@ -362,15 +362,6 @@ export function SuperAdminDashboard() {
         />
 
         <BankingKPICard
-          icon={TrendingDown}
-          title="Total Refunded"
-          value={formatPKR(lifetimeStats?.totalRefunded || 0, { maximumFractionDigits: 0 })}
-          subtitle="Cumulative refunds"
-          gradient="from-red-500 to-rose-600"
-          iconBg="text-red-600 bg-red-600"
-        />
-
-        <BankingKPICard
           icon={Wallet}
           title="Total Revenue"
           value={formatPKR(lifetimeStats?.totalRevenue || 0, { maximumFractionDigits: 0 })}
