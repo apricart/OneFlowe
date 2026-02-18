@@ -410,20 +410,18 @@ export default function RemoveFromBranchPage() {
                                         </TableHead>
                                         <TableHead>Product</TableHead>
                                         <TableHead>Code</TableHead>
-                                        <TableHead>Assigned Branches</TableHead>
-                                        <TableHead>Status</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {isLoading ? (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                                            <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
                                                 Loading products...
                                             </TableCell>
                                         </TableRow>
                                     ) : filteredProducts.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                                            <TableCell colSpan={3} className="py-10 text-center text-sm text-muted-foreground">
                                                 No products assigned to branches in this group.
                                             </TableCell>
                                         </TableRow>
@@ -458,25 +456,6 @@ export default function RemoveFromBranchPage() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <Badge variant="outline">{product.productCode}</Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {product.branchNames.map((branchName, idx) => (
-                                                            <Badge key={idx} variant="secondary" className="text-xs">
-                                                                {branchName}
-                                                            </Badge>
-                                                        ))}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex gap-2">
-                                                        <Badge variant={product.isActive ? "default" : "secondary"}>
-                                                            {product.isActive ? "Active" : "Inactive"}
-                                                        </Badge>
-                                                        <Badge variant={product.isVisible ? "outline" : "secondary"}>
-                                                            {product.isVisible ? "Visible" : "Hidden"}
-                                                        </Badge>
-                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))
