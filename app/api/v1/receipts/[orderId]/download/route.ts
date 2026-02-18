@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
@@ -6,6 +5,8 @@ import { db } from "@/lib/db"
 import { orders } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { jsPDF } from "jspdf"
+import path from "path"
+import fs from "fs"
 
 export async function GET(
     req: NextRequest,
@@ -23,7 +24,6 @@ export async function GET(
             return NextResponse.json({ error: "Invalid order ID" }, { status: 400 })
         }
 
-        // Fetch order with receipt data
         const [order] = await db
             .select()
             .from(orders)
@@ -31,10 +31,7 @@ export async function GET(
             .limit(1)
 
         if (!order || !order.receiptData) {
-            return NextResponse.json(
-                { error: "Receipt not found" },
-                { status: 404 }
-            )
+            return NextResponse.json({ error: "Receipt not found" }, { status: 404 })
         }
 
         const receiptData = order.receiptData as any
@@ -42,231 +39,159 @@ export async function GET(
         // Generate PDF (A4 size: 210mm x 297mm)
         const doc = new jsPDF()
 
-        // Helper for formatting currency
-        const formatNum = (num: number, digits = 3) =>
-            Number(num).toFixed(digits)
-
-        // 1. Header Section
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(22)
-        doc.setTextColor(26, 58, 92)
-        doc.text("APRICART", 15, 25)
-
-        doc.setFontSize(10)
-        doc.setTextColor(71, 85, 105)
-        doc.setFont("helvetica", "bold")
-        doc.text(`From: ${receiptData.organizationName || "Apricart E-Store Pvt Ltd"}`, 15, 32)
-
-        // 2. Invoice Details (Top Right)
-        doc.setTextColor(0, 0, 0)
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(9)
-        doc.text("INVOICE#:", 140, 25)
-        doc.setFont("helvetica", "normal")
-        doc.text(String(receiptData.invoiceNumber), 165, 25)
-
-        doc.setFont("helvetica", "bold")
-        doc.text("DATE:", 140, 31)
-        doc.setFont("helvetica", "normal")
-        doc.text(receiptData.date, 165, 31)
-
-        doc.setFont("helvetica", "bold")
-        doc.text("Contact No:", 140, 37)
-        doc.setFont("helvetica", "normal")
-        doc.text(receiptData.organizationContact || "0333-3182410", 165, 37)
-
-        // Buyer Info
-        doc.setFont("helvetica", "bold")
-        doc.text("BUYER NAME:", 140, 47)
-        doc.setFont("helvetica", "normal")
-        doc.text(receiptData.buyerName?.toUpperCase() || "", 165, 47)
-
-        doc.setFont("helvetica", "bold")
-        doc.text("Deliver to:", 140, 53)
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(8)
-        const addressLines = doc.splitTextToSize(receiptData.buyerAddress || 'N/A', 40)
-        doc.text(addressLines, 165, 53)
-
-        // 3. Invoice Title
-        doc.setFontSize(14)
-        doc.setFont("helvetica", "bold")
-        doc.setTextColor(0, 0, 0)
-        doc.text("INVOICE", 105, 75, { align: "center" })
-        doc.setLineWidth(0.5)
-        doc.line(15, 78, 195, 78)
-
-        // 4. Table Header
-        let yPos = 85
-
-        const drawTableHeader = (y: number) => {
-            doc.setFontSize(8)
-            doc.setFont("helvetica", "bold")
-            doc.setTextColor(0, 0, 0)
-            doc.setLineWidth(0.2)
-            doc.line(15, y - 4, 195, y - 4)
-            doc.line(15, y + 2, 195, y + 2)
-
-            doc.text("S.#", 15, y)
-            doc.text("CATEGORY", 25, y)
-            doc.text("DESCRIPTION", 65, y)
-            doc.text("QTY", 135, y, { align: "right" })
-            doc.text("RATE", 155, y, { align: "right" })
-            doc.text("TAX", 170, y, { align: "right" })
-            doc.text("TOTAL", 195, y, { align: "right" })
+        // --- Header Section ---
+        // Logo (Attempt to load from public folder)
+        try {
+            const logoPath = path.join(process.cwd(), "public", "logo-pos.png")
+            if (fs.existsSync(logoPath)) {
+                const logoData = fs.readFileSync(logoPath).toString("base64")
+                doc.addImage(`data:image/png;base64,${logoData}`, "PNG", 15, 15, 60, 16, undefined, 'FAST')
+            } else {
+                doc.setTextColor(25, 34, 109) // Navy blue from logo
+                doc.setFont("helvetica", "bold")
+                doc.setFontSize(24)
+                doc.text("ONEFLOWE", 15, 25)
+            }
+        } catch (e) {
+            console.error("Logo loading error:", e)
+            doc.setFontSize(20)
+            doc.text("ONEFLOWE", 15, 25)
         }
 
-        // 4. Items Table
-        yPos = 85
-        drawTableHeader(yPos)
-        yPos += 7
+        // Company info under logo
+        doc.setTextColor(30, 41, 59)
+        doc.setFont("helvetica", "bold")
+        doc.setFontSize(9)
+        doc.text("From:", 15, 38)
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(10)
+        doc.text(receiptData.organizationName || "Apricart E-Store Pvt Ltd", 15, 43)
 
-        let serial = 1
-        receiptData.items.forEach((mainCat: any) => {
-            // Main Category Header
-            if (yPos > 275) {
-                doc.addPage()
-                yPos = 20
-                drawTableHeader(yPos)
-                yPos += 7
-            }
+        // Right side: Invoice Meta
+        doc.setFont("helvetica", "bold")
+        doc.setFontSize(18)
+        doc.text(`INVOICE#: ${receiptData.invoiceNumber}`, 195, 22, { align: "right" })
 
-            doc.setFillColor(250, 250, 250)
-            doc.rect(15, yPos - 4, 180, 5, "F")
+        doc.setFontSize(9)
+        doc.setTextColor(100, 116, 139)
+        doc.text("DATE:", 160, 28)
+        doc.setTextColor(30, 41, 59)
+        doc.text(receiptData.date, 195, 28, { align: "right" })
+
+        doc.setTextColor(100, 116, 139)
+        doc.text("Contact No:", 160, 33)
+        doc.setTextColor(30, 41, 59)
+        doc.text(receiptData.organizationContact || "0333-3182410", 195, 33, { align: "right" })
+
+        // Buyer details on right
+        doc.setTextColor(100, 116, 139)
+        doc.setFont("helvetica", "bold")
+        doc.text("BUYER NAME:", 160, 45)
+        doc.setTextColor(15, 23, 42)
+        doc.text(String(receiptData.buyerName).toUpperCase(), 195, 45, { align: "right" })
+
+        doc.setTextColor(100, 116, 139)
+        doc.text("Deliver to:", 160, 50)
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(8)
+        const addrLines = doc.splitTextToSize(receiptData.buyerAddress || '—', 50)
+        doc.text(addrLines, 195, 50, { align: "right" })
+
+        // Divider
+        doc.setDrawColor(226, 232, 240)
+        doc.setLineWidth(0.5)
+        doc.line(15, 65, 195, 65)
+
+        // --- Items Table ---
+        let y = 75
+        doc.setFillColor(15, 23, 42)
+        doc.rect(15, y, 180, 10, "F")
+        doc.setTextColor(255, 255, 255)
+        doc.setFont("helvetica", "bold")
+        doc.setFontSize(9)
+        doc.text("DESCRIPTION", 20, y + 7)
+        doc.text("RATE", 140, y + 7, { align: "right" })
+        doc.text("QTY", 160, y + 7, { align: "right" })
+        doc.text("TOTAL", 190, y + 7, { align: "right" })
+
+        y += 15
+        doc.setTextColor(30, 41, 59)
+
+        receiptData.items?.forEach((cat: any) => {
+            // Category Header
+            if (y > 270) { doc.addPage(); y = 20; }
+            doc.setFillColor(248, 250, 252)
+            doc.rect(15, y - 4, 180, 6, "F")
             doc.setFont("helvetica", "bold")
             doc.setFontSize(7)
-            doc.setTextColor(51, 65, 85)
-            doc.text((mainCat.mainCategoryName || mainCat.categoryName)?.toUpperCase(), 17, yPos - 0.5)
-            yPos += 4
+            doc.text((cat.mainCategoryName || cat.categoryName || "ITEMS")?.toUpperCase(), 17, y)
+            y += 6
 
-            const subCats = mainCat.subCategories || [{ subCategoryName: "", items: mainCat.items, subtotal: mainCat.subtotal }]
-
-            subCats.forEach((subCat: any) => {
-                if (subCat.subCategoryName) {
-                    doc.setFont("helvetica", "boldoblique")
-                    doc.setFontSize(6.5)
-                    doc.setTextColor(148, 163, 184)
-                    doc.text(subCat.subCategoryName, 22, yPos)
-                    yPos += 3.5
-                }
-
-                subCat.items.forEach((item: any, idx: number) => {
-                    if (yPos > 275) {
+            const subCats = cat.subCategories || [{ items: cat.items }]
+            subCats.forEach((sub: any) => {
+                sub.items?.forEach((item: any) => {
+                    if (y > 270) {
                         doc.addPage()
-                        yPos = 20
-                        drawTableHeader(yPos)
-                        yPos += 7
+                        y = 20
                     }
-
-                    doc.setFontSize(8)
                     doc.setFont("helvetica", "normal")
-                    doc.setTextColor(30, 41, 59)
-
-                    doc.text(String(serial++), 15, yPos)
-
-                    const descLines = doc.splitTextToSize(item.description || '', 65)
-                    doc.text(descLines, 65, yPos)
-
-                    doc.text(String(item.quantity), 135, yPos, { align: "right" })
-                    doc.text(formatNum(item.rate), 155, yPos, { align: "right" })
-                    doc.text(formatNum(item.tax || 0, 1), 170, yPos, { align: "right" })
+                    doc.setFontSize(8)
+                    doc.text(item.description?.substring(0, 60) || "", 20, y)
+                    doc.text(Number(item.rate).toLocaleString(), 140, y, { align: "right" })
+                    doc.text(String(item.quantity), 160, y, { align: "right" })
                     doc.setFont("helvetica", "bold")
-                    doc.text(formatNum(item.total), 195, yPos, { align: "right" })
+                    doc.text(Number(item.total).toLocaleString(), 190, y, { align: "right" })
 
-                    yPos += Math.max(descLines.length * 3.5, 5)
+                    doc.setDrawColor(241, 245, 249)
+                    doc.line(15, y + 2, 195, y + 2)
+                    y += 8
                 })
-
-                // Sub Category Subtotal
-                doc.setFont("helvetica", "bold")
-                doc.setFontSize(6.5)
-                doc.setTextColor(100, 116, 139)
-                doc.text(`Sub ${subCat.subCategoryName || mainCat.categoryName}: ${formatNum(subCat.subtotal)}`, 195, yPos, { align: "right" })
-                yPos += 1.5
-                doc.setLineWidth(0.1)
-                doc.setDrawColor(241, 245, 249)
-                doc.line(22, yPos, 195, yPos)
-                yPos += 4.5
             })
-
-            // Main Category Total
-            doc.setFont("helvetica", "bold")
-            doc.setFontSize(8)
-            doc.setTextColor(15, 23, 42)
-            doc.text(`TOTAL ${(mainCat.mainCategoryName || mainCat.categoryName)?.toUpperCase()}: ${formatNum(mainCat.total ?? mainCat.subtotal ?? 0)}`, 195, yPos, { align: "right" })
-            yPos += 1.5
-            doc.setLineWidth(0.2)
-            doc.setDrawColor(226, 232, 240)
-            doc.line(15, yPos, 195, yPos)
-            yPos += 6
         })
 
-        // 5. Totals Section
-        yPos += 6
-        if (yPos > 250) {
+        // --- Summary Block ---
+        y += 10
+        if (y > 250) {
             doc.addPage()
-            yPos = 20
+            y = 20
         }
 
-        const totalsX = 140
-        const valuesX = 195
-
-        doc.setFontSize(8.5)
-        doc.setTextColor(51, 65, 85)
-
-        const drawTotalRow = (label: string, value: number, isBold = false) => {
-            doc.setFont("helvetica", isBold ? "bold" : "normal")
-            doc.text(label, totalsX, yPos)
-            doc.text(formatNum(value), valuesX, yPos, { align: "right" })
-            yPos += 5
+        const drawSummaryRow = (label: string, value: string, isTotal = false) => {
+            doc.setFont("helvetica", isTotal ? "bold" : "normal")
+            doc.setFontSize(isTotal ? 12 : 9)
+            doc.text(label, 140, y)
+            doc.text(value, 190, y, { align: "right" })
+            y += isTotal ? 10 : 6
         }
 
-        drawTotalRow("SubTotal", receiptData.subtotal)
-        drawTotalRow("Discount", receiptData.discount)
-        drawTotalRow("Tax", receiptData.tax)
-        drawTotalRow("Delivery Charges", receiptData.deliveryCharges)
-
-        if (receiptData.refund > 0) {
-            doc.setTextColor(220, 38, 38)
-            drawTotalRow("**Refund", receiptData.refund)
+        drawSummaryRow("Subtotal:", `PKR ${Number(receiptData.subtotal).toLocaleString()}`)
+        drawSummaryRow("Discounts:", `-PKR ${Number(receiptData.discount).toLocaleString()}`)
+        drawSummaryRow("Tax & Fees:", `PKR ${Number(receiptData.tax).toLocaleString()}`)
+        if (receiptData.deliveryCharges > 0) {
+            drawSummaryRow("Delivery:", `PKR ${Number(receiptData.deliveryCharges).toLocaleString()}`)
         }
 
-        yPos += 4
-        doc.setFontSize(10)
-        doc.setFont("helvetica", "bold")
-        doc.text("Total Amount", 140, yPos, { align: "right" })
-        doc.setFontSize(14)
-        doc.text(`PKR ${formatNum(receiptData.totalAmount)}`, 195, yPos, { align: "right" })
+        doc.setDrawColor(15, 23, 42)
+        doc.setLineWidth(1)
+        doc.line(140, y - 2, 195, y - 2)
+        y += 5
+        drawSummaryRow("NET TOTAL:", `PKR ${Number(receiptData.totalAmount).toLocaleString()}`, true)
 
-        // 6. Final Footer
-        yPos = 275
-        doc.setFontSize(9)
-        doc.setFont("helvetica", "bold")
-        doc.text("Thanks for your business.", 15, yPos)
-
+        // Footer
         doc.setFontSize(7)
-        doc.setTextColor(150, 150, 150)
-        doc.text("Powered by Apricart Solutions", 15, yPos + 10)
+        doc.setTextColor(148, 163, 184)
+        doc.text(`Official Document - Generated by OneFlowe ERP on ${new Date().toLocaleString()}`, 105, 285, { align: "center" })
 
-        doc.setFontSize(8)
-        doc.setTextColor(100, 100, 100)
-        doc.line(160, yPos + 8, 195, yPos + 8)
-        doc.text("Authorized Sign", 177, yPos + 12, { align: "center" })
-
-        // Generate PDF buffer
         const pdfBuffer = doc.output("arraybuffer")
 
-        // Return PDF as downloadable file
         return new NextResponse(pdfBuffer, {
             headers: {
                 "Content-Type": "application/pdf",
-                "Content-Disposition": `attachment; filename="receipt-${receiptData.invoiceNumber}.pdf"`,
+                "Content-Disposition": `attachment; filename="invoice-${receiptData.invoiceNumber}.pdf"`,
             },
         })
     } catch (e: any) {
-        console.error("PDF generation error:", e)
-        return NextResponse.json(
-            { error: "Internal Server Error" },
-            { status: 500 }
-        )
+        console.error("Invoice generation error:", e)
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }
