@@ -34,11 +34,9 @@ type BranchInventoryItem = {
 export default function BranchInventoryPage() {
   const { branchId, organizationId } = useAppContext()
   const [searchQuery, setSearchQuery] = useState("")
-  const [visibilityFilter, setVisibilityFilter] = useState("all")
 
   const params = new URLSearchParams()
   params.set("search", searchQuery)
-  params.set("visibility", visibilityFilter)
   if (branchId) params.set("branchId", String(branchId))
   if (organizationId) params.set("organizationId", String(organizationId))
 
@@ -78,8 +76,8 @@ export default function BranchInventoryPage() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <SummaryCard label="Total products" value={totalProducts} helper="Currently assigned" accent="from-blue-500 to-cyan-500" />
-        <SummaryCard label="Visible to customers" value={visibleProducts} helper={`${totalProducts - visibleProducts} hidden`} accent="from-emerald-500 to-lime-500" />
+        <SummaryCard label="Assigned products" value={totalProducts} helper="Currently assigned" accent="from-blue-500 to-cyan-500" />
+        <SummaryCard label="Available and active" value={inventory.length} helper="Active items" accent="from-emerald-500 to-lime-500" />
       </div>
 
       <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
@@ -98,15 +96,6 @@ export default function BranchInventoryPage() {
                 onChange={(event) => setSearchQuery(event.target.value)}
               />
             </div>
-            <select
-              value={visibilityFilter}
-              onChange={(event) => setVisibilityFilter(event.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              <option value="all">All products</option>
-              <option value="visible">Visible only</option>
-              <option value="hidden">Hidden only</option>
-            </select>
           </div>
         </CardHeader>
         <CardContent>
@@ -117,7 +106,6 @@ export default function BranchInventoryPage() {
                   <TableHead>Product</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Unit Price</TableHead>
-                  <TableHead>Visibility</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -162,19 +150,6 @@ export default function BranchInventoryPage() {
                         <Badge variant="outline">{item.categoryName || "Uncategorized"}</Badge>
                       </TableCell>
                       <TableCell>{formatPKR((item.customPrice ?? item.basePrice) / 100)}</TableCell>
-                      <TableCell>
-                        <Badge variant={item.isVisible ? "default" : "secondary"}>
-                          {item.isVisible ? (
-                            <span className="inline-flex items-center gap-1">
-                              <Eye className="h-3 w-3" /> Visible
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1">
-                              <Eye className="h-3 w-3" /> Hidden
-                            </span>
-                          )}
-                        </Badge>
-                      </TableCell>
                     </TableRow>
                   ))
                 )}

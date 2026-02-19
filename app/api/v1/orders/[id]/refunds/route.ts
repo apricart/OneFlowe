@@ -135,11 +135,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Validate order status
     const orderStatus = String(orderData.status || '').toUpperCase()
-    if (orderStatus === 'PENDING') {
-      return NextResponse.json({
-        error: 'Cannot refund pending orders. Order must be approved or fulfilled first.'
-      }, { status: 400 })
-    }
 
     if (orderStatus === 'REFUNDED') {
       return NextResponse.json({
@@ -187,11 +182,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .innerJoin(refunds, eq(refundItems.refundId, refunds.id))
       .where(eq(refunds.orderId, orderId))
 
-    // Aggregate previously refunded quantities per item, excluding REJECTED refunds
-    const previouslyRefundedMap = new Map<number, number>()
+    // Aggregate previously refunded quantities per item
+    const approvedRefundedMap = new Map<number, number>()
+    const pendingRefundedMap = new Map<number, number>()
+
     for (const p of previousRefunds) {
-      if (p.status !== 'REJECTED') {
-        previouslyRefundedMap.set(p.orderItemId, (previouslyRefundedMap.get(p.orderItemId) || 0) + p.quantity)
+      if (p.status === 'APPROVED' || p.status === 'COMPLETED') {
+        approvedRefundedMap.set(p.orderItemId, (approvedRefundedMap.get(p.orderItemId) || 0) + p.quantity)
+      } else if (p.status === 'PENDING') {
+        pendingRefundedMap.set(p.orderItemId, (pendingRefundedMap.get(p.orderItemId) || 0) + p.quantity)
       }
     }
 
@@ -209,12 +208,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: `Invalid quantity for item ${originalItem.productName}` }, { status: 400 })
       }
 
-      const previouslyRefunded = previouslyRefundedMap.get(item.id) || 0
-      const remainingQty = originalItem.quantity - previouslyRefunded
+      const approvedRefunded = approvedRefundedMap.get(item.id) || 0
+      const pendingRefunded = pendingRefundedMap.get(item.id) || 0
+      const remainingQty = originalItem.quantity - (approvedRefunded + pendingRefunded)
 
       if (item.quantity > remainingQty) {
         return NextResponse.json({
-          error: `Cannot refund ${item.quantity} of ${originalItem.productName}. Only ${remainingQty} remaining (Ordered: ${originalItem.quantity}, Refunded: ${previouslyRefunded})`
+          error: `Cannot refund ${item.quantity} of ${originalItem.productName}. Only ${remainingQty} remaining (Ordered: ${originalItem.quantity}, Approved: ${approvedRefunded}, Pending: ${pendingRefunded})`
         }, { status: 400 })
       }
 
@@ -235,15 +235,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .from(refunds)
       .where(eq(refunds.orderId, orderId))
 
-    const totalRefundedAmount = existingRefunds
-      .filter(r => r.status !== 'REJECTED')
+    const approvedTotal = existingRefunds
+      .filter(r => r.status === 'APPROVED' || r.status === 'COMPLETED')
       .reduce((sum, r) => sum + (r.amountCents || 0), 0)
 
-    const remainingRefundableAmount = orderData.totalCents - totalRefundedAmount
+    const pendingTotal = existingRefunds
+      .filter(r => r.status === 'PENDING')
+      .reduce((sum, r) => sum + (r.amountCents || 0), 0)
+
+    const remainingRefundableAmount = orderData.totalCents - (approvedTotal + pendingTotal)
 
     if (totalRefundAmount > remainingRefundableAmount) {
       return NextResponse.json({
-        error: `Refund amount (${(totalRefundAmount / 100).toFixed(2)} PKR) exceeds remaining refundable amount.`
+        error: `Refund amount (${(totalRefundAmount / 100).toFixed(2)} PKR) exceeds remaining refundable capacity (Total: ${(orderData.totalCents / 100).toFixed(2)}, Approved: ${(approvedTotal / 100).toFixed(2)}, Pending: ${(pendingTotal / 100).toFixed(2)}).`
       }, { status: 400 })
     }
 
@@ -252,8 +256,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       let refundId: number;
 
       // Check if this is a full refund
-      const newTotalRefunded = totalRefundedAmount + totalRefundAmount
-      const isFullRefund = newTotalRefunded >= orderData.totalCents
+      const newApprovedTotal = approvedTotal + (userRole === "SUPER_ADMIN" ? totalRefundAmount : 0)
+      const isFullRefund = newApprovedTotal >= orderData.totalCents
       const refundType = isFullRefund ? "FULL" : "PARTIAL"
 
       if (userRole === "SUPER_ADMIN") {

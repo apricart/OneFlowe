@@ -44,7 +44,8 @@ export async function GET(req: NextRequest) {
     const conditions: (SQL | undefined)[] = [
       eq(organizationInventory.organizationId, parseInt(organizationId)),
       isNull(organizationInventory.deletedAt),
-      ne(globalProducts.status, "discontinued")
+      ne(globalProducts.status, "discontinued"),
+      eq(organizationInventory.isActive, true)
     ]
 
     if (search) {
@@ -58,13 +59,6 @@ export async function GET(req: NextRequest) {
     }
     if (category) {
       conditions.push(eq(globalProducts.categoryId, parseInt(category)))
-    }
-    if (status) {
-      if (status === "active") {
-        conditions.push(eq(organizationInventory.isActive, true))
-      } else if (status === "inactive") {
-        conditions.push(eq(organizationInventory.isActive, false))
-      }
     }
 
     const whereClause = and(...conditions)
