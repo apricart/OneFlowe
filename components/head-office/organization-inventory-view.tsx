@@ -31,14 +31,12 @@ type OrganizationInventoryItem = {
 export default function HeadOfficeInventoryView() {
     const { organizationId } = useAppContext()
     const [searchQuery, setSearchQuery] = useState("")
-    const [statusFilter, setStatusFilter] = useState("all")
     const [categoryFilter, setCategoryFilter] = useState("all")
     const [page, setPage] = useState(1)
     const PAGE_SIZE = 20
 
     const encodedSearch = encodeURIComponent(searchQuery)
-    const query = `/api/v1/head-office/organization-inventory?search=${encodedSearch}&status=${statusFilter}${categoryFilter !== 'all' ? `&category=${categoryFilter}` : ''}${organizationId ? `&organizationId=${organizationId}` : ""
-        }`
+    const query = `/api/v1/head-office/organization-inventory?search=${encodedSearch}${categoryFilter !== 'all' ? `&category=${categoryFilter}` : ''}${organizationId ? `&organizationId=${organizationId}` : ""}`
 
     const { data, isLoading } = useSWR<{ items: OrganizationInventoryItem[]; total: number }>(query, fetcher, {
         fallbackData: { items: [], total: 0 },
@@ -106,7 +104,7 @@ export default function HeadOfficeInventoryView() {
                 <SummaryCard
                     label="Active SKUs"
                     value={activeCount}
-                    helper={`${totalAssigned - activeCount} paused`}
+                    helper="Active items"
                     icon={<ShieldCheck className="h-5 w-5 text-white" />}
                     accent="from-emerald-500 to-lime-500"
                 />
@@ -136,15 +134,6 @@ export default function HeadOfficeInventoryView() {
                             />
                         </div>
 
-                        <select
-                            value={statusFilter}
-                            onChange={(event) => setStatusFilter(event.target.value)}
-                            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        >
-                            <option value="all">All statuses</option>
-                            <option value="active">Active only</option>
-                            <option value="inactive">Inactive only</option>
-                        </select>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -155,7 +144,6 @@ export default function HeadOfficeInventoryView() {
                                     <TableHead>Product</TableHead>
                                     <TableHead>Category</TableHead>
                                     <TableHead>Unit Price</TableHead>
-                                    <TableHead>Status</TableHead>
                                     <TableHead>Assigned on</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -203,9 +191,6 @@ export default function HeadOfficeInventoryView() {
                                             </TableCell>
                                             <TableCell className="font-medium">
                                                 {formatPKR((item.customPrice ?? item.basePrice ?? 0) / 100)}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant={item.isActive ? "default" : "secondary"}>{item.isActive ? "Active" : "Inactive"}</Badge>
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
                                                 {new Date(item.assignedAt).toLocaleDateString()}

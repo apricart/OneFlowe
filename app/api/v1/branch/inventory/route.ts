@@ -93,14 +93,6 @@ export async function GET(req: NextRequest) {
         )
       )
     }
-    if (visibility) {
-      if (visibility === "visible") {
-        conditions.push(eq(branchInventory.isVisible, true))
-      } else if (visibility === "hidden") {
-        conditions.push(eq(branchInventory.isVisible, false))
-      }
-    }
-
     const whereClause = and(...conditions)
 
     const cacheKey = scopedCacheKey('branch-inv', { branchId, orgId: orgIdNum }, {

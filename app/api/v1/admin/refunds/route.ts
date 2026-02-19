@@ -126,6 +126,7 @@ export async function GET(req: NextRequest) {
         // Fetch already refunded quantities
         const refundedItemsData = await db
             .select({
+                refundId: refundItems.refundId, // Added to link to refund status
                 orderItemId: refundItems.orderItemId,
                 quantity: refundItems.quantity,
             })
@@ -140,19 +141,43 @@ export async function GET(req: NextRequest) {
                 )
             ))
 
-        // Aggregate refunded quantities
-        const refundedQuantityMap = new Map<number, number>()
+        // Fetch refund records with status to distinguish
+        const refundRecords = await db
+            .select({
+                id: refunds.id,
+                status: refunds.status,
+            })
+            .from(refunds)
+            .where(eq(refunds.orderId, orderData.id))
+
+        const refundStatusMap = new Map(refundRecords.map(r => [r.id, r.status]))
+
+        // Aggregate refunded vs requested quantities
+        const approvedQuantityMap = new Map<number, number>()
+        const pendingQuantityMap = new Map<number, number>()
+
         for (const record of refundedItemsData) {
-            const current = refundedQuantityMap.get(record.orderItemId) || 0
-            refundedQuantityMap.set(record.orderItemId, current + record.quantity)
+            const status = refundStatusMap.get(record.refundId)
+            if (status === "APPROVED" || status === "COMPLETED") {
+                const current = approvedQuantityMap.get(record.orderItemId) || 0
+                approvedQuantityMap.set(record.orderItemId, current + record.quantity)
+            } else if (status === "PENDING") {
+                const current = pendingQuantityMap.get(record.orderItemId) || 0
+                pendingQuantityMap.set(record.orderItemId, current + record.quantity)
+            }
         }
 
         // Merge with items
-        const itemsWithRefundStats = items.map(item => ({
-            ...item,
-            refundedQuantity: refundedQuantityMap.get(item.id) || 0,
-            remainingQuantity: item.quantity - (refundedQuantityMap.get(item.id) || 0)
-        }))
+        const itemsWithRefundStats = items.map(item => {
+            const approved = approvedQuantityMap.get(item.id) || 0
+            const pending = pendingQuantityMap.get(item.id) || 0
+            return {
+                ...item,
+                refundedQuantity: approved, // Represents approved/completed refunds
+                requestedQuantity: pending, // Represents pending refunds
+                remainingQuantity: item.quantity - (approved + pending)
+            }
+        })
 
         return NextResponse.json({
             order: {
@@ -175,7 +200,7 @@ export async function GET(req: NextRequest) {
 /**
  * POST /api/v1/admin/refunds
  * Process an item-level refund (Super Admin only)
- * 
+ *
  * Body: { orderId: number, items: Array<{itemId: number, quantity: number}>, reason?: string }
  */
 export async function POST(req: NextRequest) {
@@ -268,11 +293,7 @@ export async function POST(req: NextRequest) {
         // ===== STATUS VALIDATION =====
         const currentStatus = String(orderData.status || "").toUpperCase()
 
-        if (currentStatus === "PENDING") {
-            return NextResponse.json({
-                error: "Cannot refund pending orders. Order must be approved first."
-            }, { status: 400 })
-        }
+        // No longer blocking PENDING orders as per user request
 
         if (currentStatus === "REJECTED") {
             return NextResponse.json({
@@ -315,6 +336,7 @@ export async function POST(req: NextRequest) {
         // Fetch already refunded items to calculate remaining quantity
         const refundedItemsData = await db
             .select({
+                refundId: refundItems.refundId, // Added to link to refund status
                 orderItemId: refundItems.orderItemId,
                 quantity: refundItems.quantity,
             })
@@ -329,10 +351,29 @@ export async function POST(req: NextRequest) {
                 )
             ))
 
-        const refundedQuantityMap = new Map<number, number>()
+        // Fetch refund records with status to distinguish
+        const refundRecords = await db
+            .select({
+                id: refunds.id,
+                status: refunds.status,
+            })
+            .from(refunds)
+            .where(eq(refunds.orderId, orderId))
+
+        const refundStatusMap = new Map(refundRecords.map(r => [r.id, r.status]))
+
+        const approvedQuantityMap = new Map<number, number>()
+        const pendingQuantityMap = new Map<number, number>()
+
         for (const record of refundedItemsData) {
-            const current = refundedQuantityMap.get(record.orderItemId) || 0
-            refundedQuantityMap.set(record.orderItemId, current + record.quantity)
+            const status = refundStatusMap.get(record.refundId)
+            if (status === "APPROVED" || status === "COMPLETED") {
+                const current = approvedQuantityMap.get(record.orderItemId) || 0
+                approvedQuantityMap.set(record.orderItemId, current + record.quantity)
+            } else if (status === "PENDING") {
+                const current = pendingQuantityMap.get(record.orderItemId) || 0
+                pendingQuantityMap.set(record.orderItemId, current + record.quantity)
+            }
         }
 
         let totalRefundAmount = 0
@@ -354,13 +395,14 @@ export async function POST(req: NextRequest) {
                 }, { status: 400 })
             }
 
-            const alreadyRefundedQty = refundedQuantityMap.get(refundItem.itemId) || 0
-            const remainingQty = orderItem.quantity - alreadyRefundedQty
+            const approvedQty = approvedQuantityMap.get(refundItem.itemId) || 0
+            const pendingQty = pendingQuantityMap.get(refundItem.itemId) || 0
+            const remainingQty = orderItem.quantity - (approvedQty + pendingQty)
 
             // Validate quantity doesn't exceed remaining amount
             if (refundItem.quantity > remainingQty) {
                 return NextResponse.json({
-                    error: `Refund quantity (${refundItem.quantity}) exceeds remaining quantity (${remainingQty}) for item: ${orderItem.productName}`
+                    error: `Refund quantity (${refundItem.quantity}) exceeds remaining quantity (${remainingQty}) for item: ${orderItem.productName} (Approved: ${approvedQty}, Pending: ${pendingQty})`
                 }, { status: 400 })
             }
 
@@ -378,20 +420,32 @@ export async function POST(req: NextRequest) {
 
         // ===== VALIDATE REFUND AMOUNT =====
         const orderTotal = orderData.totalCents || 0
-        const alreadyRefunded = orderData.refundAmountCents || 0
-        const remainingRefundable = orderTotal - alreadyRefunded
+        const approvedTotal = await db
+            .select({ amount: refunds.amountCents })
+            .from(refunds)
+            .where(and(eq(refunds.orderId, orderId), or(eq(refunds.status, "APPROVED"), eq(refunds.status, "COMPLETED"))))
+            .then(res => res.reduce((sum, r) => sum + (r.amount || 0), 0))
+
+        const pendingTotal = await db
+            .select({ amount: refunds.amountCents })
+            .from(refunds)
+            .where(and(eq(refunds.orderId, orderId), eq(refunds.status, "PENDING")))
+            .then(res => res.reduce((sum, r) => sum + (r.amount || 0), 0))
+
+        const remainingRefundable = orderTotal - (approvedTotal + pendingTotal)
 
         if (totalRefundAmount > remainingRefundable) {
             return NextResponse.json({
-                error: `Total refund amount (PKR ${(totalRefundAmount / 100).toFixed(2)}) exceeds remaining refundable amount (PKR ${(remainingRefundable / 100).toFixed(2)}).`
+                error: `Total refund amount (PKR ${(totalRefundAmount / 100).toFixed(2)}) exceeds remaining capacity (Total: ${(orderTotal / 100).toFixed(2)}, Approved: ${(approvedTotal / 100).toFixed(2)}, Pending: ${(pendingTotal / 100).toFixed(2)}).`
             }, { status: 400 })
         }
 
+        const newApprovedTotal = approvedTotal + totalRefundAmount
+        const isFullRefund = newApprovedTotal >= orderTotal
+        const refundType = isFullRefund ? "FULL" : "PARTIAL"
+
         // ===== PROCESS REFUND IN TRANSACTION =====
         await db.transaction(async (tx) => {
-            const newRefundTotal = alreadyRefunded + totalRefundAmount
-            const isFullRefund = newRefundTotal >= orderTotal
-            const refundType = isFullRefund ? "FULL" : "PARTIAL"
 
             // 1. Update order with refund info and update receipt data
             const [currentOrder] = await tx
@@ -418,7 +472,7 @@ export async function POST(req: NextRequest) {
                     statusAtRefund: currentStatus,
                     refundedAt: new Date(),
                     refundedByUserId: userId,
-                    refundAmountCents: newRefundTotal,
+                    refundAmountCents: newApprovedTotal,
                     refundReason: reason?.trim() || orderData.refundReason,
                     receiptData: updatedReceiptData || currentOrder?.receiptData,
                     updatedAt: new Date(),
@@ -467,7 +521,7 @@ export async function POST(req: NextRequest) {
                     refundItems: refundDetails,
                     totalRefundAmountCents: totalRefundAmount,
                     totalRefundAmountPKR: (totalRefundAmount / 100).toFixed(2),
-                    totalRefunded: newRefundTotal,
+                    totalRefunded: newApprovedTotal,
                     isFullRefund,
                     reason: reason?.trim() || "No reason provided",
                 },
@@ -500,7 +554,7 @@ export async function POST(req: NextRequest) {
             message: `Refund of PKR ${(totalRefundAmount / 100).toFixed(2)} processed successfully`,
             refundAmount: (totalRefundAmount / 100).toFixed(2),
             itemsRefunded: refundDetails.length,
-            totalRefunded: ((alreadyRefunded + totalRefundAmount) / 100).toFixed(2),
+            totalRefunded: (newApprovedTotal / 100).toFixed(2),
             orderTotal: (orderTotal / 100).toFixed(2),
         })
 

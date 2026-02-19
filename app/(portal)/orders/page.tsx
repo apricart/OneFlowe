@@ -533,17 +533,29 @@ export default function OrdersManagementPage() {
                         )}
                       </td>
                       <td className="px-2 py-2 bg-white dark:bg-slate-900">
-                        {order.status.toLowerCase() === "refunded" ? (
-                          <Badge variant="outline" className="bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-0 text-[10px] px-1.5 py-0.5">
-                            FULL
-                          </Badge>
-                        ) : (order.refundAmountCents && order.refundAmountCents > 0) ? (
-                          <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-0 text-[10px] px-1.5 py-0.5">
-                            PARTIAL
-                          </Badge>
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground">—</span>
-                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {order.status.toLowerCase() === "refunded" ? (
+                            <Badge variant="outline" className="bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-0 text-[10px] px-1.5 py-0.5">
+                              FULL
+                            </Badge>
+                          ) : (
+                            <>
+                              {(order.refundAmountCents && order.refundAmountCents > 0) && (
+                                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-0 text-[10px] px-1.5 py-0.5">
+                                  PARTIAL
+                                </Badge>
+                              )}
+                              {(order.hasRefundRequests && order.hasRefundRequests > 0) && (
+                                <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-0 text-[10px] px-1.5 py-0.5">
+                                  REQUESTED
+                                </Badge>
+                              )}
+                              {!(order.refundAmountCents && order.refundAmountCents > 0) && !(order.hasRefundRequests && order.hasRefundRequests > 0) && (
+                                <span className="text-[10px] text-muted-foreground">—</span>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
                       <td className="px-2 py-2 text-right bg-white dark:bg-slate-900">
                         <p className="text-xs font-bold text-slate-900 dark:text-white">

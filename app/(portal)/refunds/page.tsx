@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, RefreshCcw, Loader2, AlertTriangle, Building2, Calendar, User, DollarSign } from "lucide-react"
+import { Search, RefreshCcw, Loader2, AlertTriangle, Building2, Calendar, User, DollarSign, Clock } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 type OrderItem = {
@@ -310,6 +310,93 @@ export default function RefundsPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Pending Requests Section */}
+            {!order && (
+                <Card className="mb-8 border-blue-100 dark:border-blue-900 shadow-sm">
+                    <CardHeader className="flex flex-row items-center justify-between py-4">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <Clock className="h-5 w-5 text-blue-500" />
+                            Pending Refund Requests
+                            {pendingRefunds.length > 0 && (
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                    {pendingRefunds.length}
+                                </Badge>
+                            )}
+                        </CardTitle>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1 text-xs"
+                            onClick={async () => {
+                                try {
+                                    const response = await fetch('/api/v1/admin/refunds?status=pending')
+                                    if (response.ok) {
+                                        const data = await response.json()
+                                        setPendingRefunds(data.refunds || [])
+                                        toast({ title: "Refreshed", description: "Pending requests updated" })
+                                    }
+                                } catch (e) {
+                                    toast({ title: "Error", description: "Failed to refresh", variant: "destructive" })
+                                }
+                            }}
+                        >
+                            <RefreshCcw className="h-3 w-3" />
+                            Refresh
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        {pendingRefunds.length === 0 ? (
+                            <div className="py-8 text-center bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-dashed">
+                                <p className="text-muted-foreground text-sm italic">No pending refund requests found.</p>
+                            </div>
+                        ) : (
+                            <div className="rounded-md border">
+                                <Table>
+                                    <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
+                                        <TableRow>
+                                            <TableHead className="w-[120px]">Order TID</TableHead>
+                                            <TableHead>Branch</TableHead>
+                                            <TableHead>Amount</TableHead>
+                                            <TableHead>Requested By</TableHead>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead className="text-right">Action</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {pendingRefunds.map((refund) => (
+                                            <TableRow key={refund.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
+                                                <TableCell className="font-mono text-xs font-semibold">{refund.tid}</TableCell>
+                                                <TableCell className="text-xs">{refund.branchName}</TableCell>
+                                                <TableCell className="font-bold text-xs text-red-600">
+                                                    PKR {(refund.amountCents / 100).toFixed(2)}
+                                                </TableCell>
+                                                <TableCell className="text-xs">{refund.requestedByName}</TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">
+                                                    {new Date(refund.createdAt).toLocaleDateString()}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="h-7 text-[10px] px-2 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/20 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                                                        onClick={() => {
+                                                            setSearchQuery(refund.tid)
+                                                            performSearch(refund.tid)
+                                                        }}
+                                                    >
+                                                        Process
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
             {order && (
                 <Card>
