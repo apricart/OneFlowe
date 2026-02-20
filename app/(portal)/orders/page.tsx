@@ -290,7 +290,10 @@ export default function OrdersManagementPage() {
     pending: orders.filter((o: OrderItem) => o.status.toLowerCase() === "pending").length,
     approved: orders.filter((o: OrderItem) => o.status.toLowerCase() === "approved").length,
     fulfilled: orders.filter((o: OrderItem) => o.status.toLowerCase() === "fulfilled").length,
-    refunded: orders.filter((o: OrderItem) => o.status.toLowerCase() === "refunded").length,
+    refunded: orders.filter((o: OrderItem) =>
+      o.status.toLowerCase() === "refunded" ||
+      (o.refundAmountCents && o.refundAmountCents > 0)
+    ).length,
   }
 
   const scopeText = branchId
@@ -343,7 +346,7 @@ export default function OrdersManagementPage() {
       </div>
 
       {/* Stats & Filters – shown for all roles; data is branch-scoped for branch admins */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           {
             label: "Total Orders",

@@ -405,8 +405,8 @@ export default function AssignProductPage() {
                                                                 : <span className="text-muted-foreground">Not set</span>}
                                                         </TableCell>
                                                         <TableCell>
-                                                            <Badge variant={assignment.isActive ? "default" : "secondary"}>
-                                                                {assignment.isActive ? "Active" : "Inactive"}
+                                                            <Badge variant={(assignment as any).globalStatus === "active" ? "default" : "secondary"}>
+                                                                {(assignment as any).globalStatus === "active" ? "Active" : "Inactive"}
                                                             </Badge>
                                                         </TableCell>
                                                         <TableCell className="text-right">

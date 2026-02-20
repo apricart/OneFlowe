@@ -222,7 +222,10 @@ export default function HeadOfficeOrdersPage() {
     pending: orders.filter((o: OrderItem) => o.status.toLowerCase() === "pending").length,
     approved: orders.filter((o: OrderItem) => o.status.toLowerCase() === "approved").length,
     fulfilled: orders.filter((o: OrderItem) => o.status.toLowerCase() === "fulfilled").length,
-    refunded: orders.filter((o: OrderItem) => o.status.toLowerCase() === "refunded").length,
+    refunded: orders.filter((o: OrderItem) =>
+      o.status.toLowerCase() === "refunded" ||
+      (o.refundAmountCents && o.refundAmountCents > 0)
+    ).length,
   }
 
   if (!isInitialized || !ordersEndpoint) {
@@ -257,9 +260,16 @@ export default function HeadOfficeOrdersPage() {
     {
       label: "Fulfilled",
       value: statusCounts.fulfilled,
-      sub: "Includes refunded",
+      sub: "Active orders",
       icon: ArchiveRestore,
       gradient: "from-emerald-400 to-teal-500",
+    },
+    {
+      label: "Refunded",
+      value: statusCounts.refunded,
+      sub: "Full & partial",
+      icon: TrendingDown,
+      gradient: "from-rose-400 to-red-500",
     },
   ]
 
@@ -411,7 +421,7 @@ export default function HeadOfficeOrdersPage() {
                         <td className="px-4 py-3">
                           <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
                             <StatusIcon className="h-3 w-3 mr-1" />
-                            {order.status}
+                            {order.status.toUpperCase()}
                           </Badge>
                           {(order.status.toLowerCase() === 'rejected' || order.status === 'REJECTED') && order.rejectionReason && (
                             <div className="mt-1 text-[10px] text-red-600 dark:text-red-400 max-w-[150px] leading-tight">

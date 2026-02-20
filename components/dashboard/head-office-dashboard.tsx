@@ -186,7 +186,7 @@ export function HeadOfficeDashboard() {
 
       {/* KPI Cards - Professional Banking Design */}
       {allBranchesSelected && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-slide-down">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5 animate-slide-down">
           <BankingKPICard
             icon={Building2}
             title={allBranchesSelected ? "All Branches" : "My Branches"}

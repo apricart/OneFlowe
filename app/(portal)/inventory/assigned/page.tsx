@@ -25,6 +25,7 @@ type AssignedProduct = {
     customPrice: number | null
     customName: string | null
     isActive: boolean
+    globalStatus: string
     assignedAt: string
     productName: string
     productCode: string
@@ -225,8 +226,8 @@ export default function ShowAssignedProductsPage() {
                                                         : <span className="text-muted-foreground">Not set</span>}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={product.isActive ? "default" : "secondary"}>
-                                                        {product.isActive ? "Active" : "Inactive"}
+                                                    <Badge variant={product.globalStatus === "active" ? "default" : "secondary"}>
+                                                        {product.globalStatus === "active" ? "Active" : "Inactive"}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-muted-foreground text-sm">

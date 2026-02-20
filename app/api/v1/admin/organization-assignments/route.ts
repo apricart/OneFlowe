@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
         productName: globalProducts.name,
         productCode: globalProducts.productCode,
         productImageUrl: globalProducts.imageUrl,
+        globalStatus: globalProducts.status,
         organizationName: organizations.name,
       })
         .from(organizationInventory)

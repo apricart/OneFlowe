@@ -172,7 +172,7 @@ export function BranchAdminDashboard() {
       <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
 
       {/* Professional KPI Cards - Repositioned Immediately After Header */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-slide-down">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5 animate-slide-down">
         <BankingKPICard
           icon={AlertCircle}
           title="Pending Approvals"

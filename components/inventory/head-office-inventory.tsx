@@ -133,37 +133,6 @@ export default function HeadOfficeInventory({ organizationId }: { organizationId
         subtitle="Manage products assigned to your organization"
       />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Assigned Products</p>
-              <p className="text-2xl font-bold">{totalAssigned}</p>
-            </div>
-            <Package className="h-8 w-8 text-blue-600" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Active Products</p>
-              <p className="text-2xl font-bold">{activeAssigned}</p>
-            </div>
-            <Check className="h-8 w-8 text-green-600" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Branches</p>
-              <p className="text-2xl font-bold">{totalBranches}</p>
-            </div>
-            <MapPin className="h-8 w-8 text-purple-600" />
-          </div>
-        </Card>
-      </div>
-
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Assigned Products</h3>

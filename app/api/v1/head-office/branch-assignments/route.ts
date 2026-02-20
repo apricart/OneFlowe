@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
         productName: globalProducts.name,
         productCode: globalProducts.productCode,
         productImageUrl: globalProducts.imageUrl,
+        globalStatus: globalProducts.status,
         basePrice: globalProducts.basePrice,
         unit: globalProducts.unit,
         branchName: branches.name,

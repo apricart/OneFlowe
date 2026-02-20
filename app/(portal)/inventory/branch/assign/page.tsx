@@ -353,8 +353,8 @@ export default function AssignToBranchPage() {
                                                         : <span className="text-muted-foreground">-</span>}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={product.isActive ? "default" : "secondary"}>
-                                                        {product.isActive ? "Active" : "Inactive"}
+                                                    <Badge variant={(product as any).status === "active" ? "default" : "secondary"}>
+                                                        {(product as any).status === "active" ? "Active" : "Inactive"}
                                                     </Badge>
                                                 </TableCell>
                                             </TableRow>
