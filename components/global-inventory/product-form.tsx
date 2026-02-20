@@ -100,7 +100,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
         basePrice: (initialProduct.basePrice / 100).toFixed(2),
         unit: initialProduct.unit,
         status: initialProduct.status,
-        stockQuantity: initialProduct.stockQuantity?.toString() || "0",
+        stockQuantity: initialProduct.stockQuantity?.toString() || "",
         discountType: initialProduct.discountType || "",
         discountValue: initialProduct.discountValue?.toString() || "",
         discountStartAt: initialProduct.discountStartAt
@@ -283,7 +283,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Product Code *</label>
+                <label className="block text-sm font-medium mb-1">Product Code <span className="text-destructive">*</span></label>
                 <Input
                   value={productData.productCode ?? ""}
                   onChange={(e) => setProductData({ ...productData, productCode: e.target.value })}
@@ -293,7 +293,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 <p className="mt-1 text-xs text-muted-foreground">Avoid spaces; use dashes.</p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Name *</label>
+                <label className="block text-sm font-medium mb-1">Name <span className="text-destructive">*</span></label>
                 <Input
                   value={productData.name ?? ""}
                   onChange={(e) => setProductData({ ...productData, name: e.target.value })}
@@ -318,7 +318,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium mb-1">Category *</label>
+                <label className="block text-sm font-medium mb-1">Category <span className="text-destructive">*</span></label>
                 <Select
                   value={productData.categoryId}
                   onValueChange={(value) => setProductData({ ...productData, categoryId: value, subcategoryId: "" })}
@@ -346,7 +346,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 </Select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Subcategory *</label>
+                <label className="block text-sm font-medium mb-1">Subcategory <span className="text-destructive">*</span></label>
                 <Select
                   value={productData.subcategoryId}
                   onValueChange={(value) => setProductData({ ...productData, subcategoryId: value })}
@@ -396,7 +396,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Base Price *</label>
+                <label className="block text-sm font-medium mb-1">Base Price <span className="text-destructive">*</span></label>
                 <Input
                   type="number"
                   step="0.01"
@@ -408,7 +408,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 <p className="mt-1 text-xs text-muted-foreground">In PKR</p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Unit *</label>
+                <label className="block text-sm font-medium mb-1">Unit <span className="text-destructive">*</span></label>
                 <Input
                   value={productData.unit ?? ""}
                   onChange={(e) => setProductData({ ...productData, unit: e.target.value })}
@@ -418,7 +418,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 <p className="mt-1 text-xs text-muted-foreground">Measurement</p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Stock Quantity *</label>
+                <label className="block text-sm font-medium mb-1">Stock Quantity <span className="text-destructive">*</span></label>
                 <Input
                   type="number"
                   min="0"

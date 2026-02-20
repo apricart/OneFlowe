@@ -69,7 +69,8 @@ export default function SalesSummaryReportPage() {
   const handleExportPDF = () => {
     const doc = new jsPDF()
     doc.setFontSize(20)
-    doc.text("Sales Summary Report", 14, 20)
+    const reportTitle = role === "HEAD_OFFICE" ? "Purchase Summary Report" : "Sales Summary Report"
+    doc.text(reportTitle, 14, 20)
     doc.setFontSize(10)
     doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
 
@@ -102,7 +103,8 @@ export default function SalesSummaryReportPage() {
       headStyles: { fillColor: [66, 66, 66] }
     })
 
-    doc.save("sales-summary-report.pdf")
+    const fileName = role === "HEAD_OFFICE" ? "purchase-summary-report" : "sales-summary-report"
+    doc.save(`${fileName}.pdf`)
   }
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
@@ -118,7 +120,8 @@ export default function SalesSummaryReportPage() {
     if (format === 'pdf') {
       const doc = new jsPDF()
       doc.setFontSize(20)
-      doc.text("Sales Summary Report", 14, 20)
+      const reportTitle = role === "HEAD_OFFICE" ? "Purchase Summary Report" : "Sales Summary Report"
+      doc.text(reportTitle, 14, 20)
       doc.setFontSize(10)
       doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
 
@@ -129,24 +132,30 @@ export default function SalesSummaryReportPage() {
         theme: 'grid',
         headStyles: { fillColor: [66, 66, 66] }
       })
-      doc.save(`sales-summary-${new Date().getTime()}.pdf`)
+      const fileNameBase = role === "HEAD_OFFICE" ? "purchase-summary" : "sales-summary"
+      doc.save(`${fileNameBase}-${new Date().getTime()}.pdf`)
       return
     }
 
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Summary")
+    const sheetName = role === "HEAD_OFFICE" ? "Purchase Summary" : "Sales Summary"
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
 
+    const fileNameBase = role === "HEAD_OFFICE" ? "purchase-summary" : "sales-summary"
     if (format === 'excel') {
-      XLSX.writeFile(workbook, `sales-summary-${new Date().getTime()}.xlsx`)
+      XLSX.writeFile(workbook, `${fileNameBase}-${new Date().getTime()}.xlsx`)
     } else {
-      XLSX.writeFile(workbook, `sales-summary-${new Date().getTime()}.csv`)
+      XLSX.writeFile(workbook, `${fileNameBase}-${new Date().getTime()}.csv`)
     }
   }
 
   return (
     <div className="space-y-6 pb-12">
-      <SectionHeader title="Product Purchase Summary" subtitle="Comprehensive view of purchase, taxes, and order volume." />
+      <SectionHeader
+        title={role === "HEAD_OFFICE" ? "Product Purchase Summary" : "Product Sales Summary"}
+        subtitle={role === "HEAD_OFFICE" ? "Comprehensive view of purchase, taxes, and order volume." : "Comprehensive view of sales, taxes, and order volume."}
+      />
 
       {/* Context Indicator */}
       {(organizationId || branchId || startDate || endDate) && (

@@ -970,7 +970,7 @@ export default function OrderPortalPage() {
                             </h3>
                             <p className="text-xs text-muted-foreground font-mono">{product.code}</p>
                             {product.description && (
-                              <p className="text-[10px] text-slate-500 line-clamp-1 mt-1 italic">
+                              <p className="text-xs text-slate-500 line-clamp-1 mt-1">
                                 {product.description}
                               </p>
                             )}
