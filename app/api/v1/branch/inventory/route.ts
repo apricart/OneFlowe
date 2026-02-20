@@ -79,9 +79,8 @@ export async function GET(req: NextRequest) {
       eq(branchInventory.branchId, branchId),
       eq(branchInventory.organizationId, orgIdNum),
       isNull(branchInventory.deletedAt),
-      eq(branchInventory.isVisible, true), // Only show visible products
-      // Removed branchInventory.isActive check - global status is primary control
-      eq(globalProducts.status, "active"), // Only show globally active products
+      // Only show globally active products
+      eq(globalProducts.status, "active"),
     ]
 
     if (search) {
@@ -118,11 +117,17 @@ export async function GET(req: NextRequest) {
           basePrice: globalProducts.basePrice,
           unit: globalProducts.unit,
           status: globalProducts.status,
+          productDescription: globalProducts.description,
           categoryName: categories.name,
           customName: organizationInventory.customName,
           customPrice: organizationInventory.customPrice,
           customDescription: organizationInventory.customDescription,
           customImageUrl: organizationInventory.customImageUrl,
+          discountType: globalProducts.discountType,
+          discountValue: globalProducts.discountValue,
+          discountStartAt: globalProducts.discountStartAt,
+          discountEndAt: globalProducts.discountEndAt,
+          discountActive: globalProducts.discountActive,
         })
           .from(branchInventory)
           .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
@@ -192,7 +197,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // Validate that only allowed fields are being updated
-    const allowedFields = ['isVisible', 'isActive']
+    const allowedFields = ['isActive']
     const providedFields = Object.keys(body).filter(key => key !== 'id')
     const invalidFields = providedFields.filter(field => !allowedFields.includes(field))
 
@@ -206,7 +211,6 @@ export async function PUT(req: NextRequest) {
       updatedAt: new Date()
     }
 
-    if (isVisible !== undefined) updateData.isVisible = isVisible
     if (isActive !== undefined) updateData.isActive = isActive
 
     const [updatedInventory] = await db.update(branchInventory)

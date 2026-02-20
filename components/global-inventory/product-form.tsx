@@ -76,9 +76,9 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
     subcategoryId: "",
     imageUrl: "",
     basePrice: "",
-    unit: "unit",
+    unit: "",
     status: "active",
-    stockQuantity: "0",
+    stockQuantity: "",
     discountType: "",
     discountValue: "",
     discountStartAt: "",
@@ -190,10 +190,10 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
   }
 
   const handleSubmitProduct = async () => {
-    if (!productData.productCode || !productData.name || !productData.basePrice) {
+    if (!productData.productCode || !productData.name || !productData.basePrice || !productData.unit || !productData.stockQuantity) {
       toast({
         title: "Validation Error",
-        description: "Product code, name, and base price are required",
+        description: "Product code, name, price, unit, and stock quantity are required",
         variant: "destructive",
       })
       return
@@ -206,6 +206,17 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
         variant: "destructive",
       })
       return
+    }
+
+    if (productData.discountActive) {
+      if (!productData.discountType || !productData.discountValue || !productData.discountStartAt || !productData.discountEndAt) {
+        toast({
+          title: "Validation Error",
+          description: "All discount fields (Type, Value, Start, End) are required when discount is active",
+          variant: "destructive",
+        })
+        return
+      }
     }
 
     try {
@@ -397,23 +408,25 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 <p className="mt-1 text-xs text-muted-foreground">In PKR</p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Unit</label>
+                <label className="block text-sm font-medium mb-1">Unit *</label>
                 <Input
                   value={productData.unit ?? ""}
                   onChange={(e) => setProductData({ ...productData, unit: e.target.value })}
                   placeholder="ltr / kg / box"
+                  required
                 />
                 <p className="mt-1 text-xs text-muted-foreground">Measurement</p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Stock Quantity</label>
+                <label className="block text-sm font-medium mb-1">Stock Quantity *</label>
                 <Input
                   type="number"
                   min="0"
                   step="1"
-                  value={productData.stockQuantity ?? "0"}
+                  value={productData.stockQuantity ?? ""}
                   onChange={(e) => setProductData({ ...productData, stockQuantity: e.target.value })}
                   placeholder="0"
+                  required
                 />
                 <p className="mt-1 text-xs text-muted-foreground">Available</p>
               </div>
@@ -488,7 +501,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Discount Type</label>
+                  <label className="block text-sm font-medium mb-1">Discount Type {discountEnabled && "*"}</label>
                   <Select value={productData.discountType || "percent"} onValueChange={(value) => setProductData({ ...productData, discountType: value })}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select type" />
@@ -500,29 +513,32 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Discount Value</label>
+                  <label className="block text-sm font-medium mb-1">Discount Value {discountEnabled && "*"}</label>
                   <Input
                     type="number"
                     step={productData.discountType === "flat" ? "1" : "0.01"}
                     placeholder={productData.discountType === "flat" ? "Enter amount in PKR" : "Enter percentage"}
                     value={productData.discountValue ?? ""}
                     onChange={(e) => setProductData({ ...productData, discountValue: e.target.value })}
+                    required={discountEnabled}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Discount Start</label>
+                  <label className="block text-sm font-medium mb-1">Discount Start {discountEnabled && "*"}</label>
                   <Input
                     type="datetime-local"
                     value={productData.discountStartAt ?? ""}
                     onChange={(e) => setProductData({ ...productData, discountStartAt: e.target.value })}
+                    required={discountEnabled}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Discount End</label>
+                  <label className="block text-sm font-medium mb-1">Discount End {discountEnabled && "*"}</label>
                   <Input
                     type="datetime-local"
                     value={productData.discountEndAt ?? ""}
                     onChange={(e) => setProductData({ ...productData, discountEndAt: e.target.value })}
+                    required={discountEnabled}
                   />
                 </div>
               </div>

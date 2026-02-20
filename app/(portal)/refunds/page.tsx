@@ -474,10 +474,27 @@ export default function RefundsPage() {
                         {order.refundedAt && (
                             <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                                 <h4 className="font-medium text-amber-800 dark:text-amber-200 mb-2">Refund Information</h4>
-                                <div className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
+                                <div className="text-sm text-amber-700 dark:text-amber-300 space-y-2">
                                     <p>Was <strong>{order.statusAtRefund}</strong> → Now <strong>REFUNDED</strong></p>
                                     <p>Refunded at: {new Date(order.refundedAt).toLocaleString()}</p>
-                                    <p>Amount: PKR {((order.refundAmountCents || 0) / 100).toFixed(2)}</p>
+                                    <div className="pt-2 border-t border-amber-200/50 dark:border-amber-800/50">
+                                        <p className="font-semibold mb-1">Refunded Items:</p>
+                                        <div className="space-y-1">
+                                            {order.items
+                                                .filter(i => (i.refundedQuantity || 0) > 0)
+                                                .map(i => (
+                                                    <div key={`info-${i.id}`} className="flex justify-between">
+                                                        <span>{i.refundedQuantity}x {i.productName}</span>
+                                                        <span>PKR {((i.refundedQuantity || 0) * i.priceCents / 100).toFixed(2)}</span>
+                                                    </div>
+                                                ))
+                                            }
+                                        </div>
+                                    </div>
+                                    <div className="pt-2 border-t border-amber-200/50 dark:border-amber-800/50 flex justify-between font-bold">
+                                        <span>Total Refunded</span>
+                                        <span>PKR {((order.refundAmountCents || 0) / 100).toFixed(2)}</span>
+                                    </div>
                                 </div>
                             </div>
                         )}

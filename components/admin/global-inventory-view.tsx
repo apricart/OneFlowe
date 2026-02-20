@@ -37,6 +37,7 @@ export default function GlobalInventoryView() {
     const [searchQuery, setSearchQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState("all")
     const [categoryFilter, setCategoryFilter] = useState("")
+    const [subCategoryFilter, setSubCategoryFilter] = useState("")
     const [dialogMode, setDialogMode] = useState<"create" | "edit" | "delete" | null>(null)
     const [selectedProduct, setSelectedProduct] = useState<GlobalInventoryItem | null>(null)
 
@@ -44,6 +45,7 @@ export default function GlobalInventoryView() {
     if (searchQuery) params.set("search", searchQuery)
     if (statusFilter && statusFilter !== "all") params.set("status", statusFilter)
     if (categoryFilter) params.set("category", categoryFilter)
+    if (subCategoryFilter) params.set("subCategory", subCategoryFilter)
 
     const { data, isLoading, mutate } = useSWR<{
         items: GlobalInventoryItem[]
@@ -59,16 +61,22 @@ export default function GlobalInventoryView() {
         { fallbackData: { items: [] } }
     )
 
+    const { data: subcategoriesData } = useSWR<{ items: Array<{ id: number; name: string }> }>(
+        categoryFilter ? `/api/v1/subcategories?categoryId=${categoryFilter}&limit=100` : null,
+        fetcher,
+        { fallbackData: { items: [] } }
+    )
+
     const products = data?.items ?? []
     const totalProducts = data?.pagination.total ?? 0
     const activeProducts = useMemo(() => products.filter((p) => p.status === "active").length, [products])
     const totalAssignments = useMemo(() => products.reduce((sum, p) => sum + p.assignedOrganizations, 0), [products])
 
-    const handleDelete = async () => {
+    const handleDelete = async (mode: "delete" | "discontinue" = "discontinue") => {
         if (!selectedProduct) return
 
         try {
-            const res = await fetch(`/api/v1/admin/global-inventory?id=${selectedProduct.id}`, {
+            const res = await fetch(`/api/v1/admin/global-inventory?id=${selectedProduct.id}&mode=${mode}`, {
                 method: "DELETE",
             })
 
@@ -78,10 +86,10 @@ export default function GlobalInventoryView() {
                 setSelectedProduct(null)
             } else {
                 const data = await res.json()
-                alert(data.error || "Failed to delete product")
+                alert(data.error || "Failed to process request")
             }
         } catch (error) {
-            alert("Failed to delete product")
+            alert("Failed to process request")
         }
     }
 
@@ -139,13 +147,29 @@ export default function GlobalInventoryView() {
                         </div>
                         <select
                             value={categoryFilter}
-                            onChange={(e) => setCategoryFilter(e.target.value)}
-                            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            onChange={(e) => {
+                                setCategoryFilter(e.target.value)
+                                setSubCategoryFilter("") // Reset subcategory when parent changes
+                            }}
+                            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-auto"
                         >
                             <option value="">All categories</option>
                             {categoriesData?.items.map((cat) => (
                                 <option key={cat.id} value={cat.id.toString()}>
                                     {cat.name}
+                                </option>
+                            ))}
+                        </select>
+                        <select
+                            value={subCategoryFilter}
+                            onChange={(e) => setSubCategoryFilter(e.target.value)}
+                            disabled={!categoryFilter}
+                            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-auto disabled:opacity-50"
+                        >
+                            <option value="">All subcategories</option>
+                            {subcategoriesData?.items.map((sub) => (
+                                <option key={sub.id} value={sub.id.toString()}>
+                                    {sub.name}
                                 </option>
                             ))}
                         </select>
@@ -309,19 +333,26 @@ export default function GlobalInventoryView() {
             }}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="text-destructive">Delete Product</DialogTitle>
+                        <DialogTitle>Remove Product</DialogTitle>
                     </DialogHeader>
-                    <div className="py-4">
+                    <div className="py-4 space-y-4">
                         <p className="text-sm text-muted-foreground">
-                            Are you sure you want to delete <strong>{selectedProduct?.name}</strong>? This action cannot be undone.
+                            How would you like to remove <strong>{selectedProduct?.name}</strong>?
                         </p>
+                        <div className="space-y-2">
+                            <div className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => handleDelete("discontinue")}>
+                                <p className="text-sm font-medium">Discontinue</p>
+                                <p className="text-xs text-muted-foreground">Product remains in the list but marked as discontinued. No one can order it.</p>
+                            </div>
+                            <div className="p-3 border rounded-lg border-destructive/20 hover:bg-destructive/5 cursor-pointer transition-colors" onClick={() => handleDelete("delete")}>
+                                <p className="text-sm font-medium text-destructive">Permanently Delete</p>
+                                <p className="text-xs text-muted-foreground">Remove from the catalog entirely. This action cannot be undone.</p>
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex justify-end gap-3">
+                    <div className="flex justify-end">
                         <Button variant="outline" onClick={() => setDialogMode(null)}>
                             Cancel
-                        </Button>
-                        <Button variant="destructive" onClick={handleDelete}>
-                            Delete
                         </Button>
                     </div>
                 </DialogContent>

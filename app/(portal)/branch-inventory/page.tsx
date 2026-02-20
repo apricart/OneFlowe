@@ -50,7 +50,6 @@ export default function BranchInventoryPage() {
 
   const inventory = data?.items ?? []
   const totalProducts = data?.total ?? 0
-  const visibleProducts = useMemo(() => inventory.filter((item) => item.isVisible).length, [inventory])
   const lowStock = useMemo(
     () => inventory.filter((item) => item.stockQuantity <= item.reorderThreshold && item.stockQuantity > 0).length,
     [inventory]
@@ -77,7 +76,7 @@ export default function BranchInventoryPage() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <SummaryCard label="Assigned products" value={totalProducts} helper="Currently assigned" accent="from-blue-500 to-cyan-500" />
-        <SummaryCard label="Available and active" value={inventory.length} helper="Active items" accent="from-emerald-500 to-lime-500" />
+        <SummaryCard label="Low stock" value={lowStock} helper="Requires attention" accent="from-amber-500 to-orange-500" />
       </div>
 
       <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">

@@ -50,7 +50,6 @@ export async function PATCH(
 
     const patch: any = {}
     if (body.name !== undefined) patch.name = String(body.name)
-    if (body.code !== undefined) patch.code = String(body.code)
     if (body.status !== undefined) {
       const normalized = String(body.status).toLowerCase()
       const validStatuses = ['active', 'inactive', 'suspended']
@@ -90,10 +89,17 @@ export async function DELETE(
 
     // 1. Dependency Checks - Block deletion if critical data exists
 
-    // Check for users assigned to this branch
-    const [userCount] = await db.select({ val: count() }).from(users).where(eq(users.branchId, branchId))
-    if (userCount.val > 0) {
-      return error(`Cannot delete: This branch has ${userCount.val} user(s) assigned. Please remove or reassign users first.`, 400)
+    // Check for users assigned to this branch (ignore soft-deleted users)
+    const { isNull, and } = await import("drizzle-orm")
+    const [userCount] = await db.select({ val: count() }).from(users).where(
+      and(
+        eq(users.branchId, branchId),
+        isNull(users.deletedAt)
+      )
+    )
+
+    if (userCount.val > 0 && existing.status === 'active') {
+      return error(`Cannot delete: This branch is active and has ${userCount.val} user(s) assigned. Please deactivate the branch or remove users first.`, 400)
     }
 
     // Check for orders
@@ -104,34 +110,47 @@ export async function DELETE(
 
     // Check for employee credentials
     const [credsCount] = await db.select({ val: count() }).from(employeeCredentials).where(eq(employeeCredentials.branchId, branchId))
-    if (credsCount.val > 0) {
-      return error(`Cannot delete: Active employee portal credentials found. Remove them first.`, 400)
+    if (credsCount.val > 0 && existing.status === 'active') {
+      return error(`Cannot delete: This branch is active and has employee portal credentials. Please deactivate the branch or remove them first.`, 400)
     }
 
     // Check for inventory/products assigned
     const [invCount] = await db.select({ val: count() }).from(branchInventory).where(eq(branchInventory.branchId, branchId))
-    if (invCount.val > 0) {
-      return error(`Cannot delete: This branch has assigned inventory. Please unassign products first.`, 400)
+    if (invCount.val > 0 && existing.status === 'active') {
+      return error(`Cannot delete: This branch is active and has assigned inventory. Please deactivate the branch or unassign products first.`, 400)
     }
 
     const [prodCount] = await db.select({ val: count() }).from(branchProducts).where(eq(branchProducts.branchId, branchId))
-    if (prodCount.val > 0) {
-      return error(`Cannot delete: This branch has product settings configured. Please unassign products first.`, 400)
+    if (prodCount.val > 0 && existing.status === 'active') {
+      return error(`Cannot delete: This branch is active and has product settings. Please deactivate the branch or unassign products first.`, 400)
     }
 
-    // Check for suppliers or budgets
+    // Check for suppliers
     const [supplierCount] = await db.select({ val: count() }).from(suppliers).where(eq(suppliers.branchId, branchId))
-    if (supplierCount.val > 0) {
-      return error(`Cannot delete: This branch has ${supplierCount.val} supplier record(s).`, 400)
+    if (supplierCount.val > 0 && existing.status === 'active') {
+      return error(`Cannot delete: This branch is active and has ${supplierCount.val} supplier record(s). Please deactivate the branch first.`, 400)
     }
 
     // Check for restock requests
     const [restockCount] = await db.select({ val: count() }).from(restockRequests).where(eq(restockRequests.branchId, branchId))
-    if (restockCount.val > 0) {
-      return error(`Cannot delete: This branch has pending or historical restock requests.`, 400)
+    if (restockCount.val > 0 && existing.status === 'active') {
+      return error(`Cannot delete: This branch is active and has restock requests. Please deactivate the branch first.`, 400)
     }
 
     // 2. Cascade Deletions - Clean up related data that can be safely deleted
+    // (We only reach here if it's inactive OR no critical data exists)
+
+    // Auto-cleanup users assignments (set to null)
+    await db.update(users).set({ branchId: null }).where(eq(users.branchId, branchId))
+
+    // Clear admin user ID from branch to avoid any lingering refs
+    await db.update(branches).set({ adminUserId: null }).where(eq(branches.id, branchId))
+
+    await db.delete(employeeCredentials).where(eq(employeeCredentials.branchId, branchId))
+    await db.delete(branchInventory).where(eq(branchInventory.branchId, branchId))
+    await db.delete(branchProducts).where(eq(branchProducts.branchId, branchId))
+    await db.delete(suppliers).where(eq(suppliers.branchId, branchId))
+    await db.delete(restockRequests).where(eq(restockRequests.branchId, branchId))
     // Delete budget records (budgets are not critical data and can be recreated)
     await db.delete(budgets).where(eq(budgets.branchId, branchId))
 

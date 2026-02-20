@@ -28,8 +28,14 @@ interface Product {
   priceCents: number
   unit: string
   imageUrl?: string
-  rating?: number
   stock?: number
+  rating?: number
+  description?: string
+  discountType?: string | null
+  discountValue?: number | null
+  discountStartAt?: string | null
+  discountEndAt?: string | null
+  discountActive?: boolean
 }
 
 interface CartItem extends Product {
@@ -122,7 +128,7 @@ export default function OrderPortalPage() {
     ? `/api/v1/budgets${needsContextParams ? `?branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
     : null
 
-  const { data: branchInventory, mutate: mutateBranchInventory } = useSWR<any>(branchInventoryUrl, fetcher)
+  const { data: inventoryData, mutate: mutateBranchInventory, error: inventoryError } = useSWR<any>(branchInventoryUrl, fetcher)
   const { data: budget, mutate: mutateBudget } = useSWR<any>(budgetsUrl, fetcher)
   const { data: ordersData, mutate: mutateOrders } = useSWR<any>("/api/v1/orders", fetcher)
 
@@ -144,18 +150,27 @@ export default function OrderPortalPage() {
     return branchesData?.items?.find((b: any) => b.id === activeBranchId)?.name || "Loading..."
   }, [branchesData, activeBranchId])
 
-  const products: Product[] = useMemo(() => {
-    return branchInventory?.items?.map((it: any) => ({
-      id: it.organizationInventoryId,
-      name: it.customName || it.productName,
-      code: it.productCode,
-      priceCents: it.customPrice ?? it.basePrice,
-      unit: it.unit,
-      imageUrl: it.productImageUrl,
-      stock: it.stockQuantity,
-      rating: ((it.organizationInventoryId * 7) % 20) / 10 + 3.0, // Deterministic rating based on ID to fix hydration
-    })) || []
-  }, [branchInventory?.items])
+  const mappedProducts = useMemo(() => {
+    if (!inventoryData?.items) return []
+    return inventoryData.items.map((item: any) => ({
+      id: item.organizationInventoryId,
+      name: item.customName || item.productName,
+      code: item.productCode,
+      priceCents: item.customPrice ?? item.basePrice,
+      unit: item.unit,
+      imageUrl: item.productImageUrl,
+      stock: item.stockQuantity,
+      rating: ((item.organizationInventoryId * 7) % 20) / 10 + 3.0, // Deterministic rating based on ID to fix hydration
+      description: item.customDescription || item.productDescription,
+      discountType: item.discountType,
+      discountValue: item.discountValue,
+      discountStartAt: item.discountStartAt,
+      discountEndAt: item.discountEndAt,
+      discountActive: item.discountActive
+    }))
+  }, [inventoryData])
+
+  const products: Product[] = mappedProducts
 
   const filteredProducts = useMemo(() => {
     let filtered = [...products]
@@ -199,7 +214,7 @@ export default function OrderPortalPage() {
   const canCheckout = cartTotal <= remainingBudget && cart.length > 0
   const rawBudgetPercent = ((((budget?.amountAllocatedCents || 0) - remainingBudget) / (budget?.amountAllocatedCents || 1)) * 100)
   const budgetPercent = Math.min(100, Math.max(0, rawBudgetPercent || 0))
-  const isLoadingInventory = !!branchInventoryUrl && typeof branchInventory === "undefined"
+  const isLoadingInventory = !inventoryData && !inventoryError
 
   const openProductDetail = (product: Product) => {
     setSelectedProduct(product)
@@ -935,6 +950,15 @@ export default function OrderPortalPage() {
                             <Zap className="h-3 w-3 mr-1" />
                             Trending
                           </Badge>
+
+                          {/* Discount Badge */}
+                          {product.discountActive && (
+                            <Badge
+                              className="absolute bottom-2 left-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 border-0 font-bold"
+                            >
+                              {product.discountType === 'percent' ? `${product.discountValue}% OFF` : `PKR ${product.discountValue} OFF`}
+                            </Badge>
+                          )}
                         </div>
 
                         {/* Product Info */}
@@ -945,6 +969,11 @@ export default function OrderPortalPage() {
                               {product.name}
                             </h3>
                             <p className="text-xs text-muted-foreground font-mono">{product.code}</p>
+                            {product.description && (
+                              <p className="text-[10px] text-slate-500 line-clamp-1 mt-1 italic">
+                                {product.description}
+                              </p>
+                            )}
                           </div>
 
                           {/* Rating */}
@@ -970,9 +999,21 @@ export default function OrderPortalPage() {
                           <div className="flex flex-col gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                                  PKR {(product.priceCents / 100).toFixed(2)}
-                                </p>
+                                {product.discountActive && product.discountType && (
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                      PKR {((product.priceCents - (product.discountType === 'percent' ? (product.priceCents * (product.discountValue || 0) / 100) : ((product.discountValue || 0) * 100))) / 100).toFixed(2)}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground line-through">
+                                      PKR {(product.priceCents / 100).toFixed(2)}
+                                    </p>
+                                  </div>
+                                )}
+                                {!product.discountActive && (
+                                  <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                    PKR {(product.priceCents / 100).toFixed(2)}
+                                  </p>
+                                )}
                                 <p className="text-xs text-muted-foreground">per {product.unit}</p>
                               </div>
 
@@ -1194,6 +1235,15 @@ export default function OrderPortalPage() {
                   </p>
                 </div>
 
+                {selectedProduct.description && (
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Description</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                      {selectedProduct.description}
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                   <div>
                     <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
@@ -1387,26 +1437,48 @@ export default function OrderPortalPage() {
 
               {/* Order Items List */}
               <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-                <div className="bg-slate-50 dark:bg-slate-800/50 px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+                <div className="bg-slate-50 dark:bg-slate-800/50 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                   <h3 className="font-semibold text-sm">Ordered Items</h3>
+                  {orderDetailsData?.items?.some((item: any) => (item.quantityRefunded || 0) > 0) && (
+                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-[10px]">
+                      Contains Refunds
+                    </Badge>
+                  )}
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
                   {orderDetailsData?.items ? (
-                    orderDetailsData.items
-                      .filter((item: any) => (item.quantityRefunded || 0) < item.quantity)
-                      .map((item: any) => (
-                        <div key={item.id} className="flex justify-between items-center p-4">
+                    orderDetailsData.items.map((item: any) => {
+                      const isFullyRefunded = (item.quantityRefunded || 0) >= item.quantity
+                      const isPartiallyRefunded = (item.quantityRefunded || 0) > 0 && !isFullyRefunded
+
+                      return (
+                        <div key={item.id} className={`flex justify-between items-center p-4 ${isFullyRefunded ? "opacity-50 bg-slate-50/50" : ""}`}>
                           <div className="flex-1">
-                            <p className="font-medium text-sm text-slate-900 dark:text-white">{item.productName}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm text-slate-900 dark:text-white">{item.productName}</p>
+                              {isFullyRefunded && <Badge variant="destructive" className="text-[10px] h-4">REFUNDED</Badge>}
+                              {isPartiallyRefunded && <Badge variant="outline" className="text-[10px] h-4 border-yellow-500 text-yellow-600">PARTIAL REFUND</Badge>}
+                            </div>
                             <p className="text-xs text-muted-foreground mt-0.5">
                               Qty: <span className="font-semibold">{item.quantity}</span> × {formatPKR(item.priceCents / 100)}
+                              {item.quantityRefunded > 0 && (
+                                <span className="ml-2 text-red-500 font-medium">(-{item.quantityRefunded} refunded)</span>
+                              )}
                             </p>
                           </div>
-                          <p className="font-semibold text-sm text-slate-900 dark:text-white">
-                            {formatPKR(item.totalCents / 100)}
-                          </p>
+                          <div className="text-right">
+                            <p className={`font-semibold text-sm ${isFullyRefunded ? "line-through text-muted-foreground" : "text-slate-900 dark:text-white"}`}>
+                              {formatPKR(item.totalCents / 100)}
+                            </p>
+                            {item.quantityRefunded > 0 && (
+                              <p className="text-[10px] text-red-500 font-bold">
+                                - {formatPKR((item.priceCents * item.quantityRefunded) / 100)}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      ))
+                      )
+                    })
                   ) : (
                     <div className="p-8 text-center text-muted-foreground text-sm">
                       Loading items...
@@ -1414,6 +1486,29 @@ export default function OrderPortalPage() {
                   )}
                 </div>
               </div>
+
+              {/* Itemized Refund Summary */}
+              {orderDetailsData?.items?.some((item: any) => (item.quantityRefunded || 0) > 0) && (
+                <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-yellow-50/30 dark:bg-yellow-900/10 overflow-hidden">
+                  <div className="px-4 py-2 border-b border-yellow-100 dark:border-yellow-900 bg-yellow-100/50 dark:bg-yellow-900/30">
+                    <p className="text-xs font-bold text-yellow-800 dark:text-yellow-200 uppercase tracking-wider">Refund Summary</p>
+                  </div>
+                  <div className="p-4 space-y-2">
+                    {orderDetailsData.items
+                      .filter((item: any) => (item.quantityRefunded || 0) > 0)
+                      .map((item: any) => (
+                        <div key={`refund-sum-${item.id}`} className="flex justify-between text-xs">
+                          <span>{item.quantityRefunded}x {item.productName}</span>
+                          <span className="font-bold text-red-600">-{formatPKR((item.priceCents * item.quantityRefunded) / 100)}</span>
+                        </div>
+                      ))}
+                    <div className="pt-2 border-t border-yellow-200 dark:border-yellow-800 flex justify-between font-bold text-sm">
+                      <span>Total Refunded</span>
+                      <span className="text-red-600">{formatPKR((selectedOrder.refundAmountCents || 0) / 100)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                 <div className="flex justify-between">

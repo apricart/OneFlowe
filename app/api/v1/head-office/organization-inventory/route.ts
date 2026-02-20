@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     const conditions: (SQL | undefined)[] = [
       eq(organizationInventory.organizationId, parseInt(organizationId)),
       isNull(organizationInventory.deletedAt),
-      ne(globalProducts.status, "discontinued"),
+      eq(globalProducts.status, "active"),
       eq(organizationInventory.isActive, true)
     ]
 
@@ -83,6 +83,11 @@ export async function GET(req: NextRequest) {
         unit: globalProducts.unit,
         status: globalProducts.status,
         categoryName: categories.name,
+        discountType: globalProducts.discountType,
+        discountValue: globalProducts.discountValue,
+        discountStartAt: globalProducts.discountStartAt,
+        discountEndAt: globalProducts.discountEndAt,
+        discountActive: globalProducts.discountActive,
       })
         .from(organizationInventory)
         .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))

@@ -90,9 +90,9 @@ export function PremiumAlert({
                             <Icon className={cn("h-6 w-6", config.color)} />
                         </div>
 
-                        <div className="flex-1">
-                            <p className="text-sm font-semibold text-slate-900 dark:text-white leading-relaxed">
-                                {message}
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white leading-relaxed whitespace-pre-wrap break-words">
+                                {typeof message === 'string' ? message : JSON.stringify(message)}
                             </p>
                         </div>
 

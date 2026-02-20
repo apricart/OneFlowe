@@ -173,6 +173,7 @@ export async function GET(req: NextRequest) {
           SELECT COUNT(*)::int
           FROM ${refunds}
           WHERE ${refunds.orderId} = ${orders.id}
+          AND UPPER(${refunds.status}) = 'PENDING'
         )`,
         itemCount: sql<number>`(
           SELECT SUM(${orderItems.quantity})::int

@@ -38,34 +38,50 @@ export async function POST(req: NextRequest) {
 
     // Create uploads directory if it doesn't exist
     const uploadsDir = join(process.cwd(), "public", "uploads", "products")
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true })
+    try {
+      if (!existsSync(uploadsDir)) {
+        console.log(`[Upload] Creating directory: ${uploadsDir}`)
+        await mkdir(uploadsDir, { recursive: true })
+      }
+    } catch (dirErr: any) {
+      console.error("[Upload] Directory creation failed:", dirErr)
+      return NextResponse.json({ error: `Directory creation failed: ${dirErr.message}` }, { status: 500 })
     }
 
     // Generate unique filename
     const timestamp = Date.now()
     const randomString = Math.random().toString(36).substring(2, 15)
-    const fileExtension = file.name.split('.').pop()
+    const fileExtension = file.name.split('.').pop() || 'jpg'
     const fileName = `product_${timestamp}_${randomString}.${fileExtension}`
 
     // Save file
     const filePath = join(uploadsDir, fileName)
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    await writeFile(filePath, buffer)
+    try {
+      const bytes = await file.arrayBuffer()
+      const buffer = Buffer.from(bytes)
+      await writeFile(filePath, buffer)
+      console.log(`[Upload] Successfully saved: ${filePath}`)
+    } catch (writeErr: any) {
+      console.error("[Upload] File write failed:", writeErr)
+      return NextResponse.json({ error: `File write failed: ${writeErr.message}` }, { status: 500 })
+    }
 
     // Return the public URL
     const publicUrl = `/uploads/products/${fileName}`
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       url: publicUrl,
       fileName,
       size: file.size,
       type: file.type
     })
 
-  } catch (error) {
-    console.error("Error uploading image:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+  } catch (error: any) {
+    console.error("Critical Upload Error:", error)
+    return NextResponse.json({
+      error: "Internal Server Error",
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    }, { status: 500 })
   }
 }
