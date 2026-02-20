@@ -21,7 +21,10 @@ export async function PATCH(
 
     // Check if HEAD_OFFICE user can edit this user (BOLA Protection)
     const { verifyResourceAccess } = await import("@/lib/auth")
-    const [targetUser] = await db.select({ organizationId: users.organizationId }).from(users).where(eq(users.id, id)).limit(1)
+    const [targetUser] = await db.select({
+      organizationId: users.organizationId,
+      email: users.email
+    }).from(users).where(eq(users.id, id)).limit(1)
     if (!targetUser) return error("User not found", 404)
 
     const hasAccess = await verifyResourceAccess(targetUser.organizationId)
@@ -63,6 +66,12 @@ export async function PATCH(
     // Execute update
     await db.update(users).set(patch).where(eq(users.id, id))
 
+    // If password or email changed, invalidate all sessions to force logout
+    if (body.password || body.email) {
+      console.log(`[API/Users] Password or email updated for user ${id}. Invalidating sessions...`)
+      await db.delete(sessions).where(eq(sessions.userId, id))
+    }
+
     // Audit Log (optional)
     try {
       const logScope = await getRequestScope()
@@ -82,7 +91,8 @@ export async function PATCH(
         details: {
           patchKeys: Object.keys(patch),
           updatedUserOrgId: body.organizationId,
-          updatedUserBranchId: body.branchId
+          updatedUserBranchId: body.branchId,
+          sessionsInvalidated: !!(body.password || body.email)
         },
         ipAddress: ip,
         userAgent: userAgent,
@@ -94,8 +104,22 @@ export async function PATCH(
 
     return ok({ success: true })
   } catch (criticalErr: any) {
-    console.error("[API/Users] CRITICAL ERROR IN PATCH:", criticalErr)
-    return error(criticalErr.message || "Failed to update user", 500)
+    console.error("[API/Users] ERROR IN PATCH:", criticalErr)
+    const errorMessage = criticalErr.message || "Failed to update user"
+
+    // Use 400 for validation errors so they aren't sanitized by the bank-grade error handler
+    const isValidationError = errorMessage.includes("Invalid password") ||
+      errorMessage.includes("already exists") ||
+      errorMessage.includes("Password") ||
+      errorMessage.includes("unique constraint") ||
+      errorMessage.includes("violates") ||
+      errorMessage.includes("foreign key") ||
+      errorMessage.includes("linked") ||
+      errorMessage.includes("Cannot") ||
+      criticalErr.code === "23505" ||
+      criticalErr.code === "23503"
+
+    return error(errorMessage, isValidationError ? 400 : 500)
   }
 }
 
@@ -109,8 +133,16 @@ export async function DELETE(
   const { id } = params
 
   try {
+    const scope = await getRequestScope()
+    if (scope?.userId === id) {
+      return error("Cannot delete: You cannot delete your own account while logged in.", 400)
+    }
+
     const { verifyResourceAccess } = await import("@/lib/auth")
-    const [targetUser] = await db.select({ organizationId: users.organizationId }).from(users).where(eq(users.id, id)).limit(1)
+    const [targetUser] = await db.select({
+      organizationId: users.organizationId,
+      email: users.email
+    }).from(users).where(eq(users.id, id)).limit(1)
     if (!targetUser) return error("User not found", 404)
 
     const hasAccess = await verifyResourceAccess(targetUser.organizationId)
@@ -123,7 +155,11 @@ export async function DELETE(
       refunds,
       restockRequests,
       groups,
-      globalProducts: globalProductsTable
+      globalProducts: globalProductsTable,
+      organizationInventory: orgInventory,
+      branchInventory: branchInv,
+      productAssignments: prodAssign,
+      modifiers: modsTable
     } = await import("@/db/schema")
 
     // Check for critical dependencies before attempting deletion
@@ -134,12 +170,16 @@ export async function DELETE(
       restockCount,
       groupCount,
       productCount,
-      userCreds
+      userCreds,
+      orgInvCount,
+      branchInvCount,
+      prodAssignCount,
+      modCount
     ] = await Promise.all([
       // 1. Check if user is an admin for any branches
       db.select({ val: count() }).from(branches).where(eq(branches.adminUserId, id)),
 
-      // 2. Check for orders involvement (created, approved, rejected, fulfilled, or refunded)
+      // 2. Check for orders involvement
       db.select({ val: count() }).from(orders).where(
         or(
           eq(orders.createdByUserId, id),
@@ -173,60 +213,74 @@ export async function DELETE(
       db.select({ val: count() }).from(globalProductsTable).where(eq(globalProductsTable.createdByUserId, id)),
 
       // 7. Check for employee credentials created
-      db.select({ count: count() }).from(employeeCredentials).where(eq(employeeCredentials.createdByUserId, id))
+      db.select({ count: count() }).from(employeeCredentials).where(eq(employeeCredentials.createdByUserId, id)),
+
+      // 8. Check for inventory assignments
+      db.select({ val: count() }).from(orgInventory).where(eq(orgInventory.assignedByUserId, id)),
+      db.select({ val: count() }).from(branchInv).where(eq(branchInv.assignedByUserId, id)),
+      db.select({ val: count() }).from(prodAssign).where(eq(prodAssign.performedByUserId, id)),
+
+      // 9. Check for modifiers created
+      db.select({ val: count() }).from(modsTable).where(eq(modsTable.createdByUserId, id))
     ])
 
-    // Return error messages for critical dependencies
+    // Decide between hard delete and soft delete
+    const hasHistory = orderCount[0].val > 0 ||
+      refundCount[0].val > 0 ||
+      restockCount[0].val > 0 ||
+      productCount[0].val > 0 ||
+      userCreds[0].count > 0 ||
+      groupCount[0].val > 0 ||
+      orgInvCount[0].val > 0 ||
+      branchInvCount[0].val > 0 ||
+      prodAssignCount[0].val > 0 ||
+      modCount[0].val > 0
+
+    // Return error messages ONLY for critical active roles that MUST be reassigned
     if (adminCount[0].val > 0) {
       return error(`Cannot delete: This user is assigned as the administrator for ${adminCount[0].val} branch(es). Please reassign branch administration before deleting.`, 400)
     }
 
-    if (orderCount[0].val > 0) {
-      return error(`Cannot delete: This user has historical transaction records (${orderCount[0].val} orders) as a creator or approver. To preserve audit integrity, please deactivate the account instead.`, 400)
-    }
+    if (hasHistory) {
+      console.log(`[API/Users] User ${id} has historical records. Performing soft-delete...`)
 
-    if (refundCount[0].val > 0) {
-      return error(`Cannot delete: This user has ${refundCount[0].val} historical refund records. Please deactivate the account instead.`, 400)
-    }
+      // Perform soft-delete
+      await db.update(users).set({
+        deletedAt: new Date(),
+        isActive: false,
+        // Append timestamp to email to free up the original email for a new account
+        email: `deleted_${Date.now()}_${targetUser.email}`
+      }).where(eq(users.id, id))
 
-    if (restockCount[0].val > 0) {
-      return error(`Cannot delete: This user has ${restockCount[0].val} historical restock request records. Please deactivate the account instead.`, 400)
-    }
-
-    if (groupCount[0].val > 0) {
-      return error(`Cannot delete: This user created ${groupCount[0].val} group(s). Please reassign group ownership or deactivate.`, 400)
-    }
-
-    if (productCount[0].val > 0) {
-      return error(`Cannot delete: This user created ${productCount[0].val} master products in the global inventory. Please deactivate the account instead.`, 400)
-    }
-
-    if (userCreds[0].count > 0) {
-      return error(`Cannot delete: This user created ${userCreds[0].count} employee credentials. Please deactivate instead.`, 400)
-    }
-
-    // Clean up non-critical dependencies before deletion
-    // MFA codes, sessions, notifications can be safely deleted
-    // Audit logs should preserve the user ID for historical integrity (set to null)
-    console.log(`[API/Users] Cleaning up dependencies for user ${id}...`)
-
-    try {
+      // Clean up non-critical data
+      console.log(`[API/Users] Cleaning up non-critical sessions/MFA for soft-deleted user ${id}...`)
       await Promise.all([
         db.delete(mfaCodes).where(eq(mfaCodes.userId, id)),
         db.delete(sessions).where(eq(sessions.userId, id)),
-        db.delete(notifications).where(eq(notifications.userId, id)),
-        db.delete(groupAuditLogs).where(eq(groupAuditLogs.performedByUserId, id)),
-        db.update(auditLogs).set({ userId: null }).where(eq(auditLogs.userId, id)),
-        db.update(systemLogs).set({ userId: null }).where(eq(systemLogs.userId, id))
+        db.delete(notifications).where(eq(notifications.userId, id))
       ])
-      console.log(`[API/Users] Successfully cleaned up dependencies for user ${id}`)
-    } catch (cleanupErr: any) {
-      console.error("[API/Users] Error during dependency cleanup:", cleanupErr)
-      return error(`Failed to clean up user dependencies: ${cleanupErr.message}. Please contact support.`, 500)
-    }
+    } else {
+      // Clean up all dependencies before hard deletion
+      console.log(`[API/Users] Cleaning up all dependencies for hard-delete of user ${id}...`)
 
-    // Then delete the user
-    await db.delete(users).where(eq(users.id, id))
+      try {
+        await Promise.all([
+          db.delete(mfaCodes).where(eq(mfaCodes.userId, id)),
+          db.delete(sessions).where(eq(sessions.userId, id)),
+          db.delete(notifications).where(eq(notifications.userId, id)),
+          db.delete(groupAuditLogs).where(eq(groupAuditLogs.performedByUserId, id)),
+          db.update(auditLogs).set({ userId: null }).where(eq(auditLogs.userId, id)),
+          db.update(systemLogs).set({ userId: null }).where(eq(systemLogs.userId, id))
+        ])
+        console.log(`[API/Users] Successfully cleaned up dependencies for user ${id}`)
+      } catch (cleanupErr: any) {
+        console.error("[API/Users] Error during dependency cleanup:", cleanupErr)
+        return error(`Failed to clean up user dependencies: ${cleanupErr.message}. Please contact support.`, 500)
+      }
+
+      // Then delete the user from the database
+      await db.delete(users).where(eq(users.id, id))
+    }
 
     // Audit Log
     try {
@@ -290,7 +344,16 @@ export async function DELETE(
       return error("Cannot delete: This user is linked to other system records (sessions, notifications, or audit logs). To preserve system history and data integrity, please deactivate the user instead of deleting.", 400)
     }
 
-    // For any other database errors, return a generic message to avoid leaking internals
-    return error("Failed to delete user. If this user has historical data or active sessions, please deactivate the account instead.", 500)
+    const isValidationError = errorMessage.includes("foreign key") ||
+      errorMessage.includes("violates") ||
+      errorMessage.includes("unique constraint") ||
+      errorMessage.includes("Cannot delete") ||
+      errorMessage.includes("history") ||
+      errorMessage.includes("linked") ||
+      errorMessage.includes("Please reassign") ||
+      err.code === "23503" ||
+      err.code === "23505"
+
+    return error(errorMessage, isValidationError ? 400 : 500)
   }
 }

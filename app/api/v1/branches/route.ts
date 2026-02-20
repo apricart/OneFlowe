@@ -107,14 +107,6 @@ export async function POST(req: Request) {
     const body = await readJson<any>(req)
 
     // Validate required fields
-    if (!body?.name || typeof body.name !== 'string') {
-      return error("Branch name is required and must be a string", 400)
-    }
-
-    if (!body?.code || typeof body.code !== 'string') {
-      return error("Branch code is required and must be a string", 400)
-    }
-
     if (!body?.organizationId) {
       return error("Organization ID is required", 400)
     }
@@ -126,33 +118,21 @@ export async function POST(req: Request) {
     }
 
     // Validate field format and length
-    const name = String(body.name).trim()
-    const code = String(body.code).trim().toUpperCase()
-
+    const name = String(body.name || "").trim()
     if (name.length < 2 || name.length > 100) {
       return error("Branch name must be between 2 and 100 characters", 400)
-    }
-
-    if (code.length < 2 || code.length > 20) {
-      return error("Branch code must be between 2 and 20 characters", 400)
-    }
-
-    // Validate code format (alphanumeric and underscores/hyphens)
-    if (!/^[A-Z0-9_-]+$/.test(code)) {
-      return error("Branch code must contain only uppercase letters, numbers, underscores, and hyphens", 400)
     }
 
     // Validate status
     const validStatuses = ['active', 'inactive']
     const status = body.status ? String(body.status).toLowerCase() : 'active'
-
     if (!validStatuses.includes(status)) {
       return error(`Status must be one of: ${validStatuses.join(', ')}`, 400)
     }
 
-    // Verify organization exists
+    // Verify organization exists and get its code
     const [org] = await db
-      .select({ id: organizations.id, name: organizations.name })
+      .select({ id: organizations.id, name: organizations.name, code: organizations.code })
       .from(organizations)
       .where(eq(organizations.id, organizationId))
       .limit(1)
@@ -161,18 +141,30 @@ export async function POST(req: Request) {
       return error(`Organization with ID ${organizationId} not found`, 404)
     }
 
-    // Check for duplicate code within the same organization
+    // Auto-generate code if not provided or to ensure standardization
+    // Format: {ORG_CODE}-{COUNT+1}
+    const [{ count: branchCount }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(branchesTable)
+      .where(eq(branchesTable.organizationId, organizationId))
+
+    const nextNumber = (Number(branchCount) + 1).toString().padStart(2, '0')
+    const generatedCode = `${org.code}-${nextNumber}`
+
+    // Double check for duplicate code (just in case of race conditions)
     const existing = await db
-      .select({ id: branchesTable.id, code: branchesTable.code })
+      .select({ id: branchesTable.id })
       .from(branchesTable)
       .where(and(
         eq(branchesTable.organizationId, organizationId),
-        eq(branchesTable.code, code)
+        eq(branchesTable.code, generatedCode)
       ))
       .limit(1)
 
+    let finalCode = generatedCode
     if (existing.length > 0) {
-      return error(`Branch with code '${code}' already exists in this organization`, 409)
+      // If collision, add a timestamp or more padding
+      finalCode = `${org.code}-${nextNumber}-${Date.now().toString().slice(-4)}`
     }
 
     // Insert branch
@@ -181,7 +173,7 @@ export async function POST(req: Request) {
       .values({
         organizationId,
         name,
-        code,
+        code: finalCode,
         status,
       })
       .returning()

@@ -196,7 +196,7 @@ export default function BranchAdminInventory({
       />
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -209,19 +209,10 @@ export default function BranchAdminInventory({
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Visible Products</p>
+              <p className="text-sm font-medium text-gray-600">Available Products</p>
               <p className="text-2xl font-bold">{visibleProducts}</p>
             </div>
-            <Eye className="h-8 w-8 text-green-600" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Hidden Products</p>
-              <p className="text-2xl font-bold">{hiddenProducts}</p>
-            </div>
-            <EyeOff className="h-8 w-8 text-gray-600" />
+            <Check className="h-8 w-8 text-green-600" />
           </div>
         </Card>
         <Card className="p-4">
@@ -250,15 +241,6 @@ export default function BranchAdminInventory({
                   className="pl-10 w-64"
                 />
               </div>
-              <select
-                value={visibilityFilter}
-                onChange={(e) => setVisibilityFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Products</option>
-                <option value="visible">Visible Only</option>
-                <option value="hidden">Hidden Only</option>
-              </select>
             </div>
           </div>
         </div>
@@ -269,9 +251,7 @@ export default function BranchAdminInventory({
               <th className="text-left p-4 font-medium">Product</th>
               <th className="text-left p-4 font-medium">Unit Price</th>
               <th className="text-left p-4 font-medium">Stock</th>
-              <th className="text-left p-4 font-medium">Status</th>
-              <th className="text-center p-4 font-medium">Visibility</th>
-              <th className="text-right p-4 font-medium">Actions</th>
+              <th className="text-right p-4 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -315,33 +295,14 @@ export default function BranchAdminInventory({
                       N/A
                     </div>
                   </td>
-                  <td className="p-4">
-                    <div className="flex flex-col gap-1">
+                  <td className="p-4 text-right">
+                    <div className="flex flex-col gap-1 items-end">
                       <Badge
                         variant={product.isAvailable ? "default" : "secondary"}
                         className={product.isAvailable ? "bg-green-100 text-green-800" : ""}
                       >
                         {product.isAvailable ? "Available" : "Unavailable"}
                       </Badge>
-                    </div>
-                  </td>
-                  <td className="p-4 text-center">
-                    <Switch
-                      checked={product.isVisible}
-                      onCheckedChange={(checked) =>
-                        handleToggleVisibility(product.organizationProductId, checked)
-                      }
-                    />
-                  </td>
-                  <td className="p-4 text-right">
-                    <div className="flex items-center gap-2 justify-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleVisibility(product.organizationProductId, !product.isVisible)}
-                      >
-                        {product.isVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -351,55 +312,6 @@ export default function BranchAdminInventory({
         </Table>
       </Card>
 
-      {/* Bulk Actions */}
-      {filteredProducts.length > 0 && (
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">
-              {filteredProducts.length} products available
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleBulkVisibilityToggle(
-                  filteredProducts.map(p => p.organizationProductId),
-                  true
-                )}
-              >
-                <Eye size={14} className="mr-2" />
-                Show All
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleBulkVisibilityToggle(
-                  filteredProducts.map(p => p.organizationProductId),
-                  false
-                )}
-              >
-                <EyeOff size={14} className="mr-2" />
-                Hide All
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Information Card */}
-      <Card className="p-4 bg-blue-50 border-blue-200">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
-          <div>
-            <h4 className="font-medium text-blue-900">Branch Visibility Control</h4>
-            <p className="text-sm text-blue-700 mt-1">
-              You can control which products are visible to customers in your branch.
-              Hidden products won't appear in customer-facing interfaces but will still be tracked in inventory.
-              Stock levels and availability are managed by Head Office.
-            </p>
-          </div>
-        </div>
-      </Card>
     </div>
   )
 }

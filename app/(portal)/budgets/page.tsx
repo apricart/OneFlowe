@@ -250,9 +250,9 @@ export default function BudgetsPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs tracking-[0.2em] text-white/70">HEAD OFFICE · FINANCE</p>
-            <h1 className="text-3xl font-semibold">Budget intelligence overview</h1>
+            <h1 className="text-3xl font-semibold">Monthly Budget Intelligence</h1>
             <p className="text-sm text-white/80">
-              Manage {currentMonth} allocations, holds, and spending health for every branch.
+              Manage {currentMonth} allocations, spending, and remaining budgets for every branch.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -284,9 +284,9 @@ export default function BudgetsPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[
-          { label: "Total allocated", value: formatAmount(totalAllocated), icon: Wallet, gradient: "from-indigo-500 to-purple-500", sub: currentMonth },
-          { label: "Total spent", value: formatAmount(totalSpent + totalHeld), icon: PieChart, gradient: "from-orange-400 to-pink-500", sub: "Includes pending orders" },
-          { label: "Remaining", value: formatAmount(totalRemaining), icon: CheckCircle2, gradient: "from-emerald-400 to-teal-500", sub: "Available balance" },
+          { label: "Total Monthly Allocation", value: formatAmount(totalAllocated), icon: Wallet, gradient: "from-indigo-500 to-purple-500", sub: `Limit for ${currentMonth}` },
+          { label: "Consumed This Month", value: formatAmount(totalSpent + totalHeld), icon: PieChart, gradient: "from-orange-400 to-pink-500", sub: "Includes pending orders" },
+          { label: "Remaining This Month", value: formatAmount(totalRemaining), icon: CheckCircle2, gradient: "from-emerald-400 to-teal-500", sub: `Available for ${currentMonth}` },
         ].map((metric) => {
           const Icon = metric.icon
           return (
@@ -347,8 +347,8 @@ export default function BudgetsPage() {
               <TableRow className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                 <TableHead className="font-semibold text-slate-900 dark:text-slate-200">Branch (ID / Org)</TableHead>
                 <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Monthly Budget</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Spent</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Remaining</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Spent (Month)</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Remaining (Month)</TableHead>
                 <TableHead className="text-center font-semibold text-slate-900 dark:text-slate-200">Usage</TableHead>
                 <TableHead className="text-center font-semibold text-slate-900 dark:text-slate-200">Status</TableHead>
                 <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Action</TableHead>

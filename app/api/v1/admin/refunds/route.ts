@@ -456,11 +456,16 @@ export async function POST(req: NextRequest) {
 
             let updatedReceiptData = currentOrder?.receiptData as any
             if (updatedReceiptData) {
-                // Update receipt with new refund amount
+                // Update receipt with new refund amount and itemized details
                 const { updateReceiptWithRefund } = await import('@/lib/receipt-generator')
                 updatedReceiptData = updateReceiptWithRefund(
                     updatedReceiptData,
-                    totalRefundAmount
+                    totalRefundAmount,
+                    refundDetails.map(d => ({
+                        productName: d.productName,
+                        quantity: d.quantity,
+                        amount: d.totalCents / 100
+                    }))
                 )
             }
 
@@ -548,6 +553,19 @@ export async function POST(req: NextRequest) {
                     }))
                 )
             }
+
+            // 6. CLEAR PENDING REQUESTS: Mark any existing pending refunds for this order as APPROVED
+            // This ensures that 'hasRefundRequests' in order list becomes 0 and the "REQUESTED" badge disappears.
+            await tx.update(refunds)
+                .set({
+                    status: "APPROVED",
+                    processedByUserId: userId,
+                    updatedAt: new Date()
+                })
+                .where(and(
+                    eq(refunds.orderId, orderId),
+                    eq(refunds.status, "PENDING")
+                ))
         })
 
         return NextResponse.json({

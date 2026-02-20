@@ -450,7 +450,9 @@ export default function OrganizationsPage() {
           onOpenChange={(open) => setConfirmDelete((prev) => ({ ...prev, open }))}
           onConfirm={() => confirmDelete.id && removeOrganization(confirmDelete.id)}
           title={`Delete "${confirmDelete.name}"?`}
-          description="This action cannot be undone. All data related to this organization must be removed first."
+          description={selectedOrg?.status === "active"
+            ? "This action cannot be undone. Active organizations with branches or users cannot be deleted directly. Please deactivate the organization first to allow automatic cleanup."
+            : "This action cannot be undone. Deleting this inactive organization will automatically remove its associated branches, users, and non-financial data."}
           confirmText="Delete Company"
           type="danger"
           isLoading={isDeleting}
@@ -461,7 +463,7 @@ export default function OrganizationsPage() {
           onOpenChange={(open) => setConfirmDeleteBranch((prev) => ({ ...prev, open }))}
           onConfirm={() => confirmDeleteBranch.id && removeBranch(confirmDeleteBranch.id)}
           title={`Delete Branch "${confirmDeleteBranch.name}"?`}
-          description="This action cannot be undone. Branch inventory, orders, and staff records will be permanently removed."
+          description="This action cannot be undone. Branch inventory, orders, and staff records will be permanently removed. If the branch is active, ensure all users are reassigned first."
           confirmText="Delete Branch"
           type="danger"
           isLoading={isDeleting}
@@ -782,16 +784,15 @@ function CreateBranchDialog({
 }) {
   const [orgId, setOrgId] = useState<string | undefined>(undefined)
   const [name, setName] = useState("")
-  const [code, setCode] = useState("")
   const [status, setStatus] = useState<boolean>(true)
   async function submit() {
     if (!orgId) return
-    console.log("[CreateBranchDialog] 📝 Submitting new branch:", { orgId, name, code, status })
+    console.log("[CreateBranchDialog] 📝 Submitting new branch:", { orgId, name, status })
 
     try {
       const res = await fetch("/api/v1/branches", {
         method: "POST",
-        body: JSON.stringify({ organizationId: orgId, name, code, status: status ? "active" : "inactive" }),
+        body: JSON.stringify({ organizationId: orgId, name, status: status ? "active" : "inactive" }),
         headers: { "Content-Type": "application/json" }
       })
       const data = await res.json()
@@ -802,7 +803,6 @@ function CreateBranchDialog({
 
       showFeedback("Branch created successfully.", "success")
       setName("")
-      setCode("")
       setStatus(true)
       setOrgId(undefined)
 
@@ -848,7 +848,7 @@ function CreateBranchDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="bname">Branch name</Label>
                   <Input
@@ -858,16 +858,7 @@ function CreateBranchDialog({
                     placeholder="Downtown Branch"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="bcode">Code</Label>
-                  <Input
-                    id="bcode"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.toUpperCase())}
-                    placeholder="DT-01"
-                  />
-                  <p className="text-xs text-muted-foreground">Visible in budgets, inventory, and reports.</p>
-                </div>
+                <p className="text-xs text-muted-foreground">Branch code will be automatically generated.</p>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
@@ -887,7 +878,7 @@ function CreateBranchDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={submit} disabled={!orgId || !name || !code} className="gap-2">
+          <Button onClick={submit} disabled={!orgId || !name} className="gap-2">
             <Save className="h-4 w-4" />
             Save Branch
           </Button>
@@ -997,7 +988,8 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bcode-edit">Code</Label>
-                <Input id="bcode-edit" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
+                <Input id="bcode-edit" value={code} disabled className="bg-muted cursor-not-allowed" />
+                <p className="text-xs text-muted-foreground italic">Branch codes are non-editable.</p>
               </div>
             </div>
             <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
@@ -1020,7 +1012,7 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
           <Button
             className="gap-2"
             onClick={() => {
-              onSave({ name, code, status: status ? "active" : "inactive" })
+              onSave({ name, status: status ? "active" : "inactive" })
               setOpen(false)
             }}
           >

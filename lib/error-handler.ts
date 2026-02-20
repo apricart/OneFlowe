@@ -280,11 +280,20 @@ export function parseError(error: any): ErrorDetails {
   }
 
   // Pre-mapped specific messages from our APIs (e.g. blockers)
-  if (errorMsg.startsWith('Cannot delete') || errorMsg.includes('Please') || errorMsg.includes('assigned') || errorMsg.includes('records')) {
+  if (errorMsg.startsWith('Cannot delete') || errorMsg.includes('Please') || errorMsg.includes('assigned') || errorMsg.includes('records') || errorMsg.includes('Linked')) {
     return {
       type: 'VALIDATION_ERROR',
       message: errorMsg,
       statusCode: 400
+    }
+  }
+
+  // If we already have a 400-level error with a descriptive message, use it
+  if (error?.status >= 400 && error?.status < 500 && errorMsg && !errorMsg.includes('status')) {
+    return {
+      type: 'VALIDATION_ERROR',
+      message: errorMsg,
+      statusCode: error.status
     }
   }
 

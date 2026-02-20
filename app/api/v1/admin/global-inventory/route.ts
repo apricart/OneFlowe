@@ -94,7 +94,9 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
 
-    const conditions = []
+    const conditions = [
+      isNull(globalProducts.deletedAt)
+    ]
     if (search) {
       conditions.push(
         or(
@@ -105,8 +107,39 @@ export async function GET(req: NextRequest) {
       )
     }
     if (category) {
-      conditions.push(eq(globalProducts.categoryId, parseInt(category)))
+      const catId = parseInt(category)
+      // Check if this is a parent category or a subcategory
+      const [catInfo] = await db.select({
+        id: categories.id,
+        parentId: categories.parentId
+      }).from(categories).where(eq(categories.id, catId)).limit(1)
+
+      if (catInfo) {
+        if (catInfo.parentId === null) {
+          // It's a parent category - find all subcategories
+          const subCats = await db.select({ id: categories.id })
+            .from(categories)
+            .where(eq(categories.parentId, catId))
+
+          const subCatIds = subCats.map(sc => sc.id)
+          if (subCatIds.length > 0) {
+            conditions.push(inArray(globalProducts.categoryId, subCatIds))
+          } else {
+            // No subcategories, match nothing if it's a parent with no children
+            conditions.push(eq(globalProducts.categoryId, -1))
+          }
+        } else {
+          // It's a subcategory - match directly
+          conditions.push(eq(globalProducts.categoryId, catId))
+        }
+      }
     }
+
+    const subCategory = searchParams.get("subCategory")
+    if (subCategory) {
+      conditions.push(eq(globalProducts.categoryId, parseInt(subCategory)))
+    }
+
     if (status && status !== "all") {
       conditions.push(eq(globalProducts.status, status))
     }
@@ -483,6 +516,7 @@ export async function DELETE(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get("id")
+    const mode = searchParams.get("mode") || "discontinue" // Default to discontinue for backward compatibility
 
     if (!id) {
       return NextResponse.json({ error: "Product ID is required" }, { status: 400 })
@@ -498,20 +532,31 @@ export async function DELETE(req: NextRequest) {
       status: globalProducts.status,
     })
       .from(globalProducts)
-      .where(eq(globalProducts.id, productId))
+      .where(and(eq(globalProducts.id, productId), isNull(globalProducts.deletedAt)))
       .limit(1)
 
     if (!existingProduct) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
-    // Soft delete by marking as discontinued
-    await db.update(globalProducts)
-      .set({
-        status: "discontinued",
-        updatedAt: new Date()
-      })
-      .where(eq(globalProducts.id, productId))
+    if (mode === "delete") {
+      // Soft delete by marking deletedAt
+      await db.update(globalProducts)
+        .set({
+          status: "discontinued",
+          deletedAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(eq(globalProducts.id, productId))
+    } else {
+      // Just discontinue
+      await db.update(globalProducts)
+        .set({
+          status: "discontinued",
+          updatedAt: new Date()
+        })
+        .where(eq(globalProducts.id, productId))
+    }
 
     // Cascade status change to organization and branch inventory
     const cascadeResult = await cascadeGlobalProductStatusChange(
@@ -521,16 +566,17 @@ export async function DELETE(req: NextRequest) {
       "SUPER_ADMIN"
     )
 
-    // Log the soft deletion
+    // Log the action
     await db.insert(auditLogs).values({
       userId: (session.user as any).id,
-      action: "DELETE", // Keeping DELETE action for audit trail, but functionality is soft delete
+      action: mode === "delete" ? "DELETE" : "UPDATE",
       entity: "GlobalProduct",
       entityId: id.toString(),
       metadata: {
         productCode: existingProduct.productCode,
         productName: existingProduct.name,
-        type: "soft_delete",
+        mode,
+        type: mode === "delete" ? "soft_delete" : "status_change",
         cascadeResult: {
           updatedOrgCount: cascadeResult.updatedOrgCount,
           updatedBranchCount: cascadeResult.updatedBranchCount,

@@ -32,6 +32,7 @@ export interface ReceiptData {
     tax: number
     deliveryCharges: number
     refund: number
+    refundedItems?: Array<{ productName: string, quantity: number, amount: number }>
     totalAmount: number
 }
 
@@ -222,11 +223,19 @@ function groupItemsHierarchically(
  */
 export function updateReceiptWithRefund(
     receiptData: ReceiptData,
-    refundAmountCents: number
+    refundAmountCents: number,
+    refundedItems?: Array<{ productName: string, quantity: number, amount: number }>
 ): ReceiptData {
+    // Merge existing refunded items with new ones if any
+    const existingItems = receiptData.refundedItems || []
+    const updatedRefundedItems = refundedItems
+        ? [...existingItems, ...refundedItems]
+        : existingItems
+
     return {
         ...receiptData,
-        refund: refundAmountCents / 100,
-        totalAmount: receiptData.totalAmount - refundAmountCents / 100,
+        refund: (receiptData.refund || 0) + (refundAmountCents / 100),
+        refundedItems: updatedRefundedItems.length > 0 ? updatedRefundedItems : undefined,
+        totalAmount: receiptData.totalAmount - (refundAmountCents / 100),
     }
 }

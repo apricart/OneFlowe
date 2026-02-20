@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     // Get user by email
     const { db } = await import("@/lib/db")
     const { users } = await import("@/db/schema")
-    const { eq } = await import("drizzle-orm")
+    const { eq, and, isNull } = await import("drizzle-orm")
 
     const [user] = await db
       .select({
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
         mfaEnabled: users.mfaEnabled
       })
       .from(users)
-      .where(eq(users.email, email.toLowerCase()))
+      .where(and(eq(users.email, email.toLowerCase()), isNull(users.deletedAt)))
       .limit(1)
 
     if (!user) {

@@ -109,7 +109,14 @@ export default function OrdersManagementPage() {
     let filtered = orders
 
     if (statusFilter !== "all") {
-      filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === statusFilter)
+      if (statusFilter === "refunded") {
+        filtered = filtered.filter((o: OrderItem) =>
+          o.status.toLowerCase() === "refunded" ||
+          (o.refundAmountCents && o.refundAmountCents > 0)
+        )
+      } else {
+        filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === statusFilter)
+      }
     }
 
     if (refundFilter !== "all") {
@@ -540,17 +547,17 @@ export default function OrdersManagementPage() {
                             </Badge>
                           ) : (
                             <>
-                              {(order.refundAmountCents && order.refundAmountCents > 0) && (
+                              {(order.refundAmountCents ?? 0) > 0 && (
                                 <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-0 text-[10px] px-1.5 py-0.5">
                                   PARTIAL
                                 </Badge>
                               )}
-                              {(order.hasRefundRequests && order.hasRefundRequests > 0) && (
+                              {(order.hasRefundRequests ?? 0) > 0 && (
                                 <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-0 text-[10px] px-1.5 py-0.5">
                                   REQUESTED
                                 </Badge>
                               )}
-                              {!(order.refundAmountCents && order.refundAmountCents > 0) && !(order.hasRefundRequests && order.hasRefundRequests > 0) && (
+                              {!(order.refundAmountCents && (order.refundAmountCents ?? 0) > 0) && !(order.hasRefundRequests && (order.hasRefundRequests ?? 0) > 0) && (
                                 <span className="text-[10px] text-muted-foreground">—</span>
                               )}
                             </>

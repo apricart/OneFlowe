@@ -21,12 +21,12 @@ export async function POST(req: NextRequest) {
     // Get user email
     const { db } = await import("@/lib/db")
     const { users } = await import("@/db/schema")
-    const { eq } = await import("drizzle-orm")
+    const { eq, and, isNull } = await import("drizzle-orm")
 
     const [user] = await db
       .select({ email: users.email })
       .from(users)
-      .where(eq(users.id, scope.userId))
+      .where(and(eq(users.id, scope.userId), isNull(users.deletedAt)))
       .limit(1)
 
     if (!user) {

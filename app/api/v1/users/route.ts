@@ -1,7 +1,7 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { db } from "@/lib/db"
 import { users as usersTable, roles as rolesTable, systemLogs } from "@/db/schema"
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, ne, isNull } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 import { headers } from "next/headers"
 type Role = "SUPER_ADMIN" | "HEAD_OFFICE" | "BRANCH_ADMIN" | "ORDER_PORTAL"
@@ -13,7 +13,15 @@ export async function GET(req: Request) {
   if (err) return err
   const { searchParams } = new URL(req.url)
   const organizationId = searchParams.get("organizationId")
-  const base = db
+  const scope = await getRequestScope()
+  const scopedOrgId = scope?.role === "SUPER_ADMIN" ? (organizationId ? Number(organizationId) : undefined) : (scope?.organizationId ?? undefined)
+
+  const conditions = [ne(rolesTable.name, "SUPER_ADMIN"), isNull(usersTable.deletedAt)]
+  if (scopedOrgId) {
+    conditions.push(eq(usersTable.organizationId, scopedOrgId))
+  }
+
+  const rows = await db
     .select({
       id: usersTable.id,
       email: usersTable.email,
@@ -29,13 +37,10 @@ export async function GET(req: Request) {
     })
     .from(usersTable)
     .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
+    .where(and(...conditions))
     .orderBy(desc(usersTable.createdAt))
 
-  const scope = await getRequestScope()
-  const scopedOrgId = scope?.role === "SUPER_ADMIN" ? (organizationId ? Number(organizationId) : undefined) : (scope?.organizationId ?? undefined)
-  const rows = scopedOrgId ? await base.where(eq(usersTable.organizationId, scopedOrgId)) : await base
-
-  const items = rows.map((r) => ({
+  const items = rows.map((r: any) => ({
     id: r.id,
     email: r.email,
     firstName: r.firstName || "",

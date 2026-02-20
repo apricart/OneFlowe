@@ -25,7 +25,7 @@ import {
   systemLogs,
   groupAuditLogs
 } from "@/db/schema"
-import { eq, count, and, ne } from "drizzle-orm"
+import { eq, count, and, ne, isNull } from "drizzle-orm"
 
 export async function GET(
   _: Request,
@@ -119,13 +119,18 @@ export async function DELETE(
     // These tables contain core business entities that shouldn't be auto-deleted.
 
     const [branchCount] = await db.select({ val: count() }).from(branches).where(eq(branches.organizationId, orgId))
-    if (branchCount.val > 0) {
-      return error(`Cannot delete: This organization has ${branchCount.val} active branch(es). Please delete the branches first.`, 400)
+    if (branchCount.val > 0 && existing.status === 'active') {
+      return error(`Cannot delete: This organization is active and has ${branchCount.val} active branch(es). Please deactivate the organization or delete branches first.`, 400)
     }
 
-    const [userCount] = await db.select({ val: count() }).from(users).where(eq(users.organizationId, orgId))
-    if (userCount.val > 0) {
-      return error(`Cannot delete: This organization has ${userCount.val} active user(s). Please remove or reassign users first.`, 400)
+    const [userCount] = await db.select({ val: count() }).from(users).where(
+      and(
+        eq(users.organizationId, orgId),
+        isNull(users.deletedAt)
+      )
+    )
+    if (userCount.val > 0 && existing.status === 'active') {
+      return error(`Cannot delete: This organization is active and has ${userCount.val} active user(s). Please deactivate the organization or remove users first.`, 400)
     }
 
     const [orderCount] = await db.select({ val: count() }).from(orders).where(eq(orders.organizationId, orgId))

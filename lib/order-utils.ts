@@ -149,9 +149,6 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
       // Special handling for Refunded state skips
       if (normalized === "refunded" && step.key === "fulfilled") {
         const refundOrigin = statusAtRefund?.toLowerCase()?.trim()
-        // Actually, let's just use the index logic but override for fulfilled
-        // If we reached "refunded", everything before *should* be complete, EXCEPT...
-        // if we skipped it.
         const wasFulfilled = refundOrigin === "fulfilled"
 
         if (!wasFulfilled) {
@@ -168,6 +165,11 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
         } else {
           state = "current"
         }
+      }
+
+      // Highlight Partially Refunded even if order is not fully "refunded"
+      if (step.key === "refunded" && isPartialRefund && state === "upcoming") {
+        state = "current" // Highlight it as the active additional stage
       }
 
       // Correction for skipped fulfilled if we relied on index < idx
