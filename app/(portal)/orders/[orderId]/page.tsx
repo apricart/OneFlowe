@@ -378,43 +378,8 @@ export default function SuperAdminOrderDetailsPage() {
                 )}
               </Card>
 
-              {/* Security: Approval Token Display (Only visible to approver) */}
-              {order.approvalToken && (
-                <Card className="mb-6 p-5 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
-                  <div className="flex items-start gap-4">
-                    <div className="rounded-full bg-emerald-100 dark:bg-emerald-900 p-2 text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1 space-y-2">
-                      <div>
-                        <h3 className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">Approval Token</h3>
-                        <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                          You approved this order. Securely share this token with Super Admin for fulfillment.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-900 p-3">
-                        <code className="flex-1 font-mono text-lg font-bold tracking-widest text-slate-900 dark:text-white select-all">
-                          {order.approvalToken}
-                        </code>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 hover:bg-emerald-50 dark:hover:bg-emerald-900"
-                          onClick={() => {
-                            if (order.approvalToken) {
-                              navigator.clipboard.writeText(order.approvalToken)
-                            }
-                          }}
-                          title="Copy to clipboard"
-                        >
-                          <Receipt className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              )}
+              {/* SECURITY: Approval token is NEVER shown on Super Admin view.
+                 It is only visible on the Branch Admin portal order list. */}
 
               <Card className="p-5 dark:bg-slate-900 dark:border-slate-800">
                 <div className="mb-4 flex items-center justify-between">

@@ -64,22 +64,58 @@ export default function ViewBranchProductsPage() {
 
     const branchProducts = productsData?.items ?? []
 
+    // Deduplicate: group by globalProductId so each product appears once
+    const deduplicatedProducts = useMemo(() => {
+        const productMap = new Map<number, BranchProduct & { branches: string[] }>()
+
+        for (const p of branchProducts) {
+            const gpId = (p as any).globalProductId as number
+            if (!gpId) continue
+
+            if (productMap.has(gpId)) {
+                const existing = productMap.get(gpId)!
+                if (p.branchName && !existing.branches.includes(p.branchName)) {
+                    existing.branches.push(p.branchName)
+                }
+                // Keep the earliest assignment date
+                if (new Date(p.assignedAt) < new Date(existing.assignedAt)) {
+                    existing.assignedAt = p.assignedAt
+                }
+            } else {
+                productMap.set(gpId, {
+                    ...p,
+                    branches: p.branchName ? [p.branchName] : [],
+                })
+            }
+        }
+
+        return Array.from(productMap.values())
+    }, [branchProducts])
+
     // Search filtering
     const filteredProducts = useMemo(() => {
-        if (!searchQuery) return branchProducts
+        if (!searchQuery) return deduplicatedProducts
 
         const q = searchQuery.toLowerCase()
-        return branchProducts.filter(p =>
+        return deduplicatedProducts.filter(p =>
             p.productName.toLowerCase().includes(q) ||
             p.productCode.toLowerCase().includes(q) ||
-            p.branchName?.toLowerCase().includes(q)
+            p.branches.some(b => b.toLowerCase().includes(q))
         )
-    }, [branchProducts, searchQuery])
+    }, [deduplicatedProducts, searchQuery])
 
     const handleGroupChange = (value: string) => {
         setSelectedGroupId(value)
     }
 
+    // Extract unique branch names for the summary at the top
+    const allBranches = useMemo(() => {
+        const set = new Set<string>()
+        for (const p of branchProducts) {
+            if (p.branchName) set.add(p.branchName)
+        }
+        return Array.from(set)
+    }, [branchProducts])
 
 
     // Removed handleBranchChange as individual branch selection is no longer supported
@@ -162,6 +198,26 @@ export default function ViewBranchProductsPage() {
                 </CardContent>
             </Card>
 
+            {/* Branches in this group */}
+            {selectedGroupId && allBranches.length > 0 && (
+                <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <CardContent className="pt-5">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">Branches in this group ({allBranches.length})</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {allBranches.map((branch) => (
+                                <Badge key={branch} variant="secondary" className="text-xs px-3 py-1">
+                                    <Building2 className="mr-1.5 h-3 w-3" />
+                                    {branch}
+                                </Badge>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Products Table */}
             {selectedGroupId && (
                 <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -189,7 +245,6 @@ export default function ViewBranchProductsPage() {
                                     <TableRow>
                                         <TableHead>Product</TableHead>
                                         <TableHead>Code</TableHead>
-                                        <TableHead>Branch</TableHead>
                                         <TableHead>Price</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Assigned</TableHead>
@@ -198,13 +253,13 @@ export default function ViewBranchProductsPage() {
                                 <TableBody>
                                     {isLoading ? (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
+                                            <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
                                                 Loading products...
                                             </TableCell>
                                         </TableRow>
                                     ) : filteredProducts.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                                            <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
                                                 {branchProducts.length === 0
                                                     ? "No products assigned to branches in this group yet."
                                                     : "No products match your search."}
@@ -212,7 +267,7 @@ export default function ViewBranchProductsPage() {
                                         </TableRow>
                                     ) : (
                                         filteredProducts.map((product) => (
-                                            <TableRow key={product.id} className="hover:bg-muted/40">
+                                            <TableRow key={(product as any).globalProductId || product.id} className="hover:bg-muted/40">
                                                 <TableCell>
                                                     <div className="flex items-center gap-3">
                                                         {product.productImageUrl ? (
@@ -232,12 +287,7 @@ export default function ViewBranchProductsPage() {
                                                 <TableCell>
                                                     <Badge variant="outline">{product.productCode}</Badge>
                                                 </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
-                                                        <Building2 className="h-3.5 w-3.5" />
-                                                        {product.branchName || "Unknown Branch"}
-                                                    </div>
-                                                </TableCell>
+
                                                 <TableCell className="font-medium">
                                                     {product.customPrice
                                                         ? formatPKR(product.customPrice / 100)

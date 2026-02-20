@@ -2,6 +2,8 @@ import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders } from "@/db/schema"
 import { eq, sql } from "drizzle-orm"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth-options"
 type OrderStatus = "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED"
 
 export async function GET(
@@ -22,7 +24,22 @@ export async function GET(
   const hasAccess = await verifyResourceAccess(item.organizationId, item.branchId)
   if (!hasAccess) return error("Forbidden: You do not have access to this order", 403)
 
-  return ok({ item })
+  // SECURITY: Strip approval token from response — only Branch Admin approver can see it
+  const session = await getServerSession(authOptions)
+  const currentUserId = (session?.user as any)?.id
+  const currentRole = (session?.user as any)?.role
+
+  const { approvalToken, approvalTokenHash, approvalTokenCreatedAt, ...safeItem } = item
+
+  // Only include the plaintext token if current user is BRANCH_ADMIN and is the approver
+  const isBranchAdminApprover = currentRole === "BRANCH_ADMIN" && item.approvedByUserId === currentUserId
+
+  return ok({
+    item: {
+      ...safeItem,
+      approvalToken: isBranchAdminApprover ? approvalToken : null,
+    }
+  })
 }
 
 export async function PATCH(
