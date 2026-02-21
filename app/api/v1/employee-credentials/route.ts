@@ -164,9 +164,10 @@ async function PUT(req: NextRequest) {
     if (firstName !== undefined) updates.firstName = firstName
     if (lastName !== undefined) updates.lastName = lastName
 
+    const nextVersion = (cred.sessionVersion || 0) + 1
     const [updated] = await db
       .update(employeeCredentials)
-      .set(updates)
+      .set({ ...updates, sessionVersion: nextVersion })
       .where(eq(employeeCredentials.id, credId))
       .returning()
 

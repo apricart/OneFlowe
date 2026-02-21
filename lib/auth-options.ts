@@ -2,7 +2,7 @@ import type { NextAuthOptions } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { db } from "@/lib/db"
 import { users, roles, mfaCodes, employeeCredentials, organizations, branches } from "@/db/schema"
-import { eq, and, gt, isNull } from "drizzle-orm"
+import { eq, and, gt, isNull, sql } from "drizzle-orm"
 import { verifyPassword } from "@/lib/password"
 import { checkMfaCooldown, verifyOTP, clearDailyCount } from "@/lib/mfa"
 import { compare } from "bcryptjs"
@@ -31,7 +31,8 @@ export const authOptions: NextAuthOptions = {
             branchId: users.branchId,
             fullName: users.fullName,
             mfaEnabled: users.mfaEnabled,
-            isActive: users.isActive
+            isActive: users.isActive,
+            sessionVersion: users.sessionVersion
           })
           .from(users)
           .where(and(eq(users.email, email), isNull(users.deletedAt)))
@@ -89,7 +90,8 @@ export const authOptions: NextAuthOptions = {
           organizationId: u.organizationId,
           branchId: u.branchId,
           fullName: u.fullName,
-          isEmployee: false
+          isEmployee: false,
+          sessionVersion: u.sessionVersion
         } as any
       },
     }),
@@ -119,7 +121,8 @@ export const authOptions: NextAuthOptions = {
             branchId: users.branchId,
             fullName: users.fullName,
             mfaEnabled: users.mfaEnabled,
-            isActive: users.isActive
+            isActive: users.isActive,
+            sessionVersion: users.sessionVersion
           })
           .from(users)
           .where(and(eq(users.email, email), isNull(users.deletedAt)))
@@ -178,7 +181,8 @@ export const authOptions: NextAuthOptions = {
           organizationId: u.organizationId,
           branchId: u.branchId,
           fullName: u.fullName,
-          isEmployee: false
+          isEmployee: false,
+          sessionVersion: u.sessionVersion
         } as any
       },
     }),
@@ -259,7 +263,8 @@ export const authOptions: NextAuthOptions = {
           branchId: emp.branchId,
           fullName: `${emp.firstName} ${emp.lastName}`.trim(),
           isEmployee: true,
-          employeeId: emp.id
+          employeeId: emp.id,
+          sessionVersion: emp.sessionVersion
         } as any
       },
     }),
@@ -336,7 +341,8 @@ export const authOptions: NextAuthOptions = {
           branchId: emp.branchId,
           fullName: `${emp.firstName} ${emp.lastName}`.trim(),
           isEmployee: true,
-          employeeId: emp.id
+          employeeId: emp.id,
+          sessionVersion: emp.sessionVersion
         } as any
       },
     }),
@@ -350,22 +356,59 @@ export const authOptions: NextAuthOptions = {
         token.fullName = (user as any).fullName
         token.isEmployee = (user as any).isEmployee
         token.employeeId = (user as any).employeeId
+        token.sessionVersion = (user as any).sessionVersion
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
+        // Essential session assignments (always run)
+        (session.user as any).id = token.sub
+          ; (session.user as any).role = (token as any).role
+          ; (session.user as any).organizationId = (token as any).organizationId
+          ; (session.user as any).branchId = (token as any).branchId
+          ; (session.user as any).fullName = (token as any).fullName
+          ; (session.user as any).isEmployee = (token as any).isEmployee
+          ; (session.user as any).employeeId = (token as any).employeeId
+
         // Bank-grade security: Verify user is still active and not deleted on every session check
         // This ensures that password resets, deletions, or deactivations kick users out immediately
         try {
-          const [u] = await db
-            .select({ isActive: users.isActive, deletedAt: users.deletedAt })
-            .from(users)
-            .where(eq(users.id, token.sub as string))
-            .limit(1)
+          const isEmployee = token.isEmployee === true
+          const userId = token.sub as string
 
-          if (!u || !u.isActive || u.deletedAt) {
-            console.log(`[Auth] Invaliding session for user ${token.sub}: User inactive or deleted`)
+          if (!userId) return session
+
+          let dbUser: { isActive: boolean, deletedAt: Date | null, sessionVersion: number } | null = null
+
+          if (isEmployee) {
+            // Employee ID in token sub is "emp_123", we need the numeric ID for DB lookup
+            const numericId = parseInt(userId.replace("emp_", ""), 10)
+            const [emp] = await db
+              .select({
+                isActive: employeeCredentials.isActive,
+                deletedAt: sql<Date | null>`NULL`,
+                sessionVersion: employeeCredentials.sessionVersion
+              })
+              .from(employeeCredentials)
+              .where(eq(employeeCredentials.id, numericId))
+              .limit(1)
+            dbUser = emp as any
+          } else {
+            const [u] = await db
+              .select({
+                isActive: users.isActive,
+                deletedAt: users.deletedAt,
+                sessionVersion: users.sessionVersion
+              })
+              .from(users)
+              .where(eq(users.id, userId))
+              .limit(1)
+            dbUser = u as any
+          }
+
+          if (!dbUser || !dbUser.isActive || (dbUser.deletedAt && !isEmployee) || dbUser.sessionVersion !== token.sessionVersion) {
+            console.log(`[Auth] Invaliding session for user ${userId}: Status/Version mismatch`)
             return null as any
           }
 
@@ -373,7 +416,7 @@ export const authOptions: NextAuthOptions = {
           if (token.organizationId) {
             const [org] = await db.select({ status: organizations.status }).from(organizations).where(eq(organizations.id, token.organizationId as number)).limit(1)
             if (!org || org.status?.toLowerCase() !== 'active') {
-              console.log(`[Auth] Invaliding session for user ${token.sub}: Org deactivated`)
+              console.log(`[Auth] Invaliding session for user ${userId}: Org deactivated`)
               return null as any
             }
           }
@@ -381,23 +424,14 @@ export const authOptions: NextAuthOptions = {
           if (token.branchId) {
             const [branch] = await db.select({ status: branches.status }).from(branches).where(eq(branches.id, token.branchId as number)).limit(1)
             if (!branch || branch.status?.toLowerCase() !== 'active') {
-              console.log(`[Auth] Invaliding session for user ${token.sub}: Branch deactivated`)
+              console.log(`[Auth] Invaliding session for user ${userId}: Branch deactivated`)
               return null as any
             }
           }
-
-          ; (session.user as any).id = token.sub
-            ; (session.user as any).role = (token as any).role
-            ; (session.user as any).organizationId = (token as any).organizationId
-            ; (session.user as any).branchId = (token as any).branchId
-            ; (session.user as any).fullName = (token as any).fullName
-            ; (session.user as any).isEmployee = (token as any).isEmployee
-            ; (session.user as any).employeeId = (token as any).employeeId
         } catch (err) {
           console.error("[Auth] Session validation error:", err)
-          // On DB error, we err on the side of caution? Or allow?
-          // For bank-grade, we might want to block, but for UX, we might allow if DB is briefly down.
-          // Let's allow for now to prevent total lockout on minor DB hiccups.
+          // On DB error, we allow the session to continue but log the error
+          // This prevents a DB hiccup from locking everyone out
         }
       }
       return session

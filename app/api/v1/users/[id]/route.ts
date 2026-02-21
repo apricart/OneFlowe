@@ -66,9 +66,17 @@ export async function PATCH(
     // Execute update
     await db.update(users).set(patch).where(eq(users.id, id))
 
-    // If password or email changed, invalidate all sessions to force logout
+    // If password or email changed, invalidate all sessions by incrementing version
     if (body.password || body.email) {
-      console.log(`[API/Users] Password or email updated for user ${id}. Invalidating sessions...`)
+      console.log(`[API/Users] Password or email updated for user ${id}. Incrementing session version...`)
+      const [currentUser] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, id)).limit(1)
+      const nextVersion = (currentUser?.sessionVersion || 0) + 1
+
+      await db.update(users)
+        .set({ sessionVersion: nextVersion })
+        .where(eq(users.id, id))
+
+      // Also delete physical sessions if they exist (for database-bound sessions if used)
       await db.delete(sessions).where(eq(sessions.userId, id))
     }
 

@@ -72,7 +72,14 @@ export default function HeadOfficeOrdersPage() {
     let filtered = orders
 
     if (statusFilter !== "all") {
-      filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === statusFilter)
+      if (statusFilter === "refunded") {
+        filtered = filtered.filter((o: OrderItem) =>
+          o.status.toLowerCase() === "refunded" ||
+          (o.refundAmountCents && o.refundAmountCents > 0)
+        )
+      } else {
+        filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === statusFilter)
+      }
     }
 
     if (refundFilter !== "all") {

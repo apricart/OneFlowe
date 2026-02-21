@@ -1,7 +1,7 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { db } from "@/lib/db"
-import { orders } from "@/db/schema"
-import { eq, sql } from "drizzle-orm"
+import { orders, orderItems, globalProducts, refunds, refundItems } from "@/db/schema"
+import { and, eq, sql } from "drizzle-orm"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 type OrderStatus = "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED"
@@ -34,9 +34,33 @@ export async function GET(
   // Only include the plaintext token if current user is BRANCH_ADMIN and is the approver
   const isBranchAdminApprover = currentRole === "BRANCH_ADMIN" && item.approvedByUserId === currentUserId
 
+  // Fetch items for this order
+  const itemsData = await db
+    .select({
+      id: orderItems.id,
+      productName: orderItems.productName,
+      productCode: orderItems.productCode,
+      quantity: orderItems.quantity,
+      priceCents: orderItems.priceCents,
+      unit: orderItems.unit,
+      globalProductId: orderItems.globalProductId,
+      imageUrl: globalProducts.imageUrl,
+      quantityRefunded: sql<number>`COALESCE((
+        SELECT SUM(${refundItems.quantity})::int
+        FROM ${refundItems}
+        JOIN ${refunds} ON ${refundItems.refundId} = ${refunds.id}
+        WHERE ${refundItems.orderItemId} = ${orderItems.id}
+        AND UPPER(${refunds.status}) = 'APPROVED'
+      ), 0)`.mapWith(Number),
+    })
+    .from(orderItems)
+    .leftJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
+    .where(eq(orderItems.orderId, orderId))
+
   return ok({
     item: {
       ...safeItem,
+      orderItems: itemsData,
       approvalToken: isBranchAdminApprover ? approvalToken : null,
     }
   })

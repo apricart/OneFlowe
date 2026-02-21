@@ -240,42 +240,28 @@ export default function OrderPortalPage() {
       return
     }
 
-    if (qty > availableStock) {
-      toast({
-        title: "Insufficient stock",
-        description: `Only ${availableStock} available for ${product.name}.`,
-        variant: "destructive"
-      })
-      return
-    }
-
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id)
+      const currentQtyInCart = existing?.quantity || 0
+      const newTotalQty = currentQtyInCart + qty
+
+      if (newTotalQty > availableStock) {
+        toast({
+          title: "Insufficient stock",
+          description: `Only ${availableStock} available for ${product.name}. You already have ${currentQtyInCart} in cart.`,
+          variant: "destructive"
+        })
+        return prev
+      }
+
+      toast({ title: `${product.name} added to cart` })
       if (existing) {
-        const newQuantity = existing.quantity + qty
-        if (newQuantity > availableStock) {
-          // Toast moved outside state updater below
-          return prev
-        }
         return prev.map(item =>
-          item.id === product.id ? { ...item, quantity: newQuantity } : item
+          item.id === product.id ? { ...item, quantity: newTotalQty } : item
         )
       }
       return [...prev, { ...product, quantity: qty }]
     })
-
-    // Handle toast after state update starts (or outside the updater)
-    const existingInCart = cart.find(item => item.id === product.id)
-    if (existingInCart && (existingInCart.quantity + qty) > availableStock) {
-      toast({
-        title: "Insufficient stock",
-        description: `Only ${availableStock} available for ${product.name}.`,
-        variant: "destructive"
-      })
-      return
-    }
-
-    toast({ title: `${product.name} added to cart` })
   }
 
   const updateQty = (id: number, qty: number) => {
@@ -317,7 +303,13 @@ export default function OrderPortalPage() {
         })
       })
       const json = await res.json()
-      if (!res.ok) return toast({ title: "Failed", description: json.error, variant: "destructive" })
+      if (!res.ok) {
+        if (json.error?.toLowerCase().includes("stock") || json.error?.toLowerCase().includes("budget")) {
+          mutateBranchInventory()
+          mutateBudget()
+        }
+        return toast({ title: "Failed", description: json.error, variant: "destructive" })
+      }
 
       toast({ title: "Order placed!", description: `TID: ${json.order?.tid}` })
       setCart([])
@@ -900,7 +892,8 @@ export default function OrderPortalPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {paginatedProducts.map(product => {
                   const itemInCart = cart.find(i => i.id === product.id)
-                  const selectionQty = cardQuantities[product.id] ?? itemInCart?.quantity ?? 0
+                  const defaultQty = (product.stock || 0) > 0 ? 1 : 0
+                  const selectionQty = cardQuantities[product.id] ?? itemInCart?.quantity ?? defaultQty
                   const isModified = selectionQty !== (itemInCart?.quantity || 0)
 
                   return (
@@ -1036,7 +1029,7 @@ export default function OrderPortalPage() {
                                 >
                                   <Minus className="h-3.5 w-3.5" />
                                 </Button>
-                                <span className="w-6 text-center text-xs font-bold text-slate-900 dark:text-white">
+                                <span className="w-8 text-center text-xs font-bold text-slate-900 dark:text-white">
                                   {selectionQty}
                                 </span>
                                 <Button
@@ -1439,15 +1432,15 @@ export default function OrderPortalPage() {
               <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
                 <div className="bg-slate-50 dark:bg-slate-800/50 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                   <h3 className="font-semibold text-sm">Ordered Items</h3>
-                  {orderDetailsData?.items?.some((item: any) => (item.quantityRefunded || 0) > 0) && (
+                  {orderDetailsData?.items?.[0]?.orderItems?.some((item: any) => (item.quantityRefunded || 0) > 0) && (
                     <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-[10px]">
                       Contains Refunds
                     </Badge>
                   )}
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {orderDetailsData?.items ? (
-                    orderDetailsData.items.map((item: any) => {
+                  {orderDetailsData?.items?.[0]?.orderItems ? (
+                    orderDetailsData.items[0].orderItems.map((item: any) => {
                       const isFullyRefunded = (item.quantityRefunded || 0) >= item.quantity
                       const isPartiallyRefunded = (item.quantityRefunded || 0) > 0 && !isFullyRefunded
 
@@ -1468,11 +1461,11 @@ export default function OrderPortalPage() {
                           </div>
                           <div className="text-right">
                             <p className={`font-semibold text-sm ${isFullyRefunded ? "line-through text-muted-foreground" : "text-slate-900 dark:text-white"}`}>
-                              {formatPKR(item.totalCents / 100)}
+                              {formatPKR((item.priceCents * item.quantity) / 100)}
                             </p>
                             {item.quantityRefunded > 0 && (
                               <p className="text-[10px] text-red-500 font-bold">
-                                - {formatPKR((item.priceCents * item.quantityRefunded) / 100)}
+                                - {formatPKR((item.priceCents * (item.quantityRefunded || 0)) / 100)}
                               </p>
                             )}
                           </div>
@@ -1488,18 +1481,18 @@ export default function OrderPortalPage() {
               </div>
 
               {/* Itemized Refund Summary */}
-              {orderDetailsData?.items?.some((item: any) => (item.quantityRefunded || 0) > 0) && (
+              {orderDetailsData?.items?.[0]?.orderItems?.some((item: any) => (item.quantityRefunded || 0) > 0) && (
                 <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-yellow-50/30 dark:bg-yellow-900/10 overflow-hidden">
                   <div className="px-4 py-2 border-b border-yellow-100 dark:border-yellow-900 bg-yellow-100/50 dark:bg-yellow-900/30">
                     <p className="text-xs font-bold text-yellow-800 dark:text-yellow-200 uppercase tracking-wider">Refund Summary</p>
                   </div>
                   <div className="p-4 space-y-2">
-                    {orderDetailsData.items
+                    {orderDetailsData.items[0].orderItems
                       .filter((item: any) => (item.quantityRefunded || 0) > 0)
                       .map((item: any) => (
                         <div key={`refund-sum-${item.id}`} className="flex justify-between text-xs">
-                          <span>{item.quantityRefunded}x {item.productName}</span>
-                          <span className="font-bold text-red-600">-{formatPKR((item.priceCents * item.quantityRefunded) / 100)}</span>
+                          <span>{(item.quantityRefunded || 0)}x {item.productName}</span>
+                          <span className="font-bold text-red-600">-{formatPKR((item.priceCents * (item.quantityRefunded || 0)) / 100)}</span>
                         </div>
                       ))}
                     <div className="pt-2 border-t border-yellow-200 dark:border-yellow-800 flex justify-between font-bold text-sm">

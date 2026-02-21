@@ -221,6 +221,34 @@ export default function HeadOfficeOrderDetailsPage() {
                   <p className="text-sm text-slate-700 dark:text-slate-300">{order.refundReason}</p>
                 </div>
               )}
+
+              {/* Itemized Refund Details */}
+              {order.orderItems?.some(item => (item.quantityRefunded || 0) > 0) && (
+                <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 overflow-hidden">
+                  <div className="px-3 py-2 border-b border-yellow-100 dark:border-yellow-900 bg-yellow-50/50 dark:bg-yellow-900/20">
+                    <p className="text-xs font-bold text-yellow-800 dark:text-yellow-200 uppercase tracking-wider">Refunded Items Detail</p>
+                  </div>
+                  <div className="divide-y divide-yellow-100 dark:divide-yellow-900">
+                    {order.orderItems
+                      .filter(item => (item.quantityRefunded || 0) > 0)
+                      .map(item => (
+                        <div key={item.id} className="p-3 flex justify-between items-center text-xs">
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-white">{item.productName}</p>
+                            <p className="text-muted-foreground mt-0.5">
+                              {item.quantityRefunded} {item.unit} @ {formatPKR(item.priceCents / 100)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-red-600 dark:text-red-400">
+                              - {formatPKR((item.priceCents * (item.quantityRefunded || 0)) / 100)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </Card>

@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { getValueFontSize } from "@/components/dashboard/charts"
 
 export function KpiCard({ title, value, hint, icon: Icon, colorClass = "text-blue-600" }: { title: string; value: string | number; hint?: string; icon?: any; colorClass?: string }) {
   return (
@@ -8,11 +9,12 @@ export function KpiCard({ title, value, hint, icon: Icon, colorClass = "text-blu
         {Icon ? <Icon size={18} className="opacity-70" /> : null}
       </CardHeader>
       <CardContent>
-        <div className={`text-2xl font-bold ${colorClass}`}>{value}</div>
+        <div className={`${getValueFontSize(value)} font-bold ${colorClass} break-words leading-tight`}>{value}</div>
         {hint ? <div className="text-xs opacity-70 mt-1">{hint}</div> : null}
       </CardContent>
     </Card>
   )
 }
+
 
 

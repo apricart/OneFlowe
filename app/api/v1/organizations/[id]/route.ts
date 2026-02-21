@@ -118,19 +118,20 @@ export async function DELETE(
     // 1. Tier 1: Check for Critical Blockers (Data the user must handle manually)
     // These tables contain core business entities that shouldn't be auto-deleted.
 
-    const [branchCount] = await db.select({ val: count() }).from(branches).where(eq(branches.organizationId, orgId))
-    if (branchCount.val > 0 && existing.status === 'active') {
-      return error(`Cannot delete: This organization is active and has ${branchCount.val} active branch(es). Please deactivate the organization or delete branches first.`, 400)
+    const [activeBranchCount] = await db.select({ val: count() }).from(branches).where(and(eq(branches.organizationId, orgId), eq(branches.status, 'active')))
+    if (activeBranchCount.val > 0) {
+      return error(`Cannot delete: This company has ${activeBranchCount.val} active branch(es). Please remove or deactivate every active branch before deleting the company.`, 400)
     }
 
-    const [userCount] = await db.select({ val: count() }).from(users).where(
+    const [activeUserCount] = await db.select({ val: count() }).from(users).where(
       and(
         eq(users.organizationId, orgId),
+        eq(users.isActive, true),
         isNull(users.deletedAt)
       )
     )
-    if (userCount.val > 0 && existing.status === 'active') {
-      return error(`Cannot delete: This organization is active and has ${userCount.val} active user(s). Please deactivate the organization or remove users first.`, 400)
+    if (activeUserCount.val > 0) {
+      return error(`Cannot delete: This company has ${activeUserCount.val} active user(s). Please remove or deactivate every active user before deleting the company.`, 400)
     }
 
     const [orderCount] = await db.select({ val: count() }).from(orders).where(eq(orders.organizationId, orgId))

@@ -105,6 +105,7 @@ export const users = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    sessionVersion: integer("session_version").notNull().default(1),
   },
   (t) => ({
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
@@ -537,7 +538,7 @@ export const globalProducts = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
     categoryId: integer("category_id").references(() => categories.id),
-    imageUrl: varchar("image_url", { length: 512 }),
+    imageUrl: text("image_url"),
     basePrice: integer("base_price_cents").notNull().default(0),
     // Global discount configuration
     discountType: varchar("discount_type", { length: 16 }), // percent | flat
@@ -577,7 +578,7 @@ export const organizationProducts = pgTable(
     customName: varchar("custom_name", { length: 255 }), // Override product name
     customDescription: text("custom_description"), // Override description
     customPrice: integer("custom_price_cents"), // Override pricing
-    customImageUrl: varchar("custom_image_url", { length: 512 }),
+    customImageUrl: text("custom_image_url"),
     tags: jsonb("tags").$type<string[]>().default([]),
     priority: integer("priority").default(0), // For sorting/featuring
     overrideLevel: varchar("override_level", { length: 32 }).default("super_admin"), // super_admin/head_office/branch
@@ -777,7 +778,7 @@ export const organizationInventory = pgTable(
     customName: varchar("custom_name", { length: 255 }),
     customPrice: integer("custom_price_cents"),
     customDescription: text("custom_description"),
-    customImageUrl: varchar("custom_image_url", { length: 512 }),
+    customImageUrl: text("custom_image_url"),
     assignedAt: timestamp("assigned_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -838,6 +839,7 @@ export const employeeCredentials = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+    sessionVersion: integer("session_version").notNull().default(1),
   },
   (t) => ({
     emailUq: uniqueIndex("employee_creds_email_uq").on(t.email),

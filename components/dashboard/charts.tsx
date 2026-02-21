@@ -64,6 +64,15 @@ const currencyFormatter = new Intl.NumberFormat("en-PK", {
   maximumFractionDigits: 0,
 })
 
+// ----------------- Dynamic Font Size Helper -----------------
+export const getValueFontSize = (val: string | number) => {
+  const str = String(val);
+  if (str.length > 15) return 'text-sm lg:text-base';
+  if (str.length > 11) return 'text-base lg:text-lg';
+  if (str.length > 8) return 'text-lg lg:text-xl';
+  return 'text-xl lg:text-2xl';
+}
+
 // ----------------- Yearly Sales Spline Chart -----------------
 export type SalesData = { month: string; sales: number }
 export type YearlySalesSplineChartProps = {
@@ -109,52 +118,56 @@ export function YearlySalesSplineChart({ yearlySalesData, avgSales, label = "Pur
 
       <div className="px-1">
         {/* Key Metrics */}
-        <div className="grid grid-cols-3 gap-4 mb-6 animate-slide-in">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 hover:shadow-md transition-shadow">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 animate-slide-in">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col justify-between min-h-[110px]">
             <div className="flex items-center gap-2 mb-2">
-              <div className="bg-blue-600 dark:bg-blue-500 p-1.5 rounded">
+              <div className="bg-blue-600 dark:bg-blue-500 p-1.5 rounded flex-shrink-0">
                 <DollarSign className="h-3.5 w-3.5 text-white" />
               </div>
-              <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 uppercase tracking-wide">
+              <p className="text-[10px] font-bold text-blue-900 dark:text-blue-300 uppercase tracking-wider truncate">
                 Total {label}
               </p>
             </div>
-            <p className="text-2xl font-bold text-blue-900 dark:text-blue-200 mb-1">
-              ₨{totalSales.toLocaleString()}
-            </p>
-
+            <div>
+              <p className={`${getValueFontSize('₨' + totalSales.toLocaleString())} font-bold text-blue-900 dark:text-blue-200 break-words leading-tight`}>
+                ₨{totalSales.toLocaleString()}
+              </p>
+            </div>
           </div>
 
-          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 hover:shadow-md transition-shadow">
+          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col justify-between min-h-[110px]">
             <div className="flex items-center gap-2 mb-2">
-              <div className="bg-indigo-600 dark:bg-indigo-500 p-1.5 rounded">
+              <div className="bg-indigo-600 dark:bg-indigo-500 p-1.5 rounded flex-shrink-0">
                 <Activity className="h-3.5 w-3.5 text-white" />
               </div>
-              <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-300 uppercase tracking-wide">
+              <p className="text-[10px] font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider truncate">
                 Average
               </p>
             </div>
-            <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-200 mb-1">
-              ₨{Math.round(avgSales).toLocaleString()}
-            </p>
-
+            <div>
+              <p className={`${getValueFontSize('₨' + Math.round(avgSales).toLocaleString())} font-bold text-indigo-900 dark:text-indigo-200 break-words leading-tight`}>
+                ₨{Math.round(avgSales).toLocaleString()}
+              </p>
+            </div>
           </div>
 
-          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 hover:shadow-md transition-shadow">
+          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col justify-between min-h-[110px]">
             <div className="flex items-center gap-2 mb-2">
-              <div className="bg-emerald-600 dark:bg-emerald-500 p-1.5 rounded">
+              <div className="bg-emerald-600 dark:bg-emerald-500 p-1.5 rounded flex-shrink-0">
                 <Award className="h-3.5 w-3.5 text-white" />
               </div>
-              <p className="text-xs font-semibold text-emerald-900 dark:text-emerald-300 uppercase tracking-wide">
+              <p className="text-[10px] font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider truncate">
                 Peak Period
               </p>
             </div>
-            <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-200 mb-1">
-              {peakMonth.month}
-            </p>
-            <p className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">
-              ₨{peakMonth.sales.toLocaleString()}
-            </p>
+            <div>
+              <p className="text-xl lg:text-2xl font-bold text-emerald-900 dark:text-emerald-200 break-words">
+                {peakMonth.month}
+              </p>
+              <p className="text-xs lg:text-sm text-emerald-700 dark:text-emerald-400 font-semibold break-words mt-0.5">
+                ₨{peakMonth.sales.toLocaleString()}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -329,55 +342,56 @@ export function TrendAreaChart({ data, className, label = "Purchase" }: { data: 
       <div className="space-y-6">
         <div className="px-1">
           {/* Mini Stats */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-              <div className="relative flex items-center justify-center mb-3">
-                <div className="absolute inset-0 bg-emerald-500 opacity-20 blur-lg rounded-full"></div>
-                <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-700 shadow-sm flex items-center justify-center">
-                  <DollarSign className="h-5 w-5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col justify-between min-h-[110px]">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="bg-emerald-600 dark:bg-emerald-500 p-1.5 rounded flex-shrink-0">
+                  <DollarSign className="h-3.5 w-3.5 text-white" />
                 </div>
+                <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider truncate">
+                  Total Value
+                </p>
               </div>
-              <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider mb-1">
-                Total Value
-              </p>
-              <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-200 mb-1">
-                ₨{totalValue.toLocaleString()}
-              </p>
-
+              <div>
+                <p className={`${getValueFontSize('₨' + totalValue.toLocaleString())} font-bold text-emerald-900 dark:text-emerald-200 break-words leading-tight`}>
+                  ₨{totalValue.toLocaleString()}
+                </p>
+              </div>
             </div>
 
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-              <div className="relative flex items-center justify-center mb-3">
-                <div className="absolute inset-0 bg-blue-500 opacity-20 blur-lg rounded-full"></div>
-                <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 shadow-sm flex items-center justify-center">
-                  <Award className="h-5 w-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col justify-between min-h-[110px]">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="bg-blue-600 dark:bg-blue-500 p-1.5 rounded flex-shrink-0">
+                  <Award className="h-3.5 w-3.5 text-white" />
                 </div>
+                <p className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider truncate">
+                  Peak Day
+                </p>
               </div>
-              <p className="text-xs font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider mb-1">
-                Peak Day
-              </p>
-              <p className="text-2xl font-bold text-blue-900 dark:text-blue-200 mb-1">
-                {peakDay.label}
-              </p>
-              <p className="text-sm text-blue-700 dark:text-blue-400 font-medium">
-                ₨{peakDay.value.toLocaleString()}
-              </p>
+              <div>
+                <p className="text-xl lg:text-2xl font-bold text-blue-900 dark:text-blue-200 break-words">
+                  {peakDay.label}
+                </p>
+                <p className="text-xs lg:text-sm text-blue-700 dark:text-blue-400 font-semibold break-words mt-0.5">
+                  ₨{peakDay.value.toLocaleString()}
+                </p>
+              </div>
             </div>
 
-            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-              <div className="relative flex items-center justify-center mb-3">
-                <div className="absolute inset-0 bg-indigo-500 opacity-20 blur-lg rounded-full"></div>
-                <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 shadow-sm flex items-center justify-center">
-                  <Activity className="h-5 w-5 text-indigo-600 dark:text-indigo-400" strokeWidth={2.5} />
+            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col justify-between min-h-[110px]">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="bg-indigo-600 dark:bg-indigo-500 p-1.5 rounded flex-shrink-0">
+                  <Activity className="h-3.5 w-3.5 text-white" />
                 </div>
+                <p className="text-[10px] font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider truncate">
+                  Average
+                </p>
               </div>
-              <p className="text-xs font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider mb-1">
-                Average
-              </p>
-              <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-200 mb-1">
-                ₨{Math.round(totalValue / (chartData.length || 1)).toLocaleString()}
-              </p>
-
+              <div>
+                <p className={`${getValueFontSize('₨' + Math.round(totalValue / (chartData.length || 1)).toLocaleString())} font-bold text-indigo-900 dark:text-indigo-200 break-words leading-tight`}>
+                  ₨{Math.round(totalValue / (chartData.length || 1)).toLocaleString()}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -634,44 +648,50 @@ export default function SalesBarChart({ data, label = "Purchase" }: Props & { la
         </div>
 
         {/* Summary Statistics */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <div className="relative flex items-center justify-center mb-3">
-              <div className="absolute inset-0 bg-blue-500 opacity-20 blur-lg rounded-full"></div>
-              <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 shadow-sm flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col justify-between min-h-[110px]">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-blue-600 dark:bg-blue-500 p-1.5 rounded flex-shrink-0">
+                <DollarSign className="h-3.5 w-3.5 text-white" />
               </div>
+              <p className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider truncate">Total {label}</p>
             </div>
-            <p className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider mb-1">Total {label}</p>
-            <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">
-              ₨{totalRevenue.toLocaleString()}
-            </p>
+            <div>
+              <p className={`${getValueFontSize('₨' + totalRevenue.toLocaleString())} font-bold text-blue-900 dark:text-blue-200 break-words leading-tight`}>
+                ₨{totalRevenue.toLocaleString()}
+              </p>
+            </div>
           </div>
 
-          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <div className="relative flex items-center justify-center mb-3">
-              <div className="absolute inset-0 bg-indigo-500 opacity-20 blur-lg rounded-full"></div>
-              <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 shadow-sm flex items-center justify-center">
-                <Activity className="h-5 w-5 text-indigo-600 dark:text-indigo-400" strokeWidth={2.5} />
+          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/30 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col justify-between min-h-[110px]">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-indigo-600 dark:bg-indigo-500 p-1.5 rounded flex-shrink-0">
+                <Activity className="h-3.5 w-3.5 text-white" />
               </div>
+              <p className="text-[10px] font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider truncate">Average</p>
             </div>
-            <p className="text-[10px] font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider mb-1">Average</p>
-            <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-200">
-              ₨{avgRevenue.toLocaleString()}
-            </p>
+            <div>
+              <p className={`${getValueFontSize('₨' + avgRevenue.toLocaleString())} font-bold text-indigo-900 dark:text-indigo-200 break-words leading-tight`}>
+                ₨{avgRevenue.toLocaleString()}
+              </p>
+            </div>
           </div>
 
-          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 hover:shadow-md transition-shadow">
-            <div className="relative flex items-center justify-center mb-3">
-              <div className="absolute inset-0 bg-emerald-500 opacity-20 blur-lg rounded-full"></div>
-              <div className="relative w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-emerald-200 dark:border-emerald-700 shadow-sm flex items-center justify-center">
-                <Award className="h-5 w-5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
+          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-4 hover:shadow-md transition-shadow flex flex-col justify-between min-h-[110px]">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="bg-emerald-600 dark:bg-emerald-500 p-1.5 rounded flex-shrink-0">
+                <Award className="h-3.5 w-3.5 text-white" />
               </div>
+              <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider truncate">Peak Month</p>
             </div>
-            <p className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider mb-1">Peak Month</p>
-            <p className="text-2xl font-bold text-emerald-900 dark:text-emerald-200">
-              {peakMonth.month}
-            </p>
+            <div>
+              <p className="text-xl lg:text-2xl font-bold text-emerald-900 dark:text-emerald-200 break-words">
+                {peakMonth.month}
+              </p>
+              <p className="text-xs lg:text-sm text-emerald-700 dark:text-emerald-400 font-semibold break-words mt-0.5">
+                ₨{peakMonth.value.toLocaleString()}
+              </p>
+            </div>
           </div>
         </div>
       </div>

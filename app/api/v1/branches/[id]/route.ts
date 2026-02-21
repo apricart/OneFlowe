@@ -2,7 +2,7 @@ import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { invalidateByPrefix } from "@/lib/cache-utils"
 import { db } from "@/lib/db"
 import { branches, users, orders, branchProducts, branchInventory, employeeCredentials, suppliers, budgets, restockRequests, inventory, systemLogs, notifications, auditLogs } from "@/db/schema"
-import { eq, count } from "drizzle-orm"
+import { eq, count, and, isNull } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 
 export async function GET(
@@ -90,16 +90,16 @@ export async function DELETE(
     // 1. Dependency Checks - Block deletion if critical data exists
 
     // Check for users assigned to this branch (ignore soft-deleted users)
-    const { isNull, and } = await import("drizzle-orm")
-    const [userCount] = await db.select({ val: count() }).from(users).where(
+    const [activeUserCount] = await db.select({ val: count() }).from(users).where(
       and(
         eq(users.branchId, branchId),
+        eq(users.isActive, true),
         isNull(users.deletedAt)
       )
     )
 
-    if (userCount.val > 0 && existing.status === 'active') {
-      return error(`Cannot delete: This branch is active and has ${userCount.val} user(s) assigned. Please deactivate the branch or remove users first.`, 400)
+    if (activeUserCount.val > 0) {
+      return error(`Cannot delete: This branch has ${activeUserCount.val} active user(s) assigned. Please remove or deactivate every active user before deleting the branch.`, 400)
     }
 
     // Check for orders

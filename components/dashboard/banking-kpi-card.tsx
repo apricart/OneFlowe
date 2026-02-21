@@ -1,5 +1,6 @@
 "use client"
 import { ArrowUpRight, ArrowDownRight } from "lucide-react"
+import { getValueFontSize } from "@/components/dashboard/charts"
 
 type BankingKPICardProps = {
     icon: any
@@ -56,7 +57,7 @@ export const BankingKPICard = ({
                 <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.1em]">
                     {title}
                 </p>
-                <p className="text-2xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+                <p className={`${getValueFontSize(value)} font-extrabold text-slate-900 dark:text-slate-100 tracking-tight break-words leading-tight`}>
                     {value}
                 </p>
                 {subtitle && (

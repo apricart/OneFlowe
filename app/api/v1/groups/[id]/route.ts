@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { groups, groupAuditLogs, branches } from "@/db/schema"
-import { eq, and, sql } from "drizzle-orm"
+import { eq, and, sql, count } from "drizzle-orm"
 
 export async function GET(
     req: NextRequest,
@@ -170,18 +170,23 @@ export async function DELETE(
             return NextResponse.json({ error: "Forbidden: You can only delete groups within your own organization" }, { status: 403 })
         }
 
-        // Soft delete: set status to 'deleted' and unlink branches
-        await db.transaction(async (tx) => {
-            // 1. Unlink branches
-            await tx.update(branches).set({ groupId: null }).where(eq(branches.groupId, groupId))
+        // Check for assigned branches
+        const [branchCount] = await db.select({ val: count() }).from(branches).where(eq(branches.groupId, groupId))
+        if (branchCount.val > 0) {
+            return NextResponse.json({
+                error: `Cannot delete: This group has ${branchCount.val} branch(es) assigned. Please remove all branches from the group first.`
+            }, { status: 400 })
+        }
 
-            // 2. Mark group as deleted
+        // Soft delete: set status to 'deleted'
+        await db.transaction(async (tx) => {
+            // 1. Mark group as deleted
             await tx.update(groups).set({
                 status: 'deleted',
                 updatedAt: new Date()
             }).where(eq(groups.id, groupId))
 
-            // 3. Log the deletion
+            // 2. Log the deletion
             await tx.insert(groupAuditLogs).values({
                 organizationId: existing.organizationId,
                 groupId: groupId,

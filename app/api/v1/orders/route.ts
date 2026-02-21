@@ -499,6 +499,15 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     console.error("Order creation error:", e)
     console.error("Error stack:", e.stack)
+
+    if (e.message && (
+      e.message.startsWith("Insufficient stock") ||
+      e.message.startsWith("Budget not configured") ||
+      e.message.includes("Insufficient budget")
+    )) {
+      return NextResponse.json({ error: e.message }, { status: 400 })
+    }
+
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
