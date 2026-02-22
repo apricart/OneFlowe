@@ -14,8 +14,10 @@ export function UniversalContextSelector() {
   const level = branchId ? "BRANCH" : organizationId ? "ORGANIZATION" : "GLOBAL"
   const { data: orgRes } = useOrganizations()
   const { data: branchRes } = useBranches(organizationId || undefined)
-  const orgs = orgRes?.items || []
-  const branches = (branchRes?.items || []).filter((b: any) => !organizationId || b.organizationId === organizationId)
+  const orgs = (orgRes?.items || []).filter((o: any) => o.status === "active")
+  const branches = (branchRes?.items || []).filter(
+    (b: any) => b.status === "active" && (!organizationId || b.organizationId === organizationId)
+  )
 
   const [pending, setPending] = useState<{ organizationId: string | null; branchId: string | null } | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)

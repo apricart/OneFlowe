@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { formatPKR } from "@/lib/utils"
 import { Search, Package, Sparkles, Plus, Edit, Trash2, Building2 } from "lucide-react"
 import { ProductForm } from "@/components/global-inventory/product-form"
+import { useToast } from "@/components/ui/use-toast"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -40,6 +41,8 @@ export default function GlobalInventoryView() {
     const [subCategoryFilter, setSubCategoryFilter] = useState("")
     const [dialogMode, setDialogMode] = useState<"create" | "edit" | "delete" | null>(null)
     const [selectedProduct, setSelectedProduct] = useState<GlobalInventoryItem | null>(null)
+    const [confirmAction, setConfirmAction] = useState<"delete" | "discontinue" | null>(null)
+    const { toast } = useToast()
 
     const params = new URLSearchParams()
     if (searchQuery) params.set("search", searchQuery)
@@ -84,12 +87,25 @@ export default function GlobalInventoryView() {
                 mutate()
                 setDialogMode(null)
                 setSelectedProduct(null)
+                setConfirmAction(null)
+                toast({
+                    title: "Success",
+                    description: `Product ${mode === "delete" ? "deleted" : "discontinued"} successfully.`
+                })
             } else {
                 const data = await res.json()
-                alert(data.error || "Failed to process request")
+                toast({
+                    title: "Error",
+                    description: data.error || "Failed to process request",
+                    variant: "destructive"
+                })
             }
         } catch (error) {
-            alert("Failed to process request")
+            toast({
+                title: "Error",
+                description: "Failed to process request",
+                variant: "destructive"
+            })
         }
     }
 
@@ -329,32 +345,55 @@ export default function GlobalInventoryView() {
                 if (!open) {
                     setDialogMode(null)
                     setSelectedProduct(null)
+                    setConfirmAction(null)
                 }
             }}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Remove Product</DialogTitle>
                     </DialogHeader>
-                    <div className="py-4 space-y-4">
-                        <p className="text-sm text-muted-foreground">
-                            How would you like to remove <strong>{selectedProduct?.name}</strong>?
-                        </p>
-                        <div className="space-y-2">
-                            <div className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => handleDelete("discontinue")}>
-                                <p className="text-sm font-medium">Discontinue</p>
-                                <p className="text-xs text-muted-foreground">Product remains in the list but marked as discontinued. No one can order it.</p>
-                            </div>
-                            <div className="p-3 border rounded-lg border-destructive/20 hover:bg-destructive/5 cursor-pointer transition-colors" onClick={() => handleDelete("delete")}>
-                                <p className="text-sm font-medium text-destructive">Permanently Delete</p>
-                                <p className="text-xs text-muted-foreground">Remove from the catalog entirely. This action cannot be undone.</p>
+                    {confirmAction ? (
+                        <div className="py-4 space-y-4">
+                            <p className="text-sm">
+                                Are you sure you want to <strong>{confirmAction === "delete" ? "permanently delete" : "discontinue"}</strong>{" "}
+                                {selectedProduct?.name}?
+                            </p>
+                            <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={() => setConfirmAction(null)}>
+                                    Back
+                                </Button>
+                                <Button
+                                    variant={confirmAction === "delete" ? "destructive" : "default"}
+                                    onClick={() => handleDelete(confirmAction)}
+                                >
+                                    Confirm {confirmAction === "delete" ? "Delete" : "Discontinue"}
+                                </Button>
                             </div>
                         </div>
-                    </div>
-                    <div className="flex justify-end">
-                        <Button variant="outline" onClick={() => setDialogMode(null)}>
-                            Cancel
-                        </Button>
-                    </div>
+                    ) : (
+                        <>
+                            <div className="py-4 space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                    How would you like to remove <strong>{selectedProduct?.name}</strong>?
+                                </p>
+                                <div className="space-y-2">
+                                    <div className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => setConfirmAction("discontinue")}>
+                                        <p className="text-sm font-medium">Discontinue</p>
+                                        <p className="text-xs text-muted-foreground">Product remains in the list but marked as discontinued. No one can order it.</p>
+                                    </div>
+                                    <div className="p-3 border rounded-lg border-destructive/20 hover:bg-destructive/5 cursor-pointer transition-colors" onClick={() => setConfirmAction("delete")}>
+                                        <p className="text-sm font-medium text-destructive">Permanently Delete</p>
+                                        <p className="text-xs text-muted-foreground">Remove from the catalog entirely. This action cannot be undone.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex justify-end">
+                                <Button variant="outline" onClick={() => setDialogMode(null)}>
+                                    Cancel
+                                </Button>
+                            </div>
+                        </>
+                    )}
                 </DialogContent>
             </Dialog>
         </div>

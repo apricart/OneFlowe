@@ -590,8 +590,6 @@ export async function PUT(req: NextRequest) {
       id,
       isVisible,
       isActive,
-      stockQuantity,
-      reorderThreshold,
       organizationId: bodyOrgId
     } = body
 
@@ -614,8 +612,6 @@ export async function PUT(req: NextRequest) {
 
     if (isVisible !== undefined) updateData.isVisible = isVisible
     if (isActive !== undefined) updateData.isActive = isActive
-    if (stockQuantity !== undefined) updateData.stockQuantity = stockQuantity
-    if (reorderThreshold !== undefined) updateData.reorderThreshold = reorderThreshold
 
     const [updatedAssignment] = await db.update(branchInventory)
       .set(updateData)

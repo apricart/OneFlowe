@@ -50,7 +50,7 @@ export const authOptions: NextAuthOptions = {
             .limit(1)
 
           if (!org || org.status?.toLowerCase() !== 'active') {
-            throw new Error('Organization has been de-activated by the Admin.')
+            throw new Error('ORGANIZATION_INACTIVE')
           }
         }
 
@@ -63,7 +63,7 @@ export const authOptions: NextAuthOptions = {
             .limit(1)
 
           if (!branch || branch.status?.toLowerCase() !== 'active') {
-            throw new Error('Branch has been de-activated by the Admin.')
+            throw new Error('BRANCH_INACTIVE')
           }
         }
 
@@ -140,7 +140,7 @@ export const authOptions: NextAuthOptions = {
             .limit(1)
 
           if (!org || org.status?.toLowerCase() !== 'active') {
-            throw new Error('Organization has been de-activated by the Admin.')
+            throw new Error('ORGANIZATION_INACTIVE')
           }
         }
 
@@ -153,7 +153,7 @@ export const authOptions: NextAuthOptions = {
             .limit(1)
 
           if (!branch || branch.status?.toLowerCase() !== 'active') {
-            throw new Error('Branch has been de-activated by the Admin.')
+            throw new Error('BRANCH_INACTIVE')
           }
         }
 
@@ -226,7 +226,7 @@ export const authOptions: NextAuthOptions = {
             .limit(1)
 
           if (!org || org.status?.toLowerCase() !== 'active') {
-            throw new Error('Organization has been de-activated by the Admin.')
+            throw new Error('ORGANIZATION_INACTIVE')
           }
         }
 
@@ -239,7 +239,7 @@ export const authOptions: NextAuthOptions = {
             .limit(1)
 
           if (!branch || branch.status?.toLowerCase() !== 'active') {
-            throw new Error('Branch has been de-activated by the Admin.')
+            throw new Error('BRANCH_INACTIVE')
           }
         }
 
@@ -303,7 +303,7 @@ export const authOptions: NextAuthOptions = {
             .limit(1)
 
           if (!org || org.status?.toLowerCase() !== 'active') {
-            throw new Error('Organization has been de-activated by the Admin.')
+            throw new Error('ORGANIZATION_INACTIVE')
           }
         }
 
@@ -316,7 +316,7 @@ export const authOptions: NextAuthOptions = {
             .limit(1)
 
           if (!branch || branch.status?.toLowerCase() !== 'active') {
-            throw new Error('Branch has been de-activated by the Admin.')
+            throw new Error('BRANCH_INACTIVE')
           }
         }
 

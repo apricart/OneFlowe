@@ -195,8 +195,8 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
         alert("Passwords do not match")
         return
       }
-      if (editForm.password.length < 6) {
-        alert("Password must be at least 6 characters")
+      if (editForm.password.length < 12) {
+        alert("Password must be at least 12 characters")
         return
       }
     }
@@ -762,7 +762,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                         type={showPassword ? "text" : "password"}
                         value={editForm.password}
                         onChange={e => setEditForm({ ...editForm, password: e.target.value })}
-                        placeholder="Enter new password (min. 6 characters)"
+                        placeholder="Enter new password (min. 12 characters)"
                         className="pr-10"
                       />
                       <Button

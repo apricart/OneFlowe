@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { globalProducts, categories, organizationInventory, organizations, auditLogs } from "@/db/schema"
-import { eq, and, like, or, desc, sql, inArray, isNull, ne, type SQL } from "drizzle-orm"
+import { eq, and, like, ilike, or, desc, sql, inArray, isNull, ne, type SQL } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { cascadeGlobalProductDeletion, cascadeGlobalProductStatusChange, cascadeGlobalProductFieldUpdate } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
@@ -99,9 +99,9 @@ export async function GET(req: NextRequest) {
     ]
     if (search) {
       const searchCondition = or(
-        like(globalProducts.name, `%${search}%`),
-        like(globalProducts.productCode, `%${search}%`),
-        like(globalProducts.description, `%${search}%`)
+        ilike(globalProducts.name, `%${search}%`),
+        ilike(globalProducts.productCode, `%${search}%`),
+        ilike(globalProducts.description, `%${search}%`)
       )
       if (searchCondition) {
         conditions.push(searchCondition)

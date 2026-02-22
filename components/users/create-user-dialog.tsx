@@ -413,7 +413,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                             return next
                           })
                         } else if (val.length > 0) {
-                          setErrors(prev => ({ ...prev, password: "Password must be at least 6 characters" }))
+                          setErrors(prev => ({ ...prev, password: "Password must be at least 12 characters" }))
                         }
                       }}
                       placeholder="Enter password (min 12 chars, mixed case, symbols)"

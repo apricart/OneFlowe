@@ -47,6 +47,13 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
 
     if (!session) {
       setIsInitialized(true)
+      if (typeof window !== "undefined") {
+        const path = window.location.pathname
+        if (!path.includes("/login") && !path.includes("/auth/")) {
+          const loginPath = path.startsWith("/shop") ? "/shop/login" : "/login"
+          window.location.replace(loginPath)
+        }
+      }
       return
     }
 

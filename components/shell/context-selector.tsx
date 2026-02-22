@@ -38,8 +38,8 @@ export function ContextSelector() {
     fetcher
   )
 
-  const organizations = orgsData?.items || []
-  const branches = branchesData?.items || []
+  const organizations = (orgsData?.items || []).filter((org: any) => org.status === "active")
+  const branches = (branchesData?.items || []).filter((branch: any) => branch.status === "active")
 
   // Don't render until initialized
   if (!isInitialized) return null

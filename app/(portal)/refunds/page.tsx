@@ -21,6 +21,7 @@ type OrderItem = {
     priceCents: number
     unit: string
     refundedQuantity?: number // Added by API
+    requestedQuantity?: number // Added by API
     remainingQuantity?: number // Added by API
 }
 
@@ -78,7 +79,24 @@ export default function RefundsPage() {
                 return
             }
 
-            setOrder(data.order)
+            const order = data.order
+            setOrder(order)
+
+            // Auto-select pending items
+            const newSelectedItems = new Map<number, number>()
+            order.items.forEach((item: any) => {
+                const requested = item.requestedQuantity || 0
+                if (requested > 0) {
+                    const remaining = item.remainingQuantity ?? Math.max(0, item.quantity - (item.refundedQuantity || 0))
+                    const refundable = Math.min(requested, remaining)
+                    if (refundable > 0) {
+                        newSelectedItems.set(item.id, refundable)
+                    }
+                }
+            })
+            if (newSelectedItems.size > 0) {
+                setSelectedItems(newSelectedItems)
+            }
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Failed to search order"
             setError(message)
@@ -545,6 +563,11 @@ export default function RefundsPage() {
                                                     <TableCell className="font-medium">
                                                         <div>
                                                             {item.productName}
+                                                            {(item.requestedQuantity || 0) > 0 && (
+                                                                <span className="text-xs text-blue-600 font-semibold block mt-1">
+                                                                    ({item.requestedQuantity} requested for refund)
+                                                                </span>
+                                                            )}
                                                             {refundedQty > 0 && (
                                                                 <span className="text-xs text-amber-600 block mt-1">
                                                                     ({refundedQty} already refunded)

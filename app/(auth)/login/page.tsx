@@ -56,10 +56,10 @@ function LoginForm() {
           throw new Error("Invalid credentials. Please check your email and password.")
         }
         if (result.error === "ORGANIZATION_INACTIVE") {
-          throw new Error("Your organization is currently inactive. Please contact support.")
+          throw new Error("Company has been de-activated by the Admin.")
         }
         if (result.error === "BRANCH_INACTIVE") {
-          throw new Error("Your branch is currently inactive. Please contact your administrator.")
+          throw new Error("Branch has been de-activated by the Admin.")
         }
         if (result.error === "USER_INACTIVE") {
           throw new Error("Your account has been deactivated. Please contact support.")

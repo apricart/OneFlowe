@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
                 ...item,
                 refundedQuantity: approved, // Represents approved/completed refunds
                 requestedQuantity: pending, // Represents pending refunds
-                remainingQuantity: item.quantity - (approved + pending)
+                remainingQuantity: item.quantity - approved
             }
         })
 
@@ -397,12 +397,12 @@ export async function POST(req: NextRequest) {
 
             const approvedQty = approvedQuantityMap.get(refundItem.itemId) || 0
             const pendingQty = pendingQuantityMap.get(refundItem.itemId) || 0
-            const remainingQty = orderItem.quantity - (approvedQty + pendingQty)
+            const remainingQty = orderItem.quantity - approvedQty
 
             // Validate quantity doesn't exceed remaining amount
             if (refundItem.quantity > remainingQty) {
                 return NextResponse.json({
-                    error: `Refund quantity (${refundItem.quantity}) exceeds remaining quantity (${remainingQty}) for item: ${orderItem.productName} (Approved: ${approvedQty}, Pending: ${pendingQty})`
+                    error: `Refund quantity (${refundItem.quantity}) exceeds remaining quantity (${remainingQty}) for item: ${orderItem.productName} (Approved: ${approvedQty})`
                 }, { status: 400 })
             }
 
@@ -432,11 +432,11 @@ export async function POST(req: NextRequest) {
             .where(and(eq(refunds.orderId, orderId), eq(refunds.status, "PENDING")))
             .then(res => res.reduce((sum, r) => sum + (r.amount || 0), 0))
 
-        const remainingRefundable = orderTotal - (approvedTotal + pendingTotal)
+        const remainingRefundable = orderTotal - approvedTotal
 
         if (totalRefundAmount > remainingRefundable) {
             return NextResponse.json({
-                error: `Total refund amount (PKR ${(totalRefundAmount / 100).toFixed(2)}) exceeds remaining capacity (Total: ${(orderTotal / 100).toFixed(2)}, Approved: ${(approvedTotal / 100).toFixed(2)}, Pending: ${(pendingTotal / 100).toFixed(2)}).`
+                error: `Total refund amount (PKR ${(totalRefundAmount / 100).toFixed(2)}) exceeds remaining capacity (Total: ${(orderTotal / 100).toFixed(2)}, Approved: ${(approvedTotal / 100).toFixed(2)}).`
             }, { status: 400 })
         }
 
@@ -554,11 +554,11 @@ export async function POST(req: NextRequest) {
                 )
             }
 
-            // 6. CLEAR PENDING REQUESTS: Mark any existing pending refunds for this order as APPROVED
+            // 6. CLEAR PENDING REQUESTS: Mark any existing pending refunds for this order as REPLACED
             // This ensures that 'hasRefundRequests' in order list becomes 0 and the "REQUESTED" badge disappears.
             await tx.update(refunds)
                 .set({
-                    status: "APPROVED",
+                    status: "REPLACED",
                     processedByUserId: userId,
                     updatedAt: new Date()
                 })

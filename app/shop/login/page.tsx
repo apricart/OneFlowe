@@ -49,6 +49,19 @@ export default function ShopLoginPage() {
           return
         }
 
+        if (result.error === "ORGANIZATION_INACTIVE") {
+          setIsLoading(false)
+          return toast({ title: "Login failed", description: "Company has been de-activated by the Admin.", variant: "destructive" })
+        }
+        if (result.error === "BRANCH_INACTIVE") {
+          setIsLoading(false)
+          return toast({ title: "Login failed", description: "Branch has been de-activated by the Admin.", variant: "destructive" })
+        }
+        if (result.error === "USER_INACTIVE") {
+          setIsLoading(false)
+          return toast({ title: "Login failed", description: "Your account has been deactivated.", variant: "destructive" })
+        }
+
         // 2. Fallback to Employee Login (Legacy System)
         // Only try fallback if standard login failed with specific credential error, 
         // essentially treating the first failure as "user not found in users table"
@@ -64,6 +77,12 @@ export default function ShopLoginPage() {
           if (result.error.includes("MFA")) { // Employee MFA error text might differ, auth-options throws "MFA_REQUIRED"
             setProviderType("employee")
             setStep("mfa")
+          } else if (result.error === "ORGANIZATION_INACTIVE") {
+            toast({ title: "Login failed", description: "Company has been de-activated by the Admin.", variant: "destructive" })
+          } else if (result.error === "BRANCH_INACTIVE") {
+            toast({ title: "Login failed", description: "Branch has been de-activated by the Admin.", variant: "destructive" })
+          } else if (result.error === "USER_INACTIVE") {
+            toast({ title: "Login failed", description: "Your account has been deactivated.", variant: "destructive" })
           } else {
             // Both failed
             toast({ title: "Login failed", description: "Invalid email or password", variant: "destructive" })

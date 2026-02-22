@@ -598,6 +598,12 @@ function OrganizationListItem({
       onClick={onClick}
       suppressHydrationWarning
       onKeyDown={(event) => {
+        if (
+          event.target instanceof HTMLElement &&
+          (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA" || event.target.tagName === "BUTTON")
+        ) {
+          return
+        }
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault()
           onClick()

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { branchInventory, globalProducts, organizationInventory, categories, auditLogs } from "@/db/schema"
-import { eq, and, like, or, desc, sql, isNull, SQL } from "drizzle-orm"
+import { eq, and, like, ilike, or, desc, sql, isNull, SQL } from "drizzle-orm"
 import { getEffectiveProductData } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
@@ -86,9 +86,9 @@ export async function GET(req: NextRequest) {
     if (search) {
       conditions.push(
         or(
-          like(globalProducts.name, `%${search}%`),
-          like(globalProducts.productCode, `%${search}%`),
-          like(organizationInventory.customName, `%${search}%`)
+          ilike(globalProducts.name, `%${search}%`),
+          ilike(globalProducts.productCode, `%${search}%`),
+          ilike(organizationInventory.customName, `%${search}%`)
         )
       )
     }
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
           isVisible: branchInventory.isVisible,
           isActive: branchInventory.isActive,
           stockQuantity: globalProducts.stockQuantity,
-          reorderThreshold: sql<number>`0`,
+          reorderThreshold: sql<number>`10`,
           assignedAt: branchInventory.assignedAt,
           updatedAt: branchInventory.updatedAt,
           productName: globalProducts.name,
