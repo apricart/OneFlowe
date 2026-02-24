@@ -122,7 +122,7 @@ async function GET(req: NextRequest) {
 async function PUT(req: NextRequest) {
   try {
     const body = await readJson(req)
-    const { id, isActive, firstName, lastName } = body
+    const { id, isActive, firstName, lastName, password, email } = body
 
     if (!id) {
       return error("ID required", 400)
@@ -164,14 +164,43 @@ async function PUT(req: NextRequest) {
     if (firstName !== undefined) updates.firstName = firstName
     if (lastName !== undefined) updates.lastName = lastName
 
-    const nextVersion = (cred.sessionVersion || 0) + 1
+    // Handle email update
+    if (email && email !== cred.email) {
+      // Check if email already exists
+      const existing = await db
+        .select()
+        .from(employeeCredentials)
+        .where(eq(employeeCredentials.email, email))
+        .limit(1)
+      if (existing.length > 0) {
+        return error("Email already in use", 400)
+      }
+      updates.email = email
+    }
+
+    // Handle password update
+    if (password) {
+      // Validate password complexity
+      if (password.length < 12) {
+        return error("Password must be at least 12 characters", 400)
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password) || !/[^a-zA-Z0-9]/.test(password)) {
+        return error("Password must include uppercase, lowercase, number, and special character", 400)
+      }
+      updates.passwordHash = await hash(password, 10)
+    }
+
+    // Always increment session version to force re-auth if password or email changed
+    const securityChange = !!(password || (email && email !== cred.email))
+    const nextVersion = (cred.sessionVersion || 0) + (securityChange ? 1 : 1)
+
     const [updated] = await db
       .update(employeeCredentials)
       .set({ ...updates, sessionVersion: nextVersion })
       .where(eq(employeeCredentials.id, credId))
       .returning()
 
-    return ok({ credential: updated }, { status: 200 })
+    return ok({ credential: updated, sessionInvalidated: securityChange }, { status: 200 })
   } catch (err: any) {
     console.error("PUT /employee-credentials error:", err)
     return error("Internal Server Error", 500)

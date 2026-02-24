@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, branches, users, groups, categories, globalProducts } from "@/db/schema"
+import { orders, orderItems, branches, users, groups, categories, globalProducts, organizations } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
@@ -135,6 +135,7 @@ export async function GET(req: NextRequest) {
                     userEmail: users.email,
                     employeeId: users.id,
                     groupName: groups.name,
+                    organizationName: organizations.name,
                     productName: orderItems.productName,
                     productCode: orderItems.productCode,
                     categoryName: sql<string>`COALESCE((SELECT c2.name FROM categories c2 WHERE c2.id = ${categories.parentId}), ${categories.name})`,
@@ -150,6 +151,7 @@ export async function GET(req: NextRequest) {
                 .innerJoin(orders, eq(orderItems.orderId, orders.id))
                 .innerJoin(branches, eq(orders.branchId, branches.id))
                 .innerJoin(users, eq(orders.createdByUserId, users.id))
+                .leftJoin(organizations, eq(orders.organizationId, organizations.id))
                 .leftJoin(groups, eq(branches.groupId, groups.id))
                 .leftJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
                 .leftJoin(categories, eq(globalProducts.categoryId, categories.id))

@@ -558,7 +558,8 @@ export const globalProducts = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => ({
-    codeIdx: uniqueIndex("global_products_code_idx").on(t.productCode),
+    // Partial unique index enforced via SQL migration (allows reuse of codes from soft-deleted products)
+    codeIdx: index("global_products_code_idx").on(t.productCode),
     nameIdx: index("global_products_name_idx").on(t.name),
     categoryIdx: index("global_products_category_idx").on(t.categoryId),
     statusIdx: index("global_products_status_idx").on(t.status),

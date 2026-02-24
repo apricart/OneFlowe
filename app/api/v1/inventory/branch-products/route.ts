@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { branchProducts, globalProducts, organizationProducts, auditLogs } from "@/db/schema"
+import { branchProducts, globalProducts, organizationProducts, auditLogs, categories } from "@/db/schema"
 import { eq, and, sql } from "drizzle-orm"
 
 // GET /api/v1/inventory/branch-products - Get products for branch
@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
         name: globalProducts.name,
         description: globalProducts.description,
         categoryId: globalProducts.categoryId,
+        categoryName: categories.name,
         imageUrl: globalProducts.imageUrl,
         basePrice: globalProducts.basePrice,
         unit: globalProducts.unit,
@@ -61,6 +62,7 @@ export async function GET(req: NextRequest) {
         customNotes: branchProducts.customNotes
       })
       .from(globalProducts)
+      .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
       .innerJoin(
         organizationProducts,
         and(

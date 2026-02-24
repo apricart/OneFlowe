@@ -41,7 +41,7 @@ export function OrderExport({ orders, role }: OrderExportProps) {
             "Status": order.status?.toUpperCase() || "-",
             "Refund Status": refundStatus,
             "Amount (PKR)": (order.totalCents / 100).toFixed(2),
-            "Items Count": order.itemCount || "-",
+            "Items": order.itemNames || "-",
         }
 
         // Add Org for Super Admin
@@ -55,7 +55,7 @@ export function OrderExport({ orders, role }: OrderExportProps) {
                 "Refund Status": data["Refund Status"],
                 "Amount (PKR)": data["Amount (PKR)"],
                 "Date": data.Date,
-                "Items Count": data["Items Count"],
+                "Items": data["Items"],
                 "Rejection Reason": order.rejectionReason || "-",
             }
         }
@@ -128,7 +128,7 @@ export function OrderExport({ orders, role }: OrderExportProps) {
                     order.status?.toUpperCase() || "-",
                     refundStatus,
                     formatPKR(order.totalCents / 100),
-                    order.itemCount || "-",
+                    order.itemNames || "-",
                     order.rejectionReason || "-"
                 ]
                 if (isSuperAdmin) row.splice(2, 0, order.organizationName || "-")

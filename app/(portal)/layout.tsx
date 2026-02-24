@@ -5,20 +5,23 @@ import { PreloadData } from "@/components/preload-data"
 import { AppContextProvider } from "@/components/context/app-context"
 import { OrgBranchProvider } from "@/components/context/org-branch-context"
 import { Toaster } from "@/components/ui/toaster"
+import { SessionGuard } from "@/components/shell/session-guard"
 
 export default function PortalLayout({ children }: { children: ReactNode }) {
   return (
     <AppContextProvider>
       <OrgBranchProvider>
-        <div className="min-h-svh w-full flex bg-background dark:bg-slate-950">
-          <PreloadData />
-          <Sidebar />
-          <div className="flex-1 grid grid-rows-[auto_1fr] bg-background dark:bg-slate-950">
-            <Topbar />
-            <main className="p-4 bg-background dark:bg-slate-950">{children}</main>
+        <SessionGuard>
+          <div className="min-h-svh w-full flex bg-background dark:bg-slate-950">
+            <PreloadData />
+            <Sidebar />
+            <div className="flex-1 grid grid-rows-[auto_1fr] bg-background dark:bg-slate-950">
+              <Topbar />
+              <main className="p-4 bg-background dark:bg-slate-950">{children}</main>
+            </div>
           </div>
-        </div>
-        <Toaster />
+          <Toaster />
+        </SessionGuard>
       </OrgBranchProvider>
     </AppContextProvider>
   )

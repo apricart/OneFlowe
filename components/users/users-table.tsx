@@ -133,6 +133,14 @@ export function UsersTable() {
           })
           return
         }
+        if (!/[A-Z]/.test(editForm.password) || !/[a-z]/.test(editForm.password) || !/\d/.test(editForm.password) || !/[^a-zA-Z0-9]/.test(editForm.password)) {
+          toast({
+            title: "Error",
+            description: "Password must include uppercase, lowercase, number, and special character",
+            variant: "destructive",
+          })
+          return
+        }
         body.password = editForm.password
       }
 
@@ -201,7 +209,7 @@ export function UsersTable() {
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-2">
-        <Input placeholder="Search by name or email" value={filter} onChange={(e) => setFilter(e.target.value)} className="max-w-xs" />
+        <Input placeholder="Search by name or email" value={filter} onChange={(e) => setFilter(e.target.value)} className="max-w-xs" autoComplete="off" />
         {isLoading && <span className="inline-flex items-center gap-2 text-sm text-muted-foreground"><Spinner size={14} /> Loading…</span>}
       </div>
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-sm text-muted-foreground">
@@ -307,6 +315,7 @@ export function UsersTable() {
                 type="email"
                 value={editForm.email}
                 onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">
@@ -390,7 +399,8 @@ export function UsersTable() {
                       type="password"
                       value={editForm.password}
                       onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
-                      placeholder="Enter new password (min. 12 characters)"
+                      placeholder="Enter password (min 12 chars, mixed case, symbols)"
+                      autoComplete="new-password"
                     />
                   </div>
                   <div className="space-y-2">
@@ -401,6 +411,7 @@ export function UsersTable() {
                       value={editForm.confirmPassword}
                       onChange={(e) => setEditForm({ ...editForm, confirmPassword: e.target.value })}
                       placeholder="Confirm new password"
+                      autoComplete="new-password"
                     />
                     {editForm.password && editForm.confirmPassword && editForm.password !== editForm.confirmPassword && (
                       <p className="text-sm text-red-600">Passwords do not match</p>
@@ -414,7 +425,14 @@ export function UsersTable() {
             <Button variant="outline" onClick={closeEditDialog}>Cancel</Button>
             <Button
               onClick={saveEdit}
-              disabled={!!(showPasswordReset && editForm.password && editForm.password !== editForm.confirmPassword)}
+              disabled={!!(showPasswordReset && editForm.password && (
+                editForm.password !== editForm.confirmPassword ||
+                editForm.password.length < 12 ||
+                !/[A-Z]/.test(editForm.password) ||
+                !/[a-z]/.test(editForm.password) ||
+                !/\d/.test(editForm.password) ||
+                !/[^a-zA-Z0-9]/.test(editForm.password)
+              ))}
             >
               Save Changes
             </Button>

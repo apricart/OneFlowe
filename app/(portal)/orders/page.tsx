@@ -54,6 +54,7 @@ interface OrderItem {
   createdByUserId: string
   hasRefundRequests?: number
   rejectionReason?: string | null
+  itemNames?: string | null
 }
 
 export default function OrdersManagementPage() {
@@ -475,6 +476,7 @@ export default function OrdersManagementPage() {
                   <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Status</th>
                   <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Refund</th>
                   <th className="px-2 py-2 text-right text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Amount</th>
+                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Items</th>
                   <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Date</th>
                   <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Actions</th>
                 </tr>
@@ -570,6 +572,11 @@ export default function OrdersManagementPage() {
                       <td className="px-2 py-2 text-right bg-white dark:bg-slate-900">
                         <p className="text-xs font-bold text-slate-900 dark:text-white">
                           {formatPKR(order.totalCents / 100)}
+                        </p>
+                      </td>
+                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
+                        <p className="text-[10px] text-slate-700 dark:text-slate-300 max-w-[180px] line-clamp-2" title={order.itemNames || '-'}>
+                          {order.itemNames || '-'}
                         </p>
                       </td>
                       <td className="px-2 py-2 text-[10px] text-muted-foreground bg-white dark:bg-slate-900">

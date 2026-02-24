@@ -222,7 +222,9 @@ export default function BudgetsPage() {
 
   const getSpendingPercentage = (budget: BudgetAllocation) => {
     const total = budget.amountAllocatedCents || 1
-    return ((budget.amountSpentCents + budget.amountHeldCents) / total) * 100
+    // Net spend = Spent + Held - Credited
+    const netSpend = (budget.amountSpentCents + budget.amountHeldCents) - (budget.amountCreditedCents || 0)
+    return (netSpend / total) * 100
   }
 
   const getStatusColor = (percentage: number) => {

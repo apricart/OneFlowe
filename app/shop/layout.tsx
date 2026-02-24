@@ -1,4 +1,5 @@
 import { AppContextProvider } from "@/components/context/app-context"
+import { SessionGuard } from "@/components/shell/session-guard"
 
 export const metadata = {
   title: "Order Portal - Apricart OneFlowe",
@@ -17,7 +18,9 @@ export default function ShopLayout({
 }) {
   return (
     <AppContextProvider>
-      {children}
+      <SessionGuard>
+        {children}
+      </SessionGuard>
     </AppContextProvider>
   )
 }

@@ -180,6 +180,11 @@ export async function GET(req: NextRequest) {
           FROM ${orderItems}
           WHERE ${orderItems.orderId} = ${orders.id}
         )`,
+        itemNames: sql<string>`(
+          SELECT STRING_AGG(${orderItems.productName}, ', ')
+          FROM ${orderItems}
+          WHERE ${orderItems.orderId} = ${orders.id}
+        )`,
         approvedByUserId: orders.approvedByUserId,
         approvalToken: orders.approvalToken, // Will be filtered before return
       })
@@ -221,14 +226,22 @@ export async function GET(req: NextRequest) {
               FROM ${refundItems}
               JOIN ${refunds} ON ${refundItems.refundId} = ${refunds.id}
               WHERE ${refundItems.orderItemId} = ${orderItems.id}
-              AND UPPER(${refunds.status}) = 'APPROVED'
+              AND UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED')
             ), 0)`.mapWith(Number),
           })
           .from(orderItems)
           .leftJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
           .where(eq(orderItems.orderId, orderId))
 
-        return NextResponse.json({ items: [{ ...order, orderItems: itemsData }] })
+        // Calculate total refund amount from APPROVED refund records
+        const approvedRefunds = await db
+          .select({ amount: refunds.amountCents })
+          .from(refunds)
+          .where(and(eq(refunds.orderId, orderId), sql`UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED')`))
+
+        const totalApprovedAmount = approvedRefunds.reduce((sum, r) => sum + (r.amountCents || 0), 0)
+
+        return NextResponse.json({ items: [{ ...order, orderItems: itemsData, refundAmountCents: totalApprovedAmount }] })
       }
     }
 

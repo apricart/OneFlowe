@@ -49,14 +49,16 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
   const response = NextResponse.next()
 
-  const needsAuth = protectedPrefixes.some((p) => pathname.startsWith(p))
+  const isPublicPath = ["/login", "/shop/login"].includes(pathname)
+  const needsAuth = protectedPrefixes.some((p) => pathname.startsWith(p)) && !isPublicPath
+
   if (!needsAuth) return withSecurityHeaders(response, pathname)
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token) {
     logger("middleware", { reason: "no_session", path: pathname })
     const loginPath = pathname.startsWith("/shop") ? "/shop/login" : "/login"
-    const url = new URL(loginPath, req.url)
+    const url = new URL(loginPath, req.url || "http://localhost")
     const redirectRes = NextResponse.redirect(url)
     return withSecurityHeaders(redirectRes, pathname)
   }
@@ -66,14 +68,14 @@ export async function middleware(req: NextRequest) {
   // Role-based routing enforcement
   // 1. ORDER_PORTAL users can ONLY access /shop
   if (role === "ORDER_PORTAL" && !pathname.startsWith("/shop")) {
-    const url = new URL("/shop", req.url)
+    const url = new URL("/shop", req.url || "http://localhost")
     const redirectRes = NextResponse.redirect(url)
     return withSecurityHeaders(redirectRes, pathname)
   }
 
   // 2. Admin users cannot access /shop — strict separation
   if (role && ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"].includes(role) && pathname.startsWith("/shop")) {
-    const url = new URL("/dashboard", req.url)
+    const url = new URL("/dashboard", req.url || "http://localhost")
     const redirectRes = NextResponse.redirect(url)
     return withSecurityHeaders(redirectRes, pathname)
   }
@@ -81,21 +83,21 @@ export async function middleware(req: NextRequest) {
   // Enforce SUPER_ADMIN for admin sections
   if (pathname.startsWith("/organizations") && role !== "SUPER_ADMIN") {
     logger("middleware", { reason: "insufficient_role", path: pathname, role })
-    const url = new URL("/login", req.url)
+    const url = new URL("/login", req.url || "http://localhost")
     const redirectRes = NextResponse.redirect(url)
     return withSecurityHeaders(redirectRes, pathname)
   }
   // Users route - accessible by SUPER_ADMIN and HEAD_OFFICE
   if (pathname.startsWith("/users") && !["SUPER_ADMIN", "HEAD_OFFICE"].includes(role || "")) {
     logger("middleware", { reason: "insufficient_role", path: pathname, role })
-    const url = new URL("/login", req.url)
+    const url = new URL("/login", req.url || "http://localhost")
     const redirectRes = NextResponse.redirect(url)
     return withSecurityHeaders(redirectRes, pathname)
   }
   // Head Office only routes  
   if (pathname.startsWith("/branches") && role !== "HEAD_OFFICE") {
     logger("middleware", { reason: "insufficient_role", path: pathname, role })
-    const url = new URL("/login", req.url)
+    const url = new URL("/login", req.url || "http://localhost")
     const redirectRes = NextResponse.redirect(url)
     return withSecurityHeaders(redirectRes, pathname)
   }

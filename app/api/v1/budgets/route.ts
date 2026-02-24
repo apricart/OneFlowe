@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
           amountSpentCents: b.amountSpentCents || 0,
           amountHeldCents: b.amountHeldCents || 0,
           amountCreditedCents: b.amountCreditedCents || 0,
-          remainingCents: ((b.amountAllocatedCents || 0)) - ((b.amountSpentCents || 0) + (b.amountHeldCents || 0)),
+          remainingCents: ((b.amountAllocatedCents || 0) + (b.amountCreditedCents || 0)) - ((b.amountSpentCents || 0) + (b.amountHeldCents || 0)),
         }))
 
         return NextResponse.json({ budgets: budgetsWithRemaining })
@@ -142,7 +142,7 @@ export async function GET(req: NextRequest) {
       }, { status: 404 })
     }
 
-    const remainingCents = (b.amountAllocatedCents) - (b.amountSpentCents + b.amountHeldCents)
+    const remainingCents = (b.amountAllocatedCents + b.amountCreditedCents) - (b.amountSpentCents + b.amountHeldCents)
 
     return NextResponse.json({
       branchId,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { organizationInventory, globalProducts, organizations, auditLogs } from "@/db/schema"
+import { organizationInventory, globalProducts, organizations, auditLogs, categories } from "@/db/schema"
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm"
 import { cascadeOrgDeletion, cascadeOrgStatusChange } from "@/lib/inventory-cascade"
 import { validateAssignmentData } from "@/lib/inventory-validation"
@@ -27,7 +27,10 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
 
-    const conditions = [isNull(organizationInventory.deletedAt)]
+    const conditions = [
+      isNull(organizationInventory.deletedAt),
+      isNull(globalProducts.deletedAt)
+    ]
     if (organizationId) {
       conditions.push(eq(organizationInventory.organizationId, parseInt(organizationId)))
     }
@@ -50,12 +53,14 @@ export async function GET(req: NextRequest) {
         assignedAt: organizationInventory.assignedAt,
         productName: globalProducts.name,
         productCode: globalProducts.productCode,
+        categoryName: categories.name,
         productImageUrl: globalProducts.imageUrl,
         globalStatus: globalProducts.status,
         organizationName: organizations.name,
       })
         .from(organizationInventory)
         .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
         .leftJoin(organizations, eq(organizationInventory.organizationId, organizations.id))
         .where(whereClause)
         .orderBy(desc(organizationInventory.assignedAt))
@@ -64,6 +69,7 @@ export async function GET(req: NextRequest) {
 
       db.select({ count: sql<number>`count(*)` })
         .from(organizationInventory)
+        .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
         .where(whereClause),
     ])
 
@@ -136,7 +142,7 @@ export async function POST(req: NextRequest) {
     if (!validation.valid) {
       console.log("Validation failed:", validation.errors)
       return NextResponse.json({
-        error: "Validation failed",
+        error: validation.errors[0] || "Validation failed",
         details: validation.errors
       }, { status: 400 })
     }

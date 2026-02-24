@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { organizationInventory, globalProducts, categories, auditLogs } from "@/db/schema"
-import { eq, and, like, ilike, or, desc, sql, isNull, SQL, ne } from "drizzle-orm"
+import { eq, and, like, ilike, or, desc, sql, isNull, SQL, ne, inArray } from "drizzle-orm"
+import { alias } from "drizzle-orm/pg-core"
 import { cascadeOrgStatusChange } from "@/lib/inventory-cascade"
 
 // GET /api/v1/head-office/organization-inventory - List products in organization inventory
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const search = searchParams.get("search") || ""
     const category = searchParams.get("category") || ""
+    const subCategory = searchParams.get("subCategory") || ""
     const status = searchParams.get("status") || ""
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
@@ -44,6 +46,7 @@ export async function GET(req: NextRequest) {
     const conditions: (SQL | undefined)[] = [
       eq(organizationInventory.organizationId, parseInt(organizationId)),
       isNull(organizationInventory.deletedAt),
+      isNull(globalProducts.deletedAt),
       eq(globalProducts.status, "active"),
       eq(organizationInventory.isActive, true)
     ]
@@ -57,11 +60,27 @@ export async function GET(req: NextRequest) {
         )
       )
     }
-    if (category) {
-      conditions.push(eq(globalProducts.categoryId, parseInt(category)))
+    if (category && category !== 'all') {
+      const catId = parseInt(category)
+      const subCatsList = await db.select({ id: categories.id })
+        .from(categories)
+        .where(eq(categories.parentId, catId))
+
+      const subCatIds = subCatsList.map(sc => sc.id)
+      if (subCatIds.length > 0) {
+        conditions.push(inArray(globalProducts.categoryId, subCatIds))
+      } else {
+        conditions.push(eq(globalProducts.categoryId, -1))
+      }
+    }
+    if (subCategory && subCategory !== 'all') {
+      conditions.push(eq(globalProducts.categoryId, parseInt(subCategory)))
     }
 
     const whereClause = and(...conditions)
+
+    const subCats = alias(categories, "subCategories")
+    const parentCats = alias(categories, "parentCategories")
 
     const [items, totalResult] = await Promise.all([
       db.select({
@@ -82,7 +101,8 @@ export async function GET(req: NextRequest) {
         basePrice: globalProducts.basePrice,
         unit: globalProducts.unit,
         status: globalProducts.status,
-        categoryName: categories.name,
+        categoryName: subCats.name,
+        parentCategoryName: parentCats.name,
         discountType: globalProducts.discountType,
         discountValue: globalProducts.discountValue,
         discountStartAt: globalProducts.discountStartAt,
@@ -91,7 +111,8 @@ export async function GET(req: NextRequest) {
       })
         .from(organizationInventory)
         .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+        .leftJoin(subCats, eq(globalProducts.categoryId, subCats.id))
+        .leftJoin(parentCats, eq(subCats.parentId, parentCats.id))
         .where(whereClause)
         .orderBy(desc(organizationInventory.assignedAt))
         .limit(limit)

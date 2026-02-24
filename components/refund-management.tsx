@@ -102,11 +102,27 @@ export function RefundManagement({
     const refundedQuantities = useMemo(() => {
         const quantities: Record<number, number> = {}
         effectiveRefunds.forEach((refund: any) => {
-            if (refund.status === 'REJECTED') return
-            if (refund.items && Array.isArray(refund.items)) {
-                refund.items.forEach((item: any) => {
-                    quantities[item.orderItemId] = (quantities[item.orderItemId] || 0) + item.quantity
-                })
+            if (refund.status === 'APPROVED' || refund.status === 'COMPLETED') {
+                if (refund.items && Array.isArray(refund.items)) {
+                    refund.items.forEach((item: any) => {
+                        quantities[item.orderItemId] = (quantities[item.orderItemId] || 0) + item.quantity
+                    })
+                }
+            }
+        })
+        return quantities
+    }, [effectiveRefunds])
+
+    // Calculate currently pending/requested quantities per item
+    const requestedQuantities = useMemo(() => {
+        const quantities: Record<number, number> = {}
+        effectiveRefunds.forEach((refund: any) => {
+            if (refund.status === 'PENDING') {
+                if (refund.items && Array.isArray(refund.items)) {
+                    refund.items.forEach((item: any) => {
+                        quantities[item.orderItemId] = (quantities[item.orderItemId] || 0) + item.quantity
+                    })
+                }
             }
         })
         return quantities
@@ -294,7 +310,8 @@ export function RefundManagement({
                                         {orderItems.length > 0 ? (
                                             orderItems.map((item: any) => {
                                                 const refundedQty = refundedQuantities[item.id] || 0
-                                                const remainingQty = Math.max(0, item.quantity - refundedQty)
+                                                const requestedQty = requestedQuantities[item.id] || 0
+                                                const remainingQty = Math.max(0, item.quantity - (refundedQty + requestedQty))
                                                 const isSelected = !!selectedItems[item.id]
                                                 const isFullyRefundedItem = remainingQty === 0
 
@@ -325,7 +342,8 @@ export function RefundManagement({
                                                                 <span className="text-xs text-muted-foreground flex gap-2">
                                                                     <span>{item.unit}</span>
                                                                     <span>• Ordered: {item.quantity}</span>
-                                                                    {refundedQty > 0 && <span className="text-amber-600">• Refunded: {refundedQty}</span>}
+                                                                    {refundedQty > 0 && <span className="text-green-600 font-medium">• Refunded: {refundedQty}</span>}
+                                                                    {requestedQty > 0 && <span className="text-amber-600 font-medium">• Requested: {requestedQty}</span>}
                                                                 </span>
                                                             </div>
                                                         </TableCell>
@@ -439,7 +457,8 @@ export function RefundManagement({
                                     <Badge variant="outline" className={
                                         refund.status === 'APPROVED' ? 'text-green-600 border-green-200' :
                                             refund.status === 'REJECTED' ? 'text-red-600 border-red-200' :
-                                                'text-yellow-600 border-yellow-200'
+                                                refund.status === 'SUPERSEDED' ? 'text-slate-500 border-slate-200' :
+                                                    'text-yellow-600 border-yellow-200'
                                     }>
                                         {refund.status}
                                     </Badge>

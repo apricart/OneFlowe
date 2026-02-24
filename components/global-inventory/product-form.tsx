@@ -158,6 +158,30 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
 
   const handleImageFile = async (file: File | null) => {
     if (!file) return
+
+    // Client-side validation to provide immediate feedback
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"]
+    if (!allowedTypes.includes(file.type)) {
+      setImageUploadError("Invalid file type. Only JPG, PNG, GIF are allowed")
+      toast({
+        title: "Validation Error",
+        description: "Invalid file type. Only JPG, PNG, GIF are allowed",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const maxSize = 5 * 1024 * 1024 // 5MB
+    if (file.size > maxSize) {
+      setImageUploadError("File too large. Maximum size is 5MB")
+      toast({
+        title: "Validation Error",
+        description: "File too large. Maximum size is 5MB",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsUploadingImage(true)
     setImageUploadError(null)
     try {
@@ -311,6 +335,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="discontinued">Discontinued</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-xs text-muted-foreground">Inactive = hidden.</p>
@@ -457,7 +482,12 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(event) => handleImageFile(event.target.files?.[0] || null)}
+                      onChange={(event) => {
+                        handleImageFile(event.target.files?.[0] || null)
+                      }}
+                      onClick={(event) => {
+                        (event.target as HTMLInputElement).value = "" // Reset on click for same-file re-upload
+                      }}
                       disabled={isUploadingImage}
                     />
                   </label>

@@ -69,13 +69,14 @@ export default function ProductSummaryReportPage() {
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
     const headers = [
-      "Order Date", "Employee ID", "Group", "Item Name", "Category",
+      "Order Date", "Employee ID", "Organization", "Group", "Item Name", "Category",
       "Sub-Category", "Item Code", "Branch", "Qty", "Price", "Total", "Status"
     ]
 
     const rows = filteredItems.map((item: any) => [
       new Date(item.orderDate).toLocaleDateString(),
       item.employeeId || "N/A",
+      item.organizationName || "-",
       item.groupName || "null",
       item.productName,
       item.categoryName || "-",
@@ -154,6 +155,7 @@ export default function ProductSummaryReportPage() {
             <TableRow>
               <TableHead>Order Date</TableHead>
               <TableHead>Employee ID</TableHead>
+              <TableHead>Organization</TableHead>
               <TableHead>Group</TableHead>
               <TableHead>Item Name</TableHead>
               <TableHead>Category</TableHead>
@@ -168,14 +170,15 @@ export default function ProductSummaryReportPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={12} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={13} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
             ) : filteredItems.length === 0 ? (
-              <TableRow><TableCell colSpan={12} className="h-24 text-center text-muted-foreground">No order items found.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={13} className="h-24 text-center text-muted-foreground">No order items found.</TableCell></TableRow>
             ) : (
               filteredItems.map((item: any, idx: number) => (
                 <TableRow key={idx}>
                   <TableCell className="text-xs font-mono" suppressHydrationWarning>{new Date(item.orderDate).toLocaleDateString()}</TableCell>
                   <TableCell className="text-xs font-mono text-muted-foreground">{item.employeeId || "-"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{item.organizationName || "-"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{item.groupName || "null"}</TableCell>
                   <TableCell className="text-xs font-medium">{item.productName}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{item.categoryName || "-"}</TableCell>

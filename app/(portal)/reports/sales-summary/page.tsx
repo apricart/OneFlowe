@@ -90,6 +90,7 @@ export default function SalesSummaryReportPage() {
     const tableData = filteredOrders.map((order: any) => [
       new Date(order.createdAt).toLocaleDateString(),
       order.tid,
+      order.organizationName || '-',
       order.branchName || `ID: ${order.branchId}`,
       order.status,
       formatPKR((order.totalCents || 0) / 100)
@@ -97,7 +98,7 @@ export default function SalesSummaryReportPage() {
 
     autoTable(doc, {
       startY: 75,
-      head: [["Date", "Transaction ID", "Branch", "Status", "Amount"]],
+      head: [["Date", "Transaction ID", "Organization", "Branch", "Status", "Amount"]],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [66, 66, 66] }
@@ -108,10 +109,11 @@ export default function SalesSummaryReportPage() {
   }
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-    const headers = ["Date", "Transaction ID", "Branch", "Status", "Amount (PKR)"]
+    const headers = ["Date", "Transaction ID", "Organization", "Branch", "Status", "Amount (PKR)"]
     const rows = filteredOrders.map((order: any) => [
       new Date(order.createdAt).toLocaleDateString(),
       order.tid,
+      order.organizationName || '-',
       order.branchName || `ID: ${order.branchId}`,
       order.status?.toUpperCase(),
       (order.totalCents / 100).toFixed(2)
@@ -209,6 +211,7 @@ export default function SalesSummaryReportPage() {
             <TableRow className="bg-slate-50/50 dark:bg-slate-800/50">
               <TableHead className="pl-6">Date</TableHead>
               <TableHead>Transaction ID</TableHead>
+              <TableHead>Organization</TableHead>
               <TableHead>Branch</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right pr-6">Amount</TableHead>
@@ -217,13 +220,13 @@ export default function SalesSummaryReportPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-24 text-center">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : filteredOrders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                   No orders found for the selected criteria.
                 </TableCell>
               </TableRow>
@@ -234,6 +237,9 @@ export default function SalesSummaryReportPage() {
                     {new Date(order.createdAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="font-mono text-xs font-medium">{order.tid}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground font-medium">
+                    {order.organizationName || '-'}
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground font-medium">
                     {order.branchName || `ID: ${order.branchId}`}
                   </TableCell>

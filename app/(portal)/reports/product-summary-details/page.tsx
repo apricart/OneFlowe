@@ -68,13 +68,14 @@ export default function ProductSummaryDetailsReportPage() {
   const totalItems = filteredDetails.reduce((sum: number, d: any) => sum + (d.quantity || 0), 0)
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-    const headers = ["Date", "Product", "SKU", "Transaction ID", "Branch", "Processed By", "Qty", "Total (PKR)"]
+    const headers = ["Date", "Product", "SKU", "Transaction ID", "Organization", "Branch", "Processed By", "Qty", "Total (PKR)"]
 
     const rows = filteredDetails.map((d: any) => [
       new Date(d.orderDate).toLocaleDateString(),
       d.productName,
       d.productCode || "-",
       d.tid,
+      d.organizationName || "-",
       d.branchName,
       d.createdByName || d.createdByEmail,
       d.quantity,
@@ -149,6 +150,7 @@ export default function ProductSummaryDetailsReportPage() {
               <TableHead>Product</TableHead>
               <TableHead>SKU</TableHead>
               <TableHead>Trans ID</TableHead>
+              <TableHead>Organization</TableHead>
               <TableHead>Branch</TableHead>
               <TableHead>Processed By</TableHead>
               <TableHead className="text-right">Qty</TableHead>
@@ -157,9 +159,9 @@ export default function ProductSummaryDetailsReportPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={8} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
             ) : filteredDetails.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="h-24 text-center text-muted-foreground">No transaction details found.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="h-24 text-center text-muted-foreground">No transaction details found.</TableCell></TableRow>
             ) : (
               filteredDetails.map((item: any) => (
                 <TableRow key={item.id}>
@@ -167,6 +169,7 @@ export default function ProductSummaryDetailsReportPage() {
                   <TableCell className="text-xs font-medium max-w-[150px] truncate">{item.productName}</TableCell>
                   <TableCell className="text-[10px] font-mono text-muted-foreground">{item.productCode || "-"}</TableCell>
                   <TableCell className="text-[10px] font-mono font-medium">{item.tid}</TableCell>
+                  <TableCell className="text-[10px] text-muted-foreground">{item.organizationName || "-"}</TableCell>
                   <TableCell className="text-[10px] text-muted-foreground">{item.branchName}</TableCell>
                   <TableCell className="text-[10px] font-medium">
                     <div className="flex items-center gap-1">

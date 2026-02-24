@@ -11,6 +11,9 @@ const MIN_TIMEOUT_MS = 1000
 function isValidUrl(url: string): boolean {
   try {
     if (!url || typeof url !== 'string') return false
+    // Reject explicit stringified null/undefined
+    if (url === 'undefined' || url === 'null') return false
+
     // Accept relative URLs (starting with /)
     if (url.startsWith('/')) return true
     // Validate absolute URLs
@@ -91,7 +94,8 @@ export async function fetcher<T>(url: string, timeoutMs: number = DEFAULT_TIMEOU
   try {
     // Validate inputs
     if (!isValidUrl(url)) {
-      throw new Error(`Invalid URL: ${url}`)
+      // If the URL is explicitly broken, reject quietly to let SWR handle it
+      throw new Error(`Invalid URL validation failed: ${url}`)
     }
 
     // Validate and sanitize timeout

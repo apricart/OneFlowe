@@ -266,10 +266,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Product code, name, and base price are required" }, { status: 400 })
     }
 
-    // Check if product code already exists
+    // Check if product code already exists (excluding soft-deleted products)
     const existingProduct = await db.select()
       .from(globalProducts)
-      .where(eq(globalProducts.productCode, productCode))
+      .where(
+        and(
+          eq(globalProducts.productCode, productCode),
+          isNull(globalProducts.deletedAt)
+        )
+      )
       .limit(1)
 
     if (existingProduct.length > 0) {
@@ -354,14 +359,15 @@ export async function PUT(req: NextRequest) {
 
     const productId = parseInt(id)
 
-    // Check if product code already exists for another product
+    // Check if product code already exists for another product (excluding soft-deleted)
     if (productCode) {
       const [existingProductWithCode] = await db.select()
         .from(globalProducts)
         .where(
           and(
             eq(globalProducts.productCode, productCode.toString().trim()),
-            ne(globalProducts.id, productId)
+            ne(globalProducts.id, productId),
+            isNull(globalProducts.deletedAt)
           )
         )
         .limit(1)

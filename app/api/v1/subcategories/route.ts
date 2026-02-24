@@ -15,8 +15,8 @@ export async function GET(req: NextRequest) {
     }
 
     const userRole = (session.user as any).role
-    if (userRole !== "SUPER_ADMIN") {
-      return NextResponse.json({ error: "Forbidden - Super Admin access required" }, { status: 403 })
+    if (userRole !== "SUPER_ADMIN" && userRole !== "HEAD_OFFICE" && userRole !== "BRANCH_ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const { searchParams } = new URL(req.url)

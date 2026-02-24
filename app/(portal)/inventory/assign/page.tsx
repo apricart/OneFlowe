@@ -30,6 +30,7 @@ type GlobalProduct = {
     unit: string
     status: string
     categoryName?: string
+    parentCategoryName?: string
     imageUrl?: string
 }
 
@@ -45,6 +46,8 @@ type AssignedProduct = {
     productCode: string
     productImageUrl: string | null
     organizationName: string
+    categoryName?: string
+    parentCategoryName?: string
 }
 
 export default function AssignProductPage() {
@@ -56,6 +59,8 @@ export default function AssignProductPage() {
     const [editDialogOpen, setEditDialogOpen] = useState(false)
     const [selectedProduct, setSelectedProduct] = useState<GlobalProduct | null>(null)
     const [selectedAssignment, setSelectedAssignment] = useState<AssignedProduct | null>(null)
+    const [categoryFilter, setCategoryFilter] = useState("all")
+    const [subCategoryFilter, setSubCategoryFilter] = useState("all")
     const [price, setPrice] = useState("")
     const [saving, setSaving] = useState(false)
 
@@ -70,11 +75,17 @@ export default function AssignProductPage() {
         { fallbackData: { items: [] } }
     )
 
-    // Fetch all global products
+    // Fetch all global products with filters
+    const productParams = new URLSearchParams()
+    productParams.set("limit", "500")
+    if (categoryFilter !== "all") productParams.set("category", categoryFilter)
+    if (subCategoryFilter !== "all") productParams.set("subCategory", subCategoryFilter)
+    if (searchQuery) productParams.set("search", searchQuery)
+
     const { data: productsData, isLoading: productsLoading } = useSWR<{
         items: GlobalProduct[]
     }>(
-        "/api/v1/admin/global-inventory?limit=500",
+        `/api/v1/admin/global-inventory?${productParams.toString()}`,
         fetcher,
         { fallbackData: { items: [] } }
     )
@@ -97,24 +108,8 @@ export default function AssignProductPage() {
         return allProducts.filter(p => !assignedProductIds.has(p.id))
     }, [allProducts, assignedProductIds])
 
-    // Search filtering
-    const filteredNotAssigned = useMemo(() => {
-        if (!searchQuery) return notAssignedProducts
-        const q = searchQuery.toLowerCase()
-        return notAssignedProducts.filter(p =>
-            p.name.toLowerCase().includes(q) ||
-            p.productCode.toLowerCase().includes(q)
-        )
-    }, [notAssignedProducts, searchQuery])
-
-    const filteredAssigned = useMemo(() => {
-        if (!searchQuery) return assignedProducts
-        const q = searchQuery.toLowerCase()
-        return assignedProducts.filter(a =>
-            a.productName.toLowerCase().includes(q) ||
-            a.productCode.toLowerCase().includes(q)
-        )
-    }, [assignedProducts, searchQuery])
+    const filteredNotAssigned = notAssignedProducts
+    const filteredAssigned = assignedProducts
 
     const handleAssignClick = (product: GlobalProduct) => {
         setSelectedProduct(product)
@@ -260,14 +255,18 @@ export default function AssignProductPage() {
                                 Manage product assignments for the selected organization.
                             </p>
                         </div>
-                        <div className="relative w-full lg:w-64">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search products..."
-                                className="pl-9"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end w-full">
+                            <div className="relative w-full lg:w-64">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search products..."
+                                    className="pl-9"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <CategoryFilter value={categoryFilter} onChange={(val) => { setCategoryFilter(val); setSubCategoryFilter('all'); }} />
+                            <SubcategoryFilter categoryId={categoryFilter} value={subCategoryFilter} onChange={setSubCategoryFilter} />
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -288,7 +287,8 @@ export default function AssignProductPage() {
                                         <TableHeader>
                                             <TableRow>
                                                 <TableHead>Product</TableHead>
-                                                <TableHead>Code</TableHead>
+                                                <TableHead>Category</TableHead>
+                                                <TableHead>Subcategory</TableHead>
                                                 <TableHead>Base Price</TableHead>
                                                 <TableHead>Unit</TableHead>
                                                 <TableHead className="text-right">Action</TableHead>
@@ -329,7 +329,12 @@ export default function AssignProductPage() {
                                                             </div>
                                                         </TableCell>
                                                         <TableCell>
-                                                            <Badge variant="outline">{product.productCode}</Badge>
+                                                            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                                                                {product.parentCategoryName || "Uncategorized"}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Badge variant="outline">{product.categoryName || "Uncategorized"}</Badge>
                                                         </TableCell>
                                                         <TableCell>{formatPKR(product.basePrice / 100)}</TableCell>
                                                         <TableCell>{product.unit}</TableCell>
@@ -358,7 +363,8 @@ export default function AssignProductPage() {
                                         <TableHeader>
                                             <TableRow>
                                                 <TableHead>Product</TableHead>
-                                                <TableHead>Code</TableHead>
+                                                <TableHead>Category</TableHead>
+                                                <TableHead>Subcategory</TableHead>
                                                 <TableHead>Custom Price</TableHead>
                                                 <TableHead>Status</TableHead>
                                                 <TableHead className="text-right">Action</TableHead>
@@ -397,7 +403,12 @@ export default function AssignProductPage() {
                                                             </div>
                                                         </TableCell>
                                                         <TableCell>
-                                                            <Badge variant="outline">{assignment.productCode}</Badge>
+                                                            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                                                                {assignment.parentCategoryName || "Uncategorized"}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Badge variant="outline">{assignment.categoryName || "Uncategorized"}</Badge>
                                                         </TableCell>
                                                         <TableCell>
                                                             {assignment.customPrice
@@ -513,5 +524,44 @@ export default function AssignProductPage() {
                 </DialogContent>
             </Dialog>
         </div>
+    )
+}
+const CategoryFilter = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+    const { data } = useSWR<{ items: { id: number, name: string }[] }>('/api/v1/categories?limit=100', fetcher)
+    return (
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
+        >
+            <option value="all">All Categories</option>
+            {data?.items?.map((cat) => (
+                <option key={cat.id} value={cat.id.toString()}>
+                    {cat.name}
+                </option>
+            ))}
+        </select>
+    )
+}
+
+const SubcategoryFilter = ({ categoryId, value, onChange }: { categoryId: string, value: string, onChange: (val: string) => void }) => {
+    const query = categoryId !== 'all'
+        ? `/api/v1/subcategories?categoryId=${categoryId}&limit=100`
+        : '/api/v1/subcategories?limit=100'
+    const { data } = useSWR<{ items: { id: number, name: string }[] }>(query, fetcher)
+
+    return (
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
+        >
+            <option value="all">All Subcategories</option>
+            {data?.items?.map((cat) => (
+                <option key={cat.id} value={cat.id.toString()}>
+                    {cat.name}
+                </option>
+            ))}
+        </select>
     )
 }

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { refunds, orders, budgets, auditLogs, users, orderItems, refundItems } from "@/db/schema"
-import { eq, sql, desc, inArray } from "drizzle-orm"
+import { eq, sql, desc, inArray, and } from "drizzle-orm"
 
 export async function GET(
   req: NextRequest,
@@ -274,17 +274,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         refundId = insertedRefund.id;
 
         // Adjust budget - credit back the refunded amount
+        const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
         const [budget] = await tx
           .select()
           .from(budgets)
-          .where(eq(budgets.branchId, orderData.branchId))
+          .where(
+            and(
+              eq(budgets.branchId, orderData.branchId),
+              eq(budgets.period, currentMonth)
+            )
+          )
           .limit(1)
 
         if (budget) {
           await tx
             .update(budgets)
             .set({
-              amountSpentCents: sql`${budgets.amountSpentCents} - ${totalRefundAmount}`,
               amountCreditedCents: sql`${budgets.amountCreditedCents} + ${totalRefundAmount}`,
               updatedAt: new Date(),
             })

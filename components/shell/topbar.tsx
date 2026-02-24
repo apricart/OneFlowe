@@ -31,8 +31,20 @@ export function Topbar() {
   const userRole = (session?.user as any)?.role
 
   async function logout() {
-    localStorage.removeItem('theme')
-    await signOut({ redirect: false })
+    try {
+      localStorage.removeItem('theme')
+      // Clear NextAuth session cookies explicitly for Firefox compatibility
+      document.cookie.split(";").forEach((c) => {
+        const name = c.split("=")[0].trim()
+        if (name.startsWith("next-auth") || name.startsWith("__Secure-next-auth")) {
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;secure`
+        }
+      })
+      await signOut({ redirect: false })
+    } catch (_) {
+      // Ensure redirect happens even if signOut fails
+    }
     window.location.replace("/login")
   }
 

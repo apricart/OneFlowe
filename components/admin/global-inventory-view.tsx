@@ -197,6 +197,7 @@ export default function GlobalInventoryView() {
                             <option value="all">All statuses</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
+                            <option value="discontinued">Discontinued</option>
                         </select>
                     </div>
 

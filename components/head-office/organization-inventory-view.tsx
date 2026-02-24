@@ -24,6 +24,7 @@ type OrganizationInventoryItem = {
     customImageUrl?: string
 
     categoryName?: string
+    parentCategoryName?: string
     basePrice?: number
     unit: string
     assignedAt: string
@@ -32,11 +33,12 @@ export default function HeadOfficeInventoryView() {
     const { organizationId } = useAppContext()
     const [searchQuery, setSearchQuery] = useState("")
     const [categoryFilter, setCategoryFilter] = useState("all")
+    const [subCategoryFilter, setSubCategoryFilter] = useState("all")
     const [page, setPage] = useState(1)
     const PAGE_SIZE = 20
 
     const encodedSearch = encodeURIComponent(searchQuery)
-    const query = `/api/v1/head-office/organization-inventory?search=${encodedSearch}${categoryFilter !== 'all' ? `&category=${categoryFilter}` : ''}${organizationId ? `&organizationId=${organizationId}` : ""}`
+    const query = `/api/v1/head-office/organization-inventory?search=${encodedSearch}${categoryFilter !== 'all' ? `&category=${categoryFilter}` : ''}${subCategoryFilter !== 'all' ? `&subCategory=${subCategoryFilter}` : ''}${organizationId ? `&organizationId=${organizationId}` : ""}`
 
     const { data, isLoading } = useSWR<{ items: OrganizationInventoryItem[]; total: number }>(query, fetcher, {
         fallbackData: { items: [], total: 0 },
@@ -133,7 +135,8 @@ export default function HeadOfficeInventoryView() {
                                 onChange={(event) => setSearchQuery(event.target.value)}
                             />
                         </div>
-
+                        <CategoryFilter value={categoryFilter} onChange={(val) => { setCategoryFilter(val); setSubCategoryFilter('all'); }} />
+                        <SubcategoryFilter categoryId={categoryFilter} value={subCategoryFilter} onChange={setSubCategoryFilter} />
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -143,6 +146,7 @@ export default function HeadOfficeInventoryView() {
                                 <TableRow>
                                     <TableHead>Product</TableHead>
                                     <TableHead>Category</TableHead>
+                                    <TableHead>Subcategory</TableHead>
                                     <TableHead>Unit Price</TableHead>
                                     <TableHead>Assigned on</TableHead>
                                 </TableRow>
@@ -185,6 +189,11 @@ export default function HeadOfficeInventoryView() {
                                                         )}
                                                     </div>
                                                 </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                                                    {item.parentCategoryName || "Uncategorized"}
+                                                </Badge>
                                             </TableCell>
                                             <TableCell>
                                                 <Badge variant="outline">{item.categoryName || "Uncategorized"}</Badge>
@@ -243,6 +252,28 @@ const CategoryFilter = ({ value, onChange }: { value: string, onChange: (val: st
             className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
         >
             <option value="all">All Categories</option>
+            {data?.items?.map((cat) => (
+                <option key={cat.id} value={cat.id.toString()}>
+                    {cat.name}
+                </option>
+            ))}
+        </select>
+    )
+}
+
+const SubcategoryFilter = ({ categoryId, value, onChange }: { categoryId: string, value: string, onChange: (val: string) => void }) => {
+    const query = categoryId !== 'all'
+        ? `/api/v1/subcategories?categoryId=${categoryId}&limit=100`
+        : '/api/v1/subcategories?limit=100'
+    const { data } = useSWR<{ items: { id: number, name: string }[] }>(query, fetcher)
+
+    return (
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
+        >
+            <option value="all">All Subcategories</option>
             {data?.items?.map((cat) => (
                 <option key={cat.id} value={cat.id.toString()}>
                     {cat.name}

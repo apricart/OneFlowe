@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAppContext } from "@/components/context/app-context"
 import { formatPKR } from "@/lib/utils"
-import { Search, Package, Sparkles, Eye, AlertTriangle } from "lucide-react"
+import { Search, Package, Sparkles } from "lucide-react"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -21,7 +21,8 @@ type BranchInventoryItem = {
   customPrice?: number
   customDescription?: string
   customImageUrl?: string
-  categoryName?: string
+  categoryName: string
+  parentCategoryName?: string
   basePrice: number
   unit: string
   isVisible: boolean
@@ -34,9 +35,13 @@ type BranchInventoryItem = {
 export default function BranchInventoryPage() {
   const { branchId, organizationId } = useAppContext()
   const [searchQuery, setSearchQuery] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [subCategoryFilter, setSubCategoryFilter] = useState("all")
 
   const params = new URLSearchParams()
   params.set("search", searchQuery)
+  if (categoryFilter !== "all") params.set("category", categoryFilter)
+  if (subCategoryFilter !== "all") params.set("subCategory", subCategoryFilter)
   if (branchId) params.set("branchId", String(branchId))
   if (organizationId) params.set("organizationId", String(organizationId))
 
@@ -54,6 +59,7 @@ export default function BranchInventoryPage() {
     () => inventory.filter((item) => item.stockQuantity <= item.reorderThreshold && item.stockQuantity > 0).length,
     [inventory]
   )
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 space-y-8 p-6">
       <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-purple-900 to-indigo-800 text-white shadow-xl">
@@ -95,6 +101,8 @@ export default function BranchInventoryPage() {
                 onChange={(event) => setSearchQuery(event.target.value)}
               />
             </div>
+            <CategoryFilter value={categoryFilter} onChange={(val) => { setCategoryFilter(val); setSubCategoryFilter('all'); }} />
+            <SubcategoryFilter categoryId={categoryFilter} value={subCategoryFilter} onChange={setSubCategoryFilter} />
           </div>
         </CardHeader>
         <CardContent>
@@ -104,19 +112,20 @@ export default function BranchInventoryPage() {
                 <TableRow>
                   <TableHead>Product</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead>Subcategory</TableHead>
                   <TableHead>Unit Price</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
                       Loading branch inventory…
                     </TableCell>
                   </TableRow>
                 ) : inventory.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
                       No products have been assigned to this branch. Once Head Office shares SKUs, they will appear here.
                     </TableCell>
                   </TableRow>
@@ -146,9 +155,14 @@ export default function BranchInventoryPage() {
                         </div>
                       </TableCell>
                       <TableCell>
+                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                          {item.parentCategoryName || "Uncategorized"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
                         <Badge variant="outline">{item.categoryName || "Uncategorized"}</Badge>
                       </TableCell>
-                      <TableCell>{formatPKR((item.customPrice ?? item.basePrice) / 100)}</TableCell>
+                      <TableCell className="font-medium">{formatPKR((item.customPrice ?? item.basePrice) / 100)}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -181,6 +195,46 @@ function SummaryCard({
         <div className={`h-1 rounded-full bg-gradient-to-r ${accent}`} />
       </CardContent>
     </Card>
+  )
+}
+
+const CategoryFilter = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+  const { data } = useSWR<{ items: { id: number, name: string }[] }>('/api/v1/categories?limit=100', fetcher)
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
+    >
+      <option value="all">All Categories</option>
+      {data?.items?.map((cat) => (
+        <option key={cat.id} value={cat.id.toString()}>
+          {cat.name}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+const SubcategoryFilter = ({ categoryId, value, onChange }: { categoryId: string, value: string, onChange: (val: string) => void }) => {
+  const query = categoryId !== 'all'
+    ? `/api/v1/subcategories?categoryId=${categoryId}&limit=100`
+    : '/api/v1/subcategories?limit=100'
+  const { data } = useSWR<{ items: { id: number, name: string }[] }>(query, fetcher)
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
+    >
+      <option value="all">All Subcategories</option>
+      {data?.items?.map((cat) => (
+        <option key={cat.id} value={cat.id.toString()}>
+          {cat.name}
+        </option>
+      ))}
+    </select>
   )
 }
 

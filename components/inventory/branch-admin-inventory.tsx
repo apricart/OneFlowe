@@ -15,8 +15,16 @@ import {
   EyeOff,
   AlertCircle,
   Check,
-  X
+  X,
+  Filter
 } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import useSWR from "swr"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -54,7 +62,12 @@ export default function BranchAdminInventory({
 }) {
   const { toast } = useToast()
   const [searchQuery, setSearchQuery] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [visibilityFilter, setVisibilityFilter] = useState("all")
+
+  // Fetch categories
+  const { data: categoriesData } = useSWR<{ items: { id: number; name: string }[] }>("/api/v1/categories", fetcher)
+  const categories = categoriesData?.items || []
 
   // Fetch branch products with visibility data
   const { data, error, isLoading, mutate } = useSWR<{
@@ -77,6 +90,10 @@ export default function BranchAdminInventory({
       filtered = filtered.filter(p => !p.isVisible)
     }
 
+    if (categoryFilter !== "all") {
+      filtered = filtered.filter(p => p.categoryName === categories.find(c => String(c.id) === categoryFilter)?.name)
+    }
+
     if (searchQuery) {
       filtered = filtered.filter(p =>
         p.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -86,7 +103,7 @@ export default function BranchAdminInventory({
     }
 
     return filtered
-  }, [products, visibilityFilter, searchQuery])
+  }, [products, visibilityFilter, searchQuery, categoryFilter, categories])
 
   // Calculate summary stats
   const totalProducts = products.length
@@ -232,6 +249,22 @@ export default function BranchAdminInventory({
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold">Product Visibility</h3>
             <div className="flex gap-2">
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-muted-foreground" />
+                    <SelectValue placeholder="All Categories" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={String(cat.id)}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                 <Input

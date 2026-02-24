@@ -33,6 +33,7 @@ interface OrderItem {
   branchName?: string | null
   rejectionReason?: string | null
   refundAmountCents?: number | null
+  itemNames?: string | null
 }
 
 export default function HeadOfficeOrdersPage() {
@@ -396,6 +397,7 @@ export default function HeadOfficeOrdersPage() {
                     <th className="px-4 py-3 text-left text-sm font-semibold">Branch</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Status</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Amount</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold">Items</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Refund</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Date</th>
                     <th className="px-4 py-3 text-left text-sm font-semibold">Actions</th>
@@ -440,6 +442,11 @@ export default function HeadOfficeOrdersPage() {
                         <td className="px-4 py-3">
                           <p className="font-bold text-slate-900 dark:text-white">
                             {formatPKR(order.totalCents / 100)}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="text-xs text-slate-700 dark:text-slate-300 max-w-[200px] line-clamp-2" title={order.itemNames || '-'}>
+                            {order.itemNames || '-'}
                           </p>
                         </td>
                         <td className="px-4 py-3">

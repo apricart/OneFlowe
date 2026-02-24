@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db, pool } from "@/lib/db"
-import { branchInventory, organizationInventory, branches, globalProducts, auditLogs, groups } from "@/db/schema"
+import { branchInventory, organizationInventory, branches, globalProducts, auditLogs, groups, categories } from "@/db/schema"
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm"
 import { logInventoryAction } from "@/lib/global-logger"
 
@@ -43,7 +43,8 @@ export async function GET(req: NextRequest) {
 
     const conditions = [
       eq(branchInventory.organizationId, parseInt(organizationId)),
-      isNull(branchInventory.deletedAt)
+      isNull(branchInventory.deletedAt),
+      isNull(globalProducts.deletedAt)
     ]
 
     if (branchId) {
@@ -75,6 +76,7 @@ export async function GET(req: NextRequest) {
         // Related data
         productName: globalProducts.name,
         productCode: globalProducts.productCode,
+        categoryName: categories.name,
         productImageUrl: globalProducts.imageUrl,
         globalStatus: globalProducts.status,
         basePrice: globalProducts.basePrice,
@@ -86,6 +88,7 @@ export async function GET(req: NextRequest) {
         .from(branchInventory)
         .leftJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
         .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
         .leftJoin(branches, eq(branchInventory.branchId, branches.id))
         .where(
           productId
@@ -102,6 +105,7 @@ export async function GET(req: NextRequest) {
       db.select({ count: sql<number>`count(*)` })
         .from(branchInventory)
         .leftJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+        .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
         .leftJoin(branches, eq(branchInventory.branchId, branches.id))
         .where(
           productId

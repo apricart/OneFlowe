@@ -199,6 +199,10 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
         alert("Password must be at least 12 characters")
         return
       }
+      if (!/[A-Z]/.test(editForm.password) || !/[a-z]/.test(editForm.password) || !/\d/.test(editForm.password) || !/[^a-zA-Z0-9]/.test(editForm.password)) {
+        alert("Password must include uppercase, lowercase, number, and special character")
+        return
+      }
     }
 
     setSubmitting(true)
@@ -373,6 +377,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="pl-9"
+            autoComplete="off"
           />
         </div>
         <Select value={roleFilter} onValueChange={setRoleFilter}>
@@ -642,6 +647,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                   value={editForm.email}
                   onChange={e => setEditForm({ ...editForm, email: e.target.value })}
                   placeholder="Enter email address"
+                  autoComplete="off"
                 />
               </div>
               <div className="space-y-2">
@@ -660,7 +666,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
               <h3 className="text-sm font-semibold">Role & Assignment</h3>
               <div className="space-y-2">
                 <Label htmlFor="role">Role *</Label>
-                <Select value={editForm.role} onValueChange={value => setEditForm({ ...editForm, role: value, branchId: "" })}>
+                <Select disabled value={editForm.role} onValueChange={value => setEditForm({ ...editForm, role: value, branchId: "" })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
@@ -762,8 +768,9 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                         type={showPassword ? "text" : "password"}
                         value={editForm.password}
                         onChange={e => setEditForm({ ...editForm, password: e.target.value })}
-                        placeholder="Enter new password (min. 12 characters)"
+                        placeholder="Enter password (min 12 chars, mixed case, symbols)"
                         className="pr-10"
+                        autoComplete="new-password"
                       />
                       <Button
                         type="button"
@@ -790,6 +797,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                         onChange={e => setEditForm({ ...editForm, confirmPassword: e.target.value })}
                         placeholder="Confirm new password"
                         className="pr-10"
+                        autoComplete="new-password"
                       />
                       <Button
                         type="button"
@@ -808,8 +816,11 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                     {editForm.password && editForm.confirmPassword && editForm.password !== editForm.confirmPassword && (
                       <p className="text-sm text-red-600">Passwords do not match</p>
                     )}
-                    {editForm.password && editForm.password.length > 0 && editForm.password.length < 6 && (
-                      <p className="text-sm text-red-600">Password must be at least 6 characters</p>
+                    {editForm.password && editForm.password.length > 0 && editForm.password.length < 12 && (
+                      <p className="text-sm text-red-600">Password must be at least 12 characters</p>
+                    )}
+                    {editForm.password && editForm.password.length >= 12 && (!/[A-Z]/.test(editForm.password) || !/[a-z]/.test(editForm.password) || !/\d/.test(editForm.password) || !/[^a-zA-Z0-9]/.test(editForm.password)) && (
+                      <p className="text-sm text-red-600">Password must include uppercase, lowercase, number, and special character</p>
                     )}
                   </div>
                 </div>
@@ -830,7 +841,16 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                 !editForm.email ||
                 !editForm.role ||
                 ((editForm.role === "BRANCH_ADMIN" || editForm.role === "ORDER_PORTAL") && !editForm.branchId) ||
-                (showPasswordReset && (!editForm.password || !editForm.confirmPassword || editForm.password !== editForm.confirmPassword || editForm.password.length < 6))
+                (showPasswordReset && (
+                  !editForm.password ||
+                  !editForm.confirmPassword ||
+                  editForm.password !== editForm.confirmPassword ||
+                  editForm.password.length < 12 ||
+                  !/[A-Z]/.test(editForm.password) ||
+                  !/[a-z]/.test(editForm.password) ||
+                  !/\d/.test(editForm.password) ||
+                  !/[^a-zA-Z0-9]/.test(editForm.password)
+                ))
               }
               style={{ background: "var(--color-brand-primary)", color: "white" }}
             >

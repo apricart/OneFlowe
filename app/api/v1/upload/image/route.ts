@@ -22,15 +22,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"]
     if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ error: "Invalid file type. Only JPG, PNG, GIF, and WebP are allowed" }, { status: 400 })
+      return NextResponse.json({ error: "Invalid file type. Only JPG, PNG, and GIF are allowed" }, { status: 400 })
     }
 
-    // Validate file size (2MB max for Base64 to avoid huge DB/payload sizes)
-    const maxSize = 2 * 1024 * 1024 // 2MB
+    // Validate file size (5MB max for Base64)
+    const maxSize = 5 * 1024 * 1024 // 5MB
     if (file.size > maxSize) {
-      return NextResponse.json({ error: "File too large for direct storage. Maximum size is 2MB" }, { status: 400 })
+      return NextResponse.json({ error: "File too large. Maximum size is 5MB" }, { status: 400 })
     }
 
     // Convert file to Base64 data URL

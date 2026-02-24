@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { branchInventory, globalProducts, organizationInventory, categories, auditLogs } from "@/db/schema"
-import { eq, and, like, ilike, or, desc, sql, isNull, SQL } from "drizzle-orm"
+import { eq, and, like, ilike, or, desc, sql, isNull, SQL, inArray } from "drizzle-orm"
+import { alias } from "drizzle-orm/pg-core"
 import { getEffectiveProductData } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
@@ -64,6 +65,8 @@ export async function GET(req: NextRequest) {
     const searchRaw = searchParams.get("search") || ""
     const search = searchRaw ? escapeLikePattern(searchRaw) : "" // Sanitize LIKE patterns
     const visibility = searchParams.get("visibility") || ""
+    const category = searchParams.get("category") || ""
+    const subCategory = searchParams.get("subCategory") || ""
     const pageNum = Math.max(1, parseInt(searchParams.get("page") || "1") || 1)
     const limitNum = Math.max(1, parseInt(searchParams.get("limit") || "50") || 50)
     const offset = (pageNum - 1) * limitNum
@@ -92,11 +95,32 @@ export async function GET(req: NextRequest) {
         )
       )
     }
+    if (category && category !== 'all') {
+      const catId = parseInt(category)
+      // Find all subcategories for this parent
+      const subCatsList = await db.select({ id: categories.id })
+        .from(categories)
+        .where(eq(categories.parentId, catId))
+
+      const subCatIds = subCatsList.map(sc => sc.id)
+      if (subCatIds.length > 0) {
+        conditions.push(inArray(globalProducts.categoryId, subCatIds))
+      } else {
+        // If parent has no children, it might be assigned directly? Or match nothing
+        conditions.push(eq(globalProducts.categoryId, -1))
+      }
+    }
+    if (subCategory && subCategory !== 'all') {
+      conditions.push(eq(globalProducts.categoryId, parseInt(subCategory)))
+    }
     const whereClause = and(...conditions)
 
     const cacheKey = scopedCacheKey('branch-inv', { branchId, orgId: orgIdNum }, {
-      search, visibility, page: pageNum, limit: limitNum
+      search, visibility, category, subCategory, page: pageNum, limit: limitNum
     })
+
+    const subCats = alias(categories, "subCategories")
+    const parentCats = alias(categories, "parentCategories")
 
     const result = await getCached(cacheKey, async () => {
       const [items, totalResult] = await Promise.all([
@@ -118,7 +142,8 @@ export async function GET(req: NextRequest) {
           unit: globalProducts.unit,
           status: globalProducts.status,
           productDescription: globalProducts.description,
-          categoryName: categories.name,
+          categoryName: subCats.name,
+          parentCategoryName: parentCats.name,
           customName: organizationInventory.customName,
           customPrice: organizationInventory.customPrice,
           customDescription: organizationInventory.customDescription,
@@ -132,7 +157,8 @@ export async function GET(req: NextRequest) {
           .from(branchInventory)
           .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
           .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-          .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+          .leftJoin(subCats, eq(globalProducts.categoryId, subCats.id))
+          .leftJoin(parentCats, eq(subCats.parentId, parentCats.id))
           .where(whereClause)
           .orderBy(desc(branchInventory.assignedAt))
           .limit(limitNum)

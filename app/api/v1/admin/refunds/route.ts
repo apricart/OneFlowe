@@ -554,11 +554,11 @@ export async function POST(req: NextRequest) {
                 )
             }
 
-            // 6. CLEAR PENDING REQUESTS: Mark any existing pending refunds for this order as REPLACED
+            // 6. CLEAR PENDING REQUESTS: Mark any existing pending refunds for this order as SUPERSEDED
             // This ensures that 'hasRefundRequests' in order list becomes 0 and the "REQUESTED" badge disappears.
             await tx.update(refunds)
                 .set({
-                    status: "REPLACED",
+                    status: "SUPERSEDED",
                     processedByUserId: userId,
                     updatedAt: new Date()
                 })
