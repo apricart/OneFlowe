@@ -239,7 +239,7 @@ export async function GET(req: NextRequest) {
           .from(refunds)
           .where(and(eq(refunds.orderId, orderId), sql`UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED')`))
 
-        const totalApprovedAmount = approvedRefunds.reduce((sum, r) => sum + (r.amountCents || 0), 0)
+        const totalApprovedAmount = approvedRefunds.reduce((sum, r) => sum + (r.amount || 0), 0)
 
         return NextResponse.json({ items: [{ ...order, orderItems: itemsData, refundAmountCents: totalApprovedAmount }] })
       }
