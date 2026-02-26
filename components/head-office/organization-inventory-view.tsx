@@ -34,6 +34,7 @@ export default function HeadOfficeInventoryView() {
     const [searchQuery, setSearchQuery] = useState("")
     const [categoryFilter, setCategoryFilter] = useState("all")
     const [subCategoryFilter, setSubCategoryFilter] = useState("all")
+    const [statusFilter, setStatusFilter] = useState("all")
     const [page, setPage] = useState(1)
     const PAGE_SIZE = 20
 
@@ -148,6 +149,7 @@ export default function HeadOfficeInventoryView() {
                                     <TableHead>Category</TableHead>
                                     <TableHead>Subcategory</TableHead>
                                     <TableHead>Unit Price</TableHead>
+                                    <TableHead>Status</TableHead>
                                     <TableHead>Assigned on</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -200,6 +202,11 @@ export default function HeadOfficeInventoryView() {
                                             </TableCell>
                                             <TableCell className="font-medium">
                                                 {formatPKR((item.customPrice ?? item.basePrice ?? 0) / 100)}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={item.isActive ? "default" : "secondary"}>
+                                                    {item.isActive ? "Active" : "Inactive"}
+                                                </Badge>
                                             </TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
                                                 {new Date(item.assignedAt).toLocaleDateString()}

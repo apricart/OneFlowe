@@ -62,6 +62,7 @@ export default function AssignProductPage() {
     const [categoryFilter, setCategoryFilter] = useState("all")
     const [subCategoryFilter, setSubCategoryFilter] = useState("all")
     const [price, setPrice] = useState("")
+    const [isActive, setIsActive] = useState(true)
     const [saving, setSaving] = useState(false)
 
     // Use context org if available, otherwise use local selection
@@ -114,12 +115,14 @@ export default function AssignProductPage() {
     const handleAssignClick = (product: GlobalProduct) => {
         setSelectedProduct(product)
         setPrice("")
+        setIsActive(true)
         setPriceDialogOpen(true)
     }
 
     const handleEditClick = (assignment: AssignedProduct) => {
         setSelectedAssignment(assignment)
         setPrice(assignment.customPrice ? (assignment.customPrice / 100).toString() : "")
+        setIsActive(assignment.isActive)
         setEditDialogOpen(true)
     }
 
@@ -138,6 +141,7 @@ export default function AssignProductPage() {
                     productIds: [selectedProduct.id],
                     organizationId: parseInt(selectedOrgId),
                     customPrice: parseFloat(price),
+                    isActive: isActive,
                 }),
             })
 
@@ -171,6 +175,7 @@ export default function AssignProductPage() {
                 body: JSON.stringify({
                     id: selectedAssignment.id,
                     customPrice: parseFloat(price),
+                    isActive: isActive,
                 }),
             })
 
@@ -474,6 +479,18 @@ export default function AssignProductPage() {
                                 This price will be used for orders from this organization.
                             </p>
                         </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="space-y-0.5">
+                                <label className="text-sm font-medium">Active Status</label>
+                                <p className="text-xs text-muted-foreground">Make product visible to organization</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={isActive}
+                                onChange={(e) => setIsActive(e.target.checked)}
+                                className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                            />
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setPriceDialogOpen(false)}>
@@ -510,6 +527,18 @@ export default function AssignProductPage() {
                                 placeholder="Enter custom price"
                                 value={price}
                                 onChange={(e) => setPrice(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                            <div className="space-y-0.5">
+                                <label className="text-sm font-medium">Active Status</label>
+                                <p className="text-xs text-muted-foreground">Toggle organization-level visibility</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                checked={isActive}
+                                onChange={(e) => setIsActive(e.target.checked)}
+                                className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
                             />
                         </div>
                     </div>

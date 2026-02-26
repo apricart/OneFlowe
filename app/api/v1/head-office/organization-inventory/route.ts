@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       isNull(organizationInventory.deletedAt),
       isNull(globalProducts.deletedAt),
       eq(globalProducts.status, "active"),
-      eq(organizationInventory.isActive, true)
+      eq(organizationInventory.isActive, true),
     ]
 
     if (search) {

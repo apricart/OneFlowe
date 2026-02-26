@@ -77,7 +77,7 @@ export default function ProductSummaryReportPage() {
       new Date(item.orderDate).toLocaleDateString(),
       item.employeeId || "N/A",
       item.organizationName || "-",
-      item.groupName || "null",
+      item.groupName || "-",
       item.productName,
       item.categoryName || "-",
       item.subCategoryName || "-",
@@ -179,7 +179,7 @@ export default function ProductSummaryReportPage() {
                   <TableCell className="text-xs font-mono" suppressHydrationWarning>{new Date(item.orderDate).toLocaleDateString()}</TableCell>
                   <TableCell className="text-xs font-mono text-muted-foreground">{item.employeeId || "-"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{item.organizationName || "-"}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{item.groupName || "null"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{item.groupName || "-"}</TableCell>
                   <TableCell className="text-xs font-medium">{item.productName}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{item.categoryName || "-"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{item.subCategoryName || "-"}</TableCell>

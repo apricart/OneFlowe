@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { formatPKR } from "@/lib/utils"
-import { Search, Package, Plus, Building2, GitBranch, Users } from "lucide-react"
+import { Search, Package, Plus, Building2, GitBranch, Users, Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useAppContext } from "@/components/context/app-context"
+import { Switch } from "@/components/ui/switch"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -37,12 +38,17 @@ export default function AssignToBranchPage() {
     const { organizationId: contextOrgId } = useAppContext()
     const [localOrgId, setLocalOrgId] = useState<string>("")
     const [searchQuery, setSearchQuery] = useState("")
+    // Default to 'all' for status filter
+    const [statusFilter, setStatusFilter] = useState<string>("all")
     const [selectedProducts, setSelectedProducts] = useState<number[]>([])
     const [assignDialogOpen, setAssignDialogOpen] = useState(false)
     const [selectedGroup, setSelectedGroup] = useState<string>("")
     const [saving, setSaving] = useState(false)
     const [alreadyAssignedBranches, setAlreadyAssignedBranches] = useState<Set<number>>(new Set())
     const [loadingAssignments, setLoadingAssignments] = useState(false)
+    const [togglingStatus, setTogglingStatus] = useState<number | null>(null)
+
+    const { userRole } = useAppContext()
 
     const selectedOrgId = contextOrgId || localOrgId
     const showOrgSelector = !contextOrgId
@@ -56,7 +62,7 @@ export default function AssignToBranchPage() {
 
     // Fetch organization's assigned products
     const { data: productsData, isLoading, mutate } = useSWR<{ items: OrgProduct[] }>(
-        selectedOrgId ? `/api/v1/head-office/organization-inventory?organizationId=${selectedOrgId}&limit=500` : null,
+        selectedOrgId ? `/api/v1/head-office/organization-inventory?organizationId=${selectedOrgId}&status=${statusFilter}&limit=1000` : null,
         fetcher,
         { fallbackData: { items: [] } }
     )
@@ -164,6 +170,40 @@ export default function AssignToBranchPage() {
         }
     }
 
+    const handleToggleStatus = async (productId: number, currentStatus: boolean) => {
+        if (!selectedOrgId) return
+
+        setTogglingStatus(productId)
+        try {
+            const res = await fetch("/api/v1/head-office/organization-inventory", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: productId,
+                    isActive: !currentStatus,
+                    organizationId: selectedOrgId
+                }),
+            })
+
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || "Failed to update status")
+
+            toast({
+                title: "Success",
+                description: `Product is now ${!currentStatus ? 'active' : 'inactive'}`,
+            })
+            mutate()
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message,
+                variant: "destructive"
+            })
+        } finally {
+            setTogglingStatus(null)
+        }
+    }
+
 
     const openAssignDialog = async () => {
         setSelectedGroup("")
@@ -263,7 +303,7 @@ export default function AssignToBranchPage() {
                                 Select products to assign to branches. Only products assigned to your organization are listed.
                             </p>
                         </div>
-                        <div className="flex flex-col gap-3 w-full lg:flex-row lg:items-center lg:justify-end lg:w-auto">
+                        <div className="flex flex-col gap-4 w-full lg:flex-row lg:items-center lg:justify-end lg:w-auto">
                             <div className="relative w-full lg:w-64">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
@@ -273,6 +313,20 @@ export default function AssignToBranchPage() {
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                             </div>
+
+                            <div className="w-full lg:w-48">
+                                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Statuses</SelectItem>
+                                        <SelectItem value="active">Active Only</SelectItem>
+                                        <SelectItem value="inactive">Inactive Only</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
                             <Button
                                 onClick={openAssignDialog}
                                 disabled={selectedProducts.length === 0}
@@ -353,9 +407,25 @@ export default function AssignToBranchPage() {
                                                         : <span className="text-muted-foreground">-</span>}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={(product as any).status === "active" ? "default" : "secondary"}>
-                                                        {(product as any).status === "active" ? "Active" : "Inactive"}
-                                                    </Badge>
+                                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                        {userRole === "SUPER_ADMIN" ? (
+                                                            <>
+                                                                <Switch
+                                                                    disabled={togglingStatus === product.id}
+                                                                    checked={product.isActive}
+                                                                    onCheckedChange={() => handleToggleStatus(product.id, product.isActive)}
+                                                                />
+                                                                {togglingStatus === product.id && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                                                                <span className="text-xs font-medium min-w-[50px]">
+                                                                    {product.isActive ? "Active" : "Inactive"}
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            <Badge variant={product.isActive ? "default" : "secondary"}>
+                                                                {product.isActive ? "Active" : "Inactive"}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))

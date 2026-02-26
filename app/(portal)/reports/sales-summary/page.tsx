@@ -91,6 +91,7 @@ export default function SalesSummaryReportPage() {
       new Date(order.createdAt).toLocaleDateString(),
       order.tid,
       order.organizationName || '-',
+      order.groupName || '-',
       order.branchName || `ID: ${order.branchId}`,
       order.status,
       formatPKR((order.totalCents || 0) / 100)
@@ -98,7 +99,7 @@ export default function SalesSummaryReportPage() {
 
     autoTable(doc, {
       startY: 75,
-      head: [["Date", "Transaction ID", "Organization", "Branch", "Status", "Amount"]],
+      head: [["Date", "Transaction ID", "Organization", "Group", "Branch", "Status", "Amount"]],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [66, 66, 66] }
@@ -109,11 +110,12 @@ export default function SalesSummaryReportPage() {
   }
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-    const headers = ["Date", "Transaction ID", "Organization", "Branch", "Status", "Amount (PKR)"]
+    const headers = ["Date", "Transaction ID", "Organization", "Group", "Branch", "Status", "Amount (PKR)"]
     const rows = filteredOrders.map((order: any) => [
       new Date(order.createdAt).toLocaleDateString(),
       order.tid,
       order.organizationName || '-',
+      order.groupName || '-',
       order.branchName || `ID: ${order.branchId}`,
       order.status?.toUpperCase(),
       (order.totalCents / 100).toFixed(2)
@@ -212,6 +214,7 @@ export default function SalesSummaryReportPage() {
               <TableHead className="pl-6">Date</TableHead>
               <TableHead>Transaction ID</TableHead>
               <TableHead>Organization</TableHead>
+              <TableHead>Group</TableHead>
               <TableHead>Branch</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right pr-6">Amount</TableHead>
@@ -239,6 +242,9 @@ export default function SalesSummaryReportPage() {
                   <TableCell className="font-mono text-xs font-medium">{order.tid}</TableCell>
                   <TableCell className="text-xs text-muted-foreground font-medium">
                     {order.organizationName || '-'}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground font-medium">
+                    {order.groupName || '-'}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground font-medium">
                     {order.branchName || `ID: ${order.branchId}`}

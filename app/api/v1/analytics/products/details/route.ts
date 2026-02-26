@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, branches, users, organizations } from "@/db/schema"
+import { orders, orderItems, branches, users, organizations, groups } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
                 tid: orders.tid,
                 orderDate: orders.createdAt,
                 organizationName: organizations.name,
+                groupName: groups.name,
                 branchName: branches.name,
                 createdByName: users.fullName,
                 createdByEmail: users.email
@@ -84,6 +85,7 @@ export async function GET(req: NextRequest) {
             .innerJoin(branches, eq(orders.branchId, branches.id))
             .innerJoin(users, eq(orders.createdByUserId, users.id))
             .leftJoin(organizations, eq(orders.organizationId, organizations.id))
+            .leftJoin(groups, eq(branches.groupId, groups.id))
             .where(and(...conditions))
             .orderBy(desc(orders.createdAt), desc(orderItems.id))
 

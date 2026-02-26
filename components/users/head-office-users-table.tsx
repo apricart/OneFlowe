@@ -47,7 +47,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   const [roleFilter, setRoleFilter] = useState("all")
   const [page, setPage] = useState(1)
   const [editingUser, setEditingUser] = useState<UserRow | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const [submittingUserId, setSubmittingUserId] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<UserRow | null>(null)
 
   const [showPasswordReset, setShowPasswordReset] = useState(false)
@@ -205,7 +205,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       }
     }
 
-    setSubmitting(true)
+    setSubmittingUserId(editingUser.id)
     try {
       const body: any = {
         firstName: editForm.firstName,
@@ -235,13 +235,13 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       console.error("Error updating user:", error)
       alert("Failed to update user: " + error.message)
     } finally {
-      setSubmitting(false)
+      setSubmittingUserId(null)
     }
   }
 
   // Delete user
   const deleteUser = async (user: UserRow) => {
-    setSubmitting(true)
+    setSubmittingUserId(user.id)
     try {
       await jsonFetcher(`/api/v1/users/${user.id}`, { method: "DELETE" })
       onUserUpdate()
@@ -250,13 +250,13 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       console.error("Error deleting user:", error)
       alert("Failed to delete user: " + error.message)
     } finally {
-      setSubmitting(false)
+      setSubmittingUserId(null)
     }
   }
 
   // Toggle user status
   const toggleUserStatus = async (user: UserRow) => {
-    setSubmitting(true)
+    setSubmittingUserId(user.id)
     try {
       await jsonFetcher(`/api/v1/users/${user.id}`, {
         method: "PATCH",
@@ -267,7 +267,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       console.error("Error toggling user status:", error)
       alert("Failed to update user status: " + error.message)
     } finally {
-      setSubmitting(false)
+      setSubmittingUserId(null)
     }
   }
 
@@ -528,11 +528,11 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7"
-                          disabled={submitting}
+                          disabled={submittingUserId === user.id}
                           onClick={() => toggleUserStatus(user)}
                           title={user.isActive ? "Deactivate User" : "Activate User"}
                         >
-                          <RefreshCw className={cn("h-3.5 w-3.5", submitting && "animate-spin")} />
+                          <RefreshCw className={cn("h-3.5 w-3.5", submittingUserId === user.id && "animate-spin")} />
                         </Button>
                       )}
                     </div>
@@ -835,7 +835,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
             <Button
               onClick={saveUser}
               disabled={
-                submitting ||
+                !!submittingUserId ||
                 !editForm.firstName ||
                 !editForm.lastName ||
                 !editForm.email ||
@@ -854,7 +854,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
               }
               style={{ background: "var(--color-brand-primary)", color: "white" }}
             >
-              {submitting ? "Saving..." : "Save Changes"}
+              {submittingUserId ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -880,9 +880,9 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
             <Button
               variant="destructive"
               onClick={() => deleteConfirm && deleteUser(deleteConfirm)}
-              disabled={submitting}
+              disabled={!!submittingUserId}
             >
-              {submitting ? "Deleting..." : "Delete User"}
+              {submittingUserId ? "Deleting..." : "Delete User"}
             </Button>
           </DialogFooter>
         </DialogContent>

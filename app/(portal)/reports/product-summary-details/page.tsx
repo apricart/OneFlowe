@@ -68,7 +68,7 @@ export default function ProductSummaryDetailsReportPage() {
   const totalItems = filteredDetails.reduce((sum: number, d: any) => sum + (d.quantity || 0), 0)
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-    const headers = ["Date", "Product", "SKU", "Transaction ID", "Organization", "Branch", "Processed By", "Qty", "Total (PKR)"]
+    const headers = ["Date", "Product", "SKU", "Transaction ID", "Organization", "Group", "Branch", "Processed By", "Qty", "Total (PKR)"]
 
     const rows = filteredDetails.map((d: any) => [
       new Date(d.orderDate).toLocaleDateString(),
@@ -76,6 +76,7 @@ export default function ProductSummaryDetailsReportPage() {
       d.productCode || "-",
       d.tid,
       d.organizationName || "-",
+      d.groupName || "-",
       d.branchName,
       d.createdByName || d.createdByEmail,
       d.quantity,
@@ -151,6 +152,7 @@ export default function ProductSummaryDetailsReportPage() {
               <TableHead>SKU</TableHead>
               <TableHead>Trans ID</TableHead>
               <TableHead>Organization</TableHead>
+              <TableHead>Group</TableHead>
               <TableHead>Branch</TableHead>
               <TableHead>Processed By</TableHead>
               <TableHead className="text-right">Qty</TableHead>
@@ -170,6 +172,7 @@ export default function ProductSummaryDetailsReportPage() {
                   <TableCell className="text-[10px] font-mono text-muted-foreground">{item.productCode || "-"}</TableCell>
                   <TableCell className="text-[10px] font-mono font-medium">{item.tid}</TableCell>
                   <TableCell className="text-[10px] text-muted-foreground">{item.organizationName || "-"}</TableCell>
+                  <TableCell className="text-[10px] text-muted-foreground">{item.groupName || "-"}</TableCell>
                   <TableCell className="text-[10px] text-muted-foreground">{item.branchName}</TableCell>
                   <TableCell className="text-[10px] font-medium">
                     <div className="flex items-center gap-1">

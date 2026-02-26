@@ -160,12 +160,12 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
     if (!file) return
 
     // Client-side validation to provide immediate feedback
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"]
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
     if (!allowedTypes.includes(file.type)) {
-      setImageUploadError("Invalid file type. Only JPG, PNG, GIF are allowed")
+      setImageUploadError(`Invalid type: ${file.type}. Only JPG, PNG, GIF, and WEBP are allowed`)
       toast({
         title: "Validation Error",
-        description: "Invalid file type. Only JPG, PNG, GIF are allowed",
+        description: `Invalid type: ${file.type}. Only JPG, PNG, GIF, and WEBP are allowed`,
         variant: "destructive",
       })
       return
@@ -173,10 +173,11 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
 
     const maxSize = 5 * 1024 * 1024 // 5MB
     if (file.size > maxSize) {
-      setImageUploadError("File too large. Maximum size is 5MB")
+      const sizeMB = (file.size / 1024 / 1024).toFixed(2)
+      setImageUploadError(`File too large (${sizeMB}MB). Maximum size is 5MB`)
       toast({
         title: "Validation Error",
-        description: "File too large. Maximum size is 5MB",
+        description: `File too large (${sizeMB}MB). Maximum size is 5MB`,
         variant: "destructive",
       })
       return
@@ -477,7 +478,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   <label className="flex h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed text-center text-xs text-muted-foreground hover:border-primary/60 hover:text-primary">
                     <Upload className="mb-2 h-5 w-5" />
                     <span className="font-medium">Drop image or click to browse</span>
-                    <span className="text-[11px]">JPG, PNG, GIF up to 5MB</span>
+                    <span className="text-[11px]">JPG, PNG, GIF, WEBP up to 5MB</span>
                     <input
                       type="file"
                       accept="image/*"

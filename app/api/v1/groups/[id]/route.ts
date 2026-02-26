@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { groups, groupAuditLogs, branches } from "@/db/schema"
-import { eq, and, sql, count } from "drizzle-orm"
+import { groups, groupAuditLogs, branches, branchInventory } from "@/db/schema"
+import { eq, and, sql, count, isNull } from "drizzle-orm"
 
 export async function GET(
     req: NextRequest,
@@ -173,6 +173,24 @@ export async function DELETE(
         // Check for assigned branches
         const [branchCount] = await db.select({ val: count() }).from(branches).where(eq(branches.groupId, groupId))
         if (branchCount.val > 0) {
+            // Further check: Do these branches have any products assigned?
+            const [productCount] = await db
+                .select({ val: count() })
+                .from(branchInventory)
+                .innerJoin(branches, eq(branchInventory.branchId, branches.id))
+                .where(
+                    and(
+                        eq(branches.groupId, groupId),
+                        isNull(branchInventory.deletedAt)
+                    )
+                )
+
+            if (productCount.val > 0) {
+                return NextResponse.json({
+                    error: `Cannot delete: This group has ${branchCount.val} branch(es) with ${productCount.val} total product(s) assigned. Please remove all products from branches in this group first.`
+                }, { status: 400 })
+            }
+
             return NextResponse.json({
                 error: `Cannot delete: This group has ${branchCount.val} branch(es) assigned. Please remove all branches from the group first.`
             }, { status: 400 })

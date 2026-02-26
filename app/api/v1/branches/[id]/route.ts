@@ -1,7 +1,7 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { invalidateByPrefix } from "@/lib/cache-utils"
 import { db } from "@/lib/db"
-import { branches, users, orders, branchProducts, branchInventory, employeeCredentials, suppliers, budgets, restockRequests, inventory, systemLogs, notifications, auditLogs } from "@/db/schema"
+import { branches, users, orders, branchProducts, branchInventory, employeeCredentials, suppliers, budgets, restockRequests, inventory, systemLogs, notifications, auditLogs, groups } from "@/db/schema"
 import { eq, count, and, isNull } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 
@@ -86,6 +86,12 @@ export async function DELETE(
     // 0. Check if exists
     const [existing] = await db.select().from(branches).where(eq(branches.id, branchId))
     if (!existing) return error("Branch not found", 404)
+
+    // Check if branch is part of a group
+    if (existing.groupId) {
+      const [group] = await db.select({ name: groups.name }).from(groups).where(eq(groups.id, existing.groupId)).limit(1)
+      return error(`Cannot delete: This branch is assigned to the group "${group?.name || existing.groupId}". Please remove the branch from the group first.`, 400)
+    }
 
     // 1. Dependency Checks - Block deletion if critical data exists
 

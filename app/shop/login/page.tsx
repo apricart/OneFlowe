@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
-import { ShoppingBag, ArrowRight, ChevronLeft } from "lucide-react"
+import { ShoppingBag, ArrowRight, ChevronLeft, Eye, EyeOff } from "lucide-react"
 import Image from "next/image"
 
 export default function ShopLoginPage() {
@@ -15,6 +15,7 @@ export default function ShopLoginPage() {
   const [otp, setOtp] = useState("")
   const [step, setStep] = useState<"credentials" | "mfa">("credentials")
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -186,14 +187,30 @@ export default function ShopLoginPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2 text-slate-700">Password</label>
-                <Input
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
-                  className="bg-white/80 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
-                />
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoading}
+                    className="bg-white/80 border-slate-300 focus:border-blue-500 focus:ring-blue-500 pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-slate-400 hover:text-slate-600"
+                    onClick={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
               </div>
               <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-lg" disabled={isLoading}>
                 {isLoading ? "Signing In..." : "Sign In"}

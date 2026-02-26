@@ -38,9 +38,13 @@ export default function RemoveFromBranchPage() {
     const { organizationId: contextOrgId } = useAppContext()
     const [localOrgId, setLocalOrgId] = useState<string>("")
     const [searchQuery, setSearchQuery] = useState("")
+    const [statusFilter, setStatusFilter] = useState<string>("all")
     const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
     const [selectedGroup, setSelectedGroup] = useState<string>("")
     const [saving, setSaving] = useState(false)
+
+    const { userRole } = useAppContext()
+    const isHOorBA = userRole === "HEAD_OFFICE" || userRole === "BRANCH_ADMIN"
 
     const selectedOrgId = contextOrgId || localOrgId
     const showOrgSelector = !contextOrgId
@@ -122,15 +126,23 @@ export default function RemoveFromBranchPage() {
         return Array.from(productMap.values())
     }, [assignments, hasSelection])
 
-    // Filter unique products by search
+    // Filter unique products by status and search
     const filteredProducts = useMemo(() => {
-        if (!searchQuery) return uniqueProducts
+        let result = uniqueProducts
+
+        // Apply status filter
+        if (statusFilter !== "all") {
+            const isActiveMatch = statusFilter === "active"
+            result = result.filter(p => p.isActive === isActiveMatch)
+        }
+
+        if (!searchQuery) return result
         const q = searchQuery.toLowerCase()
-        return uniqueProducts.filter(p =>
+        return result.filter(p =>
             p.productName?.toLowerCase().includes(q) ||
             p.productCode?.toLowerCase().includes(q)
         )
-    }, [uniqueProducts, searchQuery])
+    }, [uniqueProducts, searchQuery, statusFilter])
 
     // Track selected products by organizationInventoryId
     const [selectedProducts, setSelectedProducts] = useState<number[]>([])
@@ -354,18 +366,34 @@ export default function RemoveFromBranchPage() {
                             </div>
                         )}
 
-                        {/* Search - Only show if selection made */}
+                        {/* Search & Filter - Only show if selection made */}
                         {hasSelection && (
-                            <div className="max-w-md">
-                                <label className="text-sm font-medium mb-2 block">Search Products</label>
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        placeholder="Search by name or code..."
-                                        className="pl-9"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                    />
+                            <div className="flex flex-col md:flex-row gap-4">
+                                <div className="flex-1 max-w-md">
+                                    <label className="text-sm font-medium mb-2 block">Search Products</label>
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Search by name or code..."
+                                            className="pl-9"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="w-full md:w-48">
+                                    <label className="text-sm font-medium mb-2 block">Status</label>
+                                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Filter Status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Statuses</SelectItem>
+                                            <SelectItem value="active">Active Only</SelectItem>
+                                            <SelectItem value="inactive">Inactive Only</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
                         )}

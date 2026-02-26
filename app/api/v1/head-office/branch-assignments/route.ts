@@ -44,7 +44,10 @@ export async function GET(req: NextRequest) {
     const conditions = [
       eq(branchInventory.organizationId, parseInt(organizationId)),
       isNull(branchInventory.deletedAt),
-      isNull(globalProducts.deletedAt)
+      isNull(globalProducts.deletedAt),
+      eq(globalProducts.status, "active"),
+      eq(organizationInventory.isActive, true),
+      eq(branchInventory.isActive, true)
     ]
 
     if (branchId) {

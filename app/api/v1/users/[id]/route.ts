@@ -32,8 +32,11 @@ export async function PATCH(
 
     const patch: any = { updatedAt: new Date() }
 
+    // Determine if email actually changed (avoid unnecessary session invalidation)
+    const emailActuallyChanged = body.email && body.email !== targetUser.email
+
     // Update basic fields
-    if (body.email) patch.email = body.email
+    if (emailActuallyChanged) patch.email = body.email
     if (body.firstName !== undefined) patch.firstName = body.firstName
     if (body.lastName !== undefined) patch.lastName = body.lastName
     if (body.phone !== undefined) patch.phone = body.phone
@@ -63,20 +66,19 @@ export async function PATCH(
       patch.passwordHash = await hashPassword(body.password)
     }
 
-    // Execute update
+    // If password or email actually changed, bump sessionVersion atomically in the same update
+    const isSecurityChange = !!body.password || emailActuallyChanged
+    if (isSecurityChange) {
+      console.log(`[API/Users] Security-relevant change for user ${id}. Incrementing session version...`)
+      const [currentUser] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, id)).limit(1)
+      patch.sessionVersion = (currentUser?.sessionVersion || 0) + 1
+    }
+
+    // Execute update (includes sessionVersion bump if needed — single atomic write)
     await db.update(users).set(patch).where(eq(users.id, id))
 
-    // If password or email changed, invalidate all sessions by incrementing version
-    if (body.password || body.email) {
-      console.log(`[API/Users] Password or email updated for user ${id}. Incrementing session version...`)
-      const [currentUser] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, id)).limit(1)
-      const nextVersion = (currentUser?.sessionVersion || 0) + 1
-
-      await db.update(users)
-        .set({ sessionVersion: nextVersion })
-        .where(eq(users.id, id))
-
-      // Also delete physical sessions if they exist (for database-bound sessions if used)
+    // Also delete physical sessions if they exist (for database-bound sessions if used)
+    if (isSecurityChange) {
       await db.delete(sessions).where(eq(sessions.userId, id))
     }
 
@@ -100,7 +102,7 @@ export async function PATCH(
           patchKeys: Object.keys(patch),
           updatedUserOrgId: body.organizationId,
           updatedUserBranchId: body.branchId,
-          sessionsInvalidated: !!(body.password || body.email)
+          sessionsInvalidated: isSecurityChange
         },
         ipAddress: ip,
         userAgent: userAgent,

@@ -226,9 +226,16 @@ export default function ShowAssignedProductsPage() {
                                                         : <span className="text-muted-foreground">Not set</span>}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={product.globalStatus === "active" ? "default" : "secondary"}>
-                                                        {product.globalStatus === "active" ? "Active" : "Inactive"}
-                                                    </Badge>
+                                                    <div className="flex flex-col gap-1">
+                                                        <Badge variant={product.isActive ? "default" : "secondary"}>
+                                                            {product.isActive ? "Active" : "Inactive"} (Org)
+                                                        </Badge>
+                                                        {product.globalStatus !== "active" && (
+                                                            <Badge variant="destructive" className="text-[10px] py-0">
+                                                                Globally {product.globalStatus}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="text-muted-foreground text-sm">
                                                     {new Date(product.assignedAt).toLocaleDateString()}
