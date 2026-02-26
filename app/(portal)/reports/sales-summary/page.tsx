@@ -41,6 +41,7 @@ export default function SalesSummaryReportPage() {
   if (startDate) queryParams.set("startDate", startDate)
   if (endDate) queryParams.set("endDate", endDate)
   if (groupId) queryParams.set("groupId", groupId)
+  queryParams.set("limit", "10000") // Fetch more records for the report
 
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${queryParams.toString()}`, fetcher)
 

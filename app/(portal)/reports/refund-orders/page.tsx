@@ -40,6 +40,7 @@ export default function RefundOrdersReportPage() {
   if (organizationId) queryParams.set("organizationId", String(organizationId))
   if (startDate) queryParams.set("startDate", startDate)
   if (endDate) queryParams.set("endDate", endDate)
+  queryParams.set("limit", "10000")
 
   const { data, isLoading, mutate } = useSWR<any>(`/api/v1/analytics/refunds?${queryParams.toString()}`, fetcher)
 

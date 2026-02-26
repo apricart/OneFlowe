@@ -39,6 +39,7 @@ export default function ProductSummaryDetailsReportPage() {
   if (startDate) queryParams.set("startDate", startDate)
   if (endDate) queryParams.set("endDate", endDate)
   if (groupId) queryParams.set("groupId", groupId)
+  queryParams.set("limit", "10000")
 
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/products/details?${queryParams.toString()}`, fetcher)
 

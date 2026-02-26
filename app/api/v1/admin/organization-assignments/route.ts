@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { organizationInventory, globalProducts, organizations, auditLogs, categories } from "@/db/schema"
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm"
+import { alias } from "drizzle-orm/pg-core"
 import { cascadeOrgDeletion, cascadeOrgStatusChange } from "@/lib/inventory-cascade"
 import { validateAssignmentData } from "@/lib/inventory-validation"
 
@@ -40,6 +41,9 @@ export async function GET(req: NextRequest) {
 
     const whereClause = and(...conditions)
 
+    const subCategories = alias(categories, "subCategories")
+    const parentCategories = alias(categories, "parentCategories")
+
     const [items, totalResult] = await Promise.all([
       db.select({
         id: organizationInventory.id,
@@ -53,14 +57,16 @@ export async function GET(req: NextRequest) {
         assignedAt: organizationInventory.assignedAt,
         productName: globalProducts.name,
         productCode: globalProducts.productCode,
-        categoryName: categories.name,
+        categoryName: subCategories.name,
+        parentCategoryName: parentCategories.name,
         productImageUrl: globalProducts.imageUrl,
         globalStatus: globalProducts.status,
         organizationName: organizations.name,
       })
         .from(organizationInventory)
         .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+        .leftJoin(subCategories, eq(globalProducts.categoryId, subCategories.id))
+        .leftJoin(parentCategories, eq(subCategories.parentId, parentCategories.id))
         .leftJoin(organizations, eq(organizationInventory.organizationId, organizations.id))
         .where(whereClause)
         .orderBy(desc(organizationInventory.assignedAt))
