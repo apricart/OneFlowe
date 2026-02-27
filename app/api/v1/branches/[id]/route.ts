@@ -62,8 +62,9 @@ export async function PATCH(
     patch.updatedAt = new Date()
     const [item] = await db.update(branches).set(patch).where(eq(branches.id, Number(id))).returning()
 
-    // Invalidate branches cache so GET returns fresh data immediately
+    // Invalidate branches and groups cache so GET returns fresh data immediately
     await invalidateByPrefix('branches')
+    await invalidateByPrefix('groups')
 
     return ok({ item })
   } catch (e: any) {

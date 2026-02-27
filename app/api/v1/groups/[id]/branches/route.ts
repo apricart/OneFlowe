@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { groups, branches, groupAuditLogs } from "@/db/schema"
 import { eq, inArray, and, sql } from "drizzle-orm"
+import { invalidateByPrefix } from "@/lib/cache-utils"
 
 export async function GET(
     req: Request,
@@ -143,6 +144,10 @@ export async function PUT(
                 },
             })
         })
+
+        // Invalidate both groups (branch count changed) and branches (groupId changed) caches
+        await invalidateByPrefix('groups')
+        await invalidateByPrefix('branches')
 
         return NextResponse.json({ message: "Branch assignments updated" })
     } catch (e: any) {

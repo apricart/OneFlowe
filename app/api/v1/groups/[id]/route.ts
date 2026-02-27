@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { groups, groupAuditLogs, branches, branchInventory } from "@/db/schema"
 import { eq, and, sql, count, isNull } from "drizzle-orm"
+import { invalidateByPrefix } from "@/lib/cache-utils"
 
 export async function GET(
     req: NextRequest,
@@ -127,6 +128,9 @@ export async function PUT(
             },
         })
 
+        // Invalidate groups cache so GET returns fresh data immediately
+        await invalidateByPrefix('groups')
+
         return NextResponse.json({ group: updated })
     } catch (e: any) {
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
@@ -216,6 +220,9 @@ export async function DELETE(
                 },
             })
         })
+
+        // Invalidate groups cache so GET returns fresh data immediately
+        await invalidateByPrefix('groups')
 
         return NextResponse.json({ message: "Group deleted successfully" })
     } catch (e: any) {

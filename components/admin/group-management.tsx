@@ -97,14 +97,21 @@ export function GroupManagement({ role }: { role: string }) {
         ? `/api/v1/groups?organizationId=${globalOrgId}`
         : "/api/v1/groups"
 
-    const { data: groupsData, error: groupsError } = useSWR(groupsUrl, fetcher)
+    const { data: groupsData, error: groupsError } = useSWR(groupsUrl, fetcher, {
+        revalidateOnFocus: true,
+        revalidateOnMount: true,
+        dedupingInterval: 2000,
+    })
     const { data: orgsData } = useSWR(role === "SUPER_ADMIN" ? "/api/v1/organizations" : null, fetcher)
     const currentOrg = orgsData?.items?.find((org: Organization) => org.id.toString() === globalOrgId)
 
-    const branchesUrl = selectedGroup ? `/api/v1/branches?organizationId=${selectedGroup.organizationId}` : null
+    const branchesUrl = (selectedGroup?.organizationId || globalOrgId)
+        ? `/api/v1/branches?organizationId=${selectedGroup?.organizationId || globalOrgId}`
+        : null
     const { data: branchesData, mutate: mutateBranches } = useSWR(
         branchesUrl,
-        fetcher
+        fetcher,
+        { revalidateOnFocus: true, dedupingInterval: 2000 }
     )
 
     const handleCreate = async () => {
@@ -250,20 +257,17 @@ export function GroupManagement({ role }: { role: string }) {
         setIsEditOpen(true)
     }
 
-    const openBranchManager = async (group: Group) => {
-        setSelectedBranchIds([])
+    const openBranchManager = (group: Group) => {
         setSelectedGroup(group)
+
+        // Derive selection from already-loaded branches data (instant, no extra fetch)
+        const assignedIds = branchesData?.items
+            ?.filter((b: Branch) => b.groupId === group.id)
+            .map((b: Branch) => b.id) || []
+        setSelectedBranchIds(assignedIds)
+
         setIsBranchOpen(true)
-
-        // Use the function name mutateBranches for clear synchronization
         mutateBranches()
-
-        // Fetch currently assigned branches for this group to initialize selection
-        const res = await fetch(`/api/v1/groups/${group.id}/branches`)
-        const data = await res.json()
-        if (data.branches) {
-            setSelectedBranchIds(data.branches.map((b: any) => b.id))
-        }
     }
 
     if (groupsError) return <div>Failed to load groups</div>
