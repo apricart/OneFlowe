@@ -10,16 +10,24 @@ const MIN_TIMEOUT_MS = 1000
  */
 function isValidUrl(url: string): boolean {
   try {
-    if (!url || typeof url !== 'string') return false
+    if (!url || typeof url !== 'string') {
+      console.warn('[Fetcher] isValidUrl: URL is missing or not a string', { url })
+      return false
+    }
     // Reject explicit stringified null/undefined
-    if (url === 'undefined' || url === 'null') return false
+    if (url === 'undefined' || url === 'null') {
+      console.warn('[Fetcher] isValidUrl: URL is stringified null or undefined', { url })
+      return false
+    }
 
     // Accept relative URLs (starting with /)
     if (url.startsWith('/')) return true
+
     // Validate absolute URLs
     new URL(url)
     return true
-  } catch {
+  } catch (err) {
+    console.warn('[Fetcher] isValidUrl: Failed to construct URL', { url, error: err })
     return false
   }
 }

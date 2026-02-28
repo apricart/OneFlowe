@@ -8,7 +8,7 @@ export function useScopedSWR<Key extends string, Data = any, Error = any>(
   config?: SWRConfiguration<Data, Error>,
 ): SWRResponse<Data, Error> {
   const { organizationId, branchId } = useAppContext()
-  if (!key) return useSWR(null, fetcher, config) as any
+  if (!key || key === "undefined" || key === "null") return useSWR(null, fetcher, config) as any
   const url = new URL(key, typeof window !== "undefined" ? window.location.origin : "http://localhost")
   if (organizationId) url.searchParams.set("organizationId", organizationId)
   if (branchId) url.searchParams.set("branchId", branchId)

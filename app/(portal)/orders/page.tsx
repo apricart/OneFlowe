@@ -412,45 +412,58 @@ export default function OrdersManagementPage() {
           <h3 className="font-semibold text-slate-900 dark:text-slate-100">Filters</h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="relative w-full lg:max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
             <Input
               placeholder="Search by TID or Order ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-10 w-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-primary/20"
             />
           </div>
 
-          <div className="flex gap-2 flex-wrap">
-            {["all", "pending", "approved", "fulfilled", "refunded"].filter(s => !(isSuperAdmin || isHeadOffice) || s !== "pending").map((status) => (
-              <Button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                variant={statusFilter === status ? "default" : "outline"}
-                size="sm"
-                className="capitalize"
-              >
-                {status}
-              </Button>
-            ))}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1 p-1 bg-slate-100/50 dark:bg-slate-800/50 rounded-lg border border-slate-200/50 dark:border-slate-800">
+              {["all", "pending", "approved", "fulfilled", "refunded"].filter(s => !(isSuperAdmin || isHeadOffice) || s !== "pending").map((status) => (
+                <Button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  variant={statusFilter === status ? "secondary" : "ghost"}
+                  size="sm"
+                  className={`capitalize px-3 h-8 text-xs font-medium transition-all ${statusFilter === status
+                      ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white"
+                      : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+                    }`}
+                >
+                  {status}
+                </Button>
+              ))}
+            </div>
+            <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 hidden md:block mx-1" />
             <OrderExport orders={filteredOrders} role={userRole} />
           </div>
+        </div>
 
-          <div className="flex gap-2 flex-wrap items-center">
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Refund:</span>
-            {["all", "none", "partial", "full"].map((refund) => (
-              <Button
-                key={refund}
-                onClick={() => setRefundFilter(refund)}
-                variant={refundFilter === refund ? "default" : "outline"}
-                size="sm"
-                className="capitalize"
-              >
-                {refund}
-              </Button>
-            ))}
+        <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-slate-100 dark:border-slate-800/50">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Refund state</span>
+            <div className="flex gap-1.5">
+              {["all", "none", "partial", "full"].map((refund) => (
+                <Button
+                  key={refund}
+                  onClick={() => setRefundFilter(refund)}
+                  variant={refundFilter === refund ? "default" : "outline"}
+                  size="sm"
+                  className={`h-7 px-3 text-[11px] capitalize rounded-full ${refundFilter === refund
+                      ? "bg-slate-900 dark:bg-slate-100"
+                      : "border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    }`}
+                >
+                  {refund}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
       </Card>

@@ -92,10 +92,16 @@ export default function AssignProductPage() {
     )
 
     // Fetch assigned products for selected organization
+    const assignmentParams = new URLSearchParams()
+    assignmentParams.set("organizationId", selectedOrgId || "")
+    if (categoryFilter !== "all") assignmentParams.set("category", categoryFilter)
+    if (subCategoryFilter !== "all") assignmentParams.set("subCategory", subCategoryFilter)
+    if (searchQuery) assignmentParams.set("search", searchQuery)
+
     const { data: assignmentsData, isLoading: assignmentsLoading, mutate: mutateAssignments } = useSWR<{
         items: AssignedProduct[]
     }>(
-        selectedOrgId ? `/api/v1/admin/organization-assignments?organizationId=${selectedOrgId}` : null,
+        selectedOrgId ? `/api/v1/admin/organization-assignments?${assignmentParams.toString()}` : null,
         fetcher,
         { fallbackData: { items: [] } }
     )

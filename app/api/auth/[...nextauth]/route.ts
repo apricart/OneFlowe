@@ -11,7 +11,7 @@ export { handler as GET }
 // POST requests (login attempts) are rate-limited
 export async function POST(req: NextRequest, context: any) {
     // Only rate-limit actual credential login attempts, not signOut or CSRF requests
-    const url = new URL(req.url)
+    const url = new URL(req.url || "http://localhost")
     const isSignIn = url.pathname.endsWith('/callback/credentials') ||
         url.pathname.endsWith('/callback/employee-credentials')
 

@@ -171,13 +171,12 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
       return
     }
 
-    const maxSize = 5 * 1024 * 1024 // 5MB
+    const maxSize = 4 * 1024 * 1024 // 4MB
     if (file.size > maxSize) {
-      const sizeMB = (file.size / 1024 / 1024).toFixed(2)
-      setImageUploadError(`File too large (${sizeMB}MB). Maximum size is 5MB`)
+      setImageUploadError("please upload image under 4MB")
       toast({
         title: "Validation Error",
-        description: `File too large (${sizeMB}MB). Maximum size is 5MB`,
+        description: "please upload image under 4MB",
         variant: "destructive",
       })
       return
@@ -278,17 +277,23 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
         })
         onSuccess ? onSuccess() : router.push("/global-inventory")
       } else {
+        // Detailed error message from backend
+        let errorMessage = result.error || "Failed to save product"
+        if (response.status === 413) {
+          errorMessage = "The image you uploaded is too large to save. please upload image under 4MB"
+        }
+
         toast({
           title: "Error",
-          description: result.error || "Failed to save product",
+          description: errorMessage,
           variant: "destructive",
         })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving product:", error)
       toast({
         title: "Error",
-        description: "Failed to save product",
+        description: error.message || "Failed to save product",
         variant: "destructive",
       })
     }
@@ -477,7 +482,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   <label className="flex h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed text-center text-xs text-muted-foreground hover:border-primary/60 hover:text-primary">
                     <Upload className="mb-2 h-5 w-5" />
                     <span className="font-medium">Drop image or click to browse</span>
-                    <span className="text-[11px]">JPG, PNG, GIF, WEBP up to 5MB</span>
+                    <span className="text-[11px]">JPG, PNG, GIF, WEBP up to 4MB</span>
                     <input
                       type="file"
                       accept="image/*"

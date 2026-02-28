@@ -30,12 +30,12 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // Validate file size (5MB max)
-    const maxSize = 5 * 1024 * 1024 // 5MB
+    // Validate file size (4MB max)
+    const maxSize = 4 * 1024 * 1024 // 4MB
     if (file.size > maxSize) {
       console.warn(`[Upload] Rejected file with size: ${file.size} bytes`)
       return NextResponse.json({
-        error: `File too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size is 5MB`
+        error: "please upload image under 4MB"
       }, { status: 400 })
     }
 

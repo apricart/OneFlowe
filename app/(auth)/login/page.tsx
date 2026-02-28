@@ -26,9 +26,13 @@ function LoginForm() {
   const [pendingUser, setPendingUser] = useState<{ email: string; password: string } | null>(null)
   const [isProcessingMFA, setIsProcessingMFA] = useState(false)
 
-  // Clear theme preference on mount and FORCE light mode, and sign out any existing session
+  // Clear theme preference and context on mount and FORCE light mode, and sign out any existing session
   useEffect(() => {
     localStorage.removeItem("theme")
+    // Clear potentially stale context to avoid Invalid URL errors in hooks
+    localStorage.removeItem("ctx.organizationId")
+    localStorage.removeItem("ctx.branchId")
+
     document.documentElement.classList.remove("dark")
     document.documentElement.style.colorScheme = "light"
     signOut({ redirect: false })
@@ -81,7 +85,9 @@ function LoginForm() {
         window.location.replace("/shop")
       } else {
         const cb = searchParams.get("callbackUrl")
-        window.location.replace(cb || "/dashboard")
+        // Validate callbackUrl to avoid redirecting to "undefined" or "null" strings
+        const targetUrl = (cb && cb !== "undefined" && cb !== "null") ? cb : "/dashboard"
+        window.location.replace(targetUrl)
       }
     } catch (err: any) {
       setError(err.message || "An error occurred during login")
@@ -103,7 +109,8 @@ function LoginForm() {
       window.location.replace("/shop")
     } else {
       const cb = searchParams.get("callbackUrl")
-      window.location.replace(cb || "/dashboard")
+      const targetUrl = (cb && cb !== "undefined" && cb !== "null") ? cb : "/dashboard"
+      window.location.replace(targetUrl)
     }
   }
 

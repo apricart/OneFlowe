@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { organizationInventory, globalProducts, organizations, auditLogs, categories } from "@/db/schema"
-import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm"
+import { eq, and, desc, sql, inArray, isNull, or, ilike, type SQL } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { cascadeOrgDeletion, cascadeOrgStatusChange } from "@/lib/inventory-cascade"
 import { validateAssignmentData } from "@/lib/inventory-validation"
@@ -24,11 +24,14 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const organizationId = searchParams.get("organizationId")
     const productId = searchParams.get("productId")
+    const search = searchParams.get("search")
+    const category = searchParams.get("category")
+    const subCategory = searchParams.get("subCategory")
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
 
-    const conditions = [
+    const conditions: SQL[] = [
       isNull(organizationInventory.deletedAt),
       isNull(globalProducts.deletedAt)
     ]
@@ -37,6 +40,43 @@ export async function GET(req: NextRequest) {
     }
     if (productId) {
       conditions.push(eq(organizationInventory.globalProductId, parseInt(productId)))
+    }
+    if (search) {
+      conditions.push(or(
+        ilike(globalProducts.name, `%${search}%`),
+        ilike(globalProducts.productCode, `%${search}%`)
+      ) as SQL)
+    }
+    if (category && category !== 'all') {
+      const catId = parseInt(category)
+      // Check if this is a parent category or a subcategory
+      const [catInfo] = await db.select({
+        id: categories.id,
+        parentId: categories.parentId
+      }).from(categories).where(eq(categories.id, catId)).limit(1)
+
+      if (catInfo) {
+        if (catInfo.parentId === null) {
+          // It's a parent category - find all subcategories
+          const subCats = await db.select({ id: categories.id })
+            .from(categories)
+            .where(eq(categories.parentId, catId))
+
+          const subCatIds = subCats.map(sc => sc.id)
+          if (subCatIds.length > 0) {
+            conditions.push(inArray(globalProducts.categoryId, subCatIds))
+          } else {
+            // No subcategories, match nothing if it's a parent with no children
+            conditions.push(eq(globalProducts.categoryId, -1))
+          }
+        } else {
+          // It's a subcategory - match directly
+          conditions.push(eq(globalProducts.categoryId, catId))
+        }
+      }
+    }
+    if (subCategory && subCategory !== 'all') {
+      conditions.push(eq(globalProducts.categoryId, parseInt(subCategory)))
     }
 
     const whereClause = and(...conditions)

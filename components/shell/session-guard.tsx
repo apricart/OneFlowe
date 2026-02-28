@@ -43,6 +43,8 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
                 // Clear any stale local storage
                 try {
                     localStorage.removeItem("theme")
+                    localStorage.removeItem("ctx.organizationId")
+                    localStorage.removeItem("ctx.branchId")
                 } catch (_) { }
                 window.location.replace(loginPath)
             })
