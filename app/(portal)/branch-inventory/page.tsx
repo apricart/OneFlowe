@@ -50,7 +50,7 @@ export default function BranchInventoryPage() {
     total: number
   }>(`/api/v1/branch/inventory?${params.toString()}`, fetcher, {
     fallbackData: { items: [], total: 0 },
-    revalidateOnFocus: false,
+    refreshInterval: 5000, // Auto-refresh every 5s so admin changes appear quickly
   })
 
   const inventory = data?.items ?? []

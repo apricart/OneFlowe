@@ -39,148 +39,210 @@ export async function GET(
         // Generate PDF (A4 size: 210mm x 297mm)
         const doc = new jsPDF()
 
+        // Custom colors
+        const colors = {
+            primary: [15, 23, 42], // slate-900
+            secondary: [100, 116, 139], // slate-500
+            light: [248, 250, 252], // slate-50
+            border: [226, 232, 240], // slate-200
+            accent: [37, 99, 235], // blue-600
+        }
+
+        // --- Top Accent Bar ---
+        doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2])
+        doc.rect(0, 0, 210, 8, "F")
+
         // --- Header Section ---
-        // Logo (Attempt to load from public folder)
         try {
             const logoPath = path.join(process.cwd(), "public", "logo-pos.png")
             if (fs.existsSync(logoPath)) {
                 const logoData = fs.readFileSync(logoPath).toString("base64")
-                doc.addImage(`data:image/png;base64,${logoData}`, "PNG", 15, 15, 60, 16, undefined, 'FAST')
+                doc.addImage(`data:image/png;base64,${logoData}`, "PNG", 20, 20, 50, 14, undefined, 'FAST')
             } else {
-                doc.setTextColor(25, 34, 109) // Navy blue from logo
+                doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2])
                 doc.setFont("helvetica", "bold")
                 doc.setFontSize(24)
-                doc.text("ONEFLOWE", 15, 25)
+                doc.text("ONEFLOWE", 20, 30)
             }
         } catch (e) {
-            console.error("Logo loading error:", e)
-            doc.setFontSize(20)
-            doc.text("ONEFLOWE", 15, 25)
+            doc.setFontSize(24)
+            doc.text("ONEFLOWE", 20, 30)
         }
 
-        // Company info under logo
-        doc.setTextColor(30, 41, 59)
+        // From Address
+        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
         doc.setFont("helvetica", "bold")
         doc.setFontSize(9)
-        doc.text("From:", 15, 38)
+        doc.text("FROM:", 20, 45)
+        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2])
+        doc.text(receiptData.organizationName || "Apricart E-Store Pvt Ltd", 20, 50)
         doc.setFont("helvetica", "normal")
-        doc.setFontSize(10)
-        doc.text(receiptData.organizationName || "Apricart E-Store Pvt Ltd", 15, 43)
+        doc.text(receiptData.organizationContact || "0333-3182410", 20, 55)
 
         // Right side: Invoice Meta
         doc.setFont("helvetica", "bold")
-        doc.setFontSize(18)
-        doc.text(`INVOICE#: ${receiptData.invoiceNumber}`, 195, 22, { align: "right" })
+        doc.setFontSize(22)
+        doc.text("INVOICE", 190, 32, { align: "right" })
+
+        doc.setFontSize(10)
+        doc.text(`#${receiptData.invoiceNumber}`, 190, 38, { align: "right" })
 
         doc.setFontSize(9)
-        doc.setTextColor(100, 116, 139)
-        doc.text("DATE:", 160, 28)
-        doc.setTextColor(30, 41, 59)
-        doc.text(receiptData.date, 195, 28, { align: "right" })
+        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
+        doc.text("DATE:", 155, 48)
+        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2])
+        doc.text(receiptData.date, 190, 48, { align: "right" })
 
-        doc.setTextColor(100, 116, 139)
-        doc.text("Contact No:", 160, 33)
-        doc.setTextColor(30, 41, 59)
-        doc.text(receiptData.organizationContact || "0333-3182410", 195, 33, { align: "right" })
+        // --- Billed To Box ---
+        doc.setFillColor(colors.light[0], colors.light[1], colors.light[2])
+        doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2])
+        doc.roundedRect(20, 65, 170, 35, 2, 2, "FD")
 
-        // Buyer details on right
-        doc.setTextColor(100, 116, 139)
         doc.setFont("helvetica", "bold")
-        doc.text("BUYER NAME:", 160, 45)
-        doc.setTextColor(15, 23, 42)
-        doc.text(String(receiptData.buyerName).toUpperCase(), 195, 45, { align: "right" })
+        doc.setFontSize(9)
+        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
+        doc.text("BILLED TO:", 25, 75)
 
-        doc.setTextColor(100, 116, 139)
-        doc.text("Deliver to:", 160, 50)
+        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2])
+        doc.setFontSize(11)
+        doc.text(String(receiptData.buyerName).toUpperCase(), 25, 83)
         doc.setFont("helvetica", "normal")
-        doc.setFontSize(8)
-        const addrLines = doc.splitTextToSize(receiptData.buyerAddress || '—', 50)
-        doc.text(addrLines, 195, 50, { align: "right" })
+        doc.setFontSize(9)
+        if (receiptData.buyerPhone) doc.text(`Phone: ${receiptData.buyerPhone}`, 25, 89)
 
-        // Divider
-        doc.setDrawColor(226, 232, 240)
-        doc.setLineWidth(0.5)
-        doc.line(15, 65, 195, 65)
+        doc.setFont("helvetica", "bold")
+        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
+        doc.text("DELIVER TO:", 100, 75)
+        doc.setFont("helvetica", "normal")
+        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2])
+        const addrLines = doc.splitTextToSize(receiptData.buyerAddress || '—', 85)
+        doc.text(addrLines, 100, 83)
 
         // --- Items Table ---
-        let y = 75
-        doc.setFillColor(15, 23, 42)
-        doc.rect(15, y, 180, 10, "F")
+        let y = 110
+
+        // Table Header
+        doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2])
+        doc.rect(20, y, 170, 10, "F")
         doc.setTextColor(255, 255, 255)
         doc.setFont("helvetica", "bold")
         doc.setFontSize(9)
-        doc.text("DESCRIPTION", 20, y + 7)
-        doc.text("RATE", 140, y + 7, { align: "right" })
-        doc.text("QTY", 160, y + 7, { align: "right" })
-        doc.text("TOTAL", 190, y + 7, { align: "right" })
+        doc.text("#", 25, y + 7)
+        doc.text("DESCRIPTION", 40, y + 7)
+        doc.text("PRICE", 130, y + 7, { align: "right" })
+        doc.text("QTY", 155, y + 7, { align: "right" })
+        doc.text("TOTAL", 185, y + 7, { align: "right" })
 
         y += 15
-        doc.setTextColor(30, 41, 59)
 
+        // Table Body
+        let counter = 0
         receiptData.items?.forEach((cat: any) => {
-            // Category Header
-            if (y > 270) { doc.addPage(); y = 20; }
-            doc.setFillColor(248, 250, 252)
-            doc.rect(15, y - 4, 180, 6, "F")
+            if (y > 260) { doc.addPage(); y = 20; }
+
+            // Category Row
+            doc.setFillColor(colors.light[0], colors.light[1], colors.light[2])
+            doc.rect(20, y - 5, 170, 7, "F")
+            doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
             doc.setFont("helvetica", "bold")
-            doc.setFontSize(7)
-            doc.text((cat.mainCategoryName || cat.categoryName || "ITEMS")?.toUpperCase(), 17, y)
-            y += 6
+            doc.setFontSize(8)
+            doc.text((cat.mainCategoryName || cat.categoryName || "ITEMS")?.toUpperCase(), 25, y)
+            y += 7
 
             const subCats = cat.subCategories || [{ items: cat.items }]
             subCats.forEach((sub: any) => {
-                sub.items?.forEach((item: any) => {
-                    if (y > 270) {
-                        doc.addPage()
-                        y = 20
-                    }
-                    doc.setFont("helvetica", "normal")
-                    doc.setFontSize(8)
-                    doc.text(item.description?.substring(0, 60) || "", 20, y)
-                    doc.text(Number(item.rate).toLocaleString(), 140, y, { align: "right" })
-                    doc.text(String(item.quantity), 160, y, { align: "right" })
+                if (sub.subCategoryName) {
+                    if (y > 260) { doc.addPage(); y = 20; }
+                    doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
                     doc.setFont("helvetica", "bold")
-                    doc.text(Number(item.total).toLocaleString(), 190, y, { align: "right" })
+                    doc.setFontSize(8)
+                    doc.text(`> ${sub.subCategoryName}`, 30, y)
+                    y += 6
+                }
 
+                sub.items?.forEach((item: any) => {
+                    if (y > 260) { doc.addPage(); y = 20; }
+                    counter++
+                    doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2])
+
+                    // S#
+                    doc.setFont("helvetica", "normal")
+                    doc.text(String(counter), 25, y)
+
+                    // Description (truncate nicely)
+                    const desc = item.description?.substring(0, 50) + (item.description?.length > 50 ? "..." : "") || ""
+                    doc.text(desc, 40, y)
+
+                    doc.text(Number(item.rate).toLocaleString(), 130, y, { align: "right" })
+                    doc.text(String(item.quantity), 155, y, { align: "right" })
+
+                    doc.setFont("helvetica", "bold")
+                    doc.text(Number(item.total).toLocaleString(), 185, y, { align: "right" })
+
+                    // Line separator
                     doc.setDrawColor(241, 245, 249)
-                    doc.line(15, y + 2, 195, y + 2)
+                    doc.setLineWidth(0.5)
+                    doc.line(20, y + 2, 190, y + 2)
                     y += 8
                 })
             })
+            y += 4
         })
 
         // --- Summary Block ---
-        y += 10
-        if (y > 250) {
-            doc.addPage()
-            y = 20
-        }
+        y += 5
+        if (y > 220) { doc.addPage(); y = 20; }
 
         const drawSummaryRow = (label: string, value: string, isTotal = false) => {
             doc.setFont("helvetica", isTotal ? "bold" : "normal")
-            doc.setFontSize(isTotal ? 12 : 9)
-            doc.text(label, 140, y)
-            doc.text(value, 190, y, { align: "right" })
-            y += isTotal ? 10 : 6
+            doc.setFontSize(isTotal ? 14 : 10)
+            doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2])
+            doc.text(label, 130, y)
+            doc.text(value, 185, y, { align: "right" })
+            y += isTotal ? 12 : 7
         }
 
         drawSummaryRow("Subtotal:", `PKR ${Number(receiptData.subtotal).toLocaleString()}`)
-        drawSummaryRow("Discounts:", `-PKR ${Number(receiptData.discount).toLocaleString()}`)
         drawSummaryRow("Tax & Fees:", `PKR ${Number(receiptData.tax).toLocaleString()}`)
+
+        if (Number(receiptData.discount) > 0) {
+            doc.setTextColor(239, 68, 68) // red-500
+            doc.setFont("helvetica", "normal")
+            doc.text("Discounts:", 130, y)
+            doc.text(`-PKR ${Number(receiptData.discount).toLocaleString()}`, 185, y, { align: "right" })
+            y += 7
+        }
+
         if (receiptData.deliveryCharges > 0) {
+            doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2])
             drawSummaryRow("Delivery:", `PKR ${Number(receiptData.deliveryCharges).toLocaleString()}`)
         }
 
-        doc.setDrawColor(15, 23, 42)
-        doc.setLineWidth(1)
-        doc.line(140, y - 2, 195, y - 2)
-        y += 5
-        drawSummaryRow("NET TOTAL:", `PKR ${Number(receiptData.totalAmount).toLocaleString()}`, true)
+        // Total Box
+        y += 2
+        doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2])
+        doc.roundedRect(120, y - 6, 70, 14, 2, 2, "F")
+        doc.setTextColor(255, 255, 255)
+        doc.setFont("helvetica", "bold")
+        doc.setFontSize(10)
+        doc.text("TOTAL PAYABLE", 125, y + 2)
+        doc.setFontSize(14)
+        doc.text(`PKR ${Number(receiptData.totalAmount).toLocaleString()}`, 185, y + 2, { align: "right" })
 
-        // Footer
-        doc.setFontSize(7)
-        doc.setTextColor(148, 163, 184)
-        doc.text(`Official Document - Generated by OneFlowe ERP on ${new Date().toLocaleString()}`, 105, 285, { align: "center" })
+        // --- Footer ---
+        doc.setFontSize(8)
+        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
+
+        doc.text("Generated by OneFlowe ERP System", 105, 285, { align: "center" })
+        doc.text(`Printed on: ${new Date().toLocaleString()}`, 105, 289, { align: "center" })
+
+        // Signatures
+        doc.setDrawColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
+        doc.line(30, 275, 70, 275)
+        doc.text("Authorized Signature", 50, 280, { align: "center" })
+
+        doc.line(140, 275, 180, 275)
+        doc.text("Accountant", 160, 280, { align: "center" })
 
         const pdfBuffer = doc.output("arraybuffer")
 

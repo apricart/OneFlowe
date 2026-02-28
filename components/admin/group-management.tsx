@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import useSWR, { mutate } from "swr"
-import { Plus, Pencil, Trash2, Building, ChevronRight, CheckCircle2, History, Users, AlertCircle } from "lucide-react"
+import { Plus, Pencil, Trash2, Building, ChevronRight, CheckCircle2, History, Users, AlertCircle, Eraser, Package, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PremiumConfirmDialog } from "@/components/premium/premium-confirm-dialog"
 import {
@@ -77,6 +77,13 @@ export function GroupManagement({ role }: { role: string }) {
     const [isReleasing, setIsReleasing] = useState<number | null>(null)
     const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
     const [confirmRelease, setConfirmRelease] = useState<{ open: boolean; id: number | null }>({ open: false, id: null })
+    // Product protection states
+    const [branchProductCounts, setBranchProductCounts] = useState<Record<number, number>>({})
+    const [isCleaning, setIsCleaning] = useState<number | null>(null)
+    const [confirmClean, setConfirmClean] = useState<{ open: boolean; branchId: number | null; branchName: string }>({ open: false, branchId: null, branchName: "" })
+    const [isLoadingCounts, setIsLoadingCounts] = useState(false)
+    const [originalBranchIds, setOriginalBranchIds] = useState<number[]>([]) // branches in group when dialog opened
+    const [totalGroupProducts, setTotalGroupProducts] = useState(0) // total unique products in the group
 
     // Form states
     const [name, setName] = useState("")
@@ -208,12 +215,27 @@ export function GroupManagement({ role }: { role: string }) {
             const res = await fetch(`/api/v1/groups/${selectedGroup.id}/branches`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ branchIds: selectedBranchIds }),
+                body: JSON.stringify({
+                    branchIds: selectedBranchIds,
+                    newlyAddedBranchIds: selectedBranchIds.filter(id => !originalBranchIds.includes(id))
+                }),
             })
 
-            if (!res.ok) throw new Error(await res.text())
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({ error: "Failed to update branches" }))
+                // Show blocked branches info if available
+                if (errorData.blockedBranches) {
+                    const names = errorData.blockedBranches.map((b: any) => `${b.branchName} (${b.productCount} products)`).join(", ")
+                    throw new Error(`Clean products first from: ${names}`)
+                }
+                throw new Error(errorData.error || "Failed to update branches")
+            }
 
-            toast({ title: "Success", description: "Branches assigned successfully" })
+            const data = await res.json()
+            const autoMsg = data.newlyAddedBranchIds?.length > 0
+                ? ` ${data.newlyAddedBranchIds.length} new branch(es) received group products automatically.`
+                : ""
+            toast({ title: "Success", description: `Branches assigned successfully.${autoMsg}`, variant: "success" })
             setIsBranchOpen(false)
             mutate(groupsUrl)
             mutateBranches()
@@ -221,6 +243,40 @@ export function GroupManagement({ role }: { role: string }) {
             toast({ title: "Error", description: e.message, variant: "destructive" })
         } finally {
             setIsSaving(false)
+        }
+    }
+
+    const handleCleanBranch = async (branchId: number) => {
+        try {
+            if (!selectedGroup) return
+            setIsCleaning(branchId)
+            const res = await fetch(`/api/v1/groups/${selectedGroup.id}/branches/clean`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ branchId }),
+            })
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({ error: "Failed to clean products" }))
+                throw new Error(errorData.error || "Failed to clean products")
+            }
+
+            const data = await res.json()
+            toast({
+                title: "Products Cleaned",
+                description: data.message || "All products removed from this branch",
+                variant: "success",
+            })
+
+            // Update product counts locally
+            setBranchProductCounts(prev => ({ ...prev, [branchId]: 0 }))
+            // Remove from originalBranchIds so it counts as newly assigned if kept checked
+            setOriginalBranchIds(prev => prev.filter(id => id !== branchId))
+            setConfirmClean({ open: false, branchId: null, branchName: "" })
+        } catch (e: any) {
+            toast({ title: "Error", description: e.message, variant: "destructive" })
+        } finally {
+            setIsCleaning(null)
         }
     }
 
@@ -257,7 +313,7 @@ export function GroupManagement({ role }: { role: string }) {
         setIsEditOpen(true)
     }
 
-    const openBranchManager = (group: Group) => {
+    const openBranchManager = async (group: Group) => {
         setSelectedGroup(group)
 
         // Derive selection from already-loaded branches data (instant, no extra fetch)
@@ -265,9 +321,35 @@ export function GroupManagement({ role }: { role: string }) {
             ?.filter((b: Branch) => b.groupId === group.id)
             .map((b: Branch) => b.id) || []
         setSelectedBranchIds(assignedIds)
+        setOriginalBranchIds(assignedIds) // remember original state
+        setBranchProductCounts({})
+        setTotalGroupProducts(0)
 
         setIsBranchOpen(true)
         mutateBranches()
+
+        // Fetch product counts for each assigned branch in the background
+        if (assignedIds.length > 0) {
+            setIsLoadingCounts(true)
+            try {
+                const orgId = group.organizationId || globalOrgId
+                const countsRes = await fetch(`/api/v1/head-office/branch-assignments?organizationId=${orgId}&groupId=${group.id}&limit=1000`)
+                if (countsRes.ok) {
+                    const countsData = await countsRes.json()
+                    const counts: Record<number, number> = {}
+                    for (const item of countsData.items || []) {
+                        counts[item.branchId] = (counts[item.branchId] || 0) + 1
+                    }
+                    setBranchProductCounts(counts)
+                    // Calculate total unique products in the group
+                    setTotalGroupProducts(countsData.total || Object.values(counts).reduce((sum: number, c: number) => sum + c, 0))
+                }
+            } catch {
+                // silently fail - product counts are informational
+            } finally {
+                setIsLoadingCounts(false)
+            }
+        }
     }
 
     if (groupsError) return <div>Failed to load groups</div>
@@ -445,7 +527,7 @@ export function GroupManagement({ role }: { role: string }) {
 
             {/* Branch Assignment Dialog */}
             <Dialog open={isBranchOpen} onOpenChange={setIsBranchOpen}>
-                <DialogContent className="sm:max-w-[500px] rounded-2xl">
+                <DialogContent className="sm:max-w-[550px] rounded-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-xl font-bold">Assign Branches - {selectedGroup?.name}</DialogTitle>
                         <DialogDescription>Select branches to include in this group.</DialogDescription>
@@ -453,47 +535,115 @@ export function GroupManagement({ role }: { role: string }) {
                     <div className="py-4">
                         <Label className="mb-2 block font-semibold text-slate-700 dark:text-slate-300">Available Branches</Label>
                         <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/50">
-                            <ScrollArea className="h-[300px] p-4">
-                                <div className="space-y-3">
-                                    {branchesData?.items?.map((branch: Branch) => (
-                                        <div key={branch.id} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors group">
-                                            <Checkbox
-                                                id={`branch-${branch.id}`}
-                                                checked={selectedBranchIds.includes(branch.id)}
-                                                disabled={!!(branch.groupId && branch.groupId !== selectedGroup?.id)}
-                                                onCheckedChange={(checked) => {
-                                                    if (checked) {
-                                                        setSelectedBranchIds([...selectedBranchIds, branch.id])
-                                                    } else {
-                                                        setSelectedBranchIds(selectedBranchIds.filter(id => id !== branch.id))
-                                                    }
-                                                }}
-                                                className="rounded-md border-slate-300 text-blue-600 data-[state=checked]:bg-blue-600"
-                                            />
-                                            <Label htmlFor={`branch-${branch.id}`} className="cursor-pointer flex-1 font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 transition-colors">
-                                                {branch.name}
-                                                {branch.groupId && branch.groupId !== selectedGroup?.id && (
-                                                    <div className="flex items-center justify-between mt-1 text-[10px]">
-                                                        <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-200 bg-amber-50 py-0 px-1.5 h-5">
-                                                            In group: {branch.groupName || `Group #${branch.groupId}`}
-                                                        </Badge>
-                                                        <span className="text-[10px] text-slate-500 ml-2">
-                                                            Go to that group to release this branch
-                                                        </span>
+                            <ScrollArea className="h-[350px] p-4">
+                                {isLoadingCounts ? (
+                                    <div className="h-full flex flex-col items-center justify-center space-y-3 text-slate-500">
+                                        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                                        <p>Loading assigned branches...</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {branchesData?.items?.map((branch: Branch) => {
+                                            const isInThisGroup = branch.groupId === selectedGroup?.id
+                                            const isInOtherGroup = !!(branch.groupId && branch.groupId !== selectedGroup?.id)
+                                            const productCount = branchProductCounts[branch.id] || 0
+                                            const hasProducts = isInThisGroup && productCount > 0
+                                            const isNewlyAdded = selectedBranchIds.includes(branch.id) && !originalBranchIds.includes(branch.id)
+                                            const willGetProducts = isNewlyAdded && totalGroupProducts > 0
+
+                                            return (
+                                                <div key={branch.id} className={`flex items-center space-x-3 p-3 rounded-lg transition-colors group ${hasProducts ? "bg-amber-50/50 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/30"
+                                                    : willGetProducts ? "bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30"
+                                                        : "hover:bg-white dark:hover:bg-slate-800"
+                                                    }`}>
+                                                    <Checkbox
+                                                        id={`branch-${branch.id}`}
+                                                        checked={selectedBranchIds.includes(branch.id)}
+                                                        disabled={isInOtherGroup || hasProducts}
+                                                        onCheckedChange={(checked) => {
+                                                            if (hasProducts) {
+                                                                toast({
+                                                                    title: "Cannot remove branch",
+                                                                    description: `"${branch.name}" has ${productCount} products assigned. Clean products first.`,
+                                                                    variant: "destructive"
+                                                                })
+                                                                return
+                                                            }
+                                                            if (checked) {
+                                                                setSelectedBranchIds([...selectedBranchIds, branch.id])
+                                                            } else {
+                                                                setSelectedBranchIds(selectedBranchIds.filter(id => id !== branch.id))
+                                                            }
+                                                        }}
+                                                        className="rounded-md border-slate-300 text-blue-600 data-[state=checked]:bg-blue-600"
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <Label htmlFor={`branch-${branch.id}`} className={`cursor-pointer font-medium transition-colors ${hasProducts ? "text-amber-700 dark:text-amber-400" : "text-slate-700 dark:text-slate-300 group-hover:text-blue-600"
+                                                            }`}>
+                                                            {branch.name}
+                                                        </Label>
+                                                        {isInOtherGroup && (
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-200 bg-amber-50 py-0 px-1.5 h-5">
+                                                                    In group: {branch.groupName || `Group #${branch.groupId}`}
+                                                                </Badge>
+                                                                <span className="text-[10px] text-slate-500">
+                                                                    Go to that group to release this branch
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        {isInThisGroup && hasProducts && (
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-200 bg-amber-50 py-0 px-1.5 h-5">
+                                                                    <Package className="h-3 w-3 mr-1" />
+                                                                    {productCount} product{productCount !== 1 ? "s" : ""} assigned
+                                                                </Badge>
+                                                                <span className="text-[10px] text-slate-500">
+                                                                    Clean products to release
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        {willGetProducts && (
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-200 bg-emerald-50 py-0 px-1.5 h-5">
+                                                                    <Package className="h-3 w-3 mr-1" />
+                                                                    Will receive group products on save
+                                                                </Badge>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                )}
-                                            </Label>
-                                        </div>
-                                    ))}
-                                    {(!branchesData?.items || branchesData.items.length === 0) && (
-                                        <div className="text-center py-12 text-slate-400">No branches found for this organization.</div>
-                                    )}
-                                </div>
+                                                    {/* Clean button for branches in this group with products */}
+                                                    {isInThisGroup && hasProducts && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            disabled={isCleaning === branch.id}
+                                                            onClick={(e) => {
+                                                                e.preventDefault()
+                                                                setConfirmClean({ open: true, branchId: branch.id, branchName: branch.name })
+                                                            }}
+                                                            className="shrink-0 h-7 px-2 text-xs rounded-lg border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                                                        >
+                                                            {isCleaning === branch.id ? (
+                                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                                            ) : (
+                                                                <><Eraser className="h-3 w-3 mr-1" /> Clean</>
+                                                            )}
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                        {(!branchesData?.items || branchesData.items.length === 0) && (
+                                            <div className="text-center py-12 text-slate-400">No branches found for this organization.</div>
+                                        )}
+                                    </div>
+                                )}
                             </ScrollArea>
                         </div>
                         <p className="mt-4 text-xs text-slate-500 flex items-start gap-2">
-                            <History size={14} className="mt-0.5 text-blue-500" />
-                            Note: A branch can only belong to one group at a time. Assigning a branch to this group will remove it from its previous group.
+                            <AlertCircle size={14} className="mt-0.5 text-amber-500 shrink-0" />
+                            New branches will automatically receive all products assigned in this group. Branches with products cannot be removed — clean first.
                         </p>
                     </div>
                     <DialogFooter className="flex flex-col sm:flex-row gap-3">
@@ -518,6 +668,18 @@ export function GroupManagement({ role }: { role: string }) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Clean Products Confirm Dialog */}
+            <PremiumConfirmDialog
+                open={confirmClean.open}
+                onOpenChange={(v) => !isCleaning && setConfirmClean({ open: v, branchId: confirmClean.branchId, branchName: confirmClean.branchName })}
+                onConfirm={() => confirmClean.branchId && handleCleanBranch(confirmClean.branchId)}
+                title={`Clean Products from "${confirmClean.branchName}"?`}
+                description={`This will remove all ${branchProductCounts[confirmClean.branchId || 0] || 0} product(s) assigned to this branch. The branch can then be removed from the group.`}
+                confirmText="Clean All Products"
+                type="danger"
+                isLoading={isCleaning !== null}
+            />
 
             {/* Premium Confirm Dialogs */}
             <PremiumConfirmDialog

@@ -7,14 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { formatPKR } from "@/lib/utils"
-import { Search, Package, Plus, Building2, GitBranch, Users, Loader2 } from "lucide-react"
+import { Search, Package, Plus, Building2, GitBranch, Users, Loader2, CheckCircle2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useAppContext } from "@/components/context/app-context"
-import { Switch } from "@/components/ui/switch"
+
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -38,17 +37,15 @@ export default function AssignToBranchPage() {
     const { organizationId: contextOrgId } = useAppContext()
     const [localOrgId, setLocalOrgId] = useState<string>("")
     const [searchQuery, setSearchQuery] = useState("")
-    // Default to 'all' for status filter
     const [statusFilter, setStatusFilter] = useState<string>("all")
     const [selectedProducts, setSelectedProducts] = useState<number[]>([])
-    const [assignDialogOpen, setAssignDialogOpen] = useState(false)
     const [selectedGroup, setSelectedGroup] = useState<string>("")
     const [saving, setSaving] = useState(false)
-    const [alreadyAssignedBranches, setAlreadyAssignedBranches] = useState<Set<number>>(new Set())
-    const [loadingAssignments, setLoadingAssignments] = useState(false)
-    const [togglingStatus, setTogglingStatus] = useState<number | null>(null)
 
-    const { userRole } = useAppContext()
+    const [alreadyAssignedIds, setAlreadyAssignedIds] = useState<Set<number>>(new Set())
+    const [loadingAssignments, setLoadingAssignments] = useState(false)
+
+
 
     const selectedOrgId = contextOrgId || localOrgId
     const showOrgSelector = !contextOrgId
@@ -67,13 +64,6 @@ export default function AssignToBranchPage() {
         { fallbackData: { items: [] } }
     )
 
-    // Fetch branches for selected organization
-    const { data: branchesData } = useSWR<{ items: Branch[] }>(
-        selectedOrgId ? `/api/v1/branches?organizationId=${selectedOrgId}` : null,
-        fetcher,
-        { fallbackData: { items: [] } }
-    )
-
     // Fetch groups for selected organization
     const { data: groupsData } = useSWR<{ groups: Group[] }>(
         selectedOrgId ? `/api/v1/groups?organizationId=${selectedOrgId}` : null,
@@ -83,19 +73,46 @@ export default function AssignToBranchPage() {
 
     // Fetch group branches when a group is selected
     const { data: groupBranchesData } = useSWR<{ branches: Branch[] }>(
-        selectedGroup && selectedGroup !== "all" ? `/api/v1/groups/${selectedGroup}/branches` : null,
+        selectedGroup ? `/api/v1/groups/${selectedGroup}/branches` : null,
         fetcher,
         { fallbackData: { branches: [] } }
     )
 
     const orgProducts = productsData?.items ?? []
-    const branches = branchesData?.items ?? []
     const groups = groupsData?.groups ?? []
+    const branchesToShow = groupBranchesData?.branches ?? []
 
-    // When a group is selected, show only that group's branches (read-only display)
-    const branchesToShow = selectedGroup && selectedGroup !== ""
-        ? (groupBranchesData?.branches ?? [])
-        : []
+    // When group changes, fetch existing assignments to know which products are already assigned
+    useEffect(() => {
+        if (!selectedGroup || !selectedOrgId) {
+            setAlreadyAssignedIds(new Set())
+            setSelectedProducts([])
+            return
+        }
+
+        const fetchAssignments = async () => {
+            setLoadingAssignments(true)
+            try {
+                const res = await fetch(`/api/v1/head-office/branch-assignments?organizationId=${selectedOrgId}&groupId=${selectedGroup}&limit=1000`)
+                const data = await res.json()
+                if (res.ok && data.items) {
+                    // Get unique organizationInventoryIds that are already assigned in this group
+                    const assigned = new Set<number>()
+                    for (const item of data.items) {
+                        assigned.add(Number(item.organizationInventoryId))
+                    }
+                    setAlreadyAssignedIds(assigned)
+                }
+            } catch {
+                // silently fail
+            } finally {
+                setLoadingAssignments(false)
+            }
+        }
+
+        fetchAssignments()
+        setSelectedProducts([]) // reset selection on group change
+    }, [selectedGroup, selectedOrgId])
 
     // Search filtering
     const filteredProducts = useMemo(() => {
@@ -108,6 +125,8 @@ export default function AssignToBranchPage() {
     }, [orgProducts, searchQuery])
 
     const handleProductToggle = (productId: number) => {
+        // Don't allow toggling already-assigned products
+        if (alreadyAssignedIds.has(productId)) return
         setSelectedProducts(prev =>
             prev.includes(productId)
                 ? prev.filter(id => id !== productId)
@@ -115,25 +134,22 @@ export default function AssignToBranchPage() {
         )
     }
 
-    const handleSelectAll = () => {
-        if (selectedProducts.length === filteredProducts.length) {
+    const handleSelectAllNew = () => {
+        const newProducts = filteredProducts.filter(p => !alreadyAssignedIds.has(p.id))
+        if (selectedProducts.length === newProducts.length) {
             setSelectedProducts([])
         } else {
-            setSelectedProducts(filteredProducts.map(p => p.id))
+            setSelectedProducts(newProducts.map(p => p.id))
         }
-    }
-
-    const handleGroupSelect = (groupId: string) => {
-        setSelectedGroup(groupId)
     }
 
     const handleAssign = async () => {
         if (selectedProducts.length === 0) {
-            toast({ title: "Error", description: "Please select at least one product", variant: "destructive" })
+            toast({ title: "Error", description: "Please select at least one new product to assign", variant: "destructive" })
             return
         }
         if (!selectedGroup) {
-            toast({ title: "Error", description: "Please select a group", variant: "destructive" })
+            toast({ title: "Error", description: "Please select a group first", variant: "destructive" })
             return
         }
 
@@ -152,15 +168,20 @@ export default function AssignToBranchPage() {
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || "Failed to assign products")
 
+            const groupName = groups.find(g => g.id.toString() === selectedGroup)?.name || "group"
             toast({
-                title: "Success",
-                description: data.message || "Successfully assigned products to group",
+                title: "Products Assigned",
+                description: `${selectedProducts.length} product${selectedProducts.length !== 1 ? "s" : ""} assigned to ${groupName}`,
+                variant: "success",
             })
 
-            // Close and reset
-            setAssignDialogOpen(false)
+            // Move newly assigned into the already-assigned set
+            setAlreadyAssignedIds(prev => {
+                const updated = new Set(prev)
+                for (const id of selectedProducts) updated.add(id)
+                return updated
+            })
             setSelectedProducts([])
-            setSelectedGroup("")
             mutate()
         } catch (error: any) {
             console.error("Assignment error:", error)
@@ -170,95 +191,13 @@ export default function AssignToBranchPage() {
         }
     }
 
-    const handleToggleStatus = async (productId: number, currentStatus: boolean) => {
-        if (!selectedOrgId) return
-
-        setTogglingStatus(productId)
-        try {
-            const res = await fetch("/api/v1/head-office/organization-inventory", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    id: productId,
-                    isActive: !currentStatus,
-                    organizationId: selectedOrgId
-                }),
-            })
-
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error || "Failed to update status")
-
-            toast({
-                title: "Success",
-                description: `Product is now ${!currentStatus ? 'active' : 'inactive'}`,
-            })
-            mutate()
-        } catch (error: any) {
-            toast({
-                title: "Error",
-                description: error.message,
-                variant: "destructive"
-            })
-        } finally {
-            setTogglingStatus(null)
-        }
-    }
 
 
-    const openAssignDialog = async () => {
-        setSelectedGroup("")
-        setAlreadyAssignedBranches(new Set())
-        setAssignDialogOpen(true)
-
-        // Fetch existing assignments for selected products
-        if (selectedProducts.length > 0 && selectedOrgId) {
-            setLoadingAssignments(true)
-            try {
-                const res = await fetch(`/api/v1/head-office/branch-assignments?organizationId=${selectedOrgId}`)
-                const data = await res.json()
-                if (res.ok && data.items) {
-                    // Find which branches have ANY assignments for the selected products
-                    const selectedProductsSet = new Set(selectedProducts.map(id => Number(id)))
-                    const assignedBranchIds = new Set<number>()
-
-                    data.items.forEach((item: any) => {
-                        const orgInvId = Number(item.organizationInventoryId)
-                        const brId = Number(item.branchId)
-
-                        if (selectedProductsSet.has(orgInvId)) {
-                            assignedBranchIds.add(brId)
-                        }
-                    })
-                    setAlreadyAssignedBranches(assignedBranchIds)
-                }
-            } catch (err) {
-                console.error('Failed to fetch existing assignments:', err)
-            } finally {
-                setLoadingAssignments(false)
-            }
-        }
-    }
+    const newProductsCount = selectedProducts.length
+    const alreadyAssignedCount = filteredProducts.filter(p => alreadyAssignedIds.has(p.id)).length
 
     return (
         <div className="space-y-8 p-6">
-            {/* Header */}
-            <Card className="relative overflow-hidden border-none bg-gradient-to-r from-rose-900 via-pink-900 to-fuchsia-800 text-white shadow-xl">
-                <div className="pointer-events-none absolute inset-0 opacity-30">
-                    <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
-                    <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-pink-400/40 blur-3xl" />
-                </div>
-                <CardHeader className="relative space-y-3">
-                    <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-white/70">
-                        <Plus className="h-4 w-4" />
-                        Branch Assignment
-                    </p>
-                    <CardTitle className="text-3xl font-semibold text-white">Assign Products to Branches</CardTitle>
-                    <p className="text-sm text-white/80">
-                        Select products assigned to your organization and assign them to specific branches or groups.
-                    </p>
-                </CardHeader>
-            </Card>
-
             {/* Organization Selector */}
             {showOrgSelector && (
                 <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -282,26 +221,92 @@ export default function AssignToBranchPage() {
                 </Card>
             )}
 
-            {contextOrgId && (
-                <Card className="border border-slate-200 dark:border-slate-800 shadow-sm bg-rose-50/50 dark:bg-rose-950/20">
-                    <CardContent className="py-4">
-                        <div className="flex items-center gap-3">
-                            <Building2 className="h-5 w-5 text-rose-600" />
-                            <span className="text-sm">Using organization from header.</span>
+            {/* STEP 1: Group Selection */}
+            {selectedOrgId && (
+                <Card className="border-2 border-blue-200 dark:border-blue-900 shadow-sm bg-blue-50/30 dark:bg-blue-950/20">
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-bold">1</div>
+                            Select Group
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground">Choose which group's branches should receive the products.</p>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-col md:flex-row gap-4 items-start">
+                            <div className="w-full md:w-80">
+                                <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+                                    <SelectTrigger className="bg-white dark:bg-slate-900">
+                                        <SelectValue placeholder="Select a group" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {groups.length === 0 ? (
+                                            <div className="py-2 px-3 text-sm text-muted-foreground">No groups available</div>
+                                        ) : (
+                                            groups.map((group) => (
+                                                <SelectItem key={group.id} value={group.id.toString()}>
+                                                    <div className="flex items-center gap-2">
+                                                        <Users className="h-4 w-4" />
+                                                        {group.name}
+                                                    </div>
+                                                </SelectItem>
+                                            ))
+                                        )}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            {/* Branches in this group (info display) */}
+                            {selectedGroup && (
+                                <div className="flex-1">
+                                    <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                                        <GitBranch className="h-3.5 w-3.5" />
+                                        Branches in this group:
+                                    </p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {branchesToShow.length === 0 ? (
+                                            <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30">
+                                                No branches in this group
+                                            </Badge>
+                                        ) : (
+                                            branchesToShow.map((branch) => (
+                                                <Badge key={branch.id} variant="outline" className="text-blue-700 border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800">
+                                                    <Building2 className="h-3 w-3 mr-1" />
+                                                    {branch.name}
+                                                </Badge>
+                                            ))
+                                        )}
+                                    </div>
+                                    {loadingAssignments && (
+                                        <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            Loading existing assignments...
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
             )}
 
-            {/* Products Table */}
-            {selectedOrgId && (
+            {/* STEP 2: Products Table (only show after group is selected) */}
+            {selectedOrgId && selectedGroup && (
                 <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
-                            <CardTitle className="text-xl">Organization Products</CardTitle>
-                            <p className="text-sm text-muted-foreground">
-                                Select products to assign to branches. Only products assigned to your organization are listed.
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-bold">2</div>
+                                Select Products to Assign
+                            </CardTitle>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                Products already assigned to this group are highlighted. Select new products to add.
                             </p>
+                            {alreadyAssignedCount > 0 && (
+                                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    {alreadyAssignedCount} product{alreadyAssignedCount !== 1 ? "s" : ""} already assigned to this group
+                                </p>
+                            )}
                         </div>
                         <div className="flex flex-col gap-4 w-full lg:flex-row lg:items-center lg:justify-end lg:w-auto">
                             <div className="relative w-full lg:w-64">
@@ -326,15 +331,6 @@ export default function AssignToBranchPage() {
                                     </SelectContent>
                                 </Select>
                             </div>
-
-                            <Button
-                                onClick={openAssignDialog}
-                                disabled={selectedProducts.length === 0}
-                                className="gap-2"
-                            >
-                                <GitBranch className="h-4 w-4" />
-                                Assign to Group ({selectedProducts.length})
-                            </Button>
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -344,21 +340,29 @@ export default function AssignToBranchPage() {
                                     <TableRow>
                                         <TableHead className="w-12">
                                             <Checkbox
-                                                checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
-                                                onCheckedChange={handleSelectAll}
+                                                checked={
+                                                    filteredProducts.filter(p => !alreadyAssignedIds.has(p.id)).length > 0 &&
+                                                    selectedProducts.length === filteredProducts.filter(p => !alreadyAssignedIds.has(p.id)).length
+                                                }
+                                                onCheckedChange={handleSelectAllNew}
+                                                title="Select all new products"
                                             />
                                         </TableHead>
                                         <TableHead>Product</TableHead>
                                         <TableHead>Code</TableHead>
                                         <TableHead>Price</TableHead>
-                                        <TableHead>Status</TableHead>
+
+                                        <TableHead className="w-20">Assigned</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {isLoading ? (
+                                    {isLoading || loadingAssignments ? (
                                         <TableRow>
                                             <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                                                Loading products...
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                    {loadingAssignments ? "Loading assignments..." : "Loading products..."}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ) : filteredProducts.length === 0 ? (
@@ -370,171 +374,114 @@ export default function AssignToBranchPage() {
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        filteredProducts.map((product) => (
-                                            <TableRow
-                                                key={product.id}
-                                                className={`hover:bg-muted/40 cursor-pointer ${selectedProducts.includes(product.id) ? "bg-rose-50/50 dark:bg-rose-950/20" : ""}`}
-                                                onClick={() => handleProductToggle(product.id)}
-                                            >
-                                                <TableCell onClick={(e) => e.stopPropagation()}>
-                                                    <Checkbox
-                                                        checked={selectedProducts.includes(product.id)}
-                                                        onCheckedChange={() => handleProductToggle(product.id)}
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-3">
-                                                        {product.productImageUrl ? (
-                                                            <img
-                                                                src={product.productImageUrl}
-                                                                alt={product.productName}
-                                                                className="h-10 w-10 rounded-lg border object-cover"
+                                        filteredProducts.map((product) => {
+                                            const isAssigned = alreadyAssignedIds.has(product.id)
+                                            const isSelected = selectedProducts.includes(product.id)
+
+                                            return (
+                                                <TableRow
+                                                    key={product.id}
+                                                    className={`cursor-pointer transition-colors ${isAssigned
+                                                        ? "bg-emerald-50/60 dark:bg-emerald-950/20 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                                                        : isSelected
+                                                            ? "bg-blue-50/50 dark:bg-blue-950/20"
+                                                            : "hover:bg-muted/40"
+                                                        }`}
+                                                    onClick={() => handleProductToggle(product.id)}
+                                                >
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                        {isAssigned ? (
+                                                            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                                                        ) : (
+                                                            <Checkbox
+                                                                checked={isSelected}
+                                                                onCheckedChange={() => handleProductToggle(product.id)}
                                                             />
-                                                        ) : (
-                                                            <div className="flex h-10 w-10 items-center justify-center rounded-lg border bg-muted/40">
-                                                                <Package className="h-4 w-4 text-muted-foreground" />
-                                                            </div>
                                                         )}
-                                                        <span className="font-medium">{product.customName || product.productName}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline">{product.productCode}</Badge>
-                                                </TableCell>
-                                                <TableCell className="font-medium">
-                                                    {product.customPrice
-                                                        ? formatPKR(product.customPrice / 100)
-                                                        : <span className="text-muted-foreground">-</span>}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                        {userRole === "SUPER_ADMIN" ? (
-                                                            <>
-                                                                <Switch
-                                                                    disabled={togglingStatus === product.id}
-                                                                    checked={product.isActive}
-                                                                    onCheckedChange={() => handleToggleStatus(product.id, product.isActive)}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-3">
+                                                            {product.productImageUrl ? (
+                                                                <img
+                                                                    src={product.productImageUrl}
+                                                                    alt={product.productName}
+                                                                    className="h-10 w-10 rounded-lg border object-cover"
                                                                 />
-                                                                {togglingStatus === product.id && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-                                                                <span className="text-xs font-medium min-w-[50px]">
-                                                                    {product.isActive ? "Active" : "Inactive"}
-                                                                </span>
-                                                            </>
-                                                        ) : (
-                                                            <Badge variant={product.isActive ? "default" : "secondary"}>
-                                                                {product.isActive ? "Active" : "Inactive"}
+                                                            ) : (
+                                                                <div className="flex h-10 w-10 items-center justify-center rounded-lg border bg-muted/40">
+                                                                    <Package className="h-4 w-4 text-muted-foreground" />
+                                                                </div>
+                                                            )}
+                                                            <span className={`font-medium ${isAssigned ? "text-emerald-700 dark:text-emerald-400" : ""}`}>
+                                                                {product.customName || product.productName}
+                                                            </span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="outline">{product.productCode}</Badge>
+                                                    </TableCell>
+                                                    <TableCell className="font-medium">
+                                                        {product.customPrice
+                                                            ? formatPKR(product.customPrice / 100)
+                                                            : <span className="text-muted-foreground">-</span>}
+                                                    </TableCell>
+
+                                                    <TableCell>
+                                                        {isAssigned ? (
+                                                            <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800 text-[10px]">
+                                                                Assigned
                                                             </Badge>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">New</span>
                                                         )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        })
                                     )}
                                 </TableBody>
                             </Table>
+                        </div>
+
+                        {/* Assign button bar */}
+                        <div className="mt-6 flex items-center justify-between border-t pt-4">
+                            <p className="text-sm text-muted-foreground">
+                                {newProductsCount > 0
+                                    ? `${newProductsCount} new product${newProductsCount !== 1 ? "s" : ""} selected to assign`
+                                    : "Select products to assign to this group's branches"}
+                            </p>
+                            <Button
+                                onClick={handleAssign}
+                                disabled={saving || newProductsCount === 0 || branchesToShow.length === 0}
+                                className="gap-2"
+                            >
+                                {saving ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Assigning...
+                                    </>
+                                ) : (
+                                    <>
+                                        <GitBranch className="h-4 w-4" />
+                                        Assign to Group ({newProductsCount})
+                                    </>
+                                )}
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>
             )}
 
-            {/* Assign Dialog */}
-            <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-                <DialogContent className="max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Assign to Group</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                        <p className="text-sm text-muted-foreground">
-                            Assigning {selectedProducts.length} product(s) to a group. All branches in the selected group will be assigned.
-                        </p>
-
-                        {/* Group selection */}
-                        <div>
-                            <label className="text-sm font-medium mb-2 block flex items-center gap-2">
-                                <Users className="h-4 w-4" />
-                                Select Group
-                            </label>
-                            <Select value={selectedGroup} onValueChange={handleGroupSelect}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a group to assign products" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {groups.length === 0 ? (
-                                        <div className="py-2 px-3 text-sm text-muted-foreground">No groups available</div>
-                                    ) : (
-                                        groups.map((group) => (
-                                            <SelectItem key={group.id} value={group.id.toString()}>
-                                                {group.name}
-                                            </SelectItem>
-                                        ))
-                                    )}
-                                </SelectContent>
-                            </Select>
-                        </div>
-
-                        {/* Branch display (read-only) */}
-                        {selectedGroup && (
-                            <div>
-                                <label className="text-sm font-medium mb-2 block flex items-center gap-2">
-                                    <Building2 className="h-4 w-4" />
-                                    Branches in Selected Group
-                                </label>
-                                {loadingAssignments ? (
-                                    <div className="text-sm text-muted-foreground p-3">Loading existing assignments...</div>
-                                ) : (
-                                    <div className="max-h-48 overflow-y-auto border rounded-lg p-3 space-y-2 bg-muted/20">
-                                        {branchesToShow.map((branch) => {
-                                            const branchIdNum = Number(branch.id)
-                                            const isAlreadyAssigned = alreadyAssignedBranches.has(branchIdNum)
-
-                                            return (
-                                                <div key={branch.id} className="flex items-center gap-2">
-                                                    <Checkbox
-                                                        id={`branch-${branch.id}`}
-                                                        checked={true}
-                                                        disabled={true}
-                                                    />
-                                                    <label
-                                                        className="text-sm flex items-center gap-2 cursor-default"
-                                                    >
-                                                        {branch.name}
-                                                        {isAlreadyAssigned && (
-                                                            <Badge variant="secondary" className="text-xs">Already Assigned</Badge>
-                                                        )}
-                                                    </label>
-                                                </div>
-                                            )
-                                        })}
-                                        {branchesToShow.length === 0 && (
-                                            <p className="text-sm text-muted-foreground">No branches in this group.</p>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleAssign}
-                            disabled={
-                                saving ||
-                                !selectedGroup ||
-                                branchesToShow.length === 0 ||
-                                branchesToShow.every(b => alreadyAssignedBranches.has(Number(b.id)))
-                            }
-                        >
-                            {saving ? "Assigning..." :
-                                branchesToShow.length === 0 ? "No Branches in Group" :
-                                    branchesToShow.every(b => alreadyAssignedBranches.has(Number(b.id)))
-                                        ? "Already Fully Assigned"
-                                        : "Assign to Group"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            {/* Prompt to select group if none selected */}
+            {selectedOrgId && !selectedGroup && (
+                <Card className="border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
+                    <CardContent className="py-16 text-center">
+                        <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-40" />
+                        <p className="text-lg font-medium text-muted-foreground">Select a group above</p>
+                        <p className="text-sm text-muted-foreground mt-1">Choose a group to see its products and assign new ones.</p>
+                    </CardContent>
+                </Card>
+            )}
         </div>
     )
 }

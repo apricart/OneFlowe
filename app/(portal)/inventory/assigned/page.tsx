@@ -76,24 +76,6 @@ export default function ShowAssignedProductsPage() {
 
     return (
         <div className="space-y-8 p-6">
-            {/* Header */}
-            <Card className="relative overflow-hidden border-none bg-gradient-to-r from-emerald-900 via-teal-900 to-cyan-800 text-white shadow-xl">
-                <div className="pointer-events-none absolute inset-0 opacity-30">
-                    <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
-                    <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-teal-400/40 blur-3xl" />
-                </div>
-                <CardHeader className="relative space-y-3">
-                    <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-white/70">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Inventory Management
-                    </p>
-                    <CardTitle className="text-3xl font-semibold text-white">Assigned Products</CardTitle>
-                    <p className="text-sm text-white/80">
-                        View all products assigned to organizations with their custom pricing.
-                    </p>
-                </CardHeader>
-            </Card>
-
             {/* Stats */}
             {selectedOrgId && (
                 <div className="grid gap-4 md:grid-cols-2">
@@ -135,18 +117,6 @@ export default function ShowAssignedProductsPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* Show current org when using context */}
-            {contextOrgId && (
-                <Card className="border border-slate-200 dark:border-slate-800 shadow-sm bg-emerald-50/50 dark:bg-emerald-950/20">
-                    <CardContent className="py-4">
-                        <div className="flex items-center gap-3">
-                            <Building2 className="h-5 w-5 text-emerald-600" />
-                            <span className="text-sm">Using organization selected in header.</span>
-                        </div>
                     </CardContent>
                 </Card>
             )}
@@ -226,16 +196,9 @@ export default function ShowAssignedProductsPage() {
                                                         : <span className="text-muted-foreground">Not set</span>}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <div className="flex flex-col gap-1">
-                                                        <Badge variant={product.isActive ? "default" : "secondary"}>
-                                                            {product.isActive ? "Active" : "Inactive"} (Org)
-                                                        </Badge>
-                                                        {product.globalStatus !== "active" && (
-                                                            <Badge variant="destructive" className="text-[10px] py-0">
-                                                                Globally {product.globalStatus}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
+                                                    <Badge variant={product.isActive ? "default" : "secondary"}>
+                                                        {product.isActive ? "Active" : "Inactive"}
+                                                    </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-muted-foreground text-sm">
                                                     {new Date(product.assignedAt).toLocaleDateString()}

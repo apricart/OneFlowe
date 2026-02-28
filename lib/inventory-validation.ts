@@ -47,17 +47,14 @@ export async function validateBranch(branchId: number, organizationId: number): 
 }
 
 /**
- * Validate that a global product exists and is active (or at least not discontinued)
+ * Validate that a global product exists and is active
  */
 export async function validateGlobalProduct(globalProductId: number): Promise<boolean> {
   try {
     const product = await db.select({ id: globalProducts.id })
       .from(globalProducts)
       .where(
-        and(
-          eq(globalProducts.id, globalProductId),
-          ne(globalProducts.status, "discontinued")
-        )
+        eq(globalProducts.id, globalProductId)
       )
       .limit(1)
 

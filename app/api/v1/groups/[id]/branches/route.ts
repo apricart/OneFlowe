@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { groups, branches, groupAuditLogs } from "@/db/schema"
-import { eq, inArray, and, sql } from "drizzle-orm"
+import { groups, branches, groupAuditLogs, branchInventory } from "@/db/schema"
+import { eq, inArray, and, sql, isNull, count } from "drizzle-orm"
 import { invalidateByPrefix } from "@/lib/cache-utils"
 
 export async function GET(
@@ -61,11 +61,63 @@ export async function PUT(
         }
 
         const body = await req.json()
-        const { branchIds } = body // integer[]
+        const { branchIds, newlyAddedBranchIds: clientNewIds } = body // integer[]
 
         if (!Array.isArray(branchIds)) {
             return NextResponse.json({ error: "branchIds array required" }, { status: 400 })
         }
+
+        // ============================================================
+        // PRODUCT PROTECTION: Check if branches being REMOVED have products
+        // ============================================================
+        // Find branches currently in this group that are NOT in the new list
+        const currentBranches = await db
+            .select({ id: branches.id, name: branches.name })
+            .from(branches)
+            .where(eq(branches.groupId, groupId))
+
+        const branchIdsBeingRemoved = currentBranches
+            .filter(b => !branchIds.includes(b.id))
+            .map(b => b.id)
+
+        if (branchIdsBeingRemoved.length > 0) {
+            // Check for active products on branches being removed
+            const branchesWithProducts = await db
+                .select({
+                    branchId: branchInventory.branchId,
+                    branchName: branches.name,
+                    productCount: count(branchInventory.id),
+                })
+                .from(branchInventory)
+                .innerJoin(branches, eq(branchInventory.branchId, branches.id))
+                .where(
+                    and(
+                        inArray(branchInventory.branchId, branchIdsBeingRemoved),
+                        isNull(branchInventory.deletedAt),
+                        eq(branchInventory.isActive, true)
+                    )
+                )
+                .groupBy(branchInventory.branchId, branches.name)
+
+            const blocked = branchesWithProducts.filter(b => b.productCount > 0)
+            if (blocked.length > 0) {
+                const details = blocked.map(b => `${b.branchName} (${b.productCount} products)`)
+                return NextResponse.json({
+                    error: `Cannot remove branches with assigned products. Clean products first from: ${details.join(", ")}`,
+                    blockedBranches: blocked.map(b => ({
+                        branchId: b.branchId,
+                        branchName: b.branchName,
+                        productCount: b.productCount,
+                    })),
+                }, { status: 400 })
+            }
+        }
+
+        // Determine which branches are being ADDED (not currently in the group or explicitly marked by client)
+        const currentBranchIds = currentBranches.map(b => b.id)
+        const newlyAddedBranchIds = Array.isArray(clientNewIds)
+            ? clientNewIds
+            : branchIds.filter((id: number) => !currentBranchIds.includes(id))
 
         await db.transaction(async (tx) => {
             // 1. Branch exclusivity validation (Atomic check)
@@ -123,7 +175,104 @@ export async function PUT(
                 assignedCount = result.rowCount || 0
             }
 
-            // 5. Update group status based on assignment
+            // 5. AUTO-ASSIGN: Copy group products to newly added branches
+            if (newlyAddedBranchIds.length > 0 && currentBranchIds.length > 0) {
+                // Find all active products assigned to existing group branches
+                const existingProducts = await tx
+                    .select({
+                        organizationInventoryId: branchInventory.organizationInventoryId,
+                        organizationId: branchInventory.organizationId,
+                    })
+                    .from(branchInventory)
+                    .where(
+                        and(
+                            inArray(branchInventory.branchId, currentBranchIds),
+                            isNull(branchInventory.deletedAt),
+                            eq(branchInventory.isActive, true)
+                        )
+                    )
+
+                // Deduplicate by organizationInventoryId
+                const uniqueProducts = new Map<number, { organizationInventoryId: number; organizationId: number }>()
+                for (const p of existingProducts) {
+                    if (!uniqueProducts.has(p.organizationInventoryId)) {
+                        uniqueProducts.set(p.organizationInventoryId, p)
+                    }
+                }
+
+                if (uniqueProducts.size > 0) {
+                    for (const newBranchId of newlyAddedBranchIds) {
+                        // Check for existing assignments (including soft-deleted) for this branch
+                        const existingAssignments = await tx
+                            .select({
+                                id: branchInventory.id,
+                                organizationInventoryId: branchInventory.organizationInventoryId,
+                                deletedAt: branchInventory.deletedAt,
+                            })
+                            .from(branchInventory)
+                            .where(
+                                and(
+                                    eq(branchInventory.branchId, newBranchId),
+                                    inArray(branchInventory.organizationInventoryId,
+                                        Array.from(uniqueProducts.keys())
+                                    )
+                                )
+                            )
+
+                        const activeKeys = new Set(
+                            existingAssignments
+                                .filter(a => a.deletedAt === null)
+                                .map(a => a.organizationInventoryId)
+                        )
+                        const softDeletedMap = new Map(
+                            existingAssignments
+                                .filter(a => a.deletedAt !== null)
+                                .map(a => [a.organizationInventoryId, a.id])
+                        )
+
+                        const toInsert = []
+                        const toRestore: number[] = []
+
+                        for (const [orgInvId, product] of uniqueProducts) {
+                            if (activeKeys.has(orgInvId)) continue // Already active
+
+                            const softDeletedId = softDeletedMap.get(orgInvId)
+                            if (softDeletedId) {
+                                toRestore.push(softDeletedId)
+                            } else {
+                                toInsert.push({
+                                    branchId: newBranchId,
+                                    organizationId: product.organizationId,
+                                    organizationInventoryId: orgInvId,
+                                    assignedByUserId: (session.user as any).id,
+                                    isVisible: true,
+                                    isActive: true,
+                                })
+                            }
+                        }
+
+                        // Restore soft-deleted records
+                        if (toRestore.length > 0) {
+                            await tx.update(branchInventory)
+                                .set({
+                                    deletedAt: null,
+                                    isActive: true,
+                                    isVisible: true,
+                                    assignedByUserId: (session.user as any).id,
+                                    updatedAt: new Date(),
+                                })
+                                .where(inArray(branchInventory.id, toRestore))
+                        }
+
+                        // Insert new records
+                        if (toInsert.length > 0) {
+                            await tx.insert(branchInventory).values(toInsert)
+                        }
+                    }
+                }
+            }
+
+            // 6. Update group status based on assignment
             await tx
                 .update(groups)
                 .set({
@@ -132,7 +281,7 @@ export async function PUT(
                 })
                 .where(eq(groups.id, groupId))
 
-            // 6. Log assignment action
+            // 7. Log assignment action
             await tx.insert(groupAuditLogs).values({
                 organizationId: group.organizationId,
                 groupId,
@@ -141,6 +290,8 @@ export async function PUT(
                 performedByRole: role,
                 metadata: {
                     branchIds,
+                    newlyAddedBranchIds,
+                    autoAssignedProducts: newlyAddedBranchIds.length > 0,
                 },
             })
         })
@@ -149,8 +300,15 @@ export async function PUT(
         await invalidateByPrefix('groups')
         await invalidateByPrefix('branches')
 
-        return NextResponse.json({ message: "Branch assignments updated" })
+        const autoMsg = newlyAddedBranchIds.length > 0
+            ? ` ${newlyAddedBranchIds.length} new branch(es) received group products automatically.`
+            : ""
+
+        return NextResponse.json({
+            message: `Branch assignments updated.${autoMsg}`,
+            newlyAddedBranchIds,
+        })
     } catch (e: any) {
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+        return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 })
     }
 }

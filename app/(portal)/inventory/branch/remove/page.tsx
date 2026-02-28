@@ -234,24 +234,6 @@ export default function RemoveFromBranchPage() {
 
     return (
         <div className="space-y-8 p-6">
-            {/* Header */}
-            <Card className="relative overflow-hidden border-none bg-gradient-to-r from-red-900 via-rose-900 to-pink-800 text-white shadow-xl">
-                <div className="pointer-events-none absolute inset-0 opacity-30">
-                    <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
-                    <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-red-400/40 blur-3xl" />
-                </div>
-                <CardHeader className="relative space-y-3">
-                    <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-white/70">
-                        <Trash2 className="h-4 w-4" />
-                        Branch Unassignment
-                    </p>
-                    <CardTitle className="text-3xl font-semibold text-white">Remove Products from Group</CardTitle>
-                    <p className="text-sm text-white/80">
-                        Select a group to view and remove product assignments from all branches in that group.
-                    </p>
-                </CardHeader>
-            </Card>
-
             {/* Organization Selector */}
             {showOrgSelector && (
                 <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -271,17 +253,6 @@ export default function RemoveFromBranchPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                    </CardContent>
-                </Card>
-            )}
-
-            {contextOrgId && (
-                <Card className="border border-slate-200 dark:border-slate-800 shadow-sm bg-red-50/50 dark:bg-red-950/20">
-                    <CardContent className="py-4">
-                        <div className="flex items-center gap-3">
-                            <Building2 className="h-5 w-5 text-red-600" />
-                            <span className="text-sm">Using organization from header.</span>
-                        </div>
                     </CardContent>
                 </Card>
             )}

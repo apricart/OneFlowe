@@ -137,7 +137,7 @@ export async function DELETE(
 
     // Soft delete by setting status to inactive
     await db.update(globalProducts)
-      .set({ status: "discontinued", updatedAt: new Date() })
+      .set({ status: "inactive", updatedAt: new Date() })
       .where(eq(globalProducts.id, productId))
 
     // Log audit

@@ -347,7 +347,7 @@ export default function OrdersManagementPage() {
       </div>
 
       {/* Stats & Filters – shown for all roles; data is branch-scoped for branch admins */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="flex flex-wrap gap-4">
         {[
           {
             label: "Total Orders",
@@ -397,7 +397,7 @@ export default function OrdersManagementPage() {
         ].filter(stat => !(isSuperAdmin || isHeadOffice) || stat.label !== "Pending").map((stat) => (
           <div
             key={stat.label}
-            className={`bg-gradient-to-br ${stat.gradient} ${stat.border} rounded-lg p-5 hover:shadow-md transition-shadow`}
+            className={`flex-1 min-w-[200px] bg-gradient-to-br border ${stat.gradient} ${stat.border} rounded-lg p-5 hover:shadow-md transition-shadow`}
           >
             <p className={`text-xs font-semibold uppercase tracking-wider ${stat.textColor} mb-1`}>{stat.label}</p>
             <p className={`text-3xl font-bold ${stat.textColor} mb-1`}>{stat.count}</p>
@@ -466,19 +466,18 @@ export default function OrdersManagementPage() {
           <div className="overflow-x-auto bg-white dark:bg-slate-900">
             <table className="w-full bg-white dark:bg-slate-900">
               <thead className="border-b bg-slate-50 dark:bg-slate-900 dark:border-slate-800">
-                <tr className="bg-slate-50 dark:bg-slate-900">
-                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">TID</th>
+                <tr className="bg-slate-50 dark:bg-slate-900 border-b dark:border-slate-800">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">TID</th>
                   {isSuperAdmin && (
-                    <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Org</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Org</th>
                   )}
-                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Branch</th>
-                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Stage</th>
-                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Status</th>
-                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Refund</th>
-                  <th className="px-2 py-2 text-right text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Amount</th>
-                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Items</th>
-                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Date</th>
-                  <th className="px-2 py-2 text-left text-xs font-semibold text-slate-900 dark:text-slate-200 bg-slate-50 dark:bg-slate-900">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Branch</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Stage</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Refund</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Amount</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700 bg-white dark:bg-slate-900">
@@ -487,22 +486,22 @@ export default function OrdersManagementPage() {
                   const StatusIcon = statusInfo.icon
 
                   return (
-                    <tr key={order.id} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
+                    <tr key={order.id} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b dark:border-slate-800">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <div>
-                          <p className="text-xs font-semibold text-slate-900 dark:text-white">{order.tid}</p>
-                          <p className="text-[10px] text-muted-foreground">#{order.id}</p>
+                          <p className="text-xs font-semibold text-slate-900 dark:text-white uppercase font-mono">{order.tid}</p>
+                          <p className="text-[10px] text-muted-foreground">ID: #{order.id}</p>
                         </div>
                       </td>
                       {isSuperAdmin && (
-                        <td className="px-2 py-2 bg-white dark:bg-slate-900">
+                        <td className="px-4 py-3">
                           <p className="text-xs text-slate-700 dark:text-slate-300">
                             {order.organizationName || `#${order.organizationId}`}
                           </p>
                         </td>
                       )}
-                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
-                        <p className="text-xs text-slate-700 dark:text-slate-300">
+                      <td className="px-4 py-3">
+                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
                           {order.branchName || `#${order.branchId}`}
                         </p>
                       </td>
@@ -544,21 +543,21 @@ export default function OrdersManagementPage() {
                           </div>
                         )}
                       </td>
-                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
+                      <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
                           {order.status.toLowerCase() === "refunded" ? (
-                            <Badge variant="outline" className="bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-0 text-[10px] px-1.5 py-0.5">
+                            <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800 text-[10px] uppercase font-bold px-2">
                               FULL
                             </Badge>
                           ) : (
                             <>
                               {(order.refundAmountCents ?? 0) > 0 && (
-                                <Badge variant="outline" className="bg-yellow-50 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-300 border-0 text-[10px] px-1.5 py-0.5">
+                                <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 text-[10px] uppercase font-bold px-2">
                                   PARTIAL
                                 </Badge>
                               )}
                               {(order.hasRefundRequests ?? 0) > 0 && (
-                                <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-0 text-[10px] px-1.5 py-0.5">
+                                <Badge variant="outline" className="bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-400 border-sky-200 dark:border-sky-800 text-[10px] uppercase font-bold px-2">
                                   REQUESTED
                                 </Badge>
                               )}
@@ -569,21 +568,18 @@ export default function OrdersManagementPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-2 py-2 text-right bg-white dark:bg-slate-900">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white">
+                      <td className="px-4 py-3 text-right">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white font-mono">
                           {formatPKR(order.totalCents / 100)}
                         </p>
                       </td>
-                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
-                        <p className="text-[10px] text-slate-700 dark:text-slate-300 max-w-[180px] line-clamp-2" title={order.itemNames || '-'}>
-                          {order.itemNames || '-'}
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                          {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                         </p>
                       </td>
-                      <td className="px-2 py-2 text-[10px] text-muted-foreground bg-white dark:bg-slate-900">
-                        {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })}
-                      </td>
-                      <td className="px-2 py-2 bg-white dark:bg-slate-900">
-                        <div className="flex items-center gap-2">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
                           <ReceiptIconButton orderId={order.id} />
 
                           <Button

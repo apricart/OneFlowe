@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { formatPKR } from "@/lib/utils"
-import { Search, Package, Sparkles, Plus, Edit, Trash2, Building2 } from "lucide-react"
+import { Search, Package, Sparkles, Plus, Edit, Trash2, Building2, AlertTriangle, Loader2 } from "lucide-react"
 import { ProductForm } from "@/components/global-inventory/product-form"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -41,7 +41,7 @@ export default function GlobalInventoryView() {
     const [subCategoryFilter, setSubCategoryFilter] = useState("")
     const [dialogMode, setDialogMode] = useState<"create" | "edit" | "delete" | null>(null)
     const [selectedProduct, setSelectedProduct] = useState<GlobalInventoryItem | null>(null)
-    const [confirmAction, setConfirmAction] = useState<"delete" | "discontinue" | null>(null)
+    const [isDeleting, setIsDeleting] = useState(false)
     const { toast } = useToast()
 
     const params = new URLSearchParams()
@@ -75,11 +75,12 @@ export default function GlobalInventoryView() {
     const activeProducts = useMemo(() => products.filter((p) => p.status === "active").length, [products])
     const totalAssignments = useMemo(() => products.reduce((sum, p) => sum + p.assignedOrganizations, 0), [products])
 
-    const handleDelete = async (mode: "delete" | "discontinue" = "discontinue") => {
+    const handleDelete = async () => {
         if (!selectedProduct) return
 
+        setIsDeleting(true)
         try {
-            const res = await fetch(`/api/v1/admin/global-inventory?id=${selectedProduct.id}&mode=${mode}`, {
+            const res = await fetch(`/api/v1/admin/global-inventory?id=${selectedProduct.id}&mode=delete`, {
                 method: "DELETE",
             })
 
@@ -87,10 +88,9 @@ export default function GlobalInventoryView() {
                 mutate()
                 setDialogMode(null)
                 setSelectedProduct(null)
-                setConfirmAction(null)
                 toast({
                     title: "Success",
-                    description: `Product ${mode === "delete" ? "deleted" : "discontinued"} successfully.`
+                    description: `Product "${selectedProduct.name}" deleted successfully.`
                 })
             } else {
                 const data = await res.json()
@@ -106,6 +106,8 @@ export default function GlobalInventoryView() {
                 description: "Failed to process request",
                 variant: "destructive"
             })
+        } finally {
+            setIsDeleting(false)
         }
     }
 
@@ -197,7 +199,6 @@ export default function GlobalInventoryView() {
                             <option value="all">All statuses</option>
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
-                            <option value="discontinued">Discontinued</option>
                         </select>
                     </div>
 
@@ -261,9 +262,7 @@ export default function GlobalInventoryView() {
                                                     variant={
                                                         product.status === "active"
                                                             ? "default"
-                                                            : product.status === "discontinued"
-                                                                ? "destructive"
-                                                                : "secondary"
+                                                            : "secondary"
                                                     }
                                                 >
                                                     {product.status}
@@ -346,55 +345,48 @@ export default function GlobalInventoryView() {
                 if (!open) {
                     setDialogMode(null)
                     setSelectedProduct(null)
-                    setConfirmAction(null)
                 }
             }}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Remove Product</DialogTitle>
+                        <DialogTitle className="text-destructive flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" />
+                            Permanently Delete Product
+                        </DialogTitle>
                     </DialogHeader>
-                    {confirmAction ? (
-                        <div className="py-4 space-y-4">
-                            <p className="text-sm">
-                                Are you sure you want to <strong>{confirmAction === "delete" ? "permanently delete" : "discontinue"}</strong>{" "}
-                                {selectedProduct?.name}?
+                    <div className="py-6 space-y-4">
+                        <div className="p-4 bg-destructive/5 border border-destructive/20 rounded-xl space-y-3">
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                Are you sure you want to permanently delete <strong>{selectedProduct?.name}</strong>?
                             </p>
-                            <div className="flex justify-end gap-2">
-                                <Button variant="outline" onClick={() => setConfirmAction(null)}>
-                                    Back
-                                </Button>
-                                <Button
-                                    variant={confirmAction === "delete" ? "destructive" : "default"}
-                                    onClick={() => handleDelete(confirmAction)}
-                                >
-                                    Confirm {confirmAction === "delete" ? "Delete" : "Discontinue"}
-                                </Button>
-                            </div>
+                            <p className="text-xs text-destructive font-medium bg-destructive/10 p-2 rounded border border-destructive/20">
+                                ⚠️ This action cannot be undone. This will remove the product from the global catalog and all organization inventories.
+                            </p>
                         </div>
-                    ) : (
-                        <>
-                            <div className="py-4 space-y-4">
-                                <p className="text-sm text-muted-foreground">
-                                    How would you like to remove <strong>{selectedProduct?.name}</strong>?
-                                </p>
-                                <div className="space-y-2">
-                                    <div className="p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors" onClick={() => setConfirmAction("discontinue")}>
-                                        <p className="text-sm font-medium">Discontinue</p>
-                                        <p className="text-xs text-muted-foreground">Product remains in the list but marked as discontinued. No one can order it.</p>
-                                    </div>
-                                    <div className="p-3 border rounded-lg border-destructive/20 hover:bg-destructive/5 cursor-pointer transition-colors" onClick={() => setConfirmAction("delete")}>
-                                        <p className="text-sm font-medium text-destructive">Permanently Delete</p>
-                                        <p className="text-xs text-muted-foreground">Remove from the catalog entirely. This action cannot be undone.</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex justify-end">
-                                <Button variant="outline" onClick={() => setDialogMode(null)}>
-                                    Cancel
-                                </Button>
-                            </div>
-                        </>
-                    )}
+
+                        <div className="flex justify-end gap-3">
+                            <Button
+                                variant="outline"
+                                onClick={() => setDialogMode(null)}
+                                disabled={isDeleting}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleDelete}
+                                disabled={isDeleting}
+                                className="min-w-[120px]"
+                            >
+                                {isDeleting ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Deleting...
+                                    </>
+                                ) : "Delete Product"}
+                            </Button>
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

@@ -5,6 +5,7 @@ import { db, pool } from "@/lib/db"
 import { branchInventory, organizationInventory, branches, globalProducts, auditLogs, groups, categories } from "@/db/schema"
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm"
 import { logInventoryAction } from "@/lib/global-logger"
+import { invalidateByPrefix } from "@/lib/cache-utils"
 
 // GET /api/v1/head-office/branch-assignments - List branch assignments
 export async function GET(req: NextRequest) {
@@ -45,9 +46,6 @@ export async function GET(req: NextRequest) {
       eq(branchInventory.organizationId, parseInt(organizationId)),
       isNull(branchInventory.deletedAt),
       isNull(globalProducts.deletedAt),
-      eq(globalProducts.status, "active"),
-      eq(organizationInventory.isActive, true),
-      eq(branchInventory.isActive, true)
     ]
 
     if (branchId) {
@@ -87,6 +85,7 @@ export async function GET(req: NextRequest) {
         branchName: branches.name,
         customName: organizationInventory.customName,
         customPrice: organizationInventory.customPrice,
+        orgIsActive: organizationInventory.isActive,
       })
         .from(branchInventory)
         .leftJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
@@ -226,6 +225,7 @@ export async function POST(req: NextRequest) {
     const orgInventoryItems = await db.select({
       id: organizationInventory.id,
       globalProductId: organizationInventory.globalProductId,
+      isActive: organizationInventory.isActive,
     })
       .from(organizationInventory)
       .where(
@@ -271,7 +271,7 @@ export async function POST(req: NextRequest) {
 
     // Create assignments for each inventory item and branch combination
     const toInsert = []
-    const toRestore: number[] = []  // IDs of soft-deleted records to restore
+    const toRestore: { id: number; isActive: boolean }[] = []  // soft-deleted records to restore
 
     for (const orgInventoryId of organizationInventoryIds) {
       const orgItem = orgInventoryItems.find(item => item.id === orgInventoryId)
@@ -289,7 +289,7 @@ export async function POST(req: NextRequest) {
         )
 
         if (softDeleted) {
-          toRestore.push(softDeleted.id)
+          toRestore.push({ id: softDeleted.id, isActive: orgItem.isActive })
         } else {
           toInsert.push({
             branchId: Number(branchId),
@@ -297,7 +297,7 @@ export async function POST(req: NextRequest) {
             organizationInventoryId: Number(orgInventoryId),
             assignedByUserId: (session.user as any).id,
             isVisible: Boolean(isVisible),
-            isActive: Boolean(isActive),
+            isActive: orgItem.isActive, // Inherit from org inventory
           })
         }
       }
@@ -316,19 +316,20 @@ export async function POST(req: NextRequest) {
 
     // Restore soft-deleted records
     if (toRestore.length > 0) {
-      const restored = await db.update(branchInventory)
-        .set({
-          deletedAt: null,
-          isActive: isActive,
-          isVisible: isVisible,
-          assignedByUserId: (session.user as any).id,
-          updatedAt: new Date(),
-        })
-        .where(inArray(branchInventory.id, toRestore))
-        .returning()
-
-      newAssignments.push(...restored)
-      console.log('Restored assignments:', restored.length)
+      for (const item of toRestore) {
+        const [restored] = await db.update(branchInventory)
+          .set({
+            deletedAt: null,
+            isActive: item.isActive, // Inherit from org inventory
+            isVisible: isVisible,
+            assignedByUserId: (session.user as any).id,
+            updatedAt: new Date(),
+          })
+          .where(eq(branchInventory.id, item.id))
+          .returning()
+        newAssignments.push(restored)
+      }
+      console.log('Restored assignments:', toRestore.length)
     }
 
     // Insert new records
@@ -390,6 +391,9 @@ export async function POST(req: NextRequest) {
         }
       }
     )
+
+    // Invalidate branch inventory cache so portals see changes instantly
+    await invalidateByPrefix('branch-inv')
 
     return NextResponse.json({
       message: groupName
@@ -568,6 +572,9 @@ export async function DELETE(req: NextRequest) {
     } catch (logError) {
       console.error("Failed to log inventory action:", logError)
     }
+
+    // Invalidate branch inventory cache so portals see changes instantly
+    await invalidateByPrefix('branch-inv')
 
     return NextResponse.json({
       message: "Branch assignments removed successfully",

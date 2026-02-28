@@ -336,7 +336,6 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="discontinued">Discontinued</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1 text-xs text-muted-foreground">Inactive = hidden.</p>

@@ -84,6 +84,8 @@ export async function GET(req: NextRequest) {
       isNull(branchInventory.deletedAt),
       // Only show globally active products
       eq(globalProducts.status, "active"),
+      // Only show products that are active at the organization level
+      eq(organizationInventory.isActive, true),
     ]
 
     if (search) {

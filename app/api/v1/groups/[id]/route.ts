@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { groups, groupAuditLogs, branches, branchInventory } from "@/db/schema"
-import { eq, and, sql, count, isNull } from "drizzle-orm"
+import { groups, groupAuditLogs, branches, branchInventory, organizationInventory, globalProducts } from "@/db/schema"
+import { eq, and, sql, count, isNull, or, ne, inArray } from "drizzle-orm"
 import { invalidateByPrefix } from "@/lib/cache-utils"
 
 export async function GET(
@@ -177,21 +177,50 @@ export async function DELETE(
         // Check for assigned branches
         const [branchCount] = await db.select({ val: count() }).from(branches).where(eq(branches.groupId, groupId))
         if (branchCount.val > 0) {
-            // Further check: Do these branches have any products assigned?
+            // Auto-clean: soft-delete branch inventory records for globally deleted products
+            const branchIdsInGroup = await db.select({ id: branches.id })
+                .from(branches)
+                .where(eq(branches.groupId, groupId))
+
+            if (branchIdsInGroup.length > 0) {
+                const branchIdList = branchIdsInGroup.map(b => b.id)
+                const staleRecords = await db.select({ biId: branchInventory.id })
+                    .from(branchInventory)
+                    .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+                    .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+                    .where(
+                        and(
+                            inArray(branchInventory.branchId, branchIdList),
+                            isNull(branchInventory.deletedAt),
+                            sql`${globalProducts.deletedAt} IS NOT NULL`
+                        )
+                    )
+
+                if (staleRecords.length > 0) {
+                    await db.update(branchInventory)
+                        .set({ deletedAt: new Date(), updatedAt: new Date() })
+                        .where(inArray(branchInventory.id, staleRecords.map(r => r.biId)))
+                }
+            }
+
+            // Count remaining assigned products (matches what Group Products page shows)
             const [productCount] = await db
                 .select({ val: count() })
                 .from(branchInventory)
                 .innerJoin(branches, eq(branchInventory.branchId, branches.id))
+                .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+                .innerJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
                 .where(
                     and(
                         eq(branches.groupId, groupId),
-                        isNull(branchInventory.deletedAt)
+                        isNull(branchInventory.deletedAt),
+                        isNull(globalProducts.deletedAt)
                     )
                 )
 
             if (productCount.val > 0) {
                 return NextResponse.json({
-                    error: `Cannot delete: This group has ${branchCount.val} branch(es) with ${productCount.val} total product(s) assigned. Please remove all products from branches in this group first.`
+                    error: `Cannot delete: This group has ${branchCount.val} branch(es) with ${productCount.val} product(s) assigned. Please remove all products from branches in this group first.`
                 }, { status: 400 })
             }
 

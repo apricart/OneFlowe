@@ -67,10 +67,10 @@ const currencyFormatter = new Intl.NumberFormat("en-PK", {
 // ----------------- Dynamic Font Size Helper -----------------
 export const getValueFontSize = (val: string | number) => {
   const str = String(val);
-  if (str.length > 15) return 'text-sm lg:text-base';
-  if (str.length > 11) return 'text-base lg:text-lg';
-  if (str.length > 8) return 'text-lg lg:text-xl';
-  return 'text-xl lg:text-2xl';
+  if (str.length >= 13) return 'text-xs sm:text-xs md:text-sm lg:text-base tracking-tight';
+  if (str.length >= 10) return 'text-sm sm:text-sm md:text-base lg:text-lg tracking-tight';
+  if (str.length >= 7) return 'text-base sm:text-base md:text-lg lg:text-xl tracking-tight';
+  return 'text-lg sm:text-lg md:text-xl lg:text-2xl';
 }
 
 // ----------------- Yearly Sales Spline Chart -----------------

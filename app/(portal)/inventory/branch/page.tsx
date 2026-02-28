@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatPKR } from "@/lib/utils"
-import { Search, Package, Eye, Building2, GitBranch } from "lucide-react"
+import { Search, Package, Eye, Building2, GitBranch, Loader2 } from "lucide-react"
 import { useAppContext } from "@/components/context/app-context"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
@@ -25,9 +25,14 @@ type BranchProduct = {
     productImageUrl: string | null
     customName: string | null
     customPrice: number | null
+    basePrice: number
     isVisible: boolean
     isActive: boolean
     assignedAt: string
+    organizationInventoryId: number
+    globalProductId: number
+    globalStatus: string
+    orgIsActive: boolean
 }
 
 export default function ViewBranchProductsPage() {
@@ -54,12 +59,19 @@ export default function ViewBranchProductsPage() {
     )
 
     // Fetch products for selected group
-    const { data: productsData, isLoading, mutate } = useSWR<{ items: BranchProduct[] }>(
+    const { data: productsData, isLoading } = useSWR<{ items: BranchProduct[] }>(
         selectedOrgId && selectedGroupId
-            ? `/api/v1/head-office/branch-assignments?organizationId=${selectedOrgId}&groupId=${selectedGroupId}`
+            ? `/api/v1/head-office/branch-assignments?organizationId=${selectedOrgId}&groupId=${selectedGroupId}&limit=1000`
             : null,
         fetcher,
         { fallbackData: { items: [] } }
+    )
+
+    // Fetch actual branches in the selected group
+    const { data: groupBranchesData } = useSWR<{ branches: { id: number; name: string }[] }>(
+        selectedGroupId ? `/api/v1/groups/${selectedGroupId}/branches` : null,
+        fetcher,
+        { fallbackData: { branches: [] } }
     )
 
     const branchProducts = productsData?.items ?? []
@@ -69,7 +81,7 @@ export default function ViewBranchProductsPage() {
         const productMap = new Map<number, BranchProduct & { branches: string[] }>()
 
         for (const p of branchProducts) {
-            const gpId = (p as any).globalProductId as number
+            const gpId = p.globalProductId as number
             if (!gpId) continue
 
             if (productMap.has(gpId)) {
@@ -77,13 +89,13 @@ export default function ViewBranchProductsPage() {
                 if (p.branchName && !existing.branches.includes(p.branchName)) {
                     existing.branches.push(p.branchName)
                 }
-                // Keep the earliest assignment date
                 if (new Date(p.assignedAt) < new Date(existing.assignedAt)) {
                     existing.assignedAt = p.assignedAt
                 }
             } else {
                 productMap.set(gpId, {
                     ...p,
+                    isActive: p.orgIsActive !== undefined ? p.orgIsActive : p.isActive, // Use org-level status as source of truth
                     branches: p.branchName ? [p.branchName] : [],
                 })
             }
@@ -95,7 +107,6 @@ export default function ViewBranchProductsPage() {
     // Search filtering
     const filteredProducts = useMemo(() => {
         if (!searchQuery) return deduplicatedProducts
-
         const q = searchQuery.toLowerCase()
         return deduplicatedProducts.filter(p =>
             p.productName.toLowerCase().includes(q) ||
@@ -104,49 +115,18 @@ export default function ViewBranchProductsPage() {
         )
     }, [deduplicatedProducts, searchQuery])
 
-    const handleGroupChange = (value: string) => {
-        setSelectedGroupId(value)
-    }
-
-    // Extract unique branch names for the summary at the top
     const allBranches = useMemo(() => {
-        const set = new Set<string>()
-        for (const p of branchProducts) {
-            if (p.branchName) set.add(p.branchName)
-        }
-        return Array.from(set)
-    }, [branchProducts])
-
-
-    // Removed handleBranchChange as individual branch selection is no longer supported
+        return (groupBranchesData?.branches || []).map(b => b.name)
+    }, [groupBranchesData])
 
     return (
         <div className="space-y-8 p-6">
-            {/* Header */}
-            <Card className="relative overflow-hidden border-none bg-gradient-to-r from-violet-900 via-purple-900 to-fuchsia-800 text-white shadow-xl">
-                <div className="pointer-events-none absolute inset-0 opacity-30">
-                    <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
-                    <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-purple-400/40 blur-3xl" />
-                </div>
-                <CardHeader className="relative space-y-3">
-                    <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-white/70">
-                        <Eye className="h-4 w-4" />
-                        Branch Visibility
-                    </p>
-                    <CardTitle className="text-3xl font-semibold text-white">View Group Products</CardTitle>
-                    <p className="text-sm text-white/80">
-                        See which products are assigned to branches within a specific group.
-                    </p>
-                </CardHeader>
-            </Card>
-
             {/* Selectors */}
             <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
                 <CardHeader>
                     <CardTitle className="text-lg">Select Group</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    {/* Organization Selector */}
                     {showOrgSelector && (
                         <div>
                             <label className="text-sm font-medium mb-2 block">Organization</label>
@@ -156,43 +136,28 @@ export default function ViewBranchProductsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {orgsData?.items.map((org) => (
-                                        <SelectItem key={org.id} value={org.id.toString()}>
-                                            {org.name}
-                                        </SelectItem>
+                                        <SelectItem key={org.id} value={org.id.toString()}>{org.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
                     )}
 
-                    {contextOrgId && (
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-violet-50/50 dark:bg-violet-950/20">
-                            <Building2 className="h-5 w-5 text-violet-600" />
-                            <span className="text-sm">Using organization from header.</span>
-                        </div>
-                    )}
-
                     {selectedOrgId && (
-                        <div className="grid gap-4 md:grid-cols-2">
-                            {/* Group Selector */}
-                            <div className="md:col-span-2">
-                                <label className="text-sm font-medium mb-2 block flex items-center gap-2">
-                                    <GitBranch className="h-4 w-4" />
-                                    Select Group
-                                </label>
-                                <Select value={selectedGroupId} onValueChange={handleGroupChange}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a group" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {(groupsData?.groups || []).map((group) => (
-                                            <SelectItem key={group.id} value={group.id.toString()}>
-                                                {group.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <div>
+                            <label className="text-sm font-medium mb-2 block flex items-center gap-2">
+                                <GitBranch className="h-4 w-4" /> Select Group
+                            </label>
+                            <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
+                                <SelectTrigger className="max-w-md">
+                                    <SelectValue placeholder="Select a group" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {(groupsData?.groups || []).map((group) => (
+                                        <SelectItem key={group.id} value={group.id.toString()}>{group.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     )}
                 </CardContent>
@@ -218,7 +183,7 @@ export default function ViewBranchProductsPage() {
                 </Card>
             )}
 
-            {/* Products Table */}
+            {/* Products Table — Read Only */}
             {selectedGroupId && (
                 <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -254,7 +219,10 @@ export default function ViewBranchProductsPage() {
                                     {isLoading ? (
                                         <TableRow>
                                             <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                                                Loading products...
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                    Loading products...
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ) : filteredProducts.length === 0 ? (
@@ -267,7 +235,10 @@ export default function ViewBranchProductsPage() {
                                         </TableRow>
                                     ) : (
                                         filteredProducts.map((product) => (
-                                            <TableRow key={(product as any).globalProductId || product.id} className="hover:bg-muted/40">
+                                            <TableRow
+                                                key={product.globalProductId || product.id}
+                                                className={`hover:bg-muted/40 ${!product.isActive ? "opacity-60" : ""}`}
+                                            >
                                                 <TableCell>
                                                     <div className="flex items-center gap-3">
                                                         {product.productImageUrl ? (
@@ -287,16 +258,23 @@ export default function ViewBranchProductsPage() {
                                                 <TableCell>
                                                     <Badge variant="outline">{product.productCode}</Badge>
                                                 </TableCell>
-
                                                 <TableCell className="font-medium">
                                                     {product.customPrice
                                                         ? formatPKR(product.customPrice / 100)
-                                                        : <span className="text-muted-foreground">-</span>}
+                                                        : product.basePrice
+                                                            ? formatPKR(product.basePrice / 100)
+                                                            : <span className="text-muted-foreground">-</span>}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={(product as any).globalStatus === "active" ? "default" : "secondary"}>
-                                                        {(product as any).globalStatus === "active" ? "Active" : "Inactive"}
-                                                    </Badge>
+                                                    {product.isActive ? (
+                                                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800">
+                                                            Active
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="secondary" className="text-amber-700 dark:text-amber-400">
+                                                            Inactive
+                                                        </Badge>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell className="text-muted-foreground text-sm">
                                                     {new Date(product.assignedAt).toLocaleDateString()}
@@ -309,8 +287,7 @@ export default function ViewBranchProductsPage() {
                         </div>
                     </CardContent>
                 </Card>
-            )
-            }
-        </div >
+            )}
+        </div>
     )
 }

@@ -6,6 +6,7 @@ import { organizationInventory, globalProducts, categories, auditLogs } from "@/
 import { eq, and, like, ilike, or, desc, sql, isNull, SQL, ne, inArray } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { cascadeOrgStatusChange } from "@/lib/inventory-cascade"
+import { invalidateByPrefix } from "@/lib/cache-utils"
 
 // GET /api/v1/head-office/organization-inventory - List products in organization inventory
 export async function GET(req: NextRequest) {
@@ -48,8 +49,15 @@ export async function GET(req: NextRequest) {
       isNull(organizationInventory.deletedAt),
       isNull(globalProducts.deletedAt),
       eq(globalProducts.status, "active"),
-      eq(organizationInventory.isActive, true),
     ]
+
+    // Filter by organization product status (active/inactive/all)
+    if (status === "inactive") {
+      conditions.push(eq(organizationInventory.isActive, false))
+    } else if (status !== "all") {
+      // Default to active-only when no filter or "active" is selected
+      conditions.push(eq(organizationInventory.isActive, true))
+    }
 
     if (search) {
       conditions.push(
@@ -236,6 +244,9 @@ export async function PUT(req: NextRequest) {
           performedByRole: "HEAD_OFFICE"
         },
       })
+
+      // Invalidate branch inventory cache so portals see changes instantly
+      await invalidateByPrefix('branch-inv')
     }
 
     // Log the update

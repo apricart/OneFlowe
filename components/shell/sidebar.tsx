@@ -26,23 +26,8 @@ const getNavigationByRole = (role: string) => {
         icon: Boxes,
         subItems: [
           { href: "/inventory", label: "Global Products" },
-          {
-            href: "/inventory/assign",
-            label: "Organization Inventory",
-            subItems: [
-              { href: "/inventory/assign", label: "Assign from Global" },
-              { href: "/inventory/assigned", label: "View Assigned" },
-            ]
-          },
-          {
-            href: "/inventory/branch",
-            label: "Group Assignments",
-            subItems: [
-              { href: "/inventory/branch", label: "View Products" },
-              { href: "/inventory/branch/assign", label: "Assign to Group" },
-              { href: "/inventory/branch/remove", label: "Remove from Group" },
-            ]
-          },
+          { href: "/inventory/org", label: "Organization Inventory" },
+          { href: "/inventory/branch/hub", label: "Group Inventory" },
           { href: "/products/categories", label: "Categories" },
           { href: "/products/subcategories", label: "Subcategories" },
         ]

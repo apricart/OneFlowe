@@ -5,7 +5,7 @@ export const CACHE_TTL = {
     STATIC: 600,     // 10 min — roles, categories (rarely change)
     SETTINGS: 300,   // 5 min  — org settings
     LISTING: 60,     // 1 min  — branches, groups, orgs
-    INVENTORY: 30,   // 30 sec — branch inventory (shop page, changes often)
+    INVENTORY: 5,    // 5 sec  — branch inventory (shop page, needs fast updates)
     ANALYTICS: 120,  // 2 min  — dashboard, charts
 } as const
 

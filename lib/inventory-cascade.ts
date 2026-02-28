@@ -256,9 +256,9 @@ export async function cascadeGlobalProductStatusChange(
   try {
     // Determine the target isActive state based on status
     const isActive = status === 'active'
-    const shouldCascade = status === 'active' || status === 'inactive' || status === 'discontinued'
+    const shouldCascade = status === 'active' || status === 'inactive'
 
-    // Only cascade for active, inactive, or discontinued status changes
+    // Only cascade for active or inactive status changes
     if (!shouldCascade) {
       return { updatedOrgCount: 0, updatedBranchCount: 0, affectedOrgs: [], affectedBranches: [] }
     }

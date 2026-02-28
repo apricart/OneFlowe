@@ -417,7 +417,7 @@ export async function PUT(req: NextRequest) {
       .where(eq(globalProducts.id, parseInt(id)))
       .returning()
 
-    // If status changed to inactive/discontinued, cascade to organization and branch inventory
+    // If status changed, cascade to organization and branch inventory
     if (status !== undefined && status !== existingProduct.status) {
       const cascadeResult = await cascadeGlobalProductStatusChange(
         parseInt(id),
@@ -523,7 +523,7 @@ export async function DELETE(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get("id")
-    const mode = searchParams.get("mode") || "discontinue" // Default to discontinue for backward compatibility
+    const mode = searchParams.get("mode") || "deactivate" // Default to deactivate for backward compatibility
 
     if (!id) {
       return NextResponse.json({ error: "Product ID is required" }, { status: 400 })
@@ -550,16 +550,16 @@ export async function DELETE(req: NextRequest) {
       // Soft delete by marking deletedAt
       await db.update(globalProducts)
         .set({
-          status: "discontinued",
+          status: "inactive",
           deletedAt: new Date(),
           updatedAt: new Date()
         })
         .where(eq(globalProducts.id, productId))
     } else {
-      // Just discontinue
+      // Just deactivate
       await db.update(globalProducts)
         .set({
-          status: "discontinued",
+          status: "inactive",
           updatedAt: new Date()
         })
         .where(eq(globalProducts.id, productId))
@@ -568,7 +568,7 @@ export async function DELETE(req: NextRequest) {
     // Cascade status change to organization and branch inventory
     const cascadeResult = await cascadeGlobalProductStatusChange(
       productId,
-      "discontinued",
+      "inactive",
       (session.user as any).id,
       "SUPER_ADMIN"
     )

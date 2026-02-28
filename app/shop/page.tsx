@@ -128,7 +128,9 @@ export default function OrderPortalPage() {
     ? `/api/v1/budgets${needsContextParams ? `?branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
     : null
 
-  const { data: inventoryData, mutate: mutateBranchInventory, error: inventoryError } = useSWR<any>(branchInventoryUrl, fetcher)
+  const { data: inventoryData, mutate: mutateBranchInventory, error: inventoryError } = useSWR<any>(branchInventoryUrl, fetcher, {
+    refreshInterval: 5000, // Auto-refresh every 5s so admin changes appear quickly
+  })
   const { data: budget, mutate: mutateBudget } = useSWR<any>(budgetsUrl, fetcher)
   const { data: ordersData, mutate: mutateOrders } = useSWR<any>("/api/v1/orders", fetcher)
 

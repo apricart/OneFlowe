@@ -10,6 +10,7 @@ import {
   uuid,
   index,
   uniqueIndex,
+  bigint,
 } from "drizzle-orm/pg-core"
 
 export const organizations = pgTable(
@@ -264,10 +265,10 @@ export const budgets = pgTable(
       .references(() => branches.id)
       .notNull(),
     period: varchar("period", { length: 16 }).notNull(), // e.g. '2025-10'
-    amountAllocatedCents: integer("amount_allocated_cents").notNull().default(0),
-    amountSpentCents: integer("amount_spent_cents").notNull().default(0),
-    amountHeldCents: integer("amount_held_cents").notNull().default(0),
-    amountCreditedCents: integer("amount_credited_cents").notNull().default(0),
+    amountAllocatedCents: bigint("amount_allocated_cents", { mode: "number" }).notNull().default(0),
+    amountSpentCents: bigint("amount_spent_cents", { mode: "number" }).notNull().default(0),
+    amountHeldCents: bigint("amount_held_cents", { mode: "number" }).notNull().default(0),
+    amountCreditedCents: bigint("amount_credited_cents", { mode: "number" }).notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
@@ -317,9 +318,9 @@ export const orders = pgTable(
       .references(() => branches.id)
       .notNull(),
     status: varchar("status", { length: 32 }).notNull().default("PENDING"), // PENDING/APPROVED/REJECTED/FULFILLED/REFUNDED
-    subtotalCents: integer("subtotal_cents").notNull().default(0),
-    taxCents: integer("tax_cents").notNull().default(0),
-    totalCents: integer("total_cents").notNull().default(0),
+    subtotalCents: bigint("subtotal_cents", { mode: "number" }).notNull().default(0),
+    taxCents: bigint("tax_cents", { mode: "number" }).notNull().default(0),
+    totalCents: bigint("total_cents", { mode: "number" }).notNull().default(0),
     notes: text("notes"),
     createdByUserId: uuid("created_by_user_id")
       .references(() => users.id)
@@ -342,7 +343,7 @@ export const orders = pgTable(
     refundedAt: timestamp("refunded_at", { withTimezone: true }),
     refundedByUserId: uuid("refunded_by_user_id").references(() => users.id),
     statusAtRefund: varchar("status_at_refund", { length: 32 }), // Status before refund (e.g., "APPROVED", "FULFILLED")
-    refundAmountCents: integer("refund_amount_cents"), // Total refund amount
+    refundAmountCents: bigint("refund_amount_cents", { mode: "number" }), // Total refund amount
     refundReason: text("refund_reason"),
     // Receipt data - complete snapshot for historical accuracy
     receiptData: jsonb("receipt_data").$type<{
@@ -402,7 +403,7 @@ export const orderItems = pgTable(
     productCode: varchar("product_code", { length: 128 }),
     unit: varchar("unit", { length: 64 }).notNull(),
     quantity: integer("quantity").notNull(),
-    priceCents: integer("price_cents").notNull(), // Price at time of order
+    priceCents: bigint("price_cents", { mode: "number" }).notNull(), // Price at time of order
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => ({
@@ -421,7 +422,7 @@ export const refunds = pgTable(
     orderId: integer("order_id")
       .references(() => orders.id)
       .notNull(),
-    amountCents: integer("amount_cents").notNull(),
+    amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
     reason: varchar("reason", { length: 255 }),
     // New workflow: support pending refund requests
     status: varchar("status", { length: 16 }).notNull().default("PENDING"), // PENDING, APPROVED
@@ -448,7 +449,7 @@ export const refundItems = pgTable(
       .references(() => orderItems.id)
       .notNull(),
     quantity: integer("quantity").notNull(),
-    amountCents: integer("amount_cents").notNull(),
+    amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => ({
@@ -547,7 +548,7 @@ export const globalProducts = pgTable(
     discountEndAt: timestamp("discount_end_at", { withTimezone: true }),
     discountActive: boolean("discount_active").default(false),
     unit: varchar("unit", { length: 64 }).notNull().default("unit"), // kg, box, piece, etc.
-    status: varchar("status", { length: 32 }).notNull().default("active"), // active, inactive, discontinued
+    status: varchar("status", { length: 32 }).notNull().default("active"), // active, inactive
     // Single source of truth for stock across the system
     stockQuantity: integer("stock_quantity").notNull().default(0),
     metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
