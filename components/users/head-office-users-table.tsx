@@ -681,7 +681,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
               {(editForm.role === "BRANCH_ADMIN" || editForm.role === "ORDER_PORTAL") && (
                 <div className="space-y-2">
                   <Label htmlFor="branch">Branch Assignment *</Label>
-                  <Select value={editForm.branchId} onValueChange={value => setEditForm({ ...editForm, branchId: value })}>
+                  <Select disabled value={editForm.branchId} onValueChange={value => setEditForm({ ...editForm, branchId: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select branch" />
                     </SelectTrigger>

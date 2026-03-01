@@ -9,6 +9,41 @@ import { useToast } from "@/components/ui/use-toast"
 import { ShoppingBag, ArrowRight, ChevronLeft, Eye, EyeOff } from "lucide-react"
 import Image from "next/image"
 
+/**
+ * Clear stale NextAuth session cookies to prevent "Invalid URL" errors.
+ * After a password/email change the old JWT becomes invalid, but if the cookie
+ * still exists NextAuth internals may call `new URL(undefined)` and crash.
+ */
+function clearAuthCookies() {
+  try {
+    const cookieNames = [
+      "next-auth.session-token",
+      "__Secure-next-auth.session-token",
+      "next-auth.csrf-token",
+      "__Host-next-auth.csrf-token",
+      "next-auth.callback-url",
+      "__Secure-next-auth.callback-url",
+    ]
+    cookieNames.forEach((name) => {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+      // Also clear with domain variations for Vercel
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; secure`
+    })
+  } catch (_) {
+    // Cookie access may fail in some contexts — safe to ignore
+  }
+}
+
+/**
+ * Detect NextAuth internal URL constructor errors.
+ * These happen when `signIn()` or `signOut()` internally calls `new URL(data.url)`
+ * with an undefined value from a stale/invalidated session.
+ */
+function isUrlConstructorError(err: any): boolean {
+  const msg = String(err?.message || err || "").toLowerCase()
+  return msg.includes("url") && (msg.includes("invalid") || msg.includes("undefined") || msg.includes("failed to construct"))
+}
+
 export default function ShopLoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -22,7 +57,13 @@ export default function ShopLoginPage() {
   // Reset theme to light on mount and sign out any existing session
   useEffect(() => {
     localStorage.removeItem("theme")
-    signOut({ redirect: false })
+
+    // Clear stale auth cookies BEFORE calling signOut to prevent URL constructor crash
+    clearAuthCookies()
+
+    signOut({ redirect: false }).catch((err) => {
+      console.warn("[ShopLogin] signOut on mount failed (expected after password/email change):", err?.message)
+    })
   }, [])
 
   const [providerType, setProviderType] = useState<"user" | "employee" | null>(null)
@@ -35,6 +76,9 @@ export default function ShopLoginPage() {
 
     setIsLoading(true)
     try {
+      // Clear cookies again before sign-in to guarantee a clean state
+      clearAuthCookies()
+
       // 1. Try Standard User Login (New System - ORDER_PORTAL role)
       let result = await signIn("credentials", {
         email,
@@ -99,7 +143,13 @@ export default function ShopLoginPage() {
         window.location.replace("/shop")
       }
     } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+      if (isUrlConstructorError(error)) {
+        console.warn("[ShopLogin] Caught URL constructor error — clearing cookies and prompting retry:", error?.message)
+        clearAuthCookies()
+        toast({ title: "Session Expired", description: "Please try signing in again.", variant: "destructive" })
+      } else {
+        toast({ title: "Error", description: error.message, variant: "destructive" })
+      }
     } finally {
       if (step !== "mfa") setIsLoading(false)
     }
@@ -136,7 +186,15 @@ export default function ShopLoginPage() {
         window.location.replace("/shop")
       }
     } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+      if (isUrlConstructorError(error)) {
+        console.warn("[ShopLogin] Caught URL constructor error during MFA — clearing cookies and prompting retry:", error?.message)
+        clearAuthCookies()
+        setStep("credentials")
+        setOtp("")
+        toast({ title: "Session Expired", description: "Please try signing in again from the beginning.", variant: "destructive" })
+      } else {
+        toast({ title: "Error", description: error.message, variant: "destructive" })
+      }
     } finally {
       setIsLoading(false)
     }

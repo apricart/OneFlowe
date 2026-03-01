@@ -23,6 +23,7 @@ export async function PATCH(
     const { verifyResourceAccess } = await import("@/lib/auth")
     const [targetUser] = await db.select({
       organizationId: users.organizationId,
+      branchId: users.branchId,
       email: users.email
     }).from(users).where(eq(users.id, id)).limit(1)
     if (!targetUser) return error("User not found", 404)
@@ -66,8 +67,10 @@ export async function PATCH(
       patch.passwordHash = await hashPassword(body.password)
     }
 
-    // If password or email actually changed, bump sessionVersion atomically in the same update
-    const isSecurityChange = !!body.password || emailActuallyChanged
+    // If password, email, organization, or branch actually changed, bump sessionVersion atomically in the same update
+    const orgChanged = body.organizationId !== undefined && body.organizationId !== String(targetUser.organizationId)
+    const branchChanged = body.branchId !== undefined && body.branchId !== String(targetUser.branchId)
+    const isSecurityChange = !!body.password || emailActuallyChanged || orgChanged || branchChanged
     if (isSecurityChange) {
       console.log(`[API/Users] Security-relevant change for user ${id}. Incrementing session version...`)
       const [currentUser] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, id)).limit(1)

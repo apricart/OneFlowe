@@ -156,6 +156,58 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
     })
   }
 
+  // Compress/resize image using canvas to keep Base64 data URLs small
+  const compressImage = (file: File, maxDim = 1200, quality = 0.7): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      // GIFs can't be compressed via canvas without losing animation
+      if (file.type === "image/gif") {
+        resolve(file)
+        return
+      }
+
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        let { width, height } = img
+
+        // Only resize if larger than maxDim
+        if (width > maxDim || height > maxDim) {
+          const ratio = Math.min(maxDim / width, maxDim / height)
+          width = Math.round(width * ratio)
+          height = Math.round(height * ratio)
+        }
+
+        const canvas = document.createElement("canvas")
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext("2d")!
+        ctx.drawImage(img, 0, 0, width, height)
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file) // fallback to original
+              return
+            }
+            const compressed = new File([blob], file.name, {
+              type: "image/jpeg",
+              lastModified: Date.now(),
+            })
+            resolve(compressed)
+          },
+          "image/jpeg",
+          quality
+        )
+      }
+      img.onerror = () => {
+        URL.revokeObjectURL(url)
+        resolve(file) // fallback to original on error
+      }
+      img.src = url
+    })
+  }
+
   const handleImageFile = async (file: File | null) => {
     if (!file) return
 
@@ -173,10 +225,10 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
 
     const maxSize = 4 * 1024 * 1024 // 4MB
     if (file.size > maxSize) {
-      setImageUploadError("please upload image under 4MB")
+      setImageUploadError("Please upload an image under 4MB")
       toast({
         title: "Validation Error",
-        description: "please upload image under 4MB",
+        description: "Please upload an image under 4MB",
         variant: "destructive",
       })
       return
@@ -185,8 +237,11 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
     setIsUploadingImage(true)
     setImageUploadError(null)
     try {
+      // Compress the image before uploading to keep Base64 data URL small
+      const compressedFile = await compressImage(file)
+
       const formData = new FormData()
-      formData.append("image", file)
+      formData.append("image", compressedFile)
       const res = await fetch("/api/v1/upload/image", {
         method: "POST",
         body: formData,
@@ -268,7 +323,27 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
         }),
       })
 
-      const result = await response.json()
+      // Handle non-JSON responses (e.g. Vercel 413 Request Entity Too Large returns HTML)
+      let result: any
+      try {
+        result = await response.json()
+      } catch {
+        // Response was not valid JSON
+        if (response.status === 413) {
+          toast({
+            title: "Error",
+            description: "The image is too large to save. Please use a smaller image or remove it and try again.",
+            variant: "destructive",
+          })
+        } else {
+          toast({
+            title: "Error",
+            description: `Server error (${response.status}). Please try again.`,
+            variant: "destructive",
+          })
+        }
+        return
+      }
 
       if (response.ok) {
         toast({
@@ -280,7 +355,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
         // Detailed error message from backend
         let errorMessage = result.error || "Failed to save product"
         if (response.status === 413) {
-          errorMessage = "The image you uploaded is too large to save. please upload image under 4MB"
+          errorMessage = "The image is too large to save. Please use a smaller image or remove it and try again."
         }
 
         toast({

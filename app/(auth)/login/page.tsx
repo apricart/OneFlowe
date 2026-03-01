@@ -13,6 +13,41 @@ import { useToast } from "@/components/ui/use-toast"
 import Image from "next/image"
 import { Eye, EyeOff } from "lucide-react"
 
+/**
+ * Clear stale NextAuth session cookies to prevent "Invalid URL" errors.
+ * After a password/email change the old JWT becomes invalid, but if the cookie
+ * still exists NextAuth internals may call `new URL(undefined)` and crash.
+ */
+function clearAuthCookies() {
+  try {
+    const cookieNames = [
+      "next-auth.session-token",
+      "__Secure-next-auth.session-token",
+      "next-auth.csrf-token",
+      "__Host-next-auth.csrf-token",
+      "next-auth.callback-url",
+      "__Secure-next-auth.callback-url",
+    ]
+    cookieNames.forEach((name) => {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+      // Also clear with domain variations for Vercel
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; secure`
+    })
+  } catch (_) {
+    // Cookie access may fail in some contexts — safe to ignore
+  }
+}
+
+/**
+ * Detect NextAuth internal URL constructor errors.
+ * These happen when `signIn()` or `signOut()` internally calls `new URL(data.url)`
+ * with an undefined value from a stale/invalidated session.
+ */
+function isUrlConstructorError(err: any): boolean {
+  const msg = String(err?.message || err || "").toLowerCase()
+  return msg.includes("url") && (msg.includes("invalid") || msg.includes("undefined") || msg.includes("failed to construct"))
+}
+
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -26,16 +61,22 @@ function LoginForm() {
   const [pendingUser, setPendingUser] = useState<{ email: string; password: string } | null>(null)
   const [isProcessingMFA, setIsProcessingMFA] = useState(false)
 
-  // Clear theme preference and context on mount and FORCE light mode, and sign out any existing session
+  // Clear theme, context, stale cookies on mount. Force light mode. Sign out any existing session.
   useEffect(() => {
     localStorage.removeItem("theme")
-    // Clear potentially stale context to avoid Invalid URL errors in hooks
     localStorage.removeItem("ctx.organizationId")
     localStorage.removeItem("ctx.branchId")
 
     document.documentElement.classList.remove("dark")
     document.documentElement.style.colorScheme = "light"
-    signOut({ redirect: false })
+
+    // Clear stale auth cookies BEFORE calling signOut to prevent URL constructor crash
+    clearAuthCookies()
+
+    signOut({ redirect: false }).catch((err) => {
+      // Stale session may cause URL constructor errors inside NextAuth — safe to ignore on login page
+      console.warn("[Login] signOut on mount failed (expected after password/email change):", err?.message)
+    })
   }, [])
 
   async function onSubmit(e: React.FormEvent) {
@@ -46,6 +87,9 @@ function LoginForm() {
     setPendingUser(null)
 
     try {
+      // Clear cookies again before sign-in to guarantee a clean state
+      clearAuthCookies()
+
       const result = await signIn("credentials", { redirect: false, email, password })
 
       if (result?.error) {
@@ -55,7 +99,6 @@ function LoginForm() {
           setMfaRequired(true)
           return
         }
-        // Improve error message for invalid credentials
         if (result.error === "CredentialsSignin") {
           throw new Error("Invalid credentials. Please check your email and password.")
         }
@@ -71,13 +114,7 @@ function LoginForm() {
         throw new Error(result.error)
       }
 
-      const role = (result as any)?.role // Note: signIn doesn't return the session/role directly, we might need to rely on callback or fetch session. 
-      // Actually, standard NextAuth pattern is to let client side handle redirect or use router.
-      // Since we disabled redirect in signIn, we need to decide where to go.
-      // We can fetch the session to check role, or just let middleware handle it if we go to dashboard and get bounced.
-      // Better: fetch session or just check URL.
-
-      // Let's rely on getSession to be sure
+      // Fetch session to determine redirect target
       const session = await getSession()
       const userRole = (session?.user as any)?.role
 
@@ -85,12 +122,18 @@ function LoginForm() {
         window.location.replace("/shop")
       } else {
         const cb = searchParams.get("callbackUrl")
-        // Validate callbackUrl to avoid redirecting to "undefined" or "null" strings
         const targetUrl = (cb && cb !== "undefined" && cb !== "null") ? cb : "/dashboard"
         window.location.replace(targetUrl)
       }
     } catch (err: any) {
-      setError(err.message || "An error occurred during login")
+      // Catch NextAuth internal URL constructor errors and show friendly message
+      if (isUrlConstructorError(err)) {
+        console.warn("[Login] Caught URL constructor error — clearing cookies and prompting retry:", err?.message)
+        clearAuthCookies()
+        setError("Your session has expired. Please try signing in again.")
+      } else {
+        setError(err.message || "An error occurred during login")
+      }
     } finally {
       setLoading(false)
     }
@@ -101,16 +144,26 @@ function LoginForm() {
     setMfaRequired(false)
     setPendingUser(null)
 
-    // Check role for redirect
-    const session = await getSession()
-    const userRole = (session?.user as any)?.role
+    try {
+      const session = await getSession()
+      const userRole = (session?.user as any)?.role
 
-    if (userRole === "ORDER_PORTAL") {
-      window.location.replace("/shop")
-    } else {
-      const cb = searchParams.get("callbackUrl")
-      const targetUrl = (cb && cb !== "undefined" && cb !== "null") ? cb : "/dashboard"
-      window.location.replace(targetUrl)
+      if (userRole === "ORDER_PORTAL") {
+        window.location.replace("/shop")
+      } else {
+        const cb = searchParams.get("callbackUrl")
+        const targetUrl = (cb && cb !== "undefined" && cb !== "null") ? cb : "/dashboard"
+        window.location.replace(targetUrl)
+      }
+    } catch (err: any) {
+      if (isUrlConstructorError(err)) {
+        clearAuthCookies()
+        setError("Your session has expired. Please try signing in again.")
+        setIsProcessingMFA(false)
+      } else {
+        setError(err.message || "An error occurred")
+        setIsProcessingMFA(false)
+      }
     }
   }
 
@@ -213,8 +266,6 @@ function LoginForm() {
         </CardContent>
 
       </Card>
-
-
 
       {/* MFA Verification Dialog */}
       {mfaRequired && pendingUser && (

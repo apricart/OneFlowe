@@ -328,21 +328,19 @@ export function GroupManagement({ role }: { role: string }) {
         setIsBranchOpen(true)
         mutateBranches()
 
-        // Fetch product counts for each assigned branch in the background
+        // Fetch precise product counts via fast SQL aggregation API
         if (assignedIds.length > 0) {
             setIsLoadingCounts(true)
             try {
-                const orgId = group.organizationId || globalOrgId
-                const countsRes = await fetch(`/api/v1/head-office/branch-assignments?organizationId=${orgId}&groupId=${group.id}&limit=1000`)
+                const countsRes = await fetch(`/api/v1/groups/${group.id}/branch-counts`)
                 if (countsRes.ok) {
-                    const countsData = await countsRes.json()
-                    const counts: Record<number, number> = {}
-                    for (const item of countsData.items || []) {
-                        counts[item.branchId] = (counts[item.branchId] || 0) + 1
+                    const data = await countsRes.json()
+                    if (data.counts) {
+                        setBranchProductCounts(data.counts)
                     }
-                    setBranchProductCounts(counts)
-                    // Calculate total unique products in the group
-                    setTotalGroupProducts(countsData.total || Object.values(counts).reduce((sum: number, c: number) => sum + c, 0))
+                    if (data.totalGroupProducts !== undefined) {
+                        setTotalGroupProducts(Number(data.totalGroupProducts))
+                    }
                 }
             } catch {
                 // silently fail - product counts are informational

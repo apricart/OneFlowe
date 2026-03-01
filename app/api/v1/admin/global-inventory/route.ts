@@ -8,6 +8,15 @@ import { alias } from "drizzle-orm/pg-core"
 import { cascadeGlobalProductDeletion, cascadeGlobalProductStatusChange, cascadeGlobalProductFieldUpdate } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
 
+// Increase body size limit to handle Base64-encoded product images
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '8mb',
+    },
+  },
+}
+
 // GET /api/v1/admin/global-inventory - List all global products with assignment stats
 export async function GET(req: NextRequest) {
   try {
