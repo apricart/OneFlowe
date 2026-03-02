@@ -14,7 +14,7 @@ import { Search, Package, Building2, Loader2, Power, ToggleLeft } from "lucide-r
 import { useToast } from "@/components/ui/use-toast"
 import { useAppContext } from "@/components/context/app-context"
 
-import { fetcher } from "@/lib/fetcher"
+import { fetcher, apiFetch } from "@/lib/fetcher"
 
 type OrgProduct = {
     id: number
@@ -86,7 +86,7 @@ export default function ProductStatusPage() {
         mutate(optimisticData, false) // update local data, don't revalidate yet
 
         try {
-            await fetcher("/api/v1/head-office/organization-inventory", {
+            await apiFetch("/api/v1/head-office/organization-inventory", {
                 method: "PUT",
                 body: JSON.stringify({
                     id: product.id,
