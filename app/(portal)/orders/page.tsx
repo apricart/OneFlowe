@@ -127,10 +127,6 @@ export default function OrdersManagementPage() {
         filtered = filtered.filter((o: OrderItem) =>
           o.refundAmountCents && o.refundAmountCents > 0 && o.status.toLowerCase() !== "refunded"
         )
-      } else if (refundFilter === "none") {
-        filtered = filtered.filter((o: OrderItem) =>
-          !o.refundAmountCents || o.refundAmountCents === 0
-        )
       }
     }
 
@@ -432,8 +428,8 @@ export default function OrdersManagementPage() {
                   variant={statusFilter === status ? "secondary" : "ghost"}
                   size="sm"
                   className={`capitalize px-3 h-8 text-xs font-medium transition-all ${statusFilter === status
-                      ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white"
-                      : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+                    ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white"
+                    : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
                     }`}
                 >
                   {status}
@@ -449,15 +445,15 @@ export default function OrdersManagementPage() {
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Refund state</span>
             <div className="flex gap-1.5">
-              {["all", "none", "partial", "full"].map((refund) => (
+              {["all", "partial", "full"].map((refund) => (
                 <Button
                   key={refund}
                   onClick={() => setRefundFilter(refund)}
                   variant={refundFilter === refund ? "default" : "outline"}
                   size="sm"
                   className={`h-7 px-3 text-[11px] capitalize rounded-full ${refundFilter === refund
-                      ? "bg-slate-900 dark:bg-slate-100"
-                      : "border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    ? "bg-slate-900 dark:bg-slate-100"
+                    : "border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
                     }`}
                 >
                   {refund}
