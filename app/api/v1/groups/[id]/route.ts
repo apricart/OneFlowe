@@ -128,8 +128,8 @@ export async function PUT(
             },
         })
 
-        // Invalidate groups cache so GET returns fresh data immediately
-        await invalidateByPrefix('groups')
+        // Invalidate all group-related caches (list and counts)
+        await invalidateByPrefix('group')
 
         return NextResponse.json({ group: updated })
     } catch (e: any) {
@@ -250,8 +250,8 @@ export async function DELETE(
             })
         })
 
-        // Invalidate groups cache so GET returns fresh data immediately
-        await invalidateByPrefix('groups')
+        // Invalidate all group-related caches (list and counts)
+        await invalidateByPrefix('group')
 
         return NextResponse.json({ message: "Group deleted successfully" })
     } catch (e: any) {

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { groups, branches, branchInventory } from "@/db/schema"
 import { eq, and, isNull, count, sql } from "drizzle-orm"
+import { getCached, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 export async function GET(
     req: NextRequest,
@@ -44,50 +45,53 @@ export async function GET(
             return NextResponse.json({ error: "Forbidden: group does not belong to your organization" }, { status: 403 })
         }
 
-        // 2. Aggregate active product assignments per branch in this group via grouping
-        // This is safe even with >10000 products as PostgeSQL performs the aggregation internally
-        const assignmentsQuery = await db
-            .select({
-                branchId: branchInventory.branchId,
-                productCount: count(branchInventory.id)
-            })
-            .from(branchInventory)
-            .innerJoin(branches, eq(branchInventory.branchId, branches.id))
-            .where(
-                and(
-                    eq(branches.groupId, groupId),
-                    isNull(branchInventory.deletedAt),
-                    eq(branchInventory.isActive, true)
+        const cacheKey = scopedCacheKey('group:branch-counts', {}, { groupId: id })
+
+        const result = await getCached(cacheKey, async () => {
+            // Aggregation query: count products per branch
+            const assignmentsQuery = await db
+                .select({
+                    branchId: branchInventory.branchId,
+                    productCount: count(branchInventory.id)
+                })
+                .from(branchInventory)
+                .innerJoin(branches, eq(branchInventory.branchId, branches.id))
+                .where(
+                    and(
+                        eq(branches.groupId, groupId),
+                        isNull(branchInventory.deletedAt),
+                        eq(branchInventory.isActive, true)
+                    )
                 )
-            )
-            .groupBy(branchInventory.branchId)
+                .groupBy(branchInventory.branchId)
 
-        // Count unique products assigned globally for this group across all its branches
-        // Since all branches in a group get the exact same products, we can find the distinct count.
-        const [totalQuery] = await db
-            .select({
-                uniqueProducts: count(sql`DISTINCT ${branchInventory.organizationInventoryId}`)
-            })
-            .from(branchInventory)
-            .innerJoin(branches, eq(branchInventory.branchId, branches.id))
-            .where(
-                and(
-                    eq(branches.groupId, groupId),
-                    isNull(branchInventory.deletedAt),
-                    eq(branchInventory.isActive, true)
+            // Total unique products query
+            const [totalQuery] = await db
+                .select({
+                    uniqueProducts: count(sql`DISTINCT ${branchInventory.organizationInventoryId}`)
+                })
+                .from(branchInventory)
+                .innerJoin(branches, eq(branchInventory.branchId, branches.id))
+                .where(
+                    and(
+                        eq(branches.groupId, groupId),
+                        isNull(branchInventory.deletedAt),
+                        eq(branchInventory.isActive, true)
+                    )
                 )
-            )
 
-        // Convert the array into a friendly Map-like dictionary: { [branchId]: productCount }
-        const counts: Record<number, number> = {}
-        for (const item of assignmentsQuery) {
-            counts[item.branchId] = item.productCount
-        }
+            const countsDict: Record<number, number> = {}
+            for (const item of assignmentsQuery) {
+                countsDict[item.branchId] = item.productCount
+            }
 
-        return NextResponse.json({
-            counts,
-            totalGroupProducts: totalQuery?.uniqueProducts || 0
-        })
+            return {
+                counts: countsDict,
+                totalGroupProducts: Number(totalQuery?.uniqueProducts || 0)
+            }
+        }, CACHE_TTL.INVENTORY) // 10s TTL for real-time feel with high performance
+
+        return NextResponse.json(result)
 
     } catch (e: any) {
         console.error("Error fetching group branch counts:", e)

@@ -7,6 +7,7 @@ import { eq, and, desc, sql, inArray, isNull, or, ilike, type SQL } from "drizzl
 import { alias } from "drizzle-orm/pg-core"
 import { cascadeOrgDeletion, cascadeOrgStatusChange } from "@/lib/inventory-cascade"
 import { validateAssignmentData } from "@/lib/inventory-validation"
+import { invalidateByPrefix } from "@/lib/cache-utils"
 
 // GET /api/v1/admin/organization-assignments - List organization assignments
 export async function GET(req: NextRequest) {
@@ -299,6 +300,9 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Invalidate organization inventory cache
+    await invalidateByPrefix('org-inv')
+
     return NextResponse.json({
       message: `${newAssignments.length} products assigned successfully!`,
       assignments: newAssignments,
@@ -420,6 +424,10 @@ export async function DELETE(req: NextRequest) {
       },
     })
 
+    // Invalidate both organization and branch inventory caches
+    await invalidateByPrefix('org-inv')
+    await invalidateByPrefix('branch-inv')
+
     return NextResponse.json({
       message: "Assignments removed successfully",
       count: assignmentsToDelete.length,
@@ -527,6 +535,12 @@ export async function PUT(req: NextRequest) {
         performedByRole: "SUPER_ADMIN"
       },
     })
+
+    // Invalidate caches
+    await invalidateByPrefix('org-inv')
+    if (isActive !== undefined) {
+      await invalidateByPrefix('branch-inv')
+    }
 
     return NextResponse.json({
       message: "Assignment updated successfully",

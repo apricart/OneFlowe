@@ -25,8 +25,7 @@ import {
 import useSWR from "swr"
 import { useToast } from "@/components/ui/use-toast"
 import { formatPKR } from "@/lib/utils"
-
-const fetcher = (url: string) => fetch(url).then(res => res.json())
+import { fetcher } from "@/lib/fetcher"
 
 interface AssignedProduct {
   id: number

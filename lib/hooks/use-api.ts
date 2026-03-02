@@ -6,7 +6,9 @@ export function useAPI<T>(url: string | null, options?: any) {
   return useSWR<T>(url, fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: true,
-    dedupingInterval: 100, // Reduced to allow rapid updates
+    dedupingInterval: 5000, // Prevent duplicate requests during mount storms
+    keepPreviousData: true, // Show stale data while revalidating
+    refreshInterval: 0, // No auto-polling by default
     errorRetryCount: 3,
     ...options,
   })

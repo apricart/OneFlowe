@@ -6,6 +6,7 @@ import { getRequestScope } from "@/lib/auth"
 import { headers } from "next/headers"
 type Role = "SUPER_ADMIN" | "HEAD_OFFICE" | "BRANCH_ADMIN" | "ORDER_PORTAL"
 import { hashPassword } from "@/lib/password"
+import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 
 export async function GET(req: Request) {
@@ -16,43 +17,48 @@ export async function GET(req: Request) {
   const scope = await getRequestScope()
   const scopedOrgId = scope?.role === "SUPER_ADMIN" ? (organizationId ? Number(organizationId) : undefined) : (scope?.organizationId ?? undefined)
 
-  const conditions = [ne(rolesTable.name, "SUPER_ADMIN"), isNull(usersTable.deletedAt)]
-  if (scopedOrgId) {
-    conditions.push(eq(usersTable.organizationId, scopedOrgId))
-  }
+  const cacheKey = scopedCacheKey('users', { orgId: scopedOrgId, role: scope?.role })
 
-  const rows = await db
-    .select({
-      id: usersTable.id,
-      email: usersTable.email,
-      firstName: usersTable.firstName,
-      lastName: usersTable.lastName,
-      phone: usersTable.phone,
-      mfaEnabled: usersTable.mfaEnabled,
-      organizationId: usersTable.organizationId,
-      branchId: usersTable.branchId,
-      createdAt: usersTable.createdAt,
-      role: rolesTable.name,
-      isActive: usersTable.isActive,
-    })
-    .from(usersTable)
-    .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
-    .where(and(...conditions))
-    .orderBy(desc(usersTable.createdAt))
+  const items = await getCached(cacheKey, async () => {
+    const conditions = [ne(rolesTable.name, "SUPER_ADMIN"), isNull(usersTable.deletedAt)]
+    if (scopedOrgId) {
+      conditions.push(eq(usersTable.organizationId, scopedOrgId))
+    }
 
-  const items = rows.map((r: any) => ({
-    id: r.id,
-    email: r.email,
-    firstName: r.firstName || "",
-    lastName: r.lastName || "",
-    phone: r.phone || null,
-    mfaEnabled: !!r.mfaEnabled,
-    organizationId: r.organizationId ?? null,
-    branchId: r.branchId ?? null,
-    createdAt: r.createdAt as any,
-    role: r.role || "",
-    isActive: !!r.isActive,
-  }))
+    const rows = await db
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        firstName: usersTable.firstName,
+        lastName: usersTable.lastName,
+        phone: usersTable.phone,
+        mfaEnabled: usersTable.mfaEnabled,
+        organizationId: usersTable.organizationId,
+        branchId: usersTable.branchId,
+        createdAt: usersTable.createdAt,
+        role: rolesTable.name,
+        isActive: usersTable.isActive,
+      })
+      .from(usersTable)
+      .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
+      .where(and(...conditions))
+      .orderBy(desc(usersTable.createdAt))
+
+    return rows.map((r: any) => ({
+      id: r.id,
+      email: r.email,
+      firstName: r.firstName || "",
+      lastName: r.lastName || "",
+      phone: r.phone || null,
+      mfaEnabled: !!r.mfaEnabled,
+      organizationId: r.organizationId ?? null,
+      branchId: r.branchId ?? null,
+      createdAt: r.createdAt as any,
+      role: r.role || "",
+      isActive: !!r.isActive,
+    }))
+  }, CACHE_TTL.LISTING)
+
   return ok({ items })
 }
 
@@ -185,6 +191,9 @@ export async function POST(req: Request) {
     } catch (logErr) {
       console.error("[DEBUG] Failed to write audit log:", logErr)
     }
+
+    // Invalidate users cache so lists refresh immediately
+    await invalidateByPrefix('users')
 
     return ok({ item: createdUser }, { status: 201 })
   } catch (err: any) {

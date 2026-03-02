@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { organizationProducts, globalProducts, auditLogs } from "@/db/schema"
 import { eq, and, sql } from "drizzle-orm"
+import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 // GET /api/v1/inventory/organization-products - Get products for organization
 export async function GET(req: NextRequest) {
@@ -29,36 +30,40 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Fetch all products with organization-specific data
-    const items = await db
-      .select({
-        id: globalProducts.id,
-        productCode: globalProducts.productCode,
-        name: globalProducts.name,
-        description: globalProducts.description,
-        categoryId: globalProducts.categoryId,
-        imageUrl: globalProducts.imageUrl,
-        basePrice: globalProducts.basePrice,
-        unit: globalProducts.unit,
-        status: globalProducts.status,
-        orgProductId: organizationProducts.id,
-        isEnabled: organizationProducts.isEnabled,
-        customName: organizationProducts.customName,
-        customDescription: organizationProducts.customDescription,
-        customPrice: organizationProducts.customPrice,
-        customImageUrl: organizationProducts.customImageUrl,
-        tags: organizationProducts.tags,
-        priority: organizationProducts.priority
-      })
-      .from(globalProducts)
-      .leftJoin(
-        organizationProducts,
-        and(
-          eq(organizationProducts.globalProductId, globalProducts.id),
-          eq(organizationProducts.organizationId, parseInt(organizationId))
+    const cacheKey = scopedCacheKey('inv:org-products', { orgId: organizationId })
+
+    const items = await getCached(cacheKey, async () => {
+      // Fetch all products with organization-specific data
+      return db
+        .select({
+          id: globalProducts.id,
+          productCode: globalProducts.productCode,
+          name: globalProducts.name,
+          description: globalProducts.description,
+          categoryId: globalProducts.categoryId,
+          imageUrl: globalProducts.imageUrl,
+          basePrice: globalProducts.basePrice,
+          unit: globalProducts.unit,
+          status: globalProducts.status,
+          orgProductId: organizationProducts.id,
+          isEnabled: organizationProducts.isEnabled,
+          customName: organizationProducts.customName,
+          customDescription: organizationProducts.customDescription,
+          customPrice: organizationProducts.customPrice,
+          customImageUrl: organizationProducts.customImageUrl,
+          tags: organizationProducts.tags,
+          priority: organizationProducts.priority
+        })
+        .from(globalProducts)
+        .leftJoin(
+          organizationProducts,
+          and(
+            eq(organizationProducts.globalProductId, globalProducts.id),
+            eq(organizationProducts.organizationId, parseInt(organizationId))
+          )
         )
-      )
-      .where(eq(globalProducts.status, "active"))
+        .where(eq(globalProducts.status, "active"))
+    }, CACHE_TTL.LISTING)
 
     return NextResponse.json({ items })
   } catch (error: any) {
@@ -126,6 +131,10 @@ export async function PUT(req: NextRequest) {
       entityId: organizationProductId.toString(),
       metadata: { changes: body }
     })
+
+    // Invalidate inventory caches so data refreshes immediately
+    await invalidateByPrefix('inv:org-products')
+    await invalidateByPrefix('inv:branch-products')
 
     return NextResponse.json({ product: updated })
   } catch (error: any) {

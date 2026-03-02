@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { branchProducts, globalProducts, organizationProducts, auditLogs, categories } from "@/db/schema"
 import { eq, and, sql } from "drizzle-orm"
+import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 // GET /api/v1/inventory/branch-products - Get products for branch
 export async function GET(req: NextRequest) {
@@ -38,47 +39,51 @@ export async function GET(req: NextRequest) {
     }
     // SUPER_ADMIN can view any branch
 
-    // Fetch all enabled organization products with branch-specific data
-    const items = await db
-      .select({
-        id: globalProducts.id,
-        productCode: globalProducts.productCode,
-        name: globalProducts.name,
-        description: globalProducts.description,
-        categoryId: globalProducts.categoryId,
-        categoryName: categories.name,
-        imageUrl: globalProducts.imageUrl,
-        basePrice: globalProducts.basePrice,
-        unit: globalProducts.unit,
-        status: globalProducts.status,
-        // Organization overrides
-        customName: organizationProducts.customName,
-        customDescription: organizationProducts.customDescription,
-        customPrice: organizationProducts.customPrice,
-        customImageUrl: organizationProducts.customImageUrl,
-        // Branch specific (visibility + notes only)
-        branchProductId: branchProducts.id,
-        isAvailable: branchProducts.isAvailable,
-        customNotes: branchProducts.customNotes
-      })
-      .from(globalProducts)
-      .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
-      .innerJoin(
-        organizationProducts,
-        and(
-          eq(organizationProducts.globalProductId, globalProducts.id),
-          eq(organizationProducts.organizationId, parseInt(organizationId)),
-          eq(organizationProducts.isEnabled, true)
+    const cacheKey = scopedCacheKey('inv:branch-products', { orgId: organizationId, branchId })
+
+    const items = await getCached(cacheKey, async () => {
+      // Fetch all enabled organization products with branch-specific data
+      return db
+        .select({
+          id: globalProducts.id,
+          productCode: globalProducts.productCode,
+          name: globalProducts.name,
+          description: globalProducts.description,
+          categoryId: globalProducts.categoryId,
+          categoryName: categories.name,
+          imageUrl: globalProducts.imageUrl,
+          basePrice: globalProducts.basePrice,
+          unit: globalProducts.unit,
+          status: globalProducts.status,
+          // Organization overrides
+          customName: organizationProducts.customName,
+          customDescription: organizationProducts.customDescription,
+          customPrice: organizationProducts.customPrice,
+          customImageUrl: organizationProducts.customImageUrl,
+          // Branch specific (visibility + notes only)
+          branchProductId: branchProducts.id,
+          isAvailable: branchProducts.isAvailable,
+          customNotes: branchProducts.customNotes
+        })
+        .from(globalProducts)
+        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+        .innerJoin(
+          organizationProducts,
+          and(
+            eq(organizationProducts.globalProductId, globalProducts.id),
+            eq(organizationProducts.organizationId, parseInt(organizationId)),
+            eq(organizationProducts.isEnabled, true)
+          )
         )
-      )
-      .leftJoin(
-        branchProducts,
-        and(
-          eq(branchProducts.globalProductId, globalProducts.id),
-          eq(branchProducts.branchId, parseInt(branchId))
+        .leftJoin(
+          branchProducts,
+          and(
+            eq(branchProducts.globalProductId, globalProducts.id),
+            eq(branchProducts.branchId, parseInt(branchId))
+          )
         )
-      )
-      .where(eq(globalProducts.status, "active"))
+        .where(eq(globalProducts.status, "active"))
+    }, CACHE_TTL.INVENTORY)
 
     return NextResponse.json({ items })
   } catch (error: any) {
@@ -149,6 +154,8 @@ export async function PUT(req: NextRequest) {
       entityId: branchProductId.toString(),
       metadata: { changes: body }
     })
+    // Invalidate branch-products cache so data refreshes immediately
+    await invalidateByPrefix('inv:branch-products')
 
     return NextResponse.json({ product: updated })
   } catch (error: any) {

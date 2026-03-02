@@ -90,39 +90,14 @@ export async function cascadeOrgStatusChange(
   performedByRole: string
 ) {
   try {
-    // Find all branch inventory items linked to this org inventory
-    const branchItems = await db.select({
-      id: branchInventory.id,
-      branchId: branchInventory.branchId,
-      organizationId: branchInventory.organizationId,
-    })
-      .from(branchInventory)
-      .where(
-        and(
-          eq(branchInventory.organizationInventoryId, organizationInventoryId),
-          isNull(branchInventory.deletedAt)
-        )
-      )
-
-    if (branchItems.length === 0) {
-      return { updatedCount: 0, affectedBranches: [] }
-    }
-
-    // Update all branch inventory items
+    // Update all branch inventory items and get the affected ones in one go
     const updateData: any = {
       isActive,
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      isVisible: isActive // If disabling, also hide from branches; if enabling, restore visibility
     }
 
-    // If disabling, also hide from branches
-    // If enabling, restore visibility (isVisible = true)
-    if (!isActive) {
-      updateData.isVisible = false
-    } else {
-      updateData.isVisible = true
-    }
-
-    await db.update(branchInventory)
+    const branchItems = await db.update(branchInventory)
       .set(updateData)
       .where(
         and(
@@ -130,8 +105,17 @@ export async function cascadeOrgStatusChange(
           isNull(branchInventory.deletedAt)
         )
       )
+      .returning({
+        id: branchInventory.id,
+        branchId: branchInventory.branchId,
+        organizationId: branchInventory.organizationId,
+      })
 
-    // Log the cascade  update
+    if (branchItems.length === 0) {
+      return { updatedCount: 0, affectedBranches: [] }
+    }
+
+    // Log the cascade update
     await db.insert(auditLogs).values({
       userId: performedByUserId,
       action: "CASCADE_UPDATE",

@@ -14,7 +14,7 @@ import { Search, Package, Building2, Loader2, Power, ToggleLeft } from "lucide-r
 import { useToast } from "@/components/ui/use-toast"
 import { useAppContext } from "@/components/context/app-context"
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+import { fetcher } from "@/lib/fetcher"
 
 type OrgProduct = {
     id: number
@@ -86,22 +86,14 @@ export default function ProductStatusPage() {
         mutate(optimisticData, false) // update local data, don't revalidate yet
 
         try {
-            const res = await fetch("/api/v1/head-office/organization-inventory", {
+            await fetcher("/api/v1/head-office/organization-inventory", {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     id: product.id,
                     isActive: newActive,
                     organizationId: selectedOrgId,
                 }),
             })
-
-            const data = await res.json()
-            if (!res.ok) {
-                // Revert on error
-                mutate()
-                throw new Error(data.error || "Failed to update status")
-            }
 
             toast({
                 title: newActive ? "Product Activated" : "Product Deactivated",
