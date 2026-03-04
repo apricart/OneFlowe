@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, users, roles, branches, organizations, groups } from "@/db/schema"
-import { and, desc, eq, gte, lte, sql, sum, count } from "drizzle-orm"
+import { orders, users, roles, branches, organizations, groups, orderItems } from "@/db/schema"
+import { and, desc, eq, gte, lte, sql, sum, count, inArray } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions)
@@ -40,8 +40,14 @@ export async function GET(req: NextRequest) {
     const startDate = url.searchParams.get("startDate")
     const endDate = url.searchParams.get("endDate")
     const branchId = url.searchParams.get("branchId")
+    const branchIdsRaw = url.searchParams.get("branchIds")
     const organizationId = url.searchParams.get("organizationId")
     const groupId = url.searchParams.get("groupId")
+
+    // Parsing branchIds
+    const parsedBranchIds = branchIdsRaw
+        ? branchIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id))
+        : []
 
     const page = parseInt(url.searchParams.get("page") || "1")
     const limit = parseInt(url.searchParams.get("limit") || "50")
@@ -60,7 +66,9 @@ export async function GET(req: NextRequest) {
         if (organizationId && organizationId !== "null" && organizationId !== "undefined") {
             conditions.push(eq(orders.organizationId, Number(organizationId)))
         }
-        if (branchId && branchId !== "all" && branchId !== "null") {
+        if (parsedBranchIds.length > 0) {
+            conditions.push(inArray(orders.branchId, parsedBranchIds))
+        } else if (branchId && branchId !== "all" && branchId !== "null") {
             conditions.push(eq(orders.branchId, Number(branchId)))
         }
         if (groupId && groupId !== "all" && groupId !== "null") {
@@ -69,7 +77,9 @@ export async function GET(req: NextRequest) {
     } else if (normalizedRole === "HEAD_OFFICE") {
         if (currentUserOrgId) {
             conditions.push(eq(orders.organizationId, currentUserOrgId))
-            if (branchId && branchId !== "all" && branchId !== "null") {
+            if (parsedBranchIds.length > 0) {
+                conditions.push(inArray(orders.branchId, parsedBranchIds))
+            } else if (branchId && branchId !== "all" && branchId !== "null") {
                 conditions.push(eq(orders.branchId, Number(branchId)))
             }
             if (groupId && groupId !== "all" && groupId !== "null") {
@@ -106,10 +116,25 @@ export async function GET(req: NextRequest) {
         totalTax: sum(orders.taxCents),
         totalSubtotal: sum(orders.subtotalCents),
         orderCount: count(orders.id),
+        totalRefunds: sum(orders.refundAmountCents),
     })
         .from(orders)
         .leftJoin(branches, eq(orders.branchId, branches.id))
         .where(whereClause)
+
+    // Items Summary (Separate to avoid count multiplication by joins)
+    const itemsResult = await db.select({
+        totalItemsSold: sum(orderItems.quantity)
+    })
+        .from(orderItems)
+        .innerJoin(orders, eq(orderItems.orderId, orders.id))
+        .leftJoin(branches, eq(orders.branchId, branches.id))
+        .where(whereClause)
+
+    const summary = {
+        ...summaryResult[0],
+        totalItemsSold: itemsResult[0]?.totalItemsSold || 0
+    }
 
     // Recent Orders for Table with Branch Name and Pagination
     const recentOrders = await db.select({
@@ -132,9 +157,24 @@ export async function GET(req: NextRequest) {
         .limit(limit)
         .offset(offset)
 
+    // Branch Ranking (Top Performers) aggregated by sales volume
+    const topPerformers = await db.select({
+        branchId: orders.branchId,
+        branchName: branches.name,
+        sales: sum(orders.totalCents).mapWith(Number),
+        orderCount: count(orders.id),
+    })
+        .from(orders)
+        .leftJoin(branches, eq(orders.branchId, branches.id))
+        .where(whereClause)
+        .groupBy(orders.branchId, branches.name)
+        .orderBy(desc(sql`SUM(${orders.totalCents})`))
+        .limit(10)
+
     return NextResponse.json({
-        summary: summaryResult[0],
+        summary,
         orders: recentOrders,
+        topPerformers,
         pagination: {
             page,
             limit,

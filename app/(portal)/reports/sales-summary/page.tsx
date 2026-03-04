@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import useSWR from "swr"
 import { useAppContext } from "@/components/context/app-context"
 import { SectionHeader } from "@/components/ui/section-header"
@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Download, Upload, RefreshCw, Loader2, Building, Building2, Calendar } from "lucide-react"
+import { Search, Download, Upload, RefreshCw, Loader2, Building, Building2, Calendar, ShoppingBag, TrendingUp, Landmark, Calculator, Package } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -23,7 +23,13 @@ import { ReportFilters } from "@/components/reports/report-filters"
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function SalesSummaryReportPage() {
-  const { organizationId, branchId } = useAppContext()
+  const {
+    organizationId,
+    branchId: contextBranchId,
+    branchIds: contextBranchIds,
+    setBranchId: setContextBranchId,
+    setBranchIds: setContextBranchIds
+  } = useAppContext()
   const [searchTerm, setSearchTerm] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
@@ -34,13 +40,27 @@ export default function SalesSummaryReportPage() {
   const role = (session?.user as any)?.role as Role
   const [hasMounted, setHasMounted] = useState(false)
 
-  // Build query string based on GLOBAL context (AppContext) and LOCAL date filters
+  // Sync with global context
+  const branchIds = contextBranchIds
+
+  const handleBranchChange = useCallback((ids: string[]) => {
+    setContextBranchIds(ids)
+  }, [setContextBranchIds])
+
+  // Build query string based on GLOBAL context (AppContext) and LOCAL filters
   const queryParams = new URLSearchParams()
-  if (branchId) queryParams.set("branchId", branchId)
   if (organizationId) queryParams.set("organizationId", organizationId.toString())
   if (startDate) queryParams.set("startDate", startDate)
   if (endDate) queryParams.set("endDate", endDate)
   if (groupId) queryParams.set("groupId", groupId)
+
+  // Handle multiple branch IDs
+  if (branchIds.length > 0) {
+    queryParams.set("branchIds", branchIds.join(","))
+  } else if (contextBranchId) {
+    queryParams.set("branchId", contextBranchId)
+  }
+
   queryParams.set("limit", "10000") // Fetch more records for the report
 
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${queryParams.toString()}`, fetcher)
@@ -77,7 +97,8 @@ export default function SalesSummaryReportPage() {
 
     let filterText = ""
     if (organizationId) filterText += `Org ID: ${organizationId} `
-    if (branchId) filterText += `Branch ID: ${branchId} `
+    if (branchIds.length > 0) filterText += `Branch IDs: ${branchIds.join(', ')} `
+    else if (contextBranchId) filterText += `Branch ID: ${contextBranchId} `
     if (startDate || endDate) filterText += `Range: ${startDate || 'Start'} to ${endDate || 'End'}`
     if (filterText) doc.text(filterText, 14, 33)
 
@@ -163,7 +184,7 @@ export default function SalesSummaryReportPage() {
       />
 
       {/* Context Indicator */}
-      {(organizationId || branchId || startDate || endDate) && (
+      {(organizationId || branchIds.length > 0 || contextBranchId || startDate || endDate) && (
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
           <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Active Filters:</span>
           {organizationId && (
@@ -171,9 +192,13 @@ export default function SalesSummaryReportPage() {
               <Building className="h-3 w-3 text-blue-500" /> Org: {organizationId}
             </Badge>
           )}
-          {branchId && (
+          {branchIds.length > 0 ? (
+            <Badge variant="outline" className="gap-1 bg-white dark:bg-slate-950 font-medium border-blue-200 text-blue-700">
+              <Building2 className="h-3 w-3 text-indigo-500" /> {branchIds.length} Branches Selected
+            </Badge>
+          ) : contextBranchId && (
             <Badge variant="outline" className="gap-1 bg-white dark:bg-slate-950 font-medium">
-              <Building2 className="h-3 w-3 text-indigo-500" /> Branch: {branchId}
+              <Building2 className="h-3 w-3 text-indigo-500" /> Branch: {contextBranchId}
             </Badge>
           )}
           {(startDate || endDate) && (
@@ -193,13 +218,99 @@ export default function SalesSummaryReportPage() {
         setEndDate={setEndDate}
         groupId={groupId}
         setGroupId={setGroupId}
+        selectedBranchIds={branchIds}
+        onBranchChange={handleBranchChange}
         onRefresh={() => mutate()}
         onExport={handleExport}
         isLoading={isLoading}
         role={role}
         organizationId={organizationId || undefined}
         searchPlaceholder="Filter by ID or Branch..."
+        showBranchFilter={true}
       />
+
+      {/* Unified Branch Metrics (KPIs) - Shown when 1 branch is selected */}
+      {(branchIds.length === 1 || (branchIds.length === 0 && contextBranchId)) && summary && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-l-4 border-l-blue-500 hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="h-10 w-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                <ShoppingBag className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Orders</p>
+                <h4 className="text-xl font-bold text-slate-900 dark:text-white">{summary.orderCount || 0}</h4>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-l-4 border-l-emerald-500 hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="h-10 w-10 rounded-full bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gross Revenue</p>
+                <h4 className="text-xl font-bold text-slate-900 dark:text-white">{formatPKR((summary.totalSales || 0) / 100)}</h4>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-l-4 border-l-indigo-500 hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="h-10 w-10 rounded-full bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
+                <Package className="h-5 w-5 text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Items Sold</p>
+                <h4 className="text-xl font-bold text-slate-900 dark:text-white">
+                  {summary.totalItemsSold || 0}
+                </h4>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-sm bg-white dark:bg-slate-900 border-l-4 border-l-rose-500 hover:shadow-md transition-shadow">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="h-10 w-10 rounded-full bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center">
+                <Calculator className="h-5 w-5 text-rose-600" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avg. Order Value</p>
+                <h4 className="text-xl font-bold text-slate-900 dark:text-white">
+                  {formatPKR(((summary.totalSales || 0) / (summary.orderCount || 1)) / 100)}
+                </h4>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Top Performing Branches Section */}
+      {data?.topPerformers && data.topPerformers.length > 0 && (
+        <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900">
+          <CardHeader className="pb-2 border-b border-slate-50 dark:border-slate-800">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 uppercase tracking-tight">
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                Top Performing Branches
+              </CardTitle>
+              <Badge variant="secondary" className="text-[10px] font-bold">BY SALES VOLUME</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 divide-x divide-slate-50 dark:divide-slate-800">
+              {data.topPerformers.slice(0, 5).map((performer: any, index: number) => (
+                <div key={performer.branchId} className="p-4 flex flex-col gap-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold text-slate-400">RANK #{index + 1}</span>
+                    <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-slate-200">{performer.orderCount} Orders</Badge>
+                  </div>
+                  <h5 className="text-xs font-bold text-slate-900 dark:text-white truncate">{performer.branchName || `Branch #${performer.branchId}`}</h5>
+                  <p className="text-sm font-mono font-bold text-indigo-600">{formatPKR(performer.sales / 100)}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900 mb-8 pt-6">
         <div className="px-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">

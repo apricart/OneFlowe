@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     const rawStatus = searchParams.get("status") || undefined
     const status = rawStatus?.toUpperCase()
     const branchId = searchParams.get("branchId") || undefined
+    const branchIdsRaw = searchParams.get("branchIds") || undefined
     const q = searchParams.get("q") || undefined
     const from = searchParams.get("from") || undefined
     const to = searchParams.get("to") || undefined
@@ -50,6 +51,11 @@ export async function GET(req: NextRequest) {
     const idParam = searchParams.get("id") || undefined
     const mode = searchParams.get("mode") || undefined // weeklySales | monthlySales
     const groupId = searchParams.get("groupId") || undefined
+
+    // Parsing branchIds
+    const parsedBranchIds = branchIdsRaw
+      ? branchIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id))
+      : []
 
     const conditions: any[] = []
 
@@ -68,11 +74,27 @@ export async function GET(req: NextRequest) {
 
     if (status && status !== "FULFILLED") conditions.push(eq(orders.status, status))
     if (idParam && /^\d+$/.test(idParam)) conditions.push(eq(orders.id, Number(idParam)))
-    if (branchId && /^\d+$/.test(branchId)) conditions.push(eq(orders.branchId, Number(branchId)))
+
+    // Branch filtering
+    if (parsedBranchIds.length > 0) {
+      conditions.push(inArray(orders.branchId, parsedBranchIds))
+    } else if (branchId && /^\d+$/.test(branchId)) {
+      conditions.push(eq(orders.branchId, Number(branchId)))
+    }
+
     if (groupId && /^\d+$/.test(groupId)) conditions.push(eq(branches.groupId, Number(groupId)))
 
-    if (from && status !== "FULFILLED") conditions.push(gte(orders.createdAt, new Date(from)))
-    if (to && status !== "FULFILLED") conditions.push(lte(orders.createdAt, new Date(to)))
+    // Date range filtering (standardized)
+    if (startDate) conditions.push(gte(orders.createdAt, new Date(startDate)))
+    if (endDate) {
+      const end = new Date(endDate)
+      end.setHours(23, 59, 59, 999)
+      conditions.push(lte(orders.createdAt, end))
+    }
+
+    // Legacy date filters
+    if (from && !startDate) conditions.push(gte(orders.createdAt, new Date(from)))
+    if (to && !endDate) conditions.push(lte(orders.createdAt, new Date(to)))
 
     // --- Audit Logging for Group Access ---
     if (groupId && /^\d+$/.test(groupId)) {

@@ -23,8 +23,8 @@ interface ReportFiltersProps {
     setEndDate: (value: string) => void
     groupId?: string
     setGroupId?: (value: string) => void
-    branchId?: string
-    setBranchId?: (value: string) => void
+    selectedBranchIds?: string[]
+    onBranchChange?: (ids: string[]) => void
     onRefresh: () => void
     onExport?: (format: 'csv' | 'excel' | 'pdf') => void
     isLoading: boolean
@@ -44,8 +44,8 @@ export function ReportFilters({
     setEndDate,
     groupId,
     setGroupId,
-    branchId,
-    setBranchId,
+    selectedBranchIds = [],
+    onBranchChange,
     onRefresh,
     onExport,
     isLoading,
@@ -103,11 +103,12 @@ export function ReportFilters({
                     </div>
                 )}
 
-                {/* Branch Filter */}
-                {showBranchFilter && setBranchId && (role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                {/* Branch Filter (Multi) */}
+                {showBranchFilter && onBranchChange && (role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <div className="w-full md:w-auto">
                         <BranchFilter
-                            onBranchChange={setBranchId}
+                            selectedIds={selectedBranchIds}
+                            onChange={onBranchChange}
                             organizationId={organizationId}
                         />
                     </div>

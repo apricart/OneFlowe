@@ -53,12 +53,10 @@ export function Topbar() {
     <header
       className="sticky top-0 z-40 w-full h-14 flex items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800 backdrop-blur supports-[backdrop-filter]:bg-background/80 dark:supports-[backdrop-filter]:bg-slate-950/80 bg-white dark:bg-slate-950"
     >
-      {/* Left Side - Context Selector & Command Palette */}
       <div className="flex items-center gap-3">
         <div className="hidden lg:flex">
           <ContextSelector />
         </div>
-        <CommandPalette />
       </div>
 
       {/* Right Side - Actions & Profile */}
