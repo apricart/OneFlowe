@@ -26,7 +26,7 @@ export default function RefundOrdersReportPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [selectedBranchId, setSelectedBranchId] = useState("")
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
   const [generatedDate, setGeneratedDate] = useState("")
 
   const { data: session } = useSession()
@@ -35,8 +35,8 @@ export default function RefundOrdersReportPage() {
 
   const queryParams = new URLSearchParams()
   // Preference order: Selected filter > App context
-  const targetBranchId = selectedBranchId || branchId
-  if (targetBranchId) queryParams.set("branchId", String(targetBranchId))
+  const targetBranchIds = selectedBranchIds.length > 0 ? selectedBranchIds : (branchId ? [String(branchId)] : [])
+  if (targetBranchIds.length > 0) queryParams.set("branchIds", targetBranchIds.join(","))
   if (organizationId) queryParams.set("organizationId", String(organizationId))
   if (startDate) queryParams.set("startDate", startDate)
   if (endDate) queryParams.set("endDate", endDate)
@@ -140,8 +140,8 @@ export default function RefundOrdersReportPage() {
         setStartDate={setStartDate}
         endDate={endDate}
         setEndDate={setEndDate}
-        branchId={selectedBranchId}
-        setBranchId={setSelectedBranchId}
+        selectedBranchIds={selectedBranchIds}
+        onBranchChange={setSelectedBranchIds}
         onRefresh={() => mutate()}
         isLoading={isLoading}
         role={role}
