@@ -64,8 +64,8 @@ export default function OrdersManagementPage() {
   const { toast } = useToast()
   const {
     organizationId,
-    branchId: contextBranchId,
-    branchIds: contextBranchIds,
+    branchId,
+    branchIds,
     isInitialized,
     setBranchIds: setContextBranchIds
   } = useAppContext()
@@ -78,7 +78,6 @@ export default function OrdersManagementPage() {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   // Sync with global context
-  const branchIds = contextBranchIds
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [refundFilter, setRefundFilter] = useState<string>("all")
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null)
