@@ -10,6 +10,7 @@ interface AppContextValue {
   // Current context
   organizationId: string | null
   branchId: string | null
+  branchIds: string[]
 
   // User info
   userRole: Role | null
@@ -19,6 +20,7 @@ interface AppContextValue {
   // Actions
   setOrganizationId: (id: string | null) => void
   setBranchId: (id: string | null) => void
+  setBranchIds: (ids: string[]) => void
   resetContext: () => void
 
   // UI State
@@ -34,6 +36,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
 
   const [organizationId, setOrganizationIdState] = useState<string | null>(null)
   const [branchId, setBranchIdState] = useState<string | null>(null)
+  const [branchIds, setBranchIdsState] = useState<string[]>([])
   const [isInitialized, setIsInitialized] = useState(false)
 
   // Get user info from session
@@ -58,7 +61,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     }
 
     // Read from localStorage
-    let savedContext: { organizationId: string | null; branchId: string | null } | null = null
+    let savedContext: { organizationId: string | null; branchId: string | null; branchIds: string[] } | null = null
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) savedContext = JSON.parse(saved)
@@ -69,17 +72,20 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
       // Super Admin: use saved context or null (global scope)
       setOrganizationIdState(savedContext?.organizationId || null)
       setBranchIdState(savedContext?.branchId || null)
+      setBranchIdsState(savedContext?.branchIds || [])
     } else if (userRole === "HEAD_OFFICE") {
       // Head Office: force organization to user's org, use saved branch
       if (userOrgId) {
         setOrganizationIdState(String(userOrgId))
         setBranchIdState(savedContext?.branchId || null)
+        setBranchIdsState(savedContext?.branchIds || [])
       }
     } else if (userRole === "BRANCH_ADMIN") {
       // Branch Admin: force both to user's assignment
       if (userOrgId && userBranchId) {
         setOrganizationIdState(String(userOrgId))
         setBranchIdState(String(userBranchId))
+        setBranchIdsState([String(userBranchId)])
       }
     }
 
@@ -93,10 +99,10 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ organizationId, branchId })
+        JSON.stringify({ organizationId, branchId, branchIds })
       )
     } catch { }
-  }, [organizationId, branchId, isInitialized])
+  }, [organizationId, branchId, branchIds, isInitialized])
 
   // Actions
   const setOrganizationId = useCallback((id: string | null) => {
@@ -104,34 +110,55 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     // Clear branch when organization changes
     if (id !== organizationId) {
       setBranchIdState(null)
+      setBranchIdsState([])
     }
   }, [organizationId])
 
   const setBranchId = useCallback((id: string | null) => {
     setBranchIdState(id)
+    if (id && !branchIds.includes(id)) {
+      setBranchIdsState([id])
+    } else if (!id) {
+      setBranchIdsState([])
+    }
+  }, [branchIds])
+
+  const setBranchIds = useCallback((ids: string[]) => {
+    setBranchIdsState(ids)
+    // If exactly one, sync to single branchId for backward compatibility
+    if (ids.length === 1) {
+      setBranchIdState(ids[0])
+    } else {
+      setBranchIdState(null)
+    }
   }, [])
 
   const resetContext = useCallback(() => {
     if (userRole === "SUPER_ADMIN") {
       setOrganizationIdState(null)
       setBranchIdState(null)
+      setBranchIdsState([])
     } else if (userRole === "HEAD_OFFICE" && userOrgId) {
       setOrganizationIdState(String(userOrgId))
       setBranchIdState(null)
+      setBranchIdsState([])
     } else if (userRole === "BRANCH_ADMIN" && userOrgId && userBranchId) {
       setOrganizationIdState(String(userOrgId))
       setBranchIdState(String(userBranchId))
+      setBranchIdsState([String(userBranchId)])
     }
   }, [userRole, userOrgId, userBranchId])
 
   const value: AppContextValue = {
     organizationId,
     branchId,
+    branchIds,
     userRole,
     userOrgId,
     userBranchId,
     setOrganizationId,
     setBranchId,
+    setBranchIds,
     resetContext,
     isInitialized,
   }

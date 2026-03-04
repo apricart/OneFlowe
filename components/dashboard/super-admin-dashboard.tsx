@@ -1,14 +1,10 @@
 "use client"
 
-import Link from "next/link"
-import { useEffect, useMemo, useState, useRef } from "react"
+import { useEffect, useMemo, useState, useRef, useCallback, startTransition } from "react"
 import { useOrganizations, useBranches, useUsers } from "@/lib/hooks/use-api"
-import { useMonthlySales, useYearlySales, useDashboardAnalytics, useLifetimeStats } from "@/lib/hooks/use-dashboard-analytics"
-import { KpiCard } from "@/components/ui/kpi-card"
+import { useLifetimeStats } from "@/lib/hooks/use-dashboard-analytics"
+import { useSalesPerformance, type DateRange, type DashboardStatus } from "@/lib/hooks/use-sales-performance"
 import { Card, CardContent } from "@/components/ui/card"
-import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
-import { YearPicker } from "@/components/ui/YearPicker"
-import useSWR from "swr"
 import { NotificationRail } from "@/components/notifications/notification-center"
 import { formatPKR } from "@/lib/utils"
 import {
@@ -19,92 +15,45 @@ import {
   ShoppingCart,
   TrendingUp,
   Activity,
-  Calendar,
   Wallet,
   Building,
   ArrowUpRight,
-  ArrowDownRight,
   Sparkles,
   BarChart3,
-  FileText,
   GitBranch,
   Warehouse,
   Package,
-  ShieldCheck
+  ShieldCheck,
+  RefreshCw,
+  Filter,
 } from "lucide-react"
-import SalesBarChart, { TrendAreaChart, YearlySalesSplineChart, ComparisonBarChart } from "@/components/dashboard/charts"
+import { SalesPerformanceLineChart, BranchSalesBarChart, OrganizationSalesBarChart } from "@/components/dashboard/charts"
 import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
-import { GroupFilter } from "@/components/reports/group-filter"
+import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
+import { StatusFilter } from "@/components/dashboard/status-filter"
 import { useAppContext } from "@/components/context/app-context"
-import { startOfDay, subDays, endOfDay, eachDayOfInterval, format, parseISO, getYear } from "date-fns"
+import { startOfDay, endOfDay } from "date-fns"
 
-const monthNames: Record<string, string> = {
-  "01": "Jan",
-  "02": "Feb",
-  "03": "Mar",
-  "04": "Apr",
-  "05": "May",
-  "06": "Jun",
-  "07": "Jul",
-  "08": "Aug",
-  "09": "Sep",
-  "10": "Oct",
-  "11": "Nov",
-  "12": "Dec",
-}
-
-const navTiles = [
-  { title: "Organizations", description: "Configure groups and parent companies.", href: "/organizations", icon: Building2, gradient: "from-blue-600 to-blue-700" },
-  { title: "Branches", description: "Manage branches and assignments.", href: "/branches", icon: GitBranch, gradient: "from-indigo-600 to-indigo-700" },
-  { title: "Users & Roles", description: "Administer users and access levels.", href: "/users", icon: Users, gradient: "from-emerald-600 to-emerald-700" },
-  { title: "Global Inventory", description: "Master product catalog across orgs.", href: "/global-inventory", icon: Warehouse, gradient: "from-orange-600 to-orange-700" },
-  { title: "Orders", description: "Monitor and override orders.", href: "/orders", icon: Package, gradient: "from-purple-600 to-purple-700" },
-  { title: "Budgets", description: "Control branch spending limits.", href: "/budgets", icon: Wallet, gradient: "from-amber-600 to-amber-700" },
-  { title: "Reports", description: "Sales, refunds, and stock insights.", href: "/reports", icon: BarChart3, gradient: "from-blue-700 to-indigo-700" },
-  { title: "System Settings", description: "Permissions, audit, and advanced config.", href: "/admin", icon: ShieldCheck, gradient: "from-slate-700 to-slate-800" },
-]
-
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const getDefaultDateRange = (): DateRange => ({
+  startDate: startOfDay(new Date()),
+  endDate: endOfDay(new Date()),
+})
 
 export function SuperAdminDashboard() {
-  const [selectedMonths, setSelectedMonths] = useState<string[]>([])
-  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString())
-  const [yearlyChartYear, setYearlyChartYear] = useState<string>(new Date().getFullYear().toString())
-  const [groupId, setGroupId] = useState<string>("")
-  const [showPicker, setShowPicker] = useState(false)
-  const pickerRef = useRef<HTMLDivElement>(null)
   const { organizationId, branchId } = useAppContext()
 
-  const { data: dashboardData } = useDashboardAnalytics(organizationId, branchId, groupId)
-  const branchData = dashboardData?.branchSeries ?? []
-  const { data: lifetimeStats } = useLifetimeStats(organizationId, branchId, groupId)
+  // Global filter state
+  const [dateRange, setDateRange] = useState<DateRange | null>(getDefaultDateRange())
+  const [activePreset, setActivePreset] = useState<FilterPreset>("today")
+  const [status, setStatus] = useState<DashboardStatus>("all")
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
 
-  // Close picker when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement
-      // Check if click is inside picker reference OR inside a Radix Select/Portal content (Year/Month pickers)
-      const isInsidePicker = pickerRef.current && pickerRef.current.contains(target)
-      const isInsideRadixPortal = target.closest('[data-radix-portal]') || target.closest('[role="listbox"]') || target.closest('[data-radix-popper-content-wrapper]')
-
-      if (!isInsidePicker && !isInsideRadixPortal) {
-        setShowPicker(false)
-      }
-    }
-
-    if (showPicker) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showPicker])
-
-  // ---------------- Scope Data ----------------
+  // Data hooks
   const { data: orgsData } = useOrganizations()
   const { data: usersData } = useUsers(organizationId || undefined)
   const { data: branchesData } = useBranches(organizationId || undefined)
+  const { data: lifetimeStats } = useLifetimeStats(organizationId, branchId)
 
   const orgs = orgsData?.items || []
   const branchesRaw = branchesData?.items || []
@@ -119,200 +68,78 @@ export function SuperAdminDashboard() {
 
   const selectedOrg = organizationId ? orgs.find(o => o.id?.toString() === organizationId) : null
   const selectedBranch = branchId ? branchesRaw.find(b => b.id?.toString() === branchId) : null
+  const scopeText = branchId ? selectedBranch?.name || `Branch #${branchId}` : organizationId ? selectedOrg?.name || `Organization #${organizationId}` : "All organizations & branches"
 
-  // ---------------- Bar Chart Data (from useMonthlySales with selectedYear) ----------------
-  // Convert selectedYear string to number for the hook
-  const { data: monthlySalesData, isLoading: isLoadingMonthly } = useMonthlySales(organizationId, branchId, Number(selectedYear), groupId)
-
-  const barChartData = useMemo(() => {
-    // If no months selected, show last 6 months (Jul-Dec) or all if preference
-    // Logic: If user selects specific months, show them. Else show all available in data or specific default?
-    // The previous logic defaulted to Jul-Dec if empty. Let's keep it similar but based on data.
-
-    const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-    if (!monthlySalesData?.monthlySales) return []
-
-    // Create map
-    const monthlySalesMap: Record<string, number> = {}
-    monthsOrder.forEach(m => monthlySalesMap[m] = 0)
-    monthlySalesData.monthlySales.forEach(item => {
-      monthlySalesMap[item.month] = item.sales
-    })
-
-    const currentYear = new Date().getFullYear().toString()
-    const currentMonth = new Date().getMonth() // 0-11
-
-    let defaultMonths: string[]
-
-    if (selectedYear === currentYear) {
-      if (currentMonth < 6) {
-        // Jan-Jun
-        defaultMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
-      } else {
-        // Jul-Dec
-        defaultMonths = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-      }
-    } else {
-      // Past/Future years: Show All Months
-      defaultMonths = monthsOrder
-    }
-
-    const monthsToShow = selectedMonths.length > 0
-      ? selectedMonths.map(m => monthNames[m])
-      : defaultMonths
-
-    return monthsToShow.map(month => ({
-      month,
-      value: (monthlySalesMap[month] || 0) // Convert cents/PKR scaling? Verify if hook returns cents or units. 
-      // The hook types say "sales: number // Sales in PKR". 
-      // The previous code divided by 100: "value: monthlySalesMap[month] / 100".
-      // Let's check hook implementation. The hook API usually returns standard units or cents.
-      // If previous code was dividing by 100, "totalCents" was likely the source.
-      // useMonthlySales hook returns "sales". Usually in analytics APIs "sales" is already in main currency unit or cents?
-      // Let's assume the hook returns what we need. 
-      // WAIT! The previous code: "monthlySalesMap[month] += order.totalCents || 0 ... value: monthlySalesMap[month] / 100"
-      // So previous code expected Cents and converted to PKR.
-      // The Hook useMonthlySales: "sales: number // Sales in PKR".
-      // So if hook returns PKR, we DO NOT divide by 100.
-      // Let's check BranchAdminDashboard: "value: monthlySalesMap[month] || 0" (NO DIVISION).
-      // So for hook data, we DO NOT divide by 100.
-    }))
-  }, [selectedMonths, monthlySalesData])
-
-
-  // ---------------- Yearly Sales Chart Data (from useYearlySales with yearlyChartYear) ----------------
-  const { data: yearlySalesHookData, isLoading: isLoadingYearly } = useYearlySales(organizationId, branchId, Number(yearlyChartYear), groupId)
-
-  const yearlySalesData = useMemo(() => {
-    const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    if (!yearlySalesHookData?.monthlySales) return []
-
-    // Map hook data to chart format
-    // yearlySalesHookData.monthlySales has { month, sales }
-    // We just need to ensure all months are present or just map what we have?
-    // Spline chart usually expects ordered months.
-
-    const monthlySalesMap: Record<string, number> = {}
-    monthsOrder.forEach(m => monthlySalesMap[m] = 0)
-    yearlySalesHookData.monthlySales.forEach(item => {
-      monthlySalesMap[item.month] = item.sales
-    })
-
-    return monthsOrder.map(month => ({
-      month,
-      sales: monthlySalesMap[month] // Again, assume PKR
-    }))
-  }, [yearlySalesHookData])
-
-  const average =
-    yearlySalesData.filter(d => d.sales > 0).length > 0
-      ? yearlySalesData.reduce((sum, item) => sum + item.sales, 0) / yearlySalesData.filter(d => d.sales > 0).length
-      : 0
-
-  // ---------------- Weekly Sales ----------------
-  const today = new Date()
-  const startDate = startOfDay(subDays(today, 6))
-  const endDate = endOfDay(today)
-
-  const buildWeeklySalesUrl = () => {
-    const params = new URLSearchParams()
-    params.set("status", "FULFILLED")
-    params.set("startDate", startDate.toISOString())
-    params.set("endDate", endDate.toISOString())
-    if (organizationId) params.set("organizationId", organizationId)
-    if (branchId) params.set("branchId", branchId)
-    if (groupId && groupId !== "all") params.set("groupId", groupId)
-    return `/api/v1/orders?${params.toString()}`
-  }
-
-  const { data: weeklySalesData, isLoading: isLoadingSales, error: salesError } = useSWR(buildWeeklySalesUrl(), fetcher, {
-    refreshInterval: 60_000,
-  })
-
-  const weekDays = eachDayOfInterval({ start: startDate, end: endDate })
-  const weeklyData = weekDays.map(day => {
-    const dayKey = format(day, "yyyy-MM-dd")
-    const dayData = Array.isArray(weeklySalesData) ? weeklySalesData.find(d => d.day === dayKey) : null
-    return {
-      day: format(day, "EEE"),
-      ordersCount: dayData?.ordersCount ?? 0,
-      totalSales: (dayData?.totalSales ?? 0) / 100,
-    }
-  })
-
-  const totalWeekSales = weeklyData.reduce((sum, day) => sum + day.totalSales, 0)
-  const totalWeekOrders = weeklyData.reduce((sum, day) => sum + day.ordersCount, 0)
-  const salesData = weeklyData.map(day => ({ label: day.day, value: day.totalSales }))
-
-  // ---------------- Other Orders ----------------
-  const buildOrdersUrl = (params: Record<string, string | undefined>) => {
-    const search = new URLSearchParams()
-    if (params.status) search.set("status", params.status)
-    if (params.from) search.set("from", params.from)
-    if (organizationId) search.set("organizationId", organizationId)
-    if (branchId) search.set("branchId", branchId)
-    if (groupId && groupId !== "all") search.set("groupId", groupId)
-    const qs = search.toString()
-    return `/api/v1/orders${qs ? `?${qs}` : ""}`
-  }
-
-  const startOfToday = new Date()
-  startOfToday.setHours(0, 0, 0, 0)
-
-  const { data: todaysOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ from: startOfToday.toISOString() }), fetcher)
-  const { data: approvedOrders } = useSWR<{ items: any[] }>(buildOrdersUrl({ status: "APPROVED" }), fetcher)
-
-  // Include APPROVED and FULFILLED orders in today's metrics
-  // Exclude REFUNDED orders from the count (as per user request)
-  // Calculate net GMV by subtracting refunded amounts (partially refunded orders are still included)
-  const validTodaysOrders = (todaysOrders?.items || []).filter(o =>
-    ['APPROVED', 'FULFILLED'].includes(o.status?.toUpperCase())
+  // Sales performance data (dynamic, cached)
+  const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
+    organizationId,
+    branchId,
+    selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
+    undefined, // groupId
+    dateRange,
+    status
   )
 
-  // Calculate GMV with refunds deducted (works for both partial and full refunds)
-  const todaysGMVCents = validTodaysOrders.reduce((sum, o) => {
-    const netAmount = (o.totalCents || 0) - (o.refundAmountCents || 0)
-    return sum + netAmount
-  }, 0)
-  const todaysGMV = formatPKR(todaysGMVCents / 100, { maximumFractionDigits: 0 })
-  const approvedCount = approvedOrders?.items?.length || 0
+  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
+    setDateRange(range)
+    setActivePreset(preset)
+    setSelectedBranchIds([]) // reset multi-branch on date change
+  }, [])
 
-  const scopeText = branchId ? selectedBranch?.name || `Branch #${branchId}` : organizationId ? selectedOrg?.name || `Organization #${organizationId}` : "All organizations & branches"
-  const allBranchesSelected = !branchId
+  const handleStatusChange = useCallback((s: DashboardStatus) => {
+    setStatus(s)
+  }, [])
 
-  // ---------------- JSX ----------------
+  const handleBranchIdsChange = useCallback((ids: string[]) => {
+    setSelectedBranchIds(ids)
+  }, [])
+
+  // KPI derived values from sales performance
+  const totalRevenue = perfData?.totalSales ?? 0
+  const totalOrders = perfData?.totalOrders ?? 0
+  const peakPeriod = perfData?.peakPeriod
+
+  // Status-specific counts from lifetimeStats (global context) for the KPI badges
+  const pendingCount = lifetimeStats ? (lifetimeStats.totalOrders - lifetimeStats.fulfilledOrders - lifetimeStats.refundedOrders) : 0
+  const fulfilledCount = lifetimeStats?.fulfilledOrders ?? 0
+  const refundedCount = lifetimeStats?.refundedOrders ?? 0
+
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-5">
       <style>{`
         @keyframes slideDown {
           from { opacity: 0; transform: translateY(-10px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .animate-slide-down {
-          animation: slideDown 0.4s ease-out;
+        @keyframes countUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
         }
+        .animate-slide-down { animation: slideDown 0.4s ease-out; }
+        .animate-count-up { animation: countUp 0.5s ease-out; }
+        .kpi-card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .kpi-card-hover:hover { transform: translateY(-2px); }
       `}</style>
 
-      {/* Slim Premium Header */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm dark:shadow-slate-900/50 overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-indigo-900 dark:to-slate-900 px-6 py-4 flex items-center justify-between">
+      {/* Premium Header */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 dark:from-indigo-900 dark:to-slate-900 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative flex items-center justify-center">
-              <div className="absolute inset-0 bg-white opacity-20 blur-lg rounded-full animate-pulse"></div>
-              <div className="relative w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 shadow-sm flex items-center justify-center group-hover:scale-110 transition-all duration-500">
+              <div className="absolute inset-0 bg-white opacity-20 blur-xl rounded-full animate-pulse" />
+              <div className="relative w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 shadow-sm flex items-center justify-center">
                 <Sparkles className="h-6 w-6 text-white" strokeWidth={2.5} />
               </div>
             </div>
             <div>
               <h1 className="text-xl font-bold text-white">Super Admin Portal</h1>
-              <p className="text-xs text-white/70 font-medium">Enterprise Overview • <span className="text-white">{scopeText}</span></p>
+              <p className="text-xs text-white/70 font-medium mt-0.5">Enterprise Overview • <span className="text-white font-semibold">{scopeText}</span></p>
             </div>
           </div>
           <div className="hidden md:flex items-center gap-3">
             <div className="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></div>
-              <span className="text-xs font-bold text-white uppercase tracking-wider">System Live</span>
+              <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Live</span>
             </div>
           </div>
         </div>
@@ -320,234 +147,204 @@ export function SuperAdminDashboard() {
 
       <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
 
-      {/* Consolidated KPI Grid - Today's GMV + Lifetime Statistics */}
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 animate-slide-down">
-        {allBranchesSelected && (
-          <BankingKPICard
-            icon={TrendingUp}
-            title="Today's GMV"
-            value={todaysGMV}
-            gradient="from-emerald-500 to-teal-600"
-            iconBg="text-emerald-600 bg-emerald-600"
-            trend="up"
-            trendValue="12.5%"
-          />
-        )}
-
-        <BankingKPICard
-          icon={Package}
-          title="Total Orders"
-          value={lifetimeStats?.totalOrders?.toLocaleString() || "0"}
-          subtitle="All time"
-          gradient="from-violet-500 to-purple-600"
-          iconBg="text-violet-600 bg-violet-600"
-        />
-
-        <BankingKPICard
-          icon={TrendingUp}
-          title="Fulfilled Orders"
-          value={lifetimeStats?.fulfilledOrders?.toLocaleString() || "0"}
-          subtitle="Successfully completed"
-          gradient="from-green-500 to-emerald-600"
-          iconBg="text-green-600 bg-green-600"
-        />
-
-        <BankingKPICard
-          icon={AlertCircle}
-          title="Refunded Orders"
-          value={lifetimeStats?.refundedOrders?.toLocaleString() || "0"}
-          subtitle="Full refunds"
-          gradient="from-orange-500 to-amber-600"
-          iconBg="text-orange-600 bg-orange-600"
-        />
-
-        <BankingKPICard
-          icon={Wallet}
-          title="Total Revenue"
-          value={formatPKR(lifetimeStats?.totalRevenue || 0, { maximumFractionDigits: 0 })}
-          subtitle="After refunds • All years"
-          gradient="from-indigo-500 to-blue-600"
-          iconBg="text-indigo-600 bg-indigo-600"
-        />
-      </div>
-
-      {/* Main Analytics Grid - Yearly & Weekly */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Yearly Sales Chart */}
-        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 overflow-hidden">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Annual Sales Performance</h3>
-                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Revenue Trends • {yearlyChartYear}</p>
-                </div>
-              </div>
-              <YearPicker
-                selectedYear={yearlyChartYear}
-                onYearChange={setYearlyChartYear}
-              />
+      {/* ━━ Global Filter Bar ━━ */}
+      <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">
+              <Filter className="h-3.5 w-3.5" />
+              Filters
             </div>
-            {isLoadingYearly ? (
-              <div className="h-[450px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-                  <p className="text-sm text-slate-500 font-medium">Loading annual analytics...</p>
-                </div>
-              </div>
-            ) : (
-              <YearlySalesSplineChart yearlySalesData={yearlySalesData} avgSales={average} label="Sales" />
+            <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+            <GlobalDateFilter
+              value={dateRange}
+              onChange={handleDateChange}
+              activePreset={activePreset}
+            />
+            {organizationId && (
+              <>
+                <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+                <MultiBranchFilter
+                  organizationId={organizationId}
+                  selectedBranchIds={selectedBranchIds}
+                  onChange={handleBranchIdsChange}
+                />
+              </>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Weekly Sales Chart */}
-        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 overflow-hidden">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center">
-                  <Activity className="w-5 h-5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Weekly Analytics</h3>
-                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Last 7 Days Revenue</p>
-                </div>
-              </div>
-            </div>
-            {isLoadingSales ? (
-              <div className="h-[450px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-3"></div>
-                  <p className="text-sm text-slate-500 font-medium">Loading weekly data...</p>
-                </div>
-              </div>
-            ) : (
-              <TrendAreaChart data={salesData} label="Sales" />
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-
-      {/* Month Picker & Bar Chart Section */}
-      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 overflow-hidden bg-white dark:bg-slate-900">
-        <CardContent className="p-6">
-          <div className="space-y-6">
-            {/* Header with Picker Toggle */}
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="h-10 w-10 rounded-lg bg-blue-600 flex items-center justify-center">
-                    <BarChart3 className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Monthly Sales Analytics</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {selectedMonths.length > 0
-                        ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} • ${selectedYear}`
-                        : selectedYear === new Date().getFullYear().toString()
-                          ? (new Date().getMonth() < 6 ? `First Half (Jan-Jun) • ${selectedYear}` : `Second Half (Jul-Dec) • ${selectedYear}`)
-                          : `All Months • ${selectedYear}`}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Picker Toggle Button */}
-              <div className="relative" ref={pickerRef}>
-                <button
-                  onClick={() => setShowPicker(!showPicker)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-600 dark:bg-blue-500 text-white font-semibold text-sm hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors border border-blue-700 dark:border-blue-600"
-                >
-                  <Calendar className="h-4 w-4" />
-                  <span>Select Period</span>
-                </button>
-
-                {/* Dropdown Picker */}
-                {showPicker && (
-                  <div className="absolute right-0 top-full mt-2 z-50 animate-slide-down">
-                    <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-                      <MonthYearPicker
-                        selectedYear={selectedYear}
-                        selectedMonths={selectedMonths}
-                        onYearChange={setSelectedYear}
-                        onMonthsChange={setSelectedMonths}
-                      />
-                      <div className="p-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
-                        <button
-                          onClick={() => setShowPicker(false)}
-                          className="w-full px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
-                        >
-                          Apply Selection
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Chart */}
-            <div className="min-h-[400px]">
-              {isLoadingMonthly ? (
-                <div className="flex items-center justify-center h-[400px]">
-                  <div className="text-center space-y-3">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-500 mx-auto"></div>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">Loading sales data...</p>
-                  </div>
-                </div>
-              ) : (
-                <SalesBarChart data={barChartData} label="Sales" />
-              )}
-            </div>
+            <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+            <StatusFilter value={status} onChange={handleStatusChange} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Navigation Tiles */}
-      {/* <section className="space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="h-1 w-12 rounded-full bg-blue-600"></div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Admin Control Areas</h2>
+      {/* ━━ KPI Cards ━━ */}
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 animate-slide-down">
+        <div className="kpi-card-hover">
+          <BankingKPICard
+            icon={TrendingUp}
+            title="Revenue"
+            value={formatPKR(totalRevenue, { maximumFractionDigits: 0 })}
+            subtitle={activePreset === "today" ? "Today" : "Selected Period"}
+            gradient="from-blue-500 to-indigo-600"
+            iconBg="text-blue-600 bg-blue-600"
+          />
         </div>
-        <p className="text-sm text-slate-600">Quick access to configuration, users, inventory, orders, budgets, and system reports</p>
+        <div className="kpi-card-hover">
+          <BankingKPICard
+            icon={Package}
+            title="Orders"
+            value={totalOrders.toLocaleString()}
+            subtitle="Selected Period"
+            gradient="from-violet-500 to-purple-600"
+            iconBg="text-violet-600 bg-violet-600"
+          />
+        </div>
+        <div className="kpi-card-hover">
+          <BankingKPICard
+            icon={Users}
+            title="Users"
+            value={usersCount.toLocaleString()}
+            subtitle="In scope"
+            gradient="from-emerald-500 to-teal-600"
+            iconBg="text-emerald-600 bg-emerald-600"
+          />
+        </div>
+        <div className="kpi-card-hover">
+          <BankingKPICard
+            icon={Building2}
+            title="Branches"
+            value={branchesCount.toLocaleString()}
+            subtitle="In scope"
+            gradient="from-orange-500 to-amber-600"
+            iconBg="text-orange-600 bg-orange-600"
+          />
+        </div>
+      </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {navTiles.map(tile => {
-            const Icon = tile.icon
-            return (
-              <Link key={tile.title} href={tile.href}>
-                <Card className="group relative overflow-hidden border border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-lg dark:hover:shadow-slate-900/50 transition-all duration-300 h-full bg-white dark:bg-slate-900">
-                  <div className={`absolute inset-0 bg-gradient-to-br ${tile.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}></div>
-                  <CardContent className="relative p-6 flex flex-col gap-4 h-full">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-white transition-colors mb-2">
-                          {tile.title}
-                        </h3>
-                        <p className="text-xs text-slate-600 group-hover:text-white/90 transition-colors leading-relaxed">
-                          {tile.description}
-                        </p>
-                      </div>
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-lg bg-gradient-to-br ${tile.gradient} text-white shadow-sm group-hover:scale-110 transition-transform duration-300`}>
-                        <Icon className="h-6 w-6" />
-                      </div>
-                    </div>
-                    <div className="mt-auto pt-2 flex items-center gap-2 text-xs font-semibold text-slate-600 group-hover:text-white transition-colors">
-                      <span>Open {tile.title}</span>
-                      <ArrowUpRight className="h-3 w-3 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            )
-          })}
+      {/* ━━ Order Status Summary ━━ */}
+      <div className="grid gap-3 grid-cols-3 sm:grid-cols-3">
+        <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900 rounded-xl p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
+          <div className="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0">
+            <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Fulfilled</p>
+            <p className="text-xl font-bold text-emerald-900 dark:text-emerald-200">{fulfilledCount.toLocaleString()}</p>
+          </div>
         </div>
-      </section> */}
+        <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900 rounded-xl p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
+          <div className="h-9 w-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">Pending</p>
+            <p className="text-xl font-bold text-amber-900 dark:text-amber-200">{Math.max(0, pendingCount).toLocaleString()}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 rounded-xl p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
+          <div className="h-9 w-9 rounded-xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center flex-shrink-0">
+            <TrendingDown className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wider">Refunded</p>
+            <p className="text-xl font-bold text-rose-900 dark:text-rose-200">{refundedCount.toLocaleString()}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ━━ Sales Performance Chart ━━ */}
+      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Sales Performance</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                {activePreset === "today" ? "Today's performance" :
+                  activePreset === "3d" ? "Last 3 days" :
+                    activePreset === "7d" ? "Last 7 days" :
+                      activePreset === "monthly" ? "This month" :
+                        activePreset === "yearly" ? "This year" : "Custom period"} • Total sales, peak & average
+              </p>
+            </div>
+            {isLoadingPerf && (
+              <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                <span>Updating...</span>
+              </div>
+            )}
+          </div>
+          {isLoadingPerf ? (
+            <div className="h-[420px] flex items-center justify-center bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3" />
+                <p className="text-sm text-slate-500 font-medium">Loading sales data...</p>
+              </div>
+            </div>
+          ) : (
+            <SalesPerformanceLineChart
+              seriesData={perfData?.seriesData ?? []}
+              totalSales={perfData?.totalSales ?? 0}
+              avgSales={perfData?.avgSales ?? 0}
+              totalOrders={perfData?.totalOrders ?? 0}
+              peakPeriod={perfData?.peakPeriod ?? null}
+              granularity={perfData?.granularity ?? "daily"}
+              label="Sales"
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ━━ Organization or Branch Sales Chart ━━ */}
+      {(!branchId) && (
+        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+          <CardContent className="p-6">
+            {!organizationId ? (
+              // ── Organization Chart for Global View ──
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center flex-shrink-0">
+                    <Building className="w-5 h-5 text-white" strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Organization Sales Performance</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">Top performing organizations across the enterprise</p>
+                  </div>
+                </div>
+                {isLoadingPerf ? (
+                  <div className="h-64 flex items-center justify-center bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600" />
+                  </div>
+                ) : (
+                  <OrganizationSalesBarChart organizationSales={perfData?.organizationSales ?? []} label="Sales" />
+                )}
+              </>
+            ) : (
+              // ── Branch Chart for Specific Organization ──
+              <>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0">
+                    <BarChart3 className="w-5 h-5 text-white" strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Branch Sales Performance</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">Hover on bars for total sales & order count per branch</p>
+                  </div>
+                </div>
+                {isLoadingPerf ? (
+                  <div className="h-64 flex items-center justify-center bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+                  </div>
+                ) : (
+                  <BranchSalesBarChart branchSales={perfData?.branchSales ?? []} label="Sales" />
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </main>
   )
 }

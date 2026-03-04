@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
@@ -33,6 +33,7 @@ import { formatPKR } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
 import { OrderExport } from "@/components/orders/order-export"
 import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
+import { ReportFilters } from "@/components/reports/report-filters"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -61,13 +62,23 @@ export default function OrdersManagementPage() {
   const router = useRouter()
   const { data: session } = useSession()
   const { toast } = useToast()
-  const { organizationId, branchId, isInitialized } = useAppContext()
+  const {
+    organizationId,
+    branchId: contextBranchId,
+    branchIds: contextBranchIds,
+    isInitialized,
+    setBranchIds: setContextBranchIds
+  } = useAppContext()
   const userRole = (session?.user as any)?.role
   const isBranchAdmin = userRole === "BRANCH_ADMIN"
   const isHeadOffice = userRole === "HEAD_OFFICE"
   const isSuperAdmin = userRole === "SUPER_ADMIN"
 
   const [searchQuery, setSearchQuery] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
+  // Sync with global context
+  const branchIds = contextBranchIds
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [refundFilter, setRefundFilter] = useState<string>("all")
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null)
@@ -88,17 +99,31 @@ export default function OrdersManagementPage() {
   const [showErrorDialog, setShowErrorDialog] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
 
+  const handleBranchChange = useCallback((ids: string[]) => {
+    setContextBranchIds(ids)
+  }, [setContextBranchIds])
+
   // Build orders endpoint with context parameters
   const ordersEndpoint = useMemo(() => {
     if (!isInitialized) return null
     const params = new URLSearchParams()
     if (organizationId) params.set("organizationId", organizationId)
-    if (branchId) params.set("branchId", branchId)
+
+    if (branchIds.length > 0) {
+      params.set("branchIds", branchIds.join(","))
+    } else if (branchId) {
+      params.set("branchId", branchId)
+    }
+
+    if (startDate) params.set("startDate", startDate)
+    if (endDate) params.set("endDate", endDate)
+    if (statusFilter !== "all" && statusFilter !== "refunded") params.set("status", statusFilter)
+
     return `/api/v1/orders${params.toString() ? `?${params.toString()}` : ""}`
-  }, [organizationId, branchId, isInitialized])
+  }, [organizationId, branchId, branchIds, startDate, endDate, statusFilter, isInitialized])
 
   // Fetch orders scoped by context
-  const { data: ordersData, mutate: mutateOrders } = useSWR<any>(
+  const { data: ordersData, mutate: mutateOrders, isLoading } = useSWR<any>(
     ordersEndpoint,
     fetcher
   )
@@ -401,6 +426,24 @@ export default function OrdersManagementPage() {
           </div>
         ))}
       </div>
+
+      <ReportFilters
+        searchTerm={searchQuery}
+        setSearchTerm={setSearchQuery}
+        startDate={startDate}
+        setStartDate={setStartDate}
+        endDate={endDate}
+        setEndDate={setEndDate}
+        selectedBranchIds={branchIds}
+        onBranchChange={handleBranchChange}
+        onRefresh={() => mutateOrders()}
+        isLoading={isLoading}
+        role={userRole}
+        organizationId={organizationId || undefined}
+        searchPlaceholder="Search by TID or Order ID..."
+        showBranchFilter={isSuperAdmin || isHeadOffice}
+        showGroupFilter={false}
+      />
 
       <Card className="p-4 space-y-4 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
         <div className="flex items-center gap-2 mb-3">

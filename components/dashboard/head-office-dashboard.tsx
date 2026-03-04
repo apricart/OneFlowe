@@ -1,37 +1,37 @@
 "use client"
-import { useMemo, useState, useEffect, useRef, useCallback } from "react"
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area } from "recharts"
+
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
-import { useDashboardAnalytics, useWeeklySales, useYearlySales, useMonthlySales, useLifetimeStats } from "@/lib/hooks/use-dashboard-analytics"
+import { useLifetimeStats } from "@/lib/hooks/use-dashboard-analytics"
+import { useSalesPerformance, type DateRange, type DashboardStatus } from "@/lib/hooks/use-sales-performance"
 import { useAppContext } from "@/components/context/app-context"
-import { MonthYearPicker } from "@/components/ui/MonthYearPicker"
-import { YearPicker } from "@/components/ui/YearPicker"
-import { formatPKR } from "@/lib/utils"
-import SalesBarChart, { YearlySalesSplineChart, TrendAreaChart, ComparisonBarChart } from "@/components/dashboard/charts"
+import { SalesPerformanceLineChart, BranchSalesBarChart } from "@/components/dashboard/charts"
 import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
-import { Building2, AlertCircle, ShoppingCart, TrendingUp, TrendingDown, Calendar, ArrowUpRight, ArrowDownRight, BarChart3, Activity, FileCheck, Wallet, Sparkles } from "lucide-react"
+import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
+import { StatusFilter } from "@/components/dashboard/status-filter"
+import { formatPKR } from "@/lib/utils"
+import {
+  Building2, AlertCircle, ShoppingCart, TrendingUp, TrendingDown,
+  BarChart3, Activity, Wallet, Sparkles, RefreshCw, Filter, Package, Users
+} from "lucide-react"
 import { useOrganizations } from "@/lib/hooks/use-api"
 import { NotificationRail } from "@/components/notifications/notification-center"
-import { GroupFilter } from "@/components/reports/group-filter"
+import { startOfDay, endOfDay } from "date-fns"
 
-const monthNames: Record<string, string> = {
-  "01": "Jan",
-  "02": "Feb",
-  "03": "Mar",
-  "04": "Apr",
-  "05": "May",
-  "06": "Jun",
-  "07": "Jul",
-  "08": "Aug",
-  "09": "Sep",
-  "10": "Oct",
-  "11": "Nov",
-  "12": "Dec",
-}
+const getDefaultDateRange = (): DateRange => ({
+  startDate: startOfDay(new Date()),
+  endDate: endOfDay(new Date()),
+})
 
 export function HeadOfficeDashboard() {
-  const { organizationId, branchId } = useAppContext()
-  const [groupId, setGroupId] = useState<string>("")
+  const {
+    organizationId,
+    branchId: contextBranchId,
+    branchIds: contextBranchIds,
+    setBranchId: setContextBranchId,
+    setBranchIds: setContextBranchIds
+  } = useAppContext()
   const { data: orgsData } = useOrganizations()
   const orgs = orgsData?.items || []
   const selectedOrg = useMemo(() =>
@@ -39,334 +39,246 @@ export function HeadOfficeDashboard() {
     [organizationId, orgs]
   )
 
-  const { data } = useDashboardAnalytics(organizationId, branchId, groupId)
-  const { data: lifetimeStats } = useLifetimeStats(organizationId, branchId, groupId)
-  const { data: weeklySalesData } = useWeeklySales(organizationId, branchId, groupId)
-  const currentYear = new Date().getFullYear()
+  const { data: lifetimeStats } = useLifetimeStats(organizationId, contextBranchId)
 
+  // Filter state
+  const [dateRange, setDateRange] = useState<DateRange | null>(getDefaultDateRange())
+  const [activePreset, setActivePreset] = useState<FilterPreset>("today")
+  const [status, setStatus] = useState<DashboardStatus>("all")
 
-  const trendData = data?.gmvSeries ?? []
-  const branchData = data?.branchSeries ?? []
-  const branchesCount = data?.branchCount ?? 0
-  const pendingApprovals = data?.pendingApprovals ?? 0
-  const ordersThisMonth = data?.ordersThisMonth ?? 0
+  // Sync with global context
+  const selectedBranchIds = contextBranchIds
 
-  // Monthly sales state
-  const [selectedMonths, setSelectedMonths] = useState<string[]>([])
-  const [selectedYear, setSelectedYear] = useState<string>(currentYear.toString())
-  const [yearlyChartYear, setYearlyChartYear] = useState<string>(currentYear.toString())
-  const { data: yearlySalesData } = useYearlySales(organizationId, branchId, Number(yearlyChartYear), groupId)
-  const [showPicker, setShowPicker] = useState(false)
-  const pickerRef = useRef<HTMLDivElement>(null)
-  const { data: monthlySalesData } = useMonthlySales(organizationId, branchId, Number(selectedYear), groupId)
+  // Sync local selection back to context
+  const handleBranchChange = useCallback((ids: string[]) => {
+    setContextBranchIds(ids)
+  }, [setContextBranchIds])
 
-  // Close picker when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement
-      // Check if click is inside picker reference OR inside a Radix Select/Portal content
-      const isInsidePicker = pickerRef.current && pickerRef.current.contains(target)
-      const isInsideRadixPortal = target.closest('[data-radix-portal]') || target.closest('[role="listbox"]') || target.closest('[data-radix-popper-content-wrapper]')
+  // Sales performance data (dynamic)
+  const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
+    organizationId,
+    contextBranchId,
+    selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
+    undefined,
+    dateRange,
+    status
+  )
 
-      if (!isInsidePicker && !isInsideRadixPortal) {
-        setShowPicker(false)
-      }
-    }
-
-    if (showPicker) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showPicker])
-
-  const weeklySalesChartData = useMemo(() => {
-    if (!weeklySalesData?.dailySales) return []
-    return weeklySalesData.dailySales.map((day: { day: string; sales: number }) => ({
-      label: day.day,
-      value: day.sales,
-    }))
-  }, [weeklySalesData])
-
-  const yearlySalesChartData = useMemo(() => {
-    if (!yearlySalesData?.monthlySales) return []
-    return yearlySalesData.monthlySales.map((month: { month: string; sales: number }) => ({
-      month: month.month,
-      sales: month.sales,
-    }))
-  }, [yearlySalesData])
-
-  // Calculate average for YearlySalesSplineChart
-  const averageYearlySales = useMemo(() => {
-    if (!yearlySalesChartData.length) return 0
-    const filtered = yearlySalesChartData.filter(d => d.sales > 0)
-    if (filtered.length === 0) return 0
-    const sum = filtered.reduce((acc, curr) => acc + curr.sales, 0)
-    return sum / filtered.length
-  }, [yearlySalesChartData])
-
-  // Monthly sales bar chart data filtered by selected months
-  const monthlyBarChartData = useMemo(() => {
-    if (!monthlySalesData?.monthlySales) return []
-
-    const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    const monthlySalesMap: Record<string, number> = {}
-
-    // Initialize all months to 0
-    monthsOrder.forEach(m => monthlySalesMap[m] = 0)
-
-    // Populate from API data
-    monthlySalesData.monthlySales.forEach((month: { month: string; sales: number }) => {
-      monthlySalesMap[month.month] = month.sales
-    })
-
-    // If no months selected, show all months
-    const monthsToShow = selectedMonths.length > 0
-      ? selectedMonths.map(m => monthNames[m])
-      : monthsOrder
-
-    // Filter and format data for selected months
-    return monthsToShow.map(month => ({
-      month,
-      value: monthlySalesMap[month] || 0
-    }))
-  }, [selectedMonths, monthlySalesData])
-
-  const handleGroupChange = useCallback((newGroupId: string) => {
-    setGroupId(newGroupId)
+  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
+    setDateRange(range)
+    setActivePreset(preset)
   }, [])
 
-  const handleShowPickerToggle = useCallback(() => {
-    setShowPicker(prev => !prev)
-  }, [])
-
-  const handleApplySelection = useCallback(() => {
-    setShowPicker(false)
-  }, [])
-
-  const allBranchesSelected = !branchId
   const scopeText = selectedOrg?.name || `Organization #${organizationId}` || "All Organizations"
+  const allBranchesSelected = !contextBranchId && selectedBranchIds.length === 0
+
+  // Status counts from lifetime stats
+  const fulfilledCount = lifetimeStats?.fulfilledOrders ?? 0
+  const refundedCount = lifetimeStats?.refundedOrders ?? 0
+  const pendingCount = Math.max(0, (lifetimeStats?.totalOrders ?? 0) - fulfilledCount - refundedCount)
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
+    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-5">
       <style>{`
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-slide-down {
-          animation: slideDown 0.4s ease-out;
-        }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slide-down { animation: slideDown 0.4s ease-out; }
+        .kpi-card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .kpi-card-hover:hover { transform: translateY(-2px); }
       `}</style>
 
-      {/* Slim Premium Header */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm dark:shadow-slate-900/50 overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-indigo-900 dark:to-slate-900 px-6 py-4 flex items-center justify-between">
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 dark:from-indigo-900 dark:to-slate-900 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="relative flex items-center justify-center">
-              <div className="absolute inset-0 bg-white opacity-20 blur-lg rounded-full animate-pulse"></div>
-              <div className="relative w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 shadow-sm flex items-center justify-center group-hover:scale-110 transition-all duration-500">
+              <div className="absolute inset-0 bg-white opacity-20 blur-xl rounded-full animate-pulse" />
+              <div className="relative w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 shadow-sm flex items-center justify-center">
                 <Sparkles className="h-6 w-6 text-white" strokeWidth={2.5} />
               </div>
             </div>
             <div>
               <h1 className="text-xl font-bold text-white">Head Office Portal</h1>
-              <p className="text-xs text-white/70 font-medium">Enterprise Overview • <span className="text-white">{scopeText}</span></p>
+              <p className="text-xs text-white/70 font-medium mt-0.5">Enterprise Overview • <span className="text-white font-semibold">{scopeText}</span></p>
             </div>
           </div>
           <div className="hidden md:flex items-center gap-3">
-
+            <div className="px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Live</span>
+            </div>
           </div>
         </div>
       </div>
 
       <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
 
-      {/* KPI Cards - Professional Banking Design */}
-      {allBranchesSelected && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5 animate-slide-down">
+      {/* Global Filter Bar */}
+      <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">
+              <Filter className="h-3.5 w-3.5" />
+              Filters
+            </div>
+            <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+            <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
+            {organizationId && (
+              <>
+                <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+                <MultiBranchFilter
+                  organizationId={organizationId}
+                  selectedBranchIds={selectedBranchIds}
+                  onChange={handleBranchChange}
+                />
+              </>
+            )}
+            <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+            <StatusFilter value={status} onChange={setStatus} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* KPI Cards */}
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-2 lg:grid-cols-4 animate-slide-down">
+        <div className="kpi-card-hover">
           <BankingKPICard
-            icon={Building2}
-            title={allBranchesSelected ? "All Branches" : "My Branches"}
-            value={branchesCount}
+            icon={TrendingUp}
+            title="Revenue"
+            value={formatPKR(perfData?.totalSales ?? 0, { maximumFractionDigits: 0 })}
+            subtitle={activePreset === "today" ? "Today" : "Selected Period"}
             gradient="from-blue-500 to-indigo-600"
             iconBg="text-blue-600 bg-blue-600"
           />
-
+        </div>
+        <div className="kpi-card-hover">
           <BankingKPICard
-            icon={ShoppingCart}
-            title="Orders This Month"
-            value={ordersThisMonth}
+            icon={Package}
+            title="Orders"
+            value={(perfData?.totalOrders ?? 0).toLocaleString()}
+            subtitle="Selected Period"
             gradient="from-violet-500 to-purple-600"
             iconBg="text-violet-600 bg-violet-600"
           />
-
+        </div>
+        <div className="kpi-card-hover">
           <BankingKPICard
-            icon={FileCheck}
-            title="Total Orders"
-            value={lifetimeStats?.totalOrders?.toLocaleString() ?? "—"}
+            icon={Building2}
+            title="Branches"
+            value={lifetimeStats?.totalOrders !== undefined ? (perfData?.branchSales?.length ?? 0).toString() : "—"}
+            subtitle="In scope"
             gradient="from-emerald-500 to-teal-600"
             iconBg="text-emerald-600 bg-emerald-600"
           />
-
+        </div>
+        <div className="kpi-card-hover">
           <BankingKPICard
             icon={TrendingDown}
             title="Total Refunded"
             value={formatPKR(lifetimeStats?.totalRefunded || 0, { maximumFractionDigits: 0 })}
+            subtitle="All time"
             gradient="from-red-500 to-rose-600"
             iconBg="text-red-600 bg-red-600"
           />
-
-          <BankingKPICard
-            icon={Wallet}
-            title="Total Purchase Cost"
-            value={lifetimeStats?.totalRevenue ? formatPKR(lifetimeStats.totalRevenue, { maximumFractionDigits: 0 }) : "—"}
-            gradient="from-amber-500 to-orange-600"
-            iconBg="text-amber-600 bg-amber-600"
-          />
         </div>
-      )}
+      </div>
 
-      <div className="space-y-6">
-        {/* Charts Grid - Weekly and Yearly Sales (Moved to top) */}
-        {/* Charts Grid - Sync with Branch Admin */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Yearly Purchase Chart */}
-          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Annual Performance</h3>
-                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Yearly Analytics Overview</p>
-                  </div>
-                </div>
-                <YearPicker
-                  selectedYear={yearlyChartYear}
-                  onYearChange={setYearlyChartYear}
-                />
-              </div>
-              {yearlySalesChartData.length > 0 ? (
-                <YearlySalesSplineChart yearlySalesData={yearlySalesChartData} avgSales={averageYearlySales} label="Purchase" />
-              ) : (
-                <div className="h-[500px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-                    <p className="text-sm text-slate-500 font-medium">Loading yearly charts...</p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Weekly Sales Chart */}
-          <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900 overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center">
-                    <Activity className="w-5 h-5 text-emerald-600 dark:text-emerald-400" strokeWidth={2.5} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Weekly Performance</h3>
-                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">7-Day Purchase Trend</p>
-                  </div>
-                </div>
-              </div>
-              {weeklySalesChartData.length > 0 ? (
-                <TrendAreaChart data={weeklySalesChartData} label="Purchase" />
-              ) : (
-                <div className="h-[500px] flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-3"></div>
-                    <p className="text-sm text-slate-500 font-medium">Loading weekly trends...</p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+      {/* Status Summary */}
+      <div className="grid gap-3 grid-cols-3">
+        <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900 rounded-xl p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
+          <div className="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0">
+            <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Fulfilled</p>
+            <p className="text-xl font-bold text-emerald-900 dark:text-emerald-200">{fulfilledCount.toLocaleString()}</p>
+          </div>
         </div>
+        <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900 rounded-xl p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
+          <div className="h-9 w-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">Pending</p>
+            <p className="text-xl font-bold text-amber-900 dark:text-amber-200">{pendingCount.toLocaleString()}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 rounded-xl p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
+          <div className="h-9 w-9 rounded-xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center flex-shrink-0">
+            <TrendingDown className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wider">Refunded</p>
+            <p className="text-xl font-bold text-rose-900 dark:text-rose-200">{refundedCount.toLocaleString()}</p>
+          </div>
+        </div>
+      </div>
 
-
-        {/* Monthly Sales Bar Chart with Month Picker */}
-        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 hover:shadow-md transition-shadow duration-300 bg-white dark:bg-slate-900">
-          <CardContent className="p-6">
-            <div className="space-y-6">
-              {/* Header with Picker Toggle */}
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center">
-                      <BarChart3 className="w-5 h-5 text-indigo-700 dark:text-indigo-400" strokeWidth={2} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Monthly Purchase Analytics</h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {selectedMonths.length > 0
-                          ? `${selectedMonths.length} month${selectedMonths.length > 1 ? 's' : ''} selected • ${selectedYear}`
-                          : `All months • ${selectedYear}`}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Picker Toggle Button */}
-                <div className="relative" ref={pickerRef}>
-                  <button
-                    onClick={handleShowPickerToggle}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white font-semibold text-sm hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors border border-indigo-700 dark:border-indigo-600 shadow-sm"
-                  >
-                    <Calendar className="h-4 w-4" />
-                    <span>Select Period</span>
-                  </button>
-
-                  {showPicker && (
-                    <div className="absolute right-0 top-full mt-2 z-50">
-                      <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl border-2 border-slate-200 dark:border-slate-700 overflow-hidden">
-                        <MonthYearPicker
-                          selectedYear={selectedYear}
-                          selectedMonths={selectedMonths}
-                          onYearChange={setSelectedYear}
-                          onMonthsChange={setSelectedMonths}
-                        />
-                        <div className="p-3 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
-                          <button
-                            onClick={handleApplySelection}
-                            className="w-full px-4 py-2 rounded-lg bg-indigo-600 dark:bg-indigo-500 text-white text-sm font-semibold hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors"
-                          >
-                            Apply Selection
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+      {/* Sales Performance Chart */}
+      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
+              <TrendingUp className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Sales Performance</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                {activePreset === "today" ? "Today's performance" :
+                  activePreset === "3d" ? "Last 3 days" : activePreset === "7d" ? "Last 7 days" :
+                    activePreset === "monthly" ? "This month" : activePreset === "yearly" ? "This year" : "Custom period"} • Total sales, peak & average
+              </p>
+            </div>
+            {isLoadingPerf && (
+              <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                <span>Updating...</span>
               </div>
-
-              {/* Chart */}
-              <div className="min-h-[350px] bg-slate-50 dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-                {monthlyBarChartData.length > 0 ? (
-                  <SalesBarChart data={monthlyBarChartData} label="Purchase" />
-                ) : (
-                  <div className="flex items-center justify-center h-[350px]">
-                    <div className="text-center space-y-3">
-                      <div className="w-14 h-14 bg-slate-100 rounded-lg flex items-center justify-center mx-auto border border-slate-200">
-                        <BarChart3 className="w-7 h-7 text-slate-400" />
-                      </div>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Loading monthly purchase data...</p>
-                    </div>
-                  </div>
-                )}
+            )}
+          </div>
+          {isLoadingPerf ? (
+            <div className="h-[420px] flex items-center justify-center bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3" />
+                <p className="text-sm text-slate-500 font-medium">Loading sales data...</p>
               </div>
             </div>
+          ) : (
+            <SalesPerformanceLineChart
+              seriesData={perfData?.seriesData ?? []}
+              totalSales={perfData?.totalSales ?? 0}
+              avgSales={perfData?.avgSales ?? 0}
+              totalOrders={perfData?.totalOrders ?? 0}
+              peakPeriod={perfData?.peakPeriod ?? null}
+              granularity={perfData?.granularity ?? "daily"}
+              label="Sales"
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Branch Sales Chart */}
+      {allBranchesSelected && (
+        <Card className="border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 overflow-hidden">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0">
+                <BarChart3 className="w-5 h-5 text-white" strokeWidth={2.5} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Branch Sales Performance</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">Hover on bars for total sales & order count per branch</p>
+              </div>
+            </div>
+            {isLoadingPerf ? (
+              <div className="h-64 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+              </div>
+            ) : (
+              <BranchSalesBarChart branchSales={perfData?.branchSales ?? []} label="Sales" />
+            )}
           </CardContent>
         </Card>
-      </div>
+      )}
     </main>
   )
 }
