@@ -48,7 +48,7 @@ export function GroupFilter({ onGroupChange, organizationId }: GroupFilterProps)
                     </div>
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800">
-                    <SelectItem value="all" className="rounded-lg">All Branches</SelectItem>
+                    <SelectItem value="all" className="rounded-lg">All Groups</SelectItem>
                     {groups.map((group: Group) => (
                         <SelectItem key={group.id} value={group.id.toString()} className="rounded-lg">
                             {group.name}
