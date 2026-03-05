@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { groups, branches, branchInventory, groupAuditLogs } from "@/db/schema"
 import { eq, and, isNull } from "drizzle-orm"
+import { invalidateByPrefix } from "@/lib/cache-utils"
 
 /**
  * POST /api/v1/groups/[id]/branches/clean
@@ -100,6 +101,9 @@ export async function POST(
                 cleanedCount,
             },
         })
+
+        // Invalidate groups and product counts cache
+        await invalidateByPrefix('group')
 
         return NextResponse.json({
             message: `Cleaned ${cleanedCount} product(s) from branch "${branch.name}"`,

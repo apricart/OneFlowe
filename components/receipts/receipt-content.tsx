@@ -284,10 +284,10 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
 
             {/* Action Bar */}
             <div className="flex justify-end gap-2 mb-6 print-hidden max-w-[850px] mx-auto">
-                <Button onClick={handlePrint} variant="outline" size="sm" className="gap-2 h-9">
+                <Button onClick={handlePrint} variant="outline" size="sm" className="gap-2 h-9 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 font-semibold shadow-sm">
                     <Printer className="h-4 w-4" /> Print Receipt
                 </Button>
-                <Button onClick={handleDownload} disabled={isDownloading} size="sm" className="gap-2 h-9 bg-slate-900 border-slate-900">
+                <Button onClick={handleDownload} disabled={isDownloading} size="sm" className="gap-2 h-9 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md">
                     <Download className="h-4 w-4" /> {isDownloading ? "Generating..." : "Download PDF"}
                 </Button>
                 {onClose && (

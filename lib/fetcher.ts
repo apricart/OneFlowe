@@ -1,7 +1,7 @@
 const COMMON_HEADERS = { "Content-Type": "application/json" }
 
 // Configuration with validation
-const DEFAULT_TIMEOUT_MS = 15000
+const DEFAULT_TIMEOUT_MS = 30000
 const MAX_TIMEOUT_MS = 60000
 const MIN_TIMEOUT_MS = 1000
 
@@ -122,7 +122,6 @@ export async function fetcher<T>(url: string, timeoutMs: number = DEFAULT_TIMEOU
       const res = await fetch(url, {
         headers: COMMON_HEADERS,
         signal: controller.signal,
-        cache: "no-store", // Ensure fresh data
       })
 
       clearTimeout(timeoutId)

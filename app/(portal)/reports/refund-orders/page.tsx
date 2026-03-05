@@ -7,7 +7,7 @@ import { SectionHeader } from "@/components/ui/section-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, AlertCircle, MapPin, TrendingDown, Hash, DollarSign, PercentCircle, Upload } from "lucide-react"
+import { Loader2, MapPin, TrendingDown, Hash, DollarSign, PercentCircle, Upload } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -23,7 +23,6 @@ import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/
 import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expandable-row-drawer"
 import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
 import { ReportFilters } from "@/components/reports/report-filters"
-
 import { fetcher } from "@/lib/fetcher"
 import { cn } from "@/lib/utils"
 
@@ -46,7 +45,7 @@ export default function RefundOrdersReportPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
-  const [selectedBranchId, setSelectedBranchId] = useState("")
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
   const [generatedDate, setGeneratedDate] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [selectedRow, setSelectedRow] = useState<any>(null)
@@ -59,8 +58,9 @@ export default function RefundOrdersReportPage() {
   const { visibleKeys, isVisible, setVisibleKeys } = useColumnSelector(ALL_COLUMNS, "order-intelligence")
 
   const queryParams = new URLSearchParams()
-  const targetBranchId = selectedBranchId || branchId
-  if (targetBranchId) queryParams.set("branchId", String(targetBranchId))
+  // Preference order: Selected filter > App context
+  const targetBranchIds = selectedBranchIds.length > 0 ? selectedBranchIds : (branchId ? [String(branchId)] : [])
+  if (targetBranchIds.length > 0) queryParams.set("branchIds", targetBranchIds.join(","))
   if (organizationId) queryParams.set("organizationId", String(organizationId))
   if (startDate) queryParams.set("startDate", startDate)
   if (endDate) queryParams.set("endDate", endDate)
@@ -118,11 +118,11 @@ export default function RefundOrdersReportPage() {
   // Filter tags
   const filterTags: FilterTag[] = []
   if (organizationId) filterTags.push({ key: "org", label: "Org", value: String(organizationId), color: "blue" })
-  if (targetBranchId) filterTags.push({ key: "branch", label: "Branch", value: String(targetBranchId), color: "indigo" })
+  if (targetBranchIds.length > 0) filterTags.push({ key: "branches", label: "Branches", value: `${targetBranchIds.length} selected`, color: "indigo" })
   if (startDate || endDate) filterTags.push({ key: "dates", label: "Period", value: `${startDate || "..."} – ${endDate || "..."}`, color: "emerald" })
 
   const handleRemoveFilter = (key: string) => {
-    if (key === "branch") setSelectedBranchId("")
+    if (key === "branches") setSelectedBranchIds([])
     if (key === "dates") { setStartDate(""); setEndDate("") }
   }
 
@@ -209,8 +209,8 @@ export default function RefundOrdersReportPage() {
         setStartDate={setStartDate}
         endDate={endDate}
         setEndDate={setEndDate}
-        selectedBranchIds={selectedBranchId ? [selectedBranchId] : []}
-        onBranchChange={(ids) => setSelectedBranchId(ids[0] || "")}
+        selectedBranchIds={selectedBranchIds}
+        onBranchChange={setSelectedBranchIds}
         onRefresh={() => mutate()}
         isLoading={isLoading}
         role={role}
@@ -257,7 +257,7 @@ export default function RefundOrdersReportPage() {
             key={tab.key}
             onClick={() => setStatusFilter(tab.key)}
             className={cn(
-              "px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200 flex items-center gap-2",
+              "px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 flex items-center gap-2",
               statusFilter === tab.key
                 ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-600"
                 : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
@@ -265,7 +265,7 @@ export default function RefundOrdersReportPage() {
           >
             {tab.label}
             <span className={cn(
-              "text-[10px] px-1.5 py-0.5 rounded-md font-bold",
+              "text-[10px] px-1.5 py-0.5 rounded-md font-semibold",
               statusFilter === tab.key
                 ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
                 : "bg-slate-200/50 dark:bg-slate-700/50 text-slate-400"
@@ -279,7 +279,7 @@ export default function RefundOrdersReportPage() {
       {/* Table */}
       <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900">
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-3">
-          <h3 className="font-bold text-slate-900 dark:text-white text-sm">Transaction Details</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Transaction Details</h3>
           <div className="flex items-center gap-2">
             <ColumnSelector
               columns={ALL_COLUMNS}
@@ -306,20 +306,41 @@ export default function RefundOrdersReportPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={9} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 9 : 8} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
             ) : filteredRefunds.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="h-24 text-center text-muted-foreground">No records found.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 9 : 8} className="h-24 text-center text-muted-foreground">No refunds found.</TableCell></TableRow>
             ) : (
               filteredRefunds.map((refund: any) => (
                 <TableRow key={refund.id} className="hover:bg-indigo-50/30 dark:hover:bg-indigo-900/10 cursor-pointer transition-colors" onClick={() => handleRowClick(refund)}>
-                  {isVisible("date") && <TableCell className="text-xs" suppressHydrationWarning>{new Date(refund.refundedAt || refund.createdAt).toLocaleDateString()}</TableCell>}
-                  {isVisible("tid") && <TableCell className="text-xs font-medium font-mono">{refund.tid}</TableCell>}
-                  {isVisible("organization") && role === "SUPER_ADMIN" && <TableCell className="text-xs">{refund.organizationName || `Org #${refund.organizationId}`}</TableCell>}
-                  {isVisible("branch") && <TableCell className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{refund.branchName}</TableCell>}
-                  {isVisible("refundType") && <TableCell><Badge variant={refund.refundType === 'FULL' ? 'destructive' : 'outline'} className="text-[10px]">{refund.refundType || 'PARTIAL'}</Badge></TableCell>}
-                  {isVisible("prevStatus") && <TableCell><Badge variant="secondary" className="text-[10px]">{refund.statusAtRefund || refund.status}</Badge></TableCell>}
+                  {isVisible("date") && <TableCell className="text-xs" suppressHydrationWarning>{refund.refundedAt ? new Date(refund.refundedAt).toLocaleDateString() : new Date(refund.createdAt).toLocaleDateString()}</TableCell>}
+                  {isVisible("tid") && <TableCell className="text-xs font-semibold font-mono">{refund.tid}</TableCell>}
+                  {isVisible("organization") && role === "SUPER_ADMIN" && (
+                    <TableCell className="text-xs font-medium">
+                      {refund.organizationName || `Org #${refund.organizationId}`}
+                    </TableCell>
+                  )}
+                  {isVisible("branch") && (
+                    <TableCell className="text-xs text-muted-foreground flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      {refund.branchName}
+                    </TableCell>
+                  )}
+                  {isVisible("refundType") && (
+                    <TableCell>
+                      <Badge variant={refund.refundType === 'FULL' ? 'destructive' : 'outline'} className="text-[10px]">
+                        {refund.refundType || 'PARTIAL'}
+                      </Badge>
+                    </TableCell>
+                  )}
+                  {isVisible("prevStatus") && (
+                    <TableCell>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {refund.statusAtRefund || refund.status}
+                      </Badge>
+                    </TableCell>
+                  )}
                   {isVisible("orderTotal") && <TableCell className="text-right text-xs">{formatPKR(refund.orderTotal / 100)}</TableCell>}
-                  {isVisible("refundAmount") && <TableCell className="text-right text-xs font-bold text-red-600">{formatPKR(refund.refundAmount / 100)}</TableCell>}
+                  {isVisible("refundAmount") && <TableCell className="text-right text-xs font-semibold text-red-600">{formatPKR(refund.refundAmount / 100)}</TableCell>}
                   {isVisible("reason") && <TableCell className="text-xs max-w-[200px] truncate">{refund.reason || "-"}</TableCell>}
                 </TableRow>
               ))
@@ -328,7 +349,7 @@ export default function RefundOrdersReportPage() {
         </Table>
       </Card>
 
-      <div className="text-xs text-muted-foreground text-center">Report Generated: {generatedDate}</div>
+      <div className="text-xs text-muted-foreground text-center pb-4">Report Generated: {generatedDate}</div>
 
       <ExpandableRowDrawer
         open={drawerOpen}

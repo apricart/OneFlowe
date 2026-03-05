@@ -24,7 +24,6 @@ import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expa
 import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
 import { ComparisonToggle } from "@/components/reports/comparison-toggle"
 import { ReportFilters } from "@/components/reports/report-filters"
-import { Progress } from "@/components/ui/progress"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -290,11 +289,11 @@ export default function SalesSummaryReportPage() {
         <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900">
           <CardHeader className="pb-3 border-b border-slate-50 dark:border-slate-800">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-bold flex items-center gap-2 uppercase tracking-tight">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2 uppercase tracking-tight">
                 <Crown className="h-4 w-4 text-amber-500" />
                 Top Performing Branches
               </CardTitle>
-              <Badge variant="secondary" className="text-[10px] font-bold">BY SALES VOLUME</Badge>
+              <Badge variant="secondary" className="text-[10px] font-semibold">BY SALES VOLUME</Badge>
             </div>
           </CardHeader>
           <CardContent className="p-5">
@@ -312,8 +311,8 @@ export default function SalesSummaryReportPage() {
                   <div key={performer.branchId} className="group">
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-slate-400 w-6">#{index + 1}</span>
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        <span className="text-[10px] font-semibold text-slate-400 w-6">#{index + 1}</span>
+                        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                           {performer.branchName || `Branch #${performer.branchId}`}
                         </span>
                       </div>
@@ -321,7 +320,7 @@ export default function SalesSummaryReportPage() {
                         <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-slate-200 dark:border-slate-700">
                           {performer.orderCount} orders
                         </Badge>
-                        <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                        <span className="text-xs font-mono font-semibold text-indigo-600 dark:text-indigo-400">
                           {formatPKR(performer.sales / 100)}
                         </span>
                       </div>
@@ -343,7 +342,7 @@ export default function SalesSummaryReportPage() {
       {/* Transaction Table */}
       <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900 mb-8 pt-6">
         <div className="px-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-3">
-          <h3 className="font-bold text-slate-900 dark:text-white">Transaction Logs</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white">Transaction Logs</h3>
           <div className="flex items-center gap-2">
             <ColumnSelector
               columns={ALL_COLUMNS}
@@ -352,7 +351,7 @@ export default function SalesSummaryReportPage() {
               onChange={setVisibleKeys}
             />
             <ScheduleReportModal reportName="Sales Summary" />
-            <Button variant="ghost" size="sm" onClick={() => handleExport('pdf')} className="text-xs font-bold text-slate-500 hover:text-indigo-600">
+            <Button variant="ghost" size="sm" onClick={() => handleExport('pdf')} className="text-xs font-semibold text-slate-500 hover:text-indigo-600">
               <Upload className="h-3.5 w-3.5 mr-2" />
               PDF
             </Button>
@@ -415,7 +414,7 @@ export default function SalesSummaryReportPage() {
                   )}
                   {isVisible("status") && (
                     <TableCell>
-                      <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-tighter">
+                      <Badge variant="outline" className="text-[10px] uppercase font-semibold tracking-tighter">
                         {order.status}
                       </Badge>
                     </TableCell>
@@ -431,7 +430,7 @@ export default function SalesSummaryReportPage() {
           </TableBody>
         </Table>
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 text-center">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em]">
             Report Generated: {generatedDate}
           </p>
         </div>

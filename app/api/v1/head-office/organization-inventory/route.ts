@@ -6,7 +6,7 @@ import { organizationInventory, globalProducts, categories, auditLogs } from "@/
 import { eq, and, like, ilike, or, desc, sql, isNull, SQL, ne, inArray } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { cascadeOrgStatusChange } from "@/lib/inventory-cascade"
-import { invalidateByPrefix } from "@/lib/cache-utils"
+import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 // GET /api/v1/head-office/organization-inventory - List products in organization inventory
 export async function GET(req: NextRequest) {
@@ -44,101 +44,102 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
 
-    const conditions: (SQL | undefined)[] = [
-      eq(organizationInventory.organizationId, parseInt(organizationId)),
-      isNull(organizationInventory.deletedAt),
-      isNull(globalProducts.deletedAt),
-      eq(globalProducts.status, "active"),
-    ]
+    const cacheKey = scopedCacheKey('org-inv', { orgId: organizationId }, {
+      search, category, subCategory, status, page, limit
+    })
 
-    // Filter by organization product status (active/inactive/all)
-    if (status === "inactive") {
-      conditions.push(eq(organizationInventory.isActive, false))
-    } else if (status !== "all") {
-      // Default to active-only when no filter or "active" is selected
-      conditions.push(eq(organizationInventory.isActive, true))
-    }
+    return getCached(cacheKey, async () => {
+      const conditions: (SQL | undefined)[] = [
+        eq(organizationInventory.organizationId, parseInt(organizationId)),
+        isNull(organizationInventory.deletedAt),
+        isNull(globalProducts.deletedAt),
+        eq(globalProducts.status, "active"),
+      ]
 
-    if (search) {
-      conditions.push(
-        or(
-          ilike(globalProducts.name, `%${search}%`),
-          ilike(globalProducts.productCode, `%${search}%`),
-          ilike(organizationInventory.customName, `%${search}%`)
-        )
-      )
-    }
-    if (category && category !== 'all') {
-      const catId = parseInt(category)
-      const subCatsList = await db.select({ id: categories.id })
-        .from(categories)
-        .where(eq(categories.parentId, catId))
-
-      const subCatIds = subCatsList.map(sc => sc.id)
-      if (subCatIds.length > 0) {
-        conditions.push(inArray(globalProducts.categoryId, subCatIds))
-      } else {
-        conditions.push(eq(globalProducts.categoryId, -1))
+      // Filter by organization product status (active/inactive/all)
+      if (status === "inactive") {
+        conditions.push(eq(organizationInventory.isActive, false))
+      } else if (status !== "all") {
+        // Default to active-only when no filter or "active" is selected
+        conditions.push(eq(organizationInventory.isActive, true))
       }
-    }
-    if (subCategory && subCategory !== 'all') {
-      conditions.push(eq(globalProducts.categoryId, parseInt(subCategory)))
-    }
 
-    const whereClause = and(...conditions)
+      if (search) {
+        conditions.push(
+          or(
+            ilike(globalProducts.name, `%${search}%`),
+            ilike(globalProducts.productCode, `%${search}%`),
+            ilike(organizationInventory.customName, `%${search}%`)
+          )
+        )
+      }
+      if (category && category !== 'all') {
+        const catId = parseInt(category)
+        const subCatsList = await db.select({ id: categories.id })
+          .from(categories)
+          .where(eq(categories.parentId, catId))
 
-    const subCats = alias(categories, "subCategories")
-    const parentCats = alias(categories, "parentCategories")
+        const subCatIds = subCatsList.map(sc => sc.id)
+        if (subCatIds.length > 0) {
+          conditions.push(inArray(globalProducts.categoryId, subCatIds))
+        } else {
+          conditions.push(eq(globalProducts.categoryId, -1))
+        }
+      }
+      if (subCategory && subCategory !== 'all') {
+        conditions.push(eq(globalProducts.categoryId, parseInt(subCategory)))
+      }
 
-    const [items, totalResult] = await Promise.all([
-      db.select({
-        id: organizationInventory.id,
-        organizationId: organizationInventory.organizationId,
-        globalProductId: organizationInventory.globalProductId,
-        isActive: organizationInventory.isActive,
-        customName: organizationInventory.customName,
-        customPrice: organizationInventory.customPrice,
-        customDescription: organizationInventory.customDescription,
-        customImageUrl: organizationInventory.customImageUrl,
-        assignedAt: organizationInventory.assignedAt,
-        updatedAt: organizationInventory.updatedAt,
-        // Global product details
-        productName: globalProducts.name,
-        productCode: globalProducts.productCode,
-        productImageUrl: globalProducts.imageUrl,
-        basePrice: globalProducts.basePrice,
-        unit: globalProducts.unit,
-        status: globalProducts.status,
-        categoryName: subCats.name,
-        parentCategoryName: parentCats.name,
-        discountType: globalProducts.discountType,
-        discountValue: globalProducts.discountValue,
-        discountStartAt: globalProducts.discountStartAt,
-        discountEndAt: globalProducts.discountEndAt,
-        discountActive: globalProducts.discountActive,
-      })
-        .from(organizationInventory)
-        .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-        .leftJoin(subCats, eq(globalProducts.categoryId, subCats.id))
-        .leftJoin(parentCats, eq(subCats.parentId, parentCats.id))
-        .where(whereClause)
-        .orderBy(desc(organizationInventory.assignedAt))
-        .limit(limit)
-        .offset(offset),
+      const whereClause = and(...conditions)
 
-      db.select({ count: sql<number>`count(*)` })
-        .from(organizationInventory)
-        .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
-        .where(whereClause),
-    ])
+      const subCats = alias(categories, "subCategories")
+      const parentCats = alias(categories, "parentCategories")
 
-    const total = totalResult[0].count
+      const [items, totalResult] = await Promise.all([
+        db.select({
+          id: organizationInventory.id,
+          organizationId: organizationInventory.organizationId,
+          globalProductId: organizationInventory.globalProductId,
+          isActive: organizationInventory.isActive,
+          customName: organizationInventory.customName,
+          customPrice: organizationInventory.customPrice,
+          customDescription: organizationInventory.customDescription,
+          customImageUrl: organizationInventory.customImageUrl,
+          assignedAt: organizationInventory.assignedAt,
+          updatedAt: organizationInventory.updatedAt,
+          // Global product details
+          productName: globalProducts.name,
+          productCode: globalProducts.productCode,
+          productImageUrl: globalProducts.imageUrl,
+          basePrice: globalProducts.basePrice,
+          unit: globalProducts.unit,
+          status: globalProducts.status,
+          categoryName: subCats.name,
+          parentCategoryName: parentCats.name,
+          discountType: globalProducts.discountType,
+          discountValue: globalProducts.discountValue,
+          discountStartAt: globalProducts.discountStartAt,
+          discountEndAt: globalProducts.discountEndAt,
+          discountActive: globalProducts.discountActive,
+        })
+          .from(organizationInventory)
+          .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+          .leftJoin(subCats, eq(globalProducts.categoryId, subCats.id))
+          .leftJoin(parentCats, eq(subCats.parentId, parentCats.id))
+          .where(whereClause)
+          .orderBy(desc(organizationInventory.assignedAt))
+          .limit(limit)
+          .offset(offset),
 
-    // For non-Super Admin users, remove basePrice from response (it's internal)
-    // UPDATE: We now expose basePrice as the default cost if no customPrice is set
-    const sanitizedItems = items
+        db.select({ count: sql<number>`count(*)` })
+          .from(organizationInventory)
+          .leftJoin(globalProducts, eq(organizationInventory.globalProductId, globalProducts.id))
+          .where(whereClause),
+      ])
 
-    return NextResponse.json({ items: sanitizedItems, total, page, limit })
+      const total = totalResult[0].count
+      return { items, total, page, limit }
+    }, CACHE_TTL.INVENTORY).then(data => NextResponse.json(data))
   } catch (error) {
     console.error("Error fetching organization inventory:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
@@ -245,7 +246,8 @@ export async function PUT(req: NextRequest) {
         },
       })
 
-      // Invalidate branch inventory cache so portals see changes instantly
+      // Invalidate both organization and branch inventory caches
+      await invalidateByPrefix('org-inv')
       await invalidateByPrefix('branch-inv')
     }
 
@@ -261,6 +263,9 @@ export async function PUT(req: NextRequest) {
         level: "head_office"
       },
     })
+
+    // Invalidate organization inventory cache for any update
+    await invalidateByPrefix('org-inv')
 
     return NextResponse.json({
       message: "Inventory updated successfully",

@@ -316,37 +316,50 @@ export function GroupManagement({ role }: { role: string }) {
     const openBranchManager = async (group: Group) => {
         setSelectedGroup(group)
 
-        // Derive selection from already-loaded branches data (instant, no extra fetch)
-        const assignedIds = branchesData?.items
-            ?.filter((b: Branch) => b.groupId === group.id)
-            .map((b: Branch) => b.id) || []
-        setSelectedBranchIds(assignedIds)
-        setOriginalBranchIds(assignedIds) // remember original state
+        // Reset all state and show loading immediately
+        setSelectedBranchIds([])
+        setOriginalBranchIds([])
         setBranchProductCounts({})
         setTotalGroupProducts(0)
-
+        setIsLoadingCounts(true)
         setIsBranchOpen(true)
-        mutateBranches()
 
-        // Fetch precise product counts via fast SQL aggregation API
-        if (assignedIds.length > 0) {
-            setIsLoadingCounts(true)
-            try {
-                const countsRes = await fetch(`/api/v1/groups/${group.id}/branch-counts`)
-                if (countsRes.ok) {
-                    const data = await countsRes.json()
-                    if (data.counts) {
-                        setBranchProductCounts(data.counts)
-                    }
-                    if (data.totalGroupProducts !== undefined) {
-                        setTotalGroupProducts(Number(data.totalGroupProducts))
-                    }
-                }
-            } catch {
-                // silently fail - product counts are informational
-            } finally {
-                setIsLoadingCounts(false)
+        try {
+            // Fetch fresh branch data directly — don't rely on stale SWR cache
+            const orgId = group.organizationId || globalOrgId
+            const [freshBranches, countsRes] = await Promise.all([
+                fetch(`/api/v1/branches?organizationId=${orgId}`).then(r => r.ok ? r.json() : null),
+                fetch(`/api/v1/groups/${group.id}/branch-counts`).then(r => r.ok ? r.json() : null),
+            ])
+
+            // Update SWR cache with fresh data
+            if (freshBranches) {
+                mutateBranches(freshBranches, false)
             }
+
+            // Compute assigned IDs from FRESH data
+            const assignedIds = freshBranches?.items
+                ?.filter((b: Branch) => b.groupId === group.id)
+                .map((b: Branch) => b.id) || []
+            setSelectedBranchIds(assignedIds)
+            setOriginalBranchIds(assignedIds)
+
+            // Set product counts from parallel fetch
+            if (countsRes?.counts) {
+                setBranchProductCounts(countsRes.counts)
+            }
+            if (countsRes?.totalGroupProducts !== undefined) {
+                setTotalGroupProducts(Number(countsRes.totalGroupProducts))
+            }
+        } catch {
+            // If fetches fail, fall back to whatever SWR has
+            const assignedIds = branchesData?.items
+                ?.filter((b: Branch) => b.groupId === group.id)
+                .map((b: Branch) => b.id) || []
+            setSelectedBranchIds(assignedIds)
+            setOriginalBranchIds(assignedIds)
+        } finally {
+            setIsLoadingCounts(false)
         }
     }
 

@@ -297,7 +297,7 @@ export async function PUT(
         })
 
         // Invalidate both groups (branch count changed) and branches (groupId changed) caches
-        await invalidateByPrefix('groups')
+        await invalidateByPrefix('group')
         await invalidateByPrefix('branches')
 
         const autoMsg = newlyAddedBranchIds.length > 0

@@ -132,8 +132,8 @@ export async function POST(req: NextRequest) {
             metadata: { name, description },
         })
 
-        // Invalidate groups cache
-        await invalidateByPrefix('groups')
+        // Invalidate all group-related caches (list and counts)
+        await invalidateByPrefix('group')
 
         return NextResponse.json({ group: newGroup })
     } catch (e: any) {
