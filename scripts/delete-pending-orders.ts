@@ -38,7 +38,8 @@ async function main() {
             }
 
             // 2. Restore Budget
-            const currentMonth = new Date(ord.createdAt).toISOString().slice(0, 7)
+            const createdAt = ord.createdAt || new Date()
+            const currentMonth = new Date(createdAt).toISOString().slice(0, 7)
             const branchBudgets = await tx.select().from(budgets).where(
                 and(
                     eq(budgets.branchId, ord.branchId),
