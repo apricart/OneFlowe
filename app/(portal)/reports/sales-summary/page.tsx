@@ -186,7 +186,7 @@ export default function SalesSummaryReportPage() {
       {/* Context Indicator */}
       {(organizationId || branchIds.length > 0 || contextBranchId || startDate || endDate) && (
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-          <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Active Filters:</span>
+          <span className="font-semibold uppercase tracking-wider text-[10px] text-slate-400">Active Filters:</span>
           {organizationId && (
             <Badge variant="outline" className="gap-1 bg-white dark:bg-slate-950 font-medium">
               <Building className="h-3 w-3 text-blue-500" /> Org: {organizationId}
@@ -238,8 +238,8 @@ export default function SalesSummaryReportPage() {
                 <ShoppingBag className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Orders</p>
-                <h4 className="text-xl font-bold text-slate-900 dark:text-white">{summary.orderCount || 0}</h4>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Total Orders</p>
+                <h4 className="text-xl font-semibold text-slate-900 dark:text-white">{summary.orderCount || 0}</h4>
               </div>
             </CardContent>
           </Card>
@@ -249,8 +249,8 @@ export default function SalesSummaryReportPage() {
                 <TrendingUp className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Gross Revenue</p>
-                <h4 className="text-xl font-bold text-slate-900 dark:text-white">{formatPKR((summary.totalSales || 0) / 100)}</h4>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Gross Revenue</p>
+                <h4 className="text-xl font-semibold text-slate-900 dark:text-white">{formatPKR((summary.totalSales || 0) / 100)}</h4>
               </div>
             </CardContent>
           </Card>
@@ -260,8 +260,8 @@ export default function SalesSummaryReportPage() {
                 <Package className="h-5 w-5 text-indigo-600" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Items Sold</p>
-                <h4 className="text-xl font-bold text-slate-900 dark:text-white">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Items Sold</p>
+                <h4 className="text-xl font-semibold text-slate-900 dark:text-white">
                   {summary.totalItemsSold || 0}
                 </h4>
               </div>
@@ -273,8 +273,8 @@ export default function SalesSummaryReportPage() {
                 <Calculator className="h-5 w-5 text-rose-600" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Avg. Order Value</p>
-                <h4 className="text-xl font-bold text-slate-900 dark:text-white">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Avg. Order Value</p>
+                <h4 className="text-xl font-semibold text-slate-900 dark:text-white">
                   {formatPKR(((summary.totalSales || 0) / (summary.orderCount || 1)) / 100)}
                 </h4>
               </div>
@@ -288,11 +288,11 @@ export default function SalesSummaryReportPage() {
         <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900">
           <CardHeader className="pb-2 border-b border-slate-50 dark:border-slate-800">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-bold flex items-center gap-2 uppercase tracking-tight">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2 uppercase tracking-tight">
                 <TrendingUp className="h-4 w-4 text-emerald-500" />
                 Top Performing Branches
               </CardTitle>
-              <Badge variant="secondary" className="text-[10px] font-bold">BY SALES VOLUME</Badge>
+              <Badge variant="secondary" className="text-[10px] font-semibold">BY SALES VOLUME</Badge>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -300,11 +300,11 @@ export default function SalesSummaryReportPage() {
               {data.topPerformers.slice(0, 5).map((performer: any, index: number) => (
                 <div key={performer.branchId} className="p-4 flex flex-col gap-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold text-slate-400">RANK #{index + 1}</span>
+                    <span className="text-[10px] font-semibold text-slate-400">RANK #{index + 1}</span>
                     <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-slate-200">{performer.orderCount} Orders</Badge>
                   </div>
-                  <h5 className="text-xs font-bold text-slate-900 dark:text-white truncate">{performer.branchName || `Branch #${performer.branchId}`}</h5>
-                  <p className="text-sm font-mono font-bold text-indigo-600">{formatPKR(performer.sales / 100)}</p>
+                  <h5 className="text-xs font-semibold text-slate-900 dark:text-white truncate">{performer.branchName || `Branch #${performer.branchId}`}</h5>
+                  <p className="text-sm font-mono font-semibold text-indigo-600">{formatPKR(performer.sales / 100)}</p>
                 </div>
               ))}
             </div>
@@ -314,8 +314,8 @@ export default function SalesSummaryReportPage() {
 
       <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900 mb-8 pt-6">
         <div className="px-6 pb-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-          <h3 className="font-bold text-slate-900 dark:text-white">Transaction Logs</h3>
-          <Button variant="ghost" size="sm" onClick={() => handleExport('pdf')} className="text-xs font-bold text-slate-500 hover:text-indigo-600">
+          <h3 className="font-semibold text-slate-900 dark:text-white">Transaction Logs</h3>
+          <Button variant="ghost" size="sm" onClick={() => handleExport('pdf')} className="text-xs font-semibold text-slate-500 hover:text-indigo-600">
             <Upload className="h-3.5 w-3.5 mr-2" />
             PDF VERSION
           </Button>
@@ -362,7 +362,7 @@ export default function SalesSummaryReportPage() {
                     {order.branchName || `ID: ${order.branchId}`}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-tighter">
+                    <Badge variant="outline" className="text-[10px] uppercase font-semibold tracking-tighter">
                       {order.status}
                     </Badge>
                   </TableCell>
@@ -375,7 +375,7 @@ export default function SalesSummaryReportPage() {
           </TableBody>
         </Table>
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 text-center">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em]">
             Report Generated: {generatedDate}
           </p>
         </div>

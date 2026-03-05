@@ -151,7 +151,7 @@ export function BranchAdminDashboard() {
           gradient="from-red-500 to-rose-600" iconBg="text-red-600 bg-red-600" delay={200}
         />
         <BankingKPICard
-          icon={XCircle} title="Cancelled"
+          icon={XCircle} title="Rejected"
           value={rejectedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-slate-500 to-slate-700" iconBg="text-slate-600 bg-slate-600" delay={225}

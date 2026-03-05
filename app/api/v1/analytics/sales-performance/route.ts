@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
             .select({
                 bucket: dateExpr,
                 label: labelExpr,
-                totalSales: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`.mapWith(Number),
+                totalSales: sql<number>`coalesce(sum(CASE WHEN UPPER(${orders.status}) NOT IN ('REJECTED', 'CANCELLED') THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
                 orderCount: sql<number>`coalesce(count(${orders.id}), 0)`.mapWith(Number),
             })
             .from(orders)
@@ -183,7 +183,7 @@ export async function GET(req: NextRequest) {
             .select({
                 branchId: branches.id,
                 branchName: branches.name,
-                totalSales: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`.mapWith(Number),
+                totalSales: sql<number>`coalesce(sum(CASE WHEN UPPER(${orders.status}) NOT IN ('REJECTED', 'CANCELLED') THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
                 orderCount: sql<number>`coalesce(count(${orders.id}), 0)`.mapWith(Number),
             })
             .from(branches)
@@ -212,7 +212,7 @@ export async function GET(req: NextRequest) {
                 .select({
                     organizationId: organizations.id,
                     organizationName: organizations.name,
-                    totalSales: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`.mapWith(Number),
+                    totalSales: sql<number>`coalesce(sum(CASE WHEN UPPER(${orders.status}) NOT IN ('REJECTED', 'CANCELLED') THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
                     orderCount: sql<number>`coalesce(count(${orders.id}), 0)`.mapWith(Number),
                 })
                 .from(organizations)
