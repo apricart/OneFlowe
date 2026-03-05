@@ -19,8 +19,24 @@ import {
   ReferenceArea,
   ReferenceLine
 } from "recharts"
-import { TrendingUp, BarChart3, DollarSign, Activity, Award, Trophy, Zap, MousePointerClick } from "lucide-react"
-import type { SalesSeriesPoint, BranchSalesPoint } from "@/lib/hooks/use-sales-performance"
+import { TrendingUp, BarChart3, DollarSign, Activity, Award, Trophy, Zap, MousePointerClick, Info } from "lucide-react"
+import type { SalesSeriesPoint, BranchSalesPoint, DateRange } from "@/lib/hooks/use-sales-performance"
+import {
+  format,
+  eachDayOfInterval,
+  eachHourOfInterval,
+  eachMonthOfInterval,
+  isSameDay,
+  isSameHour,
+  isSameMonth,
+  startOfDay,
+  endOfDay,
+  startOfMonth,
+  endOfMonth,
+  eachYearOfInterval,
+  startOfYear,
+  endOfYear
+} from "date-fns"
 
 type Props = {
   data: {
@@ -710,7 +726,8 @@ export type SalesPerformanceLineChartProps = {
   totalOrders: number
   peakPeriod: { label: string; sales: number; orders: number } | null
   label?: string
-  granularity?: "hourly" | "daily" | "monthly"
+  granularity?: "hourly" | "daily" | "monthly" | "yearly"
+  dateRange: DateRange | null
 }
 
 const formatCurrency = (value: number) => {
@@ -719,29 +736,38 @@ const formatCurrency = (value: number) => {
   return `₨${value}`
 }
 
-const SalesPerfTooltip = ({ active, payload, label: tooltipLabel }: any) => {
+const SalesPerfTooltip = ({ active, payload, label: tooltipLabel, activeMetric }: any) => {
   if (!active || !payload?.length) return null
-  const sales = payload.find((p: any) => p.dataKey === 'sales')?.value ?? 0
-  const orders = payload.find((p: any) => p.dataKey === 'orders')?.value ?? 0
-  return (
-    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 dark:border-slate-800 min-w-[200px]">
-      <p className="font-bold text-slate-800 dark:text-slate-200 text-base mb-3 pb-2 border-b border-slate-100 dark:border-slate-800">{tooltipLabel}</p>
+  const d = payload[0].payload
+  const sales = d.sales ?? 0
+  const orders = d.orders ?? 0
 
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="h-3 w-3 rounded-full bg-emerald-400 shadow-sm" />
+  const isRevenue = activeMetric === 'revenue'
+
+  return (
+    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.15)] border border-slate-100 dark:border-slate-800 min-w-[220px] ring-1 ring-black/5 dark:ring-white/5">
+      <p className="font-bold text-slate-800 dark:text-slate-200 text-base mb-3 pb-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        {tooltipLabel}
+        <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-widest">Snap-shot</span>
+      </p>
+
+      <div className="space-y-4">
+        <div className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${isRevenue ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''}`}>
+          <div className={`h-3 w-3 rounded-full shadow-sm ${isRevenue ? 'bg-emerald-400 scale-125' : 'bg-slate-300 dark:bg-slate-700'}`} />
           <div className="flex-1">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-0.5">Sales Amount</span>
-            <span className="text-base font-black text-slate-900 dark:text-white">₨{sales.toLocaleString()}</span>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5 uppercase tracking-tighter">Total Revenue</span>
+            <span className={`text-base font-black ${isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>₨{sales.toLocaleString()}</span>
           </div>
+          {isRevenue && <TrendingUp className="w-4 h-4 text-emerald-500" />}
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="h-3 w-3 rounded-full bg-blue-500 shadow-sm" />
+        <div className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${!isRevenue ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+          <div className={`h-3 w-3 rounded-full shadow-sm ${!isRevenue ? 'bg-blue-500 scale-125' : 'bg-slate-300 dark:bg-slate-700'}`} />
           <div className="flex-1">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-0.5">Orders Count</span>
-            <span className="text-base font-black text-slate-900 dark:text-white">{orders.toLocaleString()}</span>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5 uppercase tracking-tighter">Orders Count</span>
+            <span className={`text-base font-black ${!isRevenue ? 'text-blue-600 dark:text-blue-400' : 'text-slate-900 dark:text-white'}`}>{orders.toLocaleString()}</span>
           </div>
+          {!isRevenue && <Activity className="w-4 h-4 text-blue-500" />}
         </div>
       </div>
     </div>
@@ -756,20 +782,82 @@ export function SalesPerformanceLineChart({
   peakPeriod,
   label = "Sales",
   granularity = "daily",
+  dateRange,
 }: SalesPerformanceLineChartProps) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
+  const [activeMetric, setActiveMetric] = useState<'revenue' | 'orders'>('revenue')
 
   const safeData = useMemo(() => {
-    if (!seriesData || seriesData.length === 0) {
-      return Array.from({ length: 7 }).map((_, i) => ({
-        label: `Day ${i + 1}`,
-        sales: 0,
-        orders: 0
-      }))
+    if (!dateRange || !dateRange.startDate || !dateRange.endDate) {
+      if (!seriesData || seriesData.length === 0) {
+        return Array.from({ length: 7 }).map((_, i) => ({
+          label: `Day ${i + 1}`,
+          sales: 0,
+          orders: 0
+        }))
+      }
+      return seriesData
     }
-    return seriesData
-  }, [seriesData])
+
+    const { startDate, endDate } = dateRange
+    let intervals: Date[] = []
+
+    if (granularity === 'hourly') {
+      intervals = eachHourOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
+    } else if (granularity === 'daily') {
+      intervals = eachDayOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
+    } else if (granularity === 'yearly') {
+      intervals = eachYearOfInterval({ start: startOfYear(startDate), end: endOfYear(endDate) })
+    } else {
+      intervals = eachMonthOfInterval({ start: startOfMonth(startDate), end: endOfMonth(endDate) })
+    }
+
+    const padded = intervals.map(date => {
+      let labelStr = ""
+      if (granularity === 'hourly') labelStr = format(date, 'hh:mm a')
+      else if (granularity === 'daily') labelStr = format(date, 'dd MMM')
+      else if (granularity === 'yearly') labelStr = format(date, 'yyyy')
+      else labelStr = format(date, 'MMM yyyy')
+
+      const match = seriesData?.find(d => d.label === labelStr)
+
+      return {
+        label: labelStr,
+        sales: match?.sales ?? 0,
+        orders: match?.orders ?? 0,
+        fullDate: date
+      }
+    })
+
+    const mapped = padded.map(d => {
+      // Calculate visual (sqrt) values to "pump" lower ranges
+      const vSales = Math.sqrt(d.sales || 0)
+      const vOrders = Math.sqrt(d.orders || 0)
+
+      return {
+        ...d,
+        vSales,
+        vOrders,
+        // Active visual value for the Area and Primary Line
+        vActive: activeMetric === 'revenue' ? vSales : vOrders,
+        // Inactive visual value for the Secondary Line
+        vSecondary: activeMetric === 'revenue' ? vOrders : vSales
+      }
+    })
+
+    // Truncate leading zero-data points for large ranges (monthly/yearly)
+    if (granularity === 'monthly' || granularity === 'yearly') {
+      const firstActiveIndex = mapped.findIndex(d => d.sales > 0 || d.orders > 0)
+      if (firstActiveIndex > 0) {
+        return mapped.slice(firstActiveIndex)
+      }
+    }
+
+    return mapped
+  }, [seriesData, dateRange, granularity, activeMetric])
+
+  const isEmpty = useMemo(() => !seriesData || seriesData.length === 0 || totalSales === 0, [seriesData, totalSales])
 
   return (
     <div className="space-y-6">
@@ -779,90 +867,129 @@ export function SalesPerformanceLineChart({
             Sales Performance
           </h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Analyze revenue trends and order volume over time
+            Analyze trends and volume over the selected period
           </p>
         </div>
 
-        <div className="flex items-center gap-6 bg-slate-50 dark:bg-slate-900/50 px-4 py-2 rounded-xl border border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2">
-            <div className="w-3.5 h-3.5 rounded-full bg-emerald-400" />
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Sales Amount</span>
-          </div>
-          <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
-          <div className="flex items-center gap-2">
-            <div className="w-3.5 h-3.5 rounded-full bg-blue-500" />
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Order Volume</span>
-          </div>
+        {/* Metric Toggle */}
+        <div className="flex p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+          <button
+            onClick={() => setActiveMetric('revenue')}
+            className={`
+              flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200
+              ${activeMetric === 'revenue'
+                ? "bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}
+            `}
+          >
+            <div className={`w-2 h-2 rounded-full ${activeMetric === 'revenue' ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+            Revenue
+          </button>
+          <button
+            onClick={() => setActiveMetric('orders')}
+            className={`
+              flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200
+              ${activeMetric === 'orders'
+                ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}
+            `}
+          >
+            <div className={`w-2 h-2 rounded-full ${activeMetric === 'orders' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+            Orders
+          </button>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
-        <div className="h-[380px] w-full">
+      <div className="relative bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-6 shadow-sm overflow-hidden min-h-[440px]">
+        {isEmpty && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/40 dark:bg-slate-950/40 backdrop-blur-[2px]">
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 shadow-inner">
+              <Info className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+            </div>
+            <p className="text-sm font-bold text-slate-400 dark:text-slate-500">No activity recorded for this period</p>
+            <p className="text-[11px] text-slate-300 dark:text-slate-600 mt-1 font-medium italic">Adjust filters to see more results</p>
+          </div>
+        )}
+
+        <div className={`h-[380px] w-full transition-opacity duration-500 ${isEmpty ? 'opacity-30 grayscale-[50%]' : 'opacity-100'}`}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart
+            <AreaChart
               data={safeData}
-              margin={{ top: 20, right: 30, left: 10, bottom: 20 }}
+              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
             >
               <defs>
-                <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#34d399" stopOpacity={0.8} />
-                  <stop offset="95%" stopColor="#34d399" stopOpacity={0.1} />
+                <linearGradient id="activeMetricGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={activeMetric === 'revenue' ? (isDark ? "#34d399" : "#10b981") : (isDark ? "#60a5fa" : "#3b82f6")} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={activeMetric === 'revenue' ? (isDark ? "#34d399" : "#10b981") : (isDark ? "#60a5fa" : "#3b82f6")} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={isDark ? "#334155" : "#f1f5f9"} />
+              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
               <XAxis
                 dataKey="label"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontSize: 12, fontWeight: 600 }}
+                tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontSize: 11, fontWeight: 700 }}
                 dy={15}
                 minTickGap={25}
               />
               <YAxis
-                yAxisId="sales"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontSize: 12, fontWeight: 600 }}
-                tickFormatter={formatCurrency}
-                dx={-15}
-              />
-              <YAxis
-                yAxisId="orders"
-                orientation="right"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontSize: 12, fontWeight: 600 }}
-                dx={15}
+                tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontSize: 11, fontWeight: 700 }}
+                tickFormatter={(val) => {
+                  const realVal = Math.pow(val, 2)
+                  return activeMetric === 'revenue'
+                    ? `Rs ${formatCurrency(realVal).replace('₨', '')}`
+                    : Math.round(realVal).toLocaleString()
+                }}
+                width={activeMetric === 'revenue' ? 100 : 55}
+                dx={-10}
+                domain={[0, 'auto']}
               />
               <Tooltip
-                content={<SalesPerfTooltip />}
-                cursor={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1, strokeDasharray: "4 4" }}
+                content={<SalesPerfTooltip activeMetric={activeMetric} />}
+                cursor={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1.5, strokeDasharray: "4 4" }}
               />
 
-              {/* Sales Area */}
+              {/* Secondary Metric Line (Subtle dashed) */}
               <Line
-                yAxisId="sales"
                 type="monotone"
-                dataKey="sales"
-                stroke="#10b981"
-                strokeWidth={3}
-                dot={{ r: 4, strokeWidth: 0, fill: "#10b981" }}
-                activeDot={{ r: 7, strokeWidth: 0, fill: "#34d399" }}
+                dataKey="vSecondary"
+                stroke={isDark ? "#475569" : "#cbd5e1"}
+                strokeWidth={2}
+                strokeDasharray="8 6"
+                dot={false}
+                activeDot={false}
                 animationDuration={1500}
               />
 
-              {/* Orders Line */}
-              <Line
-                yAxisId="orders"
+              {/* Primary Active Metric Area */}
+              <Area
                 type="monotone"
-                dataKey="orders"
-                stroke="#3b82f6"
-                strokeWidth={3}
-                dot={{ r: 4, strokeWidth: 0, fill: "#3b82f6" }}
-                activeDot={{ r: 7, strokeWidth: 0, fill: "#60a5fa" }}
+                dataKey="vActive"
+                stroke={activeMetric === 'revenue'
+                  ? (isDark ? "#34d399" : "#10b981")
+                  : (isDark ? "#60a5fa" : "#3b82f6")
+                }
+                strokeWidth={4}
+                fill="url(#activeMetricGrad)"
                 animationDuration={1500}
+                animationEasing="ease-in-out"
+                dot={{
+                  r: 4,
+                  strokeWidth: 2.5,
+                  fill: isDark ? "#0f172a" : "#ffffff",
+                  stroke: activeMetric === 'revenue' ? (isDark ? "#34d399" : "#10b981") : (isDark ? "#60a5fa" : "#3b82f6")
+                }}
+                activeDot={{
+                  r: 8,
+                  strokeWidth: 3,
+                  fill: activeMetric === 'revenue' ? (isDark ? "#34d399" : "#10b981") : (isDark ? "#60a5fa" : "#3b82f6"),
+                  stroke: activeMetric === 'revenue' ? (isDark ? "#10b981" : "#ffffff") : (isDark ? "#3b82f6" : "#ffffff"),
+                  className: `drop-shadow-[0_0_12px_${activeMetric === 'revenue' ? 'rgba(16,185,129,0.5)' : 'rgba(59,130,246,0.5)'}]`
+                }}
               />
-            </LineChart>
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -870,30 +997,22 @@ export function SalesPerformanceLineChart({
   )
 }
 
-// ── Branch Sales Bar Chart ──
-const BranchTooltipContent = ({ active, payload, label: bLabel }: any) => {
+// ── Branch Sales Horizontal Bar Chart ──
+const HorizontalBranchTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null
-  const sales = payload.find((p: any) => p.dataKey === 'sales')?.value ?? 0
-  const ordersVal = payload.find((p: any) => p.dataKey === 'orders')?.value ?? 0
+  const d = payload[0]?.payload
+  if (!d) return null
   return (
     <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 dark:border-slate-800 min-w-[200px]">
-      <p className="font-bold text-slate-800 dark:text-slate-200 text-base mb-3 pb-2 border-b border-slate-100 dark:border-slate-800">{bLabel}</p>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: payload[0].payload.branchId === payload[0].payload.topBranchId ? '#f59e0b' : '#3b82f6' }} />
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Sales</span>
-          </div>
-          <span className="text-sm font-black text-slate-900 dark:text-white">₨{sales.toLocaleString()}</span>
+      <p className="font-bold text-slate-800 dark:text-slate-200 text-sm mb-2.5 pb-2 border-b border-slate-100 dark:border-slate-800">{d.branchName}</p>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Sales</span>
+          <span className="text-sm font-black text-slate-900 dark:text-white">₨{d.sales.toLocaleString()}</span>
         </div>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full bg-emerald-400" />
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Orders Finished</span>
-          </div>
-          <span className="text-sm font-black text-slate-900 dark:text-white">{ordersVal.toLocaleString()}</span>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Orders</span>
+          <span className="text-sm font-black text-slate-900 dark:text-white">{d.orders.toLocaleString()}</span>
         </div>
       </div>
     </div>
@@ -908,119 +1027,91 @@ export function BranchSalesBarChart({ branchSales, label = "Sales" }: { branchSa
 
   if (!filteredBranches || filteredBranches.length === 0) {
     return (
-      <div className="h-48 flex items-center justify-center bg-slate-50 dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+      <div className="h-48 flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
         <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No branch data available for this period</p>
       </div>
     )
   }
 
-  const sortedBranches = [...filteredBranches].sort((a, b) => b.sales - a.sales).map(d => ({
-    ...d,
-    topBranchId: filteredBranches.sort((x, y) => y.sales - x.sales)[0]?.branchId
-  }))
+  const sortedBranches = [...filteredBranches].sort((a, b) => b.sales - a.sales)
+  const topBranchId = sortedBranches[0]?.branchId
 
-  const topBranch = sortedBranches[0]
+  // Dynamic height: if 1 branch 90px, else 55px per branch (min 200)
+  const chartHeight = sortedBranches.length === 1 ? 90 : Math.max(200, sortedBranches.length * 55)
 
-  const barColor = (b: any, dark: boolean) => {
-    if (b.branchId === b.topBranchId) return dark ? "#fbbf24" : "#f59e0b" // gold
-    return dark ? "#818cf8" : "#3b82f6" // blue
+  const barFill = (entry: any) => {
+    if (entry.branchId === topBranchId) return isDark ? "#fbbf24" : "#f59e0b"
+    return isDark ? "#818cf8" : "#6366f1"
   }
 
   return (
-    <div className="bg-white dark:bg-slate-950 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-      <div className="flex items-start gap-3 mb-6">
-        <div className="p-2.5 bg-blue-600 rounded-xl mt-1">
-          <BarChart3 className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <h3 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Branch Sales Performance</h3>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-1">
-            <MousePointerClick className="h-3.5 w-3.5" />
-            Hover on bars for total sales & order count per branch
-          </p>
-        </div>
-      </div>
-
-      {topBranch && (
-        <div className="flex items-center justify-between px-6 py-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-2xl mb-8 border-l-4 border-l-amber-400">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="h-6 w-6 rounded-md bg-amber-500 flex items-center justify-center">
-                <Trophy className="h-3 w-3 text-white" />
-              </div>
-              <p className="text-[11px] font-bold text-amber-700 dark:text-amber-500 uppercase tracking-widest">Highest Sales Branch</p>
-            </div>
-            <p className="text-base font-bold text-amber-900 dark:text-amber-400 ml-8">{topBranch.branchName}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-3xl font-black text-amber-900 dark:text-amber-400 leading-none tracking-tight">₨{topBranch.sales.toLocaleString()}</p>
-            <p className="text-sm font-bold text-amber-600 dark:text-amber-500 mt-2 bg-amber-100 dark:bg-amber-900/40 inline-block px-2 py-0.5 rounded-md">{topBranch.orders} orders</p>
-          </div>
-        </div>
-      )}
-
-      <div className="h-[340px] w-full mt-4">
+    <div>
+      <div style={{ height: chartHeight }} className="w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={sortedBranches}
-            margin={{ top: 20, right: 0, left: -20, bottom: 20 }}
-            barGap={0}
+            layout="vertical"
+            margin={{ top: 5, right: 80, left: 10, bottom: 5 }}
+            barCategoryGap="20%"
           >
-            <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={isDark ? "#334155" : "#f1f5f9"} />
+            <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
             <XAxis
-              dataKey="branchName"
-              axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1" }}
-              tickLine={false}
-              tick={{ fill: isDark ? "#64748b" : "#64748b", fontSize: 11, fontWeight: 600 }}
-              interval={0}
-              angle={-35}
-              textAnchor="end"
-              dy={15}
-              dx={-5}
-            />
-            <YAxis
+              type="number"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: isDark ? "#64748b" : "#64748b", fontSize: 11, fontWeight: 600 }}
-              tickFormatter={(v) => `₨${v >= 1000 ? (v / 1000) + 'k' : v}`}
-              dx={-10}
+              tick={{ fill: isDark ? "#64748b" : "#94a3b8", fontSize: 11, fontWeight: 600 }}
+              tickFormatter={(v) => {
+                if (v >= 1000000) return `₨${(v / 1000000).toFixed(1)}M`
+                if (v >= 1000) return `₨${(v / 1000).toFixed(0)}k`
+                return `₨${v}`
+              }}
+            />
+            <YAxis
+              type="category"
+              dataKey="branchName"
+              axisLine={false}
+              tickLine={false}
+              width={150}
+              tick={{ fill: isDark ? "#94a3b8" : "#475569", fontSize: 12, fontWeight: 600 }}
             />
             <Tooltip
-              content={<BranchTooltipContent />}
-              cursor={{ fill: isDark ? "rgba(51,65,85,0.05)" : "rgba(241,245,249,0.5)" }}
+              content={<HorizontalBranchTooltip />}
+              cursor={{ fill: isDark ? "rgba(51,65,85,0.08)" : "rgba(241,245,249,0.6)" }}
             />
-
-            {/* Sales Bar */}
             <Bar
               dataKey="sales"
-              radius={[4, 4, 0, 0]}
+              radius={[0, 6, 6, 0]}
+              animationDuration={1200}
+              animationEasing="ease-out"
+              minPointSize={10}
               barSize={32}
-              animationDuration={1500}
             >
+              <LabelList
+                dataKey="sales"
+                position="right"
+                formatter={(v: number) => {
+                  if (v >= 1000000) return `₨${(v / 1000000).toFixed(1)}M`
+                  if (v >= 1000) return `₨${(v / 1000).toFixed(1)}k`
+                  return `₨${v}`
+                }}
+                style={{ fill: isDark ? "#cbd5e1" : "#475569", fontWeight: 700, fontSize: 11 }}
+              />
               {sortedBranches.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={barColor(entry, isDark)} />
+                <Cell key={`cell-${index}`} fill={barFill(entry)} />
               ))}
             </Bar>
-
-            {/* Orders Data for Tooltip (Transparent) */}
-            <Bar
-              dataKey="orders"
-              radius={[4, 4, 0, 0]}
-              barSize={0}
-              fill="transparent"
-            />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="flex items-center justify-center gap-6 mt-8 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-center gap-6 mt-4 p-2.5 bg-slate-50/80 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-2">
-          <div className="w-3.5 h-3.5 rounded bg-amber-500 shadow-sm" />
-          <span className="text-[13px] font-bold text-slate-600 dark:text-slate-400">Top Branch (Sales)</span>
+          <div className="w-3 h-3 rounded bg-amber-500 shadow-sm" />
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Top Branch</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3.5 h-3.5 rounded bg-blue-500 shadow-sm" />
-          <span className="text-[13px] font-bold text-slate-600 dark:text-slate-400">Other Branches</span>
+          <div className="w-3 h-3 rounded bg-indigo-500 shadow-sm" />
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Other Branches</span>
         </div>
       </div>
     </div>
@@ -1048,110 +1139,133 @@ const OrgTooltipContent = ({ active, payload, label: bLabel }: any) => {
   )
 }
 
-export const OrganizationSalesBarChart = ({
+// ── Organization Sales Horizontal Bar Chart ──
+const HorizontalOrgTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null
+  const d = payload[0]?.payload
+  if (!d) return null
+  return (
+    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 dark:border-slate-800 min-w-[200px]">
+      <p className="font-bold text-slate-800 dark:text-slate-200 text-sm mb-2.5 pb-2 border-b border-slate-100 dark:border-slate-800">{d.name}</p>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Sales</span>
+          <span className="text-sm font-black text-slate-900 dark:text-white">₨{d.sales.toLocaleString()}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Orders</span>
+          <span className="text-sm font-black text-slate-900 dark:text-white">{d.orders.toLocaleString()}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function OrganizationSalesBarChart({
   organizationSales,
   label = "Organization Sales",
 }: {
   organizationSales: { organizationId: number; organizationName: string; sales: number; orders: number }[]
   label?: string
-}) => {
-  const isDark = true;
+}) {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
 
-  // Find highest selling org
-  const maxSales = Math.max(...organizationSales.map(b => b.sales), 0)
+  const filteredOrgs = organizationSales.filter(o => o.sales > 0 || o.orders > 0)
 
-  const formattedData = organizationSales.map((b) => ({
-    name: b.organizationName,
-    sales: b.sales,
-    orders: b.orders,
-    isTop: b.sales === maxSales && b.sales > 0, // Highlight the best
+  if (!filteredOrgs || filteredOrgs.length === 0) {
+    return (
+      <div className="h-48 flex items-center justify-center bg-slate-50/50 dark:bg-slate-900/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">No organization data available for this period</p>
+      </div>
+    )
+  }
+
+  const sortedOrgs = [...filteredOrgs].sort((a, b) => b.sales - a.sales).map(o => ({
+    name: o.organizationName,
+    sales: o.sales,
+    orders: o.orders,
+    id: o.organizationId
   }))
 
-  const barColor = (entry: any, isDarkTheme: boolean) => {
-    if (entry.isTop) return isDarkTheme ? "#fbbf24" : "#f59e0b"
-    return isDarkTheme ? "#3b82f6" : "#2563eb"
+  const topOrgId = sortedOrgs[0]?.id
+
+  // Dynamic height: if 1 org 90px, else 55px per org (min 200)
+  const chartHeight = sortedOrgs.length === 1 ? 90 : Math.max(200, sortedOrgs.length * 55)
+
+  const barFill = (entry: any) => {
+    if (entry.id === topOrgId) return isDark ? "#fbbf24" : "#f59e0b"
+    return isDark ? "#818cf8" : "#6366f1"
   }
 
   return (
     <div className="relative">
-      {/* Decorative background glow */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/5 via-transparent to-amber-500/5 blur-3xl rounded-3xl -z-10" />
-
-      {formattedData.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6 bg-white/50 dark:bg-slate-900/50 p-4 lg:p-6 rounded-2xl border border-slate-100 dark:border-slate-800/60 shadow-sm backdrop-blur-md">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Trophy className="h-4 w-4 text-amber-500" />
-              <p className="text-[11px] font-bold text-amber-700 dark:text-amber-500 uppercase tracking-widest">Highest Sales Org</p>
-            </div>
-            <p className="text-base font-bold text-amber-900 dark:text-amber-400 ml-6">{formattedData.find(d => d.isTop)?.name || "N/A"}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-3xl font-black text-amber-900 dark:text-amber-400 leading-none tracking-tight">₨{(formattedData.find(d => d.isTop)?.sales || 0).toLocaleString()}</p>
-            <p className="text-sm font-bold text-amber-600 dark:text-amber-500 mt-2 bg-amber-100 dark:bg-amber-900/40 inline-block px-2 py-0.5 rounded-md">{(formattedData.find(d => d.isTop)?.orders || 0)} orders</p>
-          </div>
-        </div>
-      )}
-
-      <div className="h-[340px] w-full mt-4">
+      <div style={{ height: chartHeight }} className="w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
-            data={formattedData}
-            margin={{ top: 20, right: 0, left: -20, bottom: 20 }}
-            barGap={0}
+            data={sortedOrgs}
+            layout="vertical"
+            margin={{ top: 5, right: 80, left: 10, bottom: 5 }}
+            barCategoryGap="20%"
           >
-            <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={isDark ? "#334155" : "#f1f5f9"} />
+            <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
             <XAxis
-              dataKey="name"
-              axisLine={{ stroke: isDark ? "#475569" : "#cbd5e1" }}
-              tickLine={false}
-              tick={{ fill: isDark ? "#64748b" : "#64748b", fontSize: 11, fontWeight: 600 }}
-              interval={0}
-              angle={-35}
-              textAnchor="end"
-              dy={15}
-              dx={-5}
-            />
-            <YAxis
+              type="number"
               axisLine={false}
               tickLine={false}
-              tick={{ fill: isDark ? "#64748b" : "#64748b", fontSize: 11, fontWeight: 600 }}
-              tickFormatter={(v) => `₨${v >= 1000 ? (v / 1000) + 'k' : v}`}
-              dx={-10}
+              tick={{ fill: isDark ? "#64748b" : "#94a3b8", fontSize: 11, fontWeight: 600 }}
+              tickFormatter={(v) => {
+                if (v >= 1000000) return `₨${(v / 1000000).toFixed(1)}M`
+                if (v >= 1000) return `₨${(v / 1000).toFixed(0)}k`
+                return `₨${v}`
+              }}
+            />
+            <YAxis
+              type="category"
+              dataKey="name"
+              axisLine={false}
+              tickLine={false}
+              width={150}
+              tick={{ fill: isDark ? "#94a3b8" : "#475569", fontSize: 12, fontWeight: 600 }}
             />
             <Tooltip
-              content={<OrgTooltipContent />}
-              cursor={{ fill: isDark ? "rgba(51,65,85,0.05)" : "rgba(241,245,249,0.5)" }}
+              content={<HorizontalOrgTooltip />}
+              cursor={{ fill: isDark ? "rgba(51,65,85,0.08)" : "rgba(241,245,249,0.6)" }}
             />
-
             <Bar
               dataKey="sales"
-              radius={[4, 4, 0, 0]}
+              radius={[0, 6, 6, 0]}
+              animationDuration={1200}
+              animationEasing="ease-out"
+              minPointSize={10}
               barSize={32}
-              animationDuration={1500}
             >
-              {formattedData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={barColor(entry, isDark)} />
+              <LabelList
+                dataKey="sales"
+                position="right"
+                formatter={(v: number) => {
+                  if (v >= 1000000) return `₨${(v / 1000000).toFixed(1)}M`
+                  if (v >= 1000) return `₨${(v / 1000).toFixed(1)}k`
+                  return `₨${v}`
+                }}
+                style={{ fill: isDark ? "#cbd5e1" : "#475569", fontWeight: 700, fontSize: 11 }}
+              />
+              {sortedOrgs.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={barFill(entry)} />
               ))}
             </Bar>
-            <Bar
-              dataKey="orders"
-              radius={[4, 4, 0, 0]}
-              barSize={0}
-              fill="transparent"
-            />
           </BarChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="flex items-center justify-center gap-6 mt-8 p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-center gap-6 mt-4 p-2.5 bg-slate-50/80 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800">
         <div className="flex items-center gap-2">
-          <div className="w-3.5 h-3.5 rounded bg-amber-500 shadow-sm" />
-          <span className="text-[13px] font-bold text-slate-600 dark:text-slate-400">Top Organization (Sales)</span>
+          <div className="w-3 h-3 rounded bg-amber-500 shadow-sm" />
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Top Organization</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3.5 h-3.5 rounded bg-blue-500 shadow-sm" />
-          <span className="text-[13px] font-bold text-slate-600 dark:text-slate-400">Other Organizations</span>
+          <div className="w-3 h-3 rounded bg-indigo-500 shadow-sm" />
+          <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Other Organizations</span>
         </div>
       </div>
     </div>

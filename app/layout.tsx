@@ -1,6 +1,16 @@
 import type { Metadata } from 'next'
-import { GeistSans } from 'geist/font/sans'
-import { GeistMono } from 'geist/font/mono'
+import { Outfit, JetBrains_Mono } from 'next/font/google'
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  variable: '--font-outfit',
+})
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains-mono',
+})
+
 import { Analytics } from '@vercel/analytics/next'
 import { AuthSessionProvider } from '@/components/session-provider'
 import { Toaster } from '@/components/ui/toaster'
@@ -50,7 +60,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
+      <body className={`font-sans ${outfit.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
         <ThemeProvider>
           <AuthSessionProvider>
             <SWRProvider>

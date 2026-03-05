@@ -18,7 +18,7 @@ export type BranchSalesPoint = {
 }
 
 export type SalesPerformanceResponse = {
-    granularity: "hourly" | "daily" | "monthly"
+    granularity: "hourly" | "daily" | "monthly" | "yearly"
     seriesData: SalesSeriesPoint[]
     totalSales: number
     totalOrders: number
@@ -33,7 +33,7 @@ export type DateRange = {
     endDate: Date
 }
 
-export type DashboardStatus = "all" | "PENDING" | "FULFILLED" | "REFUNDED"
+export type DashboardStatus = "all" | "PENDING" | "FULFILLED" | "REFUNDED" | "REJECTED" | "APPROVED"
 
 export function useSalesPerformance(
     organizationId?: string | null,

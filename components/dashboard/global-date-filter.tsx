@@ -14,7 +14,7 @@ interface GlobalDateFilterProps {
     className?: string
 }
 
-const presets: { id: FilterPreset; label: string }[] = [
+export const presets: { id: FilterPreset; label: string }[] = [
     { id: "today", label: "Today" },
     { id: "3d", label: "3 Days" },
     { id: "7d", label: "7 Days" },
@@ -23,6 +23,13 @@ const presets: { id: FilterPreset; label: string }[] = [
     { id: "all", label: "All Time" },
     { id: "custom", label: "Custom" },
 ]
+
+export function getPresetLabel(preset: FilterPreset, range?: DateRange | null): string {
+    if (preset === "custom" && range) {
+        return `${format(range.startDate, "dd MMM yyyy")} – ${format(range.endDate, "dd MMM yyyy")}`
+    }
+    return presets.find(p => p.id === preset)?.label || "Selected Period"
+}
 
 function getPresetRange(preset: FilterPreset): DateRange {
     const now = new Date()
@@ -69,7 +76,7 @@ export function GlobalDateFilter({ value, onChange, activePreset, className }: G
     }, [fromDate, toDate, onChange])
 
     const displayLabel = activePreset === "custom" && value
-        ? `${format(value.startDate, "dd MMM")} – ${format(value.endDate, "dd MMM yy")}`
+        ? `${format(value.startDate, "dd MMM yyyy")} – ${format(value.endDate, "dd MMM yyyy")}`
         : null
 
     return (
