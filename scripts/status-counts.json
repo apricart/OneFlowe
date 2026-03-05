@@ -1,0 +1,34 @@
+[
+  {
+    "status": "CANCELLED",
+    "count": "3"
+  },
+  {
+    "status": "REJECTED",
+    "count": "5"
+  },
+  {
+    "status": "APPROVED",
+    "count": "2"
+  },
+  {
+    "status": "REFUNDED",
+    "count": "51"
+  },
+  {
+    "status": "FULFILLED",
+    "count": "62"
+  },
+  {
+    "status": "rejected",
+    "count": "7"
+  },
+  {
+    "status": "pending",
+    "count": "4"
+  },
+  {
+    "status": "fulfilled",
+    "count": "14"
+  }
+]

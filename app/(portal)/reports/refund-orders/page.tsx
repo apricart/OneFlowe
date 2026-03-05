@@ -4,11 +4,9 @@ import { useState, useEffect } from "react"
 import useSWR from "swr"
 import { useAppContext } from "@/components/context/app-context"
 import { SectionHeader } from "@/components/ui/section-header"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Download, Upload, RefreshCw, Loader2, Building, Building2, Calendar, AlertCircle, MapPin } from "lucide-react"
+import { Loader2, MapPin, Building, Building2, Calendar } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -18,7 +16,6 @@ import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
 
 import { ReportFilters } from "@/components/reports/report-filters"
-
 import { fetcher } from "@/lib/fetcher"
 
 export default function RefundOrdersReportPage() {
@@ -34,7 +31,6 @@ export default function RefundOrdersReportPage() {
   const [hasMounted, setHasMounted] = useState(false)
 
   const queryParams = new URLSearchParams()
-  // Preference order: Selected filter > App context
   const targetBranchIds = selectedBranchIds.length > 0 ? selectedBranchIds : (branchId ? [String(branchId)] : [])
   if (targetBranchIds.length > 0) queryParams.set("branchIds", targetBranchIds.join(","))
   if (organizationId) queryParams.set("organizationId", String(organizationId))
@@ -64,8 +60,6 @@ export default function RefundOrdersReportPage() {
     r.branchName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.reason?.toLowerCase().includes(searchTerm.toLowerCase())
   )
-
-  const totalRefunded = filteredRefunds.reduce((sum: number, r: any) => sum + (r.refundAmount || 0), 0)
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
     const isSuperAdmin = role === "SUPER_ADMIN"
@@ -121,7 +115,7 @@ export default function RefundOrdersReportPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <SectionHeader title="Refund Order Report" subtitle="Analyze refund trends and transaction reversals." />
 
       {(organizationId || branchId || startDate || endDate) && (
@@ -140,13 +134,8 @@ export default function RefundOrdersReportPage() {
         setStartDate={setStartDate}
         endDate={endDate}
         setEndDate={setEndDate}
-<<<<<<< HEAD
         selectedBranchIds={selectedBranchIds}
         onBranchChange={setSelectedBranchIds}
-=======
-        selectedBranchIds={selectedBranchId ? [selectedBranchId] : []}
-        onBranchChange={(ids) => setSelectedBranchId(ids[0] || "")}
->>>>>>> origin/yousuf
         onRefresh={() => mutate()}
         isLoading={isLoading}
         role={role}
@@ -174,9 +163,9 @@ export default function RefundOrdersReportPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 8 : 7} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 9 : 8} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
             ) : filteredRefunds.length === 0 ? (
-              <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 8 : 7} className="h-24 text-center text-muted-foreground">No refunds found.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 9 : 8} className="h-24 text-center text-muted-foreground">No refunds found.</TableCell></TableRow>
             ) : (
               filteredRefunds.map((refund: any) => (
                 <TableRow key={refund.id}>
@@ -211,7 +200,7 @@ export default function RefundOrdersReportPage() {
         </Table>
       </Card>
 
-      <div className="text-xs text-muted-foreground text-center">Report Generated: {generatedDate}</div>
+      <div className="text-xs text-muted-foreground text-center pb-4">Report Generated: {generatedDate}</div>
     </div>
   )
 }
