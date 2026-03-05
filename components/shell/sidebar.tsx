@@ -44,7 +44,6 @@ const getNavigationByRole = (role: string) => {
           { href: "/reports/product-summary", label: "Product Analytics" },
           { href: "/reports/order-report", label: "Order Report" },
           { href: "/reports/branch-reports", label: "Branch Reports" },
-          { href: "/reports/product-summary-details", label: "Product Summary Details" },
           { href: "/reports/groups", label: "Groups Report" },
         ]
       },
@@ -71,7 +70,6 @@ const getNavigationByRole = (role: string) => {
           { href: "/reports/product-summary", label: "Product Analytics" },
           { href: "/reports/order-report", label: "Order Report" },
           { href: "/reports/branch-reports", label: "Branch Reports" },
-          { href: "/reports/product-summary-details", label: "Product Summary Details" },
           { href: "/reports/groups", label: "Groups Report" },
         ]
       },
