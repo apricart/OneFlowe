@@ -4,14 +4,12 @@ import { Card, CardContent } from "@/components/ui/card"
 import { TrendingUp, TrendingDown, Minus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { LineChart, Line, ResponsiveContainer } from "recharts"
-import type { LucideProps } from "lucide-react"
-
 interface KPICardProps {
     title: string
     value: string | number
     trend?: number // percentage change vs previous period
     trendData?: number[] // array of values for sparkline
-    icon: React.ComponentType<LucideProps>
+    icon: React.ElementType
     colorScheme?: "indigo" | "emerald" | "rose" | "amber" | "blue" | "violet"
     comparisonValue?: string | number
     comparisonLabel?: string
