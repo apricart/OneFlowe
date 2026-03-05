@@ -39,9 +39,11 @@ const getNavigationByRole = (role: string) => {
         label: "Reports",
         icon: BarChart3,
         subItems: [
-          { href: "/reports/sales-summary", label: "Summary Report" },
-          { href: "/reports/refund-orders", label: "Refund Order Report" },
-          { href: "/reports/product-summary", label: "Product Summary" },
+          { href: "/reports/sales-summary", label: "Sales Summary" },
+          { href: "/reports/refund-orders", label: "Order Intelligence" },
+          { href: "/reports/product-summary", label: "Product Analytics" },
+          { href: "/reports/order-report", label: "Order Report" },
+          { href: "/reports/branch-reports", label: "Branch Reports" },
           { href: "/reports/product-summary-details", label: "Product Summary Details" },
           { href: "/reports/groups", label: "Groups Report" },
         ]
@@ -64,9 +66,11 @@ const getNavigationByRole = (role: string) => {
         label: "Reports",
         icon: BarChart3,
         subItems: [
-          { href: "/reports/sales-summary", label: "Summary Report" },
-          { href: "/reports/refund-orders", label: "Refund Order Report" },
-          { href: "/reports/product-summary", label: "Product Summary" },
+          { href: "/reports/sales-summary", label: "Sales Summary" },
+          { href: "/reports/refund-orders", label: "Order Intelligence" },
+          { href: "/reports/product-summary", label: "Product Analytics" },
+          { href: "/reports/order-report", label: "Order Report" },
+          { href: "/reports/branch-reports", label: "Branch Reports" },
           { href: "/reports/product-summary-details", label: "Product Summary Details" },
           { href: "/reports/groups", label: "Groups Report" },
         ]

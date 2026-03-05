@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Download, Upload, RefreshCw, Loader2, Building, ChevronDown, ChevronRight, Users } from "lucide-react"
+import { Search, Download, Upload, RefreshCw, Loader2, Building, ChevronDown, ChevronRight, Users, FolderTree, ShoppingBag, TrendingUp, Calculator } from "lucide-react"
 import { formatPKR } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -18,6 +18,9 @@ import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
 
 import { ReportFilters } from "@/components/reports/report-filters"
+import { QuickDateRange } from "@/components/reports/quick-date-range"
+import { KPICard } from "@/components/reports/kpi-card"
+import { FilterTagBar, type FilterTag } from "@/components/reports/filter-tag-bar"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -158,57 +161,30 @@ export default function GroupsReportPage() {
         }
     }
 
+    const filterTags: FilterTag[] = []
+    if (organizationId) filterTags.push({ key: "org", label: "Org", value: String(organizationId), color: "blue" as const })
+    if (startDate || endDate) filterTags.push({ key: "dates", label: "Period", value: `${startDate || "..."} – ${endDate || "..."}`, color: "emerald" as const })
+    if (groupId) filterTags.push({ key: "group", label: "Group", value: groupId, color: "amber" as const })
+
+    const handleRemoveFilter = (key: string) => {
+        if (key === "dates") { setStartDate(""); setEndDate("") }
+        if (key === "group") setGroupId("")
+    }
+
     return (
-        <div className="space-y-6">
+        <div className="space-y-5">
             <SectionHeader title="Groups Report" subtitle="Analyze group performance, member branches, order counts, and revenue breakdowns." />
 
-            {organizationId && (
-                <div className="flex flex-wrap gap-4 text-sm text-muted-foreground bg-muted/30 p-2 rounded-md border border-dashed">
-                    <span className="font-medium">Active Filters:</span>
-                    <span className="flex items-center gap-1">
-                        <Building className="h-3 w-3" /> Org ID: {organizationId}
-                    </span>
-                </div>
-            )}
+            <QuickDateRange startDate={startDate} endDate={endDate} onStartDateChange={setStartDate} onEndDateChange={setEndDate} storageKey="groups-report-dates" />
 
-            {/* Summary Cards */}
-            <div className="grid gap-4 md:grid-cols-4">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Groups</CardTitle>
-                        <span className="text-muted-foreground">📊</span>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{isLoading ? "..." : summary.totalGroups}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
-                        <span className="text-muted-foreground">📦</span>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{isLoading ? "..." : summary.totalOrders}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">{role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue"}</CardTitle>
-                        <span className="text-muted-foreground">💰</span>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{isLoading ? "..." : formatPKR(summary.totalRevenue / 100)}</div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">{role === "HEAD_OFFICE" ? "Avg Expense/Group" : "Avg Revenue/Group"}</CardTitle>
-                        <span className="text-muted-foreground">📈</span>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{isLoading ? "..." : formatPKR(summary.avgRevenuePerGroup / 100)}</div>
-                    </CardContent>
-                </Card>
+            <FilterTagBar tags={filterTags} onRemove={handleRemoveFilter} />
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KPICard title="Total Groups" value={isLoading ? "..." : summary.totalGroups} icon={FolderTree} colorScheme="blue" />
+                <KPICard title="Total Orders" value={isLoading ? "..." : summary.totalOrders} icon={ShoppingBag} colorScheme="violet" />
+                <KPICard title={role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue"} value={isLoading ? "..." : formatPKR(summary.totalRevenue / 100)} icon={TrendingUp} colorScheme="emerald" />
+                <KPICard title={role === "HEAD_OFFICE" ? "Avg Expense/Group" : "Avg Revenue/Group"} value={isLoading ? "..." : formatPKR(summary.avgRevenuePerGroup / 100)} icon={Calculator} colorScheme="amber" />
             </div>
 
             <ReportFilters
