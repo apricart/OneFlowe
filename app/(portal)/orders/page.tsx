@@ -107,20 +107,21 @@ export default function OrdersManagementPage() {
   const ordersEndpoint = useMemo(() => {
     if (!isInitialized) return null
     const params = new URLSearchParams()
-    if (organizationId) params.set("organizationId", organizationId)
+    if (organizationId && organizationId !== "null" && organizationId !== "0") {
+      params.set("organizationId", organizationId)
+    }
 
     if (branchIds.length > 0) {
       params.set("branchIds", branchIds.join(","))
-    } else if (contextBranchId) {
-      params.set("branchId", contextBranchId)
+    } else if (branchId) {
+      params.set("branchId", branchId)
     }
 
     if (startDate) params.set("startDate", startDate)
     if (endDate) params.set("endDate", endDate)
-    if (statusFilter !== "all" && statusFilter !== "refunded") params.set("status", statusFilter)
 
     return `/api/v1/orders${params.toString() ? `?${params.toString()}` : ""}`
-  }, [organizationId, contextBranchId, branchIds, startDate, endDate, statusFilter, isInitialized])
+  }, [organizationId, branchId, branchIds, startDate, endDate, isInitialized])
 
   // Fetch orders scoped by context
   const { data: ordersData, mutate: mutateOrders, isLoading } = useSWR<any>(
@@ -305,7 +306,7 @@ export default function OrdersManagementPage() {
   const organizations = orgsData?.items || []
   const branches = branchesData?.items || []
   const selectedOrg = organizations.find((o: any) => o.id.toString() === organizationId)
-  const selectedBranch = branches.find((b: any) => b.id.toString() === contextBranchId)
+  const selectedBranch = branches.find((b: any) => b.id.toString() === branchId)
 
   const statusCounts = useMemo(() => {
     // 1) Fully Refunded: status is 'refunded'
@@ -338,8 +339,8 @@ export default function OrdersManagementPage() {
     }
   }, [orders])
 
-  const scopeText = contextBranchId
-    ? selectedBranch?.name || `Branch #${contextBranchId}`
+  const scopeText = branchId
+    ? selectedBranch?.name || `Branch #${branchId}`
     : organizationId
       ? selectedOrg?.name || "Selected organization"
       : "All organizations"
