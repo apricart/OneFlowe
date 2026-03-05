@@ -246,197 +246,219 @@ export default function OrganizationsPage() {
         isVisible={feedback.visible}
         onClose={() => setFeedback({ ...feedback, visible: false })}
       />
-      <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-6">
-        <header className="flex items-center justify-between">
-          <h1 className={cn("text-2xl font-semibold text-balance")}>Companies</h1>
-          <div className="flex gap-2">
-            <CreateOrgDialog
-              open={openOrg}
-              onOpenChange={setOpenOrg}
-              showFeedback={showFeedback}
-              onCreated={async (newOrg) => {
-                setOpenOrg(false)
-                await addOrganizationOptimistic(newOrg)
-              }}
-            />
-            <CreateBranchDialog
-              organizations={orgs?.items || []}
-              open={openBranch}
-              onOpenChange={setOpenBranch}
-              showFeedback={showFeedback}
-              onCreated={async (newBranch) => {
-                setOpenBranch(false)
-                await addBranchOptimistic(newBranch)
-              }}
-            />
-          </div>
-        </header>
+      <main className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] p-4 md:p-8 space-y-8">
+        {/* --- PREMIUM HEADER SECTION --- */}
+        <section className="shrink-0 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
+          <div className="relative overflow-hidden rounded-[2.5rem] border border-white/20 dark:border-white/5 shadow-2xl transition-all duration-500 hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/5">
+            {/* Dynamic Mesh Gradient Background - Midnight Aurora Theme */}
+            <div className="absolute inset-0 bg-[#020617]">
+              {/* Primary Aura */}
+              <div className="absolute top-[-10%] left-[-10%] h-[120%] w-[120%] bg-[radial-gradient(circle_at_20%_30%,_rgba(79,70,229,0.15)_0%,_transparent_50%)]" />
+              <div className="absolute top-[-10%] left-[-10%] h-[120%] w-[120%] bg-[radial-gradient(circle_at_80%_70%,_rgba(16,185,129,0.1)_0%,_transparent_50%)]" />
 
-        <section className="grid gap-4">
-          <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-xl">
-            <div className="pointer-events-none absolute inset-0 opacity-30">
-              <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
-              <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-indigo-400/40 blur-3xl" />
+              {/* Moving Accents */}
+              <div className="absolute top-[10%] right-[10%] h-[40%] w-[40%] bg-indigo-500/10 blur-[120px] rounded-full animate-pulse" />
+              <div className="absolute bottom-[10%] left-[20%] h-[30%] w-[30%] bg-emerald-500/5 blur-[100px] rounded-full animate-pulse [animation-delay:2s]" />
+
+              {/* Darkening Gradients */}
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#020617]/40 to-[#020617]" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#020617]/60 via-transparent to-[#020617]/60" />
             </div>
-            <CardHeader className="relative space-y-6">
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.2em] text-white/70">Organization overview</p>
-                <CardTitle className="text-3xl font-semibold text-white">Multi-tenant control center</CardTitle>
-                <p className="text-sm text-white/80">
-                  Keep every company and its branch network aligned. Use this panel to manage hierarchy, status, and growth.
-                </p>
+
+            {/* Premium Glassmorphism Overlay */}
+            <div className="absolute inset-0 backdrop-blur-[120px]" />
+
+            <div className="relative px-8 py-10 lg:py-14 text-white">
+              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-12">
+                <div className="space-y-6 flex-1">
+                  <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-slate-900/50 dark:bg-indigo-500/10 border border-white/10 dark:border-indigo-500/20 backdrop-blur-md">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+                    </span>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.4em] text-indigo-400 dark:text-indigo-300">Corporate Infrastructure</p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h1 className="text-4xl md:text-5xl font-semibold tracking-tighter text-white lg:text-7xl">
+                      Organization <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-white to-emerald-300">Settings</span>
+                    </h1>
+                    <p className="text-lg md:text-xl text-slate-300 max-w-2xl font-medium leading-relaxed">
+                      Scale your enterprise architecture with multi-tenant governance. Manage global corporate logic and operational branches from a high-performance command center.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-5 pt-4">
+                    <CreateOrgDialog
+                      open={openOrg}
+                      onOpenChange={setOpenOrg}
+                      showFeedback={showFeedback}
+                      variant="outline"
+                      className="h-14 px-8 rounded-2xl bg-white/5 text-white hover:bg-white/10 hover:text-white border-white/20 backdrop-blur-xl shadow-2xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] font-medium tracking-tight"
+                      onCreated={async (newOrg) => {
+                        setOpenOrg(false)
+                        await addOrganizationOptimistic(newOrg)
+                      }}
+                    />
+                    <CreateBranchDialog
+                      organizations={orgs?.items || []}
+                      open={openBranch}
+                      onOpenChange={setOpenBranch}
+                      showFeedback={showFeedback}
+                      variant="secondary"
+                      className="h-14 px-8 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500 shadow-xl shadow-indigo-600/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] font-medium tracking-tight border-none"
+                      onCreated={async (newBranch) => {
+                        setOpenBranch(false)
+                        await addBranchOptimistic(newBranch)
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-8 self-start xl:self-center">
+                  <div className="flex gap-6">
+                    <HeroStat
+                      label="Companies"
+                      value={orgCount}
+                      helper="Enterprise Tenants"
+                      icon={<Building2 className="w-6 h-6 text-indigo-400" />}
+                    />
+                    <HeroStat
+                      label="Branches"
+                      value={branchCount}
+                      helper="Global Network"
+                      icon={<GitBranch className="w-6 h-6 text-emerald-400" />}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <HeroStat label="Companies" value={orgCount} helper="Active tenants" />
-                <HeroStat label="Branches" value={branchCount} helper="Across all orgs" />
-                <HeroStat label="Average branches/org" value={orgCount ? Math.max(1, Math.round(branchCount / orgCount)) : 0} helper="Coverage" />
-              </div>
-            </CardHeader>
-          </Card>
+            </div>
+          </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[320px,1fr]">
-          <Card className="h-full border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                Company List
-                <Badge variant="outline">{orgCount}</Badge>
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">Select a company to view its details and branches.</p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search companies..."
-                  value={orgSearch}
-                  onChange={(e) => setOrgSearch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <ScrollArea className="h-[calc(100vh-280px)] pr-3">
-                <div className="space-y-2">
-                  <OrganizationListItem
-                    isActive={!selectedOrgId}
-                    onClick={() => setSelectedOrgId(null)}
-                    title="All Companies"
-                    subtitle={`${orgCount} companies, ${branchCount} branches`}
-                    badgeLabel="Global"
-                  />
-                  {filteredOrganizations.map((org) => (
-                    <OrganizationListItem
-                      key={org.id}
-                      isActive={String(org.id) === String(selectedOrgId)}
-                      onClick={() => setSelectedOrgId(String(org.id))}
-                      title={org.name}
-                      subtitle={`${org.code} • ${branchesByOrgId.get(org.id)?.length || 0} branches`}
-                      status={isActiveStatus(org.status)}
-                    >
-                      <EditOrgDialog org={org} onSave={(payload) => editOrganization(String(org.id), payload)} />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setConfirmDelete({ open: true, id: String(org.id), name: org.name })
-                        }}
-                        title="Delete company"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                    </OrganizationListItem>
-                  ))}
-                  {filteredOrganizations.length === 0 && (
-                    <p className="text-sm text-muted-foreground px-2">No companies match your search.</p>
-                  )}
+        <section className="grid gap-10 lg:grid-cols-12 shrink-0 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300 fill-mode-both">
+          <div className="lg:col-span-6 xl:col-span-5">
+            <Card className="h-full border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-[2rem] overflow-hidden">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <CardTitle className="text-xl font-semibold tracking-tight">Company List</CardTitle>
+                  <Badge variant="outline" className="bg-indigo-50/50 text-indigo-700 border-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-400 dark:border-indigo-500/20 rounded-lg px-2.5 py-1">
+                    {orgCount}
+                  </Badge>
                 </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-
-          <div className="space-y-6">
-            <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-              <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle>{selectedOrg ? selectedOrg.name : "All Companies"}</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedOrg
-                      ? `Code ${selectedOrg.code} • ${branchesByOrgId.get(selectedOrg.id)?.length || 0} branch(es)`
-                      : "Showing metrics across every company"}
-                  </p>
-                </div>
-                {selectedOrg && (
-                  <div className="flex items-center gap-2">
-                    <EditOrgDialog org={selectedOrg} onSave={(payload) => editOrganization(String(selectedOrg.id), payload)} />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setConfirmDelete({ open: true, id: String(selectedOrg.id), name: selectedOrg.name })}
-                      title="Delete company"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </div>
-                )}
+                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed">Select a company to view its details and branches.</p>
               </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  <SummaryStat
-                    label={selectedOrg ? "Current company" : "Companies"}
-                    value={selectedOrg ? selectedOrg.name : orgCount}
-                    helper={selectedOrg ? `Code ${selectedOrg.code}` : "Total tenants"}
-                    icon={<Building2 className="h-4 w-4 text-primary" />}
-                  />
-                  <SummaryStat
-                    label="Branches in view"
-                    value={filteredBranches.length}
-                    helper={branchStatusFilter === "all" ? "All statuses" : `${branchStatusFilter} only`}
-                    icon={<GitBranch className="h-4 w-4 text-emerald-500" />}
-                  />
-                  <SummaryStat
-                    label="Status"
-                    value={
-                      selectedOrg ? (isActiveStatus(selectedOrg.status) ? "Active" : "Inactive") : `${branchCount} branches total`
-                    }
-                    helper={selectedOrg ? "Company visibility" : "Across all orgs"}
-                    icon={<Badge variant="outline">{selectedOrg ? "Org" : "All"}</Badge>}
+              <CardContent className="space-y-6 px-4 pb-6">
+                <div className="relative group">
+                  <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
+                  <Input
+                    placeholder="Search companies..."
+                    value={orgSearch}
+                    onChange={(e) => setOrgSearch(e.target.value)}
+                    className="pl-11 h-12 bg-slate-50/50 dark:bg-slate-950/50 border-transparent focus:border-indigo-500/30 focus:ring-4 focus:ring-indigo-500/10 rounded-xl transition-all"
                   />
                 </div>
+                <ScrollArea className="h-[500px] xl:h-[600px] -mx-4 px-4 pr-6">
+                  <div className="space-y-3">
+                    <OrganizationListItem
+                      isActive={!selectedOrgId}
+                      onClick={() => setSelectedOrgId(null)}
+                      title="All Companies"
+                      subtitle={`${orgCount} companies, ${branchCount} branches`}
+                      badgeLabel="Global"
+                    />
+                    {filteredOrganizations.map((org) => (
+                      <OrganizationListItem
+                        key={org.id}
+                        isActive={String(org.id) === String(selectedOrgId)}
+                        onClick={() => setSelectedOrgId(String(org.id))}
+                        title={org.name}
+                        subtitle={`${org.code} • ${branchesByOrgId.get(org.id)?.length || 0} branches`}
+                        status={isActiveStatus(org.status)}
+                      >
+                        <EditOrgDialog org={org} onSave={(payload) => editOrganization(String(org.id), payload)} />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setConfirmDelete({ open: true, id: String(org.id), name: org.name })
+                          }}
+                          title="Delete company"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </OrganizationListItem>
+                    ))}
+                    {filteredOrganizations.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
+                        <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                          <Search className="h-5 w-5 text-slate-400" />
+                        </div>
+                        <p className="text-sm font-medium text-slate-500">No results found</p>
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
               </CardContent>
             </Card>
+          </div>
 
-            <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-              <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle>Branches {selectedOrg ? `for ${selectedOrg.name}` : ""}</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {filteredBranches.length} branch{filteredBranches.length === 1 ? "" : "es"} shown
+          <div className="lg:col-span-6 xl:col-span-7 space-y-10">
+            <div className="grid gap-6 sm:grid-cols-2">
+              <SummaryStat
+                label={selectedOrg ? "Parent Identity" : "Infrastructure"}
+                value={selectedOrg ? selectedOrg.name : `${orgCount} Entities`}
+                helper={selectedOrg ? `ID: ${selectedOrg.code}` : "Active Tenants"}
+                icon={<Building2 className="h-5 w-5" />}
+              />
+              <SummaryStat
+                label="Operational Reach"
+                value={`${filteredBranches.length} Branch${filteredBranches.length === 1 ? "" : "es"}`}
+                helper={branchStatusFilter === "all" ? "Full Distribution" : `${branchStatusFilter} Subset`}
+                icon={<GitBranch className="h-5 w-5" />}
+              />
+            </div>
+
+            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-[2rem] overflow-hidden">
+              <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6">
+                <div className="space-y-1">
+                  <CardTitle className="text-2xl font-bold tracking-tight">Branches Management</CardTitle>
+                  <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                    {selectedOrg ? `Strategic units for ${selectedOrg.name}` : `Full enterprise distribution`}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm text-muted-foreground">Status</Label>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 items-center px-4 rounded-xl bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Filter by status
+                  </div>
                   <Select value={branchStatusFilter} onValueChange={(value) => setBranchStatusFilter(value as typeof branchStatusFilter)}>
-                    <SelectTrigger className="w-[160px]">
-                      <SelectValue placeholder="Filter status" />
+                    <SelectTrigger className="w-[180px] h-10 rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-sm focus:ring-4 focus:ring-indigo-500/10 transition-all">
+                      <SelectValue placeholder="Status Distribution" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All statuses</SelectItem>
+                    <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800">
+                      <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="active">Active only</SelectItem>
                       <SelectItem value="inactive">Inactive only</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </CardHeader>
-              <CardContent>
-                <BranchesTable
-                  items={filteredBranches}
-                  organizations={orgs?.items || []}
-                  showCompanyColumn={!selectedOrg}
-                  showFeedback={showFeedback}
-                  onDelete={(id, name) => setConfirmDeleteBranch({ open: true, id, name })}
-                  onRefresh={refreshAll}
-                  onEdit={editBranchOptimistic}
-                />
+              <CardContent className="p-0">
+                <ScrollArea className="h-[450px] xl:h-[550px] w-full">
+                  <div className="w-full px-8 pb-8 pt-2">
+                    <BranchesTable
+                      items={filteredBranches}
+                      organizations={orgs?.items || []}
+                      showCompanyColumn={!selectedOrg}
+                      showFeedback={showFeedback}
+                      onDelete={(id, name) => setConfirmDeleteBranch({ open: true, id, name })}
+                      onRefresh={refreshAll}
+                      onEdit={editBranchOptimistic}
+                    />
+                  </div>
+                </ScrollArea>
               </CardContent>
             </Card>
           </div>
@@ -515,38 +537,60 @@ function BranchesTable({
     }
   }
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-left border-b">
-          <tr>
-            <th className="py-2 pr-2">Branch</th>
-            <th className="py-2 pr-2">Code</th>
-            {showCompanyColumn && <th className="py-2 pr-2">Company</th>}
-            <th className="py-2 pr-2">Status</th>
-            <th className="py-2"></th>
+    <div className="w-full">
+      <table className="w-full text-sm border-collapse table-fixed">
+        <thead>
+          <tr className="text-left text-[10px] uppercase tracking-[0.2em] text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800/60">
+            <th className="pb-4 pr-2 font-semibold w-[35%]">Strategic Branch</th>
+            <th className="pb-4 pr-2 font-semibold w-[15%]">Code</th>
+            {showCompanyColumn && <th className="pb-4 pr-2 font-semibold w-[25%]">Parent</th>}
+            <th className="pb-4 pr-2 font-semibold w-[15%] text-center">Lifecycle</th>
+            <th className="pb-4 w-[10%]"></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
           {items.map((b) => (
-            <tr key={b.id} className="border-b last:border-0">
-              <td className="py-2 pr-2">{b.name}</td>
-              <td className="py-2 pr-2">{b.code}</td>
-              {showCompanyColumn && <td className="py-2 pr-2">{orgById[b.organizationId]?.name || "—"}</td>}
-              <td className="py-2 pr-2">
+            <tr key={b.id} className="group hover:bg-slate-50/80 dark:hover:bg-indigo-500/[0.03] transition-all duration-300">
+              <td className="py-5 pr-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-100/50 dark:border-indigo-500/20 group-hover:scale-110 transition-transform">
+                    {b.name.charAt(0)}
+                  </div>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100 tracking-tight">{b.name}</span>
+                </div>
+              </td>
+              <td className="py-5 pr-4">
+                <code className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest border border-slate-200/50 dark:border-slate-700/50">
+                  {b.code}
+                </code>
+              </td>
+              {showCompanyColumn && (
+                <td className="py-5 pr-4">
+                  <span className="font-semibold text-slate-500 dark:text-slate-400">{orgById[b.organizationId]?.name || "—"}</span>
+                </td>
+              )}
+              <td className="py-5 pr-2 text-center">
                 <Badge
                   variant={isActiveStatus(b.status) ? "outline" : "destructive"}
                   className={cn(
-                    "px-2 py-0.5 text-xs",
-                    isActiveStatus(b.status) ? "border-emerald-200 text-emerald-700" : "border-red-200 bg-red-50 text-red-700"
+                    "px-2 py-0.5 text-[8px] uppercase font-semibold tracking-widest rounded-full border",
+                    isActiveStatus(b.status)
+                      ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-500"
+                      : "border-rose-500/20 bg-rose-500/5 text-rose-500"
                   )}
                 >
                   {isActiveStatus(b.status) ? "Active" : "Inactive"}
                 </Badge>
               </td>
-              <td className="py-2 text-right">
-                <div className="inline-flex items-center gap-1">
+              <td className="py-5 text-right">
+                <div className="inline-flex items-center gap-2 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all">
                   <EditBranchDialog branch={b} onSave={(payload) => edit(String(b.id), payload)} />
-                  <Button variant="ghost" size="icon" aria-label="Delete" onClick={() => onDelete(String(b.id), b.name)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                    onClick={() => onDelete(String(b.id), b.name)}
+                  >
                     <Trash2 size={16} />
                   </Button>
                 </div>
@@ -555,8 +599,13 @@ function BranchesTable({
           ))}
           {items.length === 0 && (
             <tr>
-              <td className="py-3 text-muted-foreground" colSpan={showCompanyColumn ? 5 : 4}>
-                No branches match the current view.
+              <td className="py-12 text-center" colSpan={showCompanyColumn ? 5 : 4}>
+                <div className="flex flex-col items-center justify-center space-y-3">
+                  <div className="h-12 w-12 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
+                    <GitBranch className="h-6 w-6 text-slate-300" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-400">No operational units detected</p>
+                </div>
               </td>
             </tr>
           )}
@@ -610,41 +659,56 @@ function OrganizationListItem({
         }
       }}
       className={cn(
-        "w-full rounded-lg border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-        isActive ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:bg-muted"
+        "group w-full rounded-[1.25rem] border-2 p-4 text-left transition-all duration-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/20",
+        isActive
+          ? "border-indigo-500/30 bg-indigo-50 shadow-[0_4px_20px_rgba(79,70,229,0.08)] dark:border-indigo-500/40 dark:bg-indigo-500/10"
+          : "border-transparent bg-slate-50/50 hover:bg-white hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/40 dark:bg-slate-950/40 dark:hover:bg-slate-800/60 dark:hover:border-slate-700 dark:hover:shadow-none"
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         <div
           className={cn(
-            "flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold",
-            isActive ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+            "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-[13px] font-semibold transition-all duration-500",
+            isActive
+              ? "bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30 scale-110 rotate-3"
+              : badgeLabel === "Global"
+                ? "bg-slate-900 text-white shadow-md dark:bg-white dark:text-slate-900"
+                : "bg-white text-slate-600 border border-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 group-hover:scale-105"
           )}
         >
           {badgeLabel === "Global" ? "∞" : initials || "?"}
         </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <p className="font-medium">{title}</p>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <p className={cn("font-semibold truncate tracking-tight", isActive ? "text-indigo-950 dark:text-indigo-100" : "text-slate-700 dark:text-slate-200")}>{title}</p>
             {typeof status === "boolean" && (
               <span
                 className={cn(
-                  "h-2 w-2 rounded-full",
-                  status ? "bg-emerald-400" : "bg-rose-400"
+                  "h-2 w-2 rounded-full shrink-0",
+                  status ? "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" : "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"
                 )}
               />
             )}
           </div>
-          <p className="text-xs text-muted-foreground">{subtitle}</p>
+          <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-col items-end gap-2 shrink-0">
           {typeof status === "boolean" ? (
-            <Badge variant={status ? "outline" : "destructive"}>{status ? "Active" : "Inactive"}</Badge>
+            <Badge variant={status ? "outline" : "secondary"} className={cn(
+              "text-[9px] uppercase font-semibold tracking-widest px-2 py-0.5 rounded-md",
+              status
+                ? "border-emerald-200/50 bg-emerald-50/50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
+                : "bg-slate-100 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400"
+            )}>
+              {status ? "Active" : "Inactive"}
+            </Badge>
           ) : badgeLabel ? (
-            <Badge variant="secondary">{badgeLabel}</Badge>
+            <Badge variant="secondary" className="text-[9px] uppercase font-semibold tracking-widest px-2 py-0.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded-md border-transparent shadow-none">
+              {badgeLabel}
+            </Badge>
           ) : null}
           {children && (
-            <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all" onClick={(event) => event.stopPropagation()}>
               {children}
             </div>
           )}
@@ -654,25 +718,49 @@ function OrganizationListItem({
   )
 }
 
-function HeroStat({ label, value, helper }: { label: string; value: string | number; helper?: string }) {
+function HeroStat({ label, value, helper, icon }: { label: string; value: string | number; helper?: string; icon?: ReactNode }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/10 p-4 backdrop-blur">
-      <p className="text-xs uppercase tracking-wide text-white/70">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-white">{value}</p>
-      {helper && <p className="text-xs text-white/70">{helper}</p>}
+    <div className="min-w-[180px] rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] transition-all duration-300 hover:bg-white/[0.08] hover:border-white/20 group">
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/10 group-hover:scale-110 transition-transform duration-500">
+            {icon}
+          </div>
+          <p className="text-3xl font-semibold text-white tracking-tighter">{value}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-white uppercase tracking-[0.2em]">{label}</p>
+          {helper && <p className="mt-1 text-[10px] text-white/50 font-medium uppercase tracking-widest">{helper}</p>}
+        </div>
+      </div>
     </div>
   )
 }
 
 function SummaryStat({ label, value, icon, helper }: { label: string; value: string | number; icon?: ReactNode; helper?: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        {icon}
-        <span>{label}</span>
+    <div className="relative overflow-hidden group flex flex-col justify-between rounded-2xl border border-slate-200/50 dark:border-slate-800/50 bg-white dark:bg-slate-950 p-6 shadow-sm transition-all duration-300 hover:shadow-md hover:border-indigo-500/20">
+      <div className="absolute top-0 right-0 p-3 opacity-5 group-hover:opacity-10 transition-opacity translate-x-1/4 -translate-y-1/4">
+        <div className="scale-[3]">
+          {icon}
+        </div>
       </div>
-      <div className="mt-2 text-2xl font-semibold">{value}</div>
-      {helper && <p className="mt-1 text-xs text-muted-foreground">{helper}</p>}
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/20 shadow-sm transition-transform group-hover:scale-110">
+            {icon}
+          </div>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">{label}</span>
+        </div>
+
+        <div className="space-y-1">
+          <div className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white truncate">
+            {value}
+          </div>
+          {helper && <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400/80 uppercase tracking-wider">{helper}</p>}
+        </div>
+      </div>
     </div>
   )
 }
@@ -682,11 +770,15 @@ function CreateOrgDialog({
   onOpenChange,
   onCreated,
   showFeedback,
+  variant,
+  className,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   onCreated: (item: Organization) => void
   showFeedback: (msg: string, type: AlertType) => void
+  variant?: React.ComponentProps<typeof Button>["variant"]
+  className?: string
 }) {
   const [name, setName] = useState("")
   const [code, setCode] = useState("")
@@ -713,7 +805,7 @@ function CreateOrgDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
+        <Button variant={variant} className={cn("gap-2", className)}>
           <Building2 className="h-4 w-4" />
           Create Company
         </Button>
@@ -781,12 +873,16 @@ function CreateBranchDialog({
   onOpenChange,
   onCreated,
   showFeedback,
+  variant,
+  className,
 }: {
   organizations: Organization[]
   open: boolean
   onOpenChange: (v: boolean) => void
   onCreated: (item: Branch) => void
   showFeedback: (msg: string, type: AlertType) => void
+  variant?: React.ComponentProps<typeof Button>["variant"]
+  className?: string
 }) {
   const [orgId, setOrgId] = useState<string | undefined>(undefined)
   const [name, setName] = useState("")

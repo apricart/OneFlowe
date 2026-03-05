@@ -63,8 +63,8 @@ export async function GET(req: NextRequest) {
     if (role === "SUPER_ADMIN") {
       if (organizationIdParam && /^\d+$/.test(organizationIdParam))
         conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
-      // Super Admin sees ONLY Approved, Fulfilled, and Refunded orders
-      conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'REFUNDED')`)
+      // Super Admin sees ALL orders for visibility consistency
+      // conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'REFUNDED')`)
     } else if (role === "HEAD_OFFICE") {
       if (typeof orgIdNum === "number") conditions.push(eq(orders.organizationId, orgIdNum))
     } else {
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
       if (typeof branchIdFromUser === "number") conditions.push(eq(orders.branchId, branchIdFromUser))
     }
 
-    if (status && status !== "FULFILLED") conditions.push(eq(orders.status, status))
+    if (status) conditions.push(eq(orders.status, status))
     if (idParam && /^\d+$/.test(idParam)) conditions.push(eq(orders.id, Number(idParam)))
 
     // Branch filtering
@@ -119,55 +119,6 @@ export async function GET(req: NextRequest) {
     }
 
 
-
-
-    // --- SALES MODE: Weekly / Monthly ---
-    // Count orders when APPROVED (GMV style), not when fulfilled
-    if (status === "FULFILLED") {
-      // Include both APPROVED and FULFILLED orders in sales
-      conditions.push(sql`${orders.approvedAt} IS NOT NULL`)
-      conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'REFUNDED')`)
-
-      if (startDate) conditions.push(gte(orders.approvedAt, new Date(startDate)))
-      if (endDate) conditions.push(lte(orders.approvedAt, new Date(endDate)))
-
-      // MONTHLY SALES
-      if (mode === "monthlySales") {
-        const monthlySales = await db
-          .select({
-            monthNum: sql<number>`EXTRACT(MONTH FROM ${orders.approvedAt})::int`,
-            month: sql<string>`TO_CHAR(${orders.approvedAt}, 'Mon')`,
-            sales: sql<number>`SUM(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0))::int`,
-          })
-          .from(orders)
-          .leftJoin(branches, eq(orders.branchId, branches.id))
-          .where(and(...conditions))
-          .groupBy(sql`1,2`)
-          .orderBy(sql`1`)
-
-        return NextResponse.json(
-          monthlySales.map((d) => ({
-            month: d.month,
-            sales: d.sales / 100, // cents → PKR
-          }))
-        )
-      }
-
-      // WEEKLY SALES
-      const weeklySales = await db
-        .select({
-          day: sql<string>`TO_CHAR(${orders.approvedAt}, 'YYYY-MM-DD')`,
-          ordersCount: sql<number>`COUNT(*)::int`,
-          totalSales: sql<number>`SUM(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0))::int`,
-        })
-        .from(orders)
-        .leftJoin(branches, eq(orders.branchId, branches.id))
-        .where(and(...conditions))
-        .groupBy(sql`1`)
-        .orderBy(sql`1`)
-
-      return NextResponse.json(weeklySales)
-    }
 
 
     // --- Base query (non-sales) ---
@@ -433,12 +384,22 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Generate token for instant approval
+      const { generateApprovalToken, hashApprovalToken } = await import('@/lib/approval-token')
+      const plainToken = generateApprovalToken(10)
+      const tokenHash = await hashApprovalToken(plainToken)
+
       // 3. Create Order
       const [ord] = await tx.insert(orders).values({
         tid,
         organizationId: Number(organizationId),
         branchId: Number(branchId),
-        status: 'pending',
+        status: 'approved',
+        approvedAt: new Date(),
+        approvedByUserId: userId,
+        approvalToken: plainToken,
+        approvalTokenHash: tokenHash,
+        approvalTokenCreatedAt: new Date(),
         subtotalCents: subtotal,
         taxCents: tax,
         totalCents: total,
@@ -527,10 +488,24 @@ export async function POST(req: NextRequest) {
         success: true
       })
 
-      return ord
+      // Log token generation
+      const { logTokenGenerated } = await import('@/lib/global-logger')
+      logTokenGenerated(
+        ord.id,
+        tid,
+        userId,
+        session.user?.email || 'unknown'
+      )
+
+      return { ...ord, _plainToken: plainToken }
     })
 
-    return NextResponse.json({ message: 'Order created', order: created })
+    return NextResponse.json({
+      message: 'Order created',
+      order: created,
+      approvalToken: created._plainToken,
+      warning: 'SAVE THIS TOKEN! It is required by Super Admins to fulfill the order.'
+    })
   } catch (e: any) {
     console.error("Order creation error:", e)
     console.error("Error stack:", e.stack)

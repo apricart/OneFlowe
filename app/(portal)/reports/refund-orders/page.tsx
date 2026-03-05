@@ -120,7 +120,7 @@ export default function RefundOrdersReportPage() {
 
       {(organizationId || branchId || startDate || endDate) && (
         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground bg-muted/30 p-2 rounded-md border border-dashed">
-          <span className="font-medium">Active Filters:</span>
+          <span className="font-semibold">Active Filters:</span>
           {organizationId && <span className="flex items-center gap-1"><Building className="h-3 w-3" /> Org ID: {organizationId}</span>}
           {branchId && <span className="flex items-center gap-1"><Building2 className="h-3 w-3" /> Branch ID: {branchId}</span>}
           {(startDate || endDate) && <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {startDate || "..."} — {endDate || "..."}</span>}
@@ -170,7 +170,7 @@ export default function RefundOrdersReportPage() {
               filteredRefunds.map((refund: any) => (
                 <TableRow key={refund.id}>
                   <TableCell className="text-xs" suppressHydrationWarning>{refund.refundedAt ? new Date(refund.refundedAt).toLocaleDateString() : new Date(refund.createdAt).toLocaleDateString()}</TableCell>
-                  <TableCell className="text-xs font-medium">{refund.tid}</TableCell>
+                  <TableCell className="text-xs font-semibold">{refund.tid}</TableCell>
                   {role === "SUPER_ADMIN" && (
                     <TableCell className="text-xs font-medium">
                       {refund.organizationName || `Org #${refund.organizationId}`}
@@ -191,7 +191,7 @@ export default function RefundOrdersReportPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right text-xs">{formatPKR(refund.orderTotal / 100)}</TableCell>
-                  <TableCell className="text-right text-xs font-bold text-red-600">{formatPKR(refund.refundAmount / 100)}</TableCell>
+                  <TableCell className="text-right text-xs font-semibold text-red-600">{formatPKR(refund.refundAmount / 100)}</TableCell>
                   <TableCell className="text-xs max-w-[200px] truncate">{refund.reason || "-"}</TableCell>
                 </TableRow>
               ))

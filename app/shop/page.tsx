@@ -313,7 +313,11 @@ export default function OrderPortalPage() {
         return toast({ title: "Failed", description: json.error, variant: "destructive" })
       }
 
-      toast({ title: "Order placed!", description: `TID: ${json.order?.tid}` })
+      toast({
+        title: "Order Placed & Approved",
+        description: `TID: ${json.order?.tid}. IMPORTANT: Save this Approval Token to give to Super Admin for fulfillment: ${json.approvalToken}`,
+        duration: 15000 // Show it longer so they can write it down
+      })
       setCart([])
       setShowCheckout(false)
 

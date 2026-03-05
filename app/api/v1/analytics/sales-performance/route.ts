@@ -67,11 +67,11 @@ export async function GET(req: NextRequest) {
     const startDate = startDateParam ? new Date(startDateParam) : todayStart
     const endDate = endDateParam ? new Date(endDateParam) : todayEnd
 
-    // Determine granularity for series: hourly for 1 day, daily for ≤31 days, monthly for more
+    // Determine granularity for series: hourly for 1 day, daily for ≤90 days, monthly for more up to 10 years
     const diffMs = endDate.getTime() - startDate.getTime()
     const diffDays = diffMs / (1000 * 60 * 60 * 24)
-    const granularity: "hourly" | "daily" | "monthly" =
-        diffDays <= 1 ? "hourly" : diffDays <= 90 ? "daily" : "monthly"
+    const granularity: "hourly" | "daily" | "monthly" | "yearly" =
+        diffDays <= 1 ? "hourly" : diffDays <= 90 ? "daily" : diffDays <= 3650 ? "monthly" : "yearly"
 
     const cacheKey = generateCacheKey("sales-perf", {
         role, organizationId, branchId,
@@ -89,12 +89,15 @@ export async function GET(req: NextRequest) {
             lte(orders.createdAt, endDate),
         ]
 
-        // Status filter
-        const statuses = statusParam && statusParam !== "all"
-            ? [statusParam.toUpperCase(), statusParam.toLowerCase()]
-            : ["APPROVED", "approved", "FULFILLED", "fulfilled", "REFUNDED", "refunded", "PENDING", "pending"]
-
-        conditions.push(sql`UPPER(${orders.status}) IN (${sql.join(statuses.filter(s => s === s.toUpperCase()).map(s => sql`${s}`), sql`, `)})`)
+        // Status filter: normalize to uppercase for comparison
+        const upperStatus = statusParam?.toUpperCase()
+        if (upperStatus && upperStatus !== "ALL") {
+            if (upperStatus === "REJECTED") {
+                conditions.push(or(eq(sql`UPPER(${orders.status})`, "REJECTED"), eq(sql`UPPER(${orders.status})`, "CANCELLED")))
+            } else {
+                conditions.push(eq(sql`UPPER(${orders.status})`, upperStatus))
+            }
+        }
 
         // Scope filters
         if (organizationId) conditions.push(eq(orders.organizationId, organizationId))
@@ -119,9 +122,12 @@ export async function GET(req: NextRequest) {
         } else if (granularity === "daily") {
             dateExpr = sql`date_trunc('day', (${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')`
             labelExpr = sql<string>`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'DD Mon')`
-        } else {
+        } else if (granularity === "monthly") {
             dateExpr = sql`date_trunc('month', (${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')`
             labelExpr = sql<string>`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'Mon YYYY')`
+        } else {
+            dateExpr = sql`date_trunc('year', (${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')`
+            labelExpr = sql<string>`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY')`
         }
 
         const seriesRows = await db
