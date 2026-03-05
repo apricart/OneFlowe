@@ -74,9 +74,10 @@ export default function OrdersManagementPage() {
   const isHeadOffice = userRole === "HEAD_OFFICE"
   const isSuperAdmin = userRole === "SUPER_ADMIN"
 
+  const today = new Date().toISOString().split("T")[0]
   const [searchQuery, setSearchQuery] = useState("")
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
+  const [startDate, setStartDate] = useState(today)
+  const [endDate, setEndDate] = useState(today)
   // Sync with global context
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [refundFilter, setRefundFilter] = useState<string>("all")
@@ -110,8 +111,8 @@ export default function OrdersManagementPage() {
 
     if (branchIds.length > 0) {
       params.set("branchIds", branchIds.join(","))
-    } else if (branchId) {
-      params.set("branchId", branchId)
+    } else if (contextBranchId) {
+      params.set("branchId", contextBranchId)
     }
 
     if (startDate) params.set("startDate", startDate)
@@ -119,7 +120,7 @@ export default function OrdersManagementPage() {
     if (statusFilter !== "all" && statusFilter !== "refunded") params.set("status", statusFilter)
 
     return `/api/v1/orders${params.toString() ? `?${params.toString()}` : ""}`
-  }, [organizationId, branchId, branchIds, startDate, endDate, statusFilter, isInitialized])
+  }, [organizationId, contextBranchId, branchIds, startDate, endDate, statusFilter, isInitialized])
 
   // Fetch orders scoped by context
   const { data: ordersData, mutate: mutateOrders, isLoading } = useSWR<any>(
@@ -304,21 +305,41 @@ export default function OrdersManagementPage() {
   const organizations = orgsData?.items || []
   const branches = branchesData?.items || []
   const selectedOrg = organizations.find((o: any) => o.id.toString() === organizationId)
-  const selectedBranch = branches.find((b: any) => b.id.toString() === branchId)
+  const selectedBranch = branches.find((b: any) => b.id.toString() === contextBranchId)
 
-  const statusCounts = {
-    all: orders.length,
-    pending: orders.filter((o: OrderItem) => o.status.toLowerCase() === "pending").length,
-    approved: orders.filter((o: OrderItem) => o.status.toLowerCase() === "approved").length,
-    fulfilled: orders.filter((o: OrderItem) => o.status.toLowerCase() === "fulfilled").length,
-    refunded: orders.filter((o: OrderItem) =>
-      o.status.toLowerCase() === "refunded" ||
-      (o.refundAmountCents && o.refundAmountCents > 0)
-    ).length,
-  }
+  const statusCounts = useMemo(() => {
+    // 1) Fully Refunded: status is 'refunded'
+    const refunded = orders.filter((o: OrderItem) => o.status.toLowerCase() === "refunded").length
 
-  const scopeText = branchId
-    ? selectedBranch?.name || `Branch #${branchId}`
+    // 2) Partially Refunded: status is NOT 'refunded' AND has refund amount
+    const partiallyRefunded = orders.filter((o: OrderItem) =>
+      o.status.toLowerCase() !== "refunded" && (o.refundAmountCents && o.refundAmountCents > 0)
+    ).length
+
+    // 3) Fulfilled: status is 'fulfilled' AND NO refund amount
+    const fulfilled = orders.filter((o: OrderItem) =>
+      o.status.toLowerCase() === "fulfilled" && !(o.refundAmountCents && o.refundAmountCents > 0)
+    ).length
+
+    // 4) Approved: status is 'approved' AND NO refund amount
+    const approved = orders.filter((o: OrderItem) =>
+      o.status.toLowerCase() === "approved" && !(o.refundAmountCents && o.refundAmountCents > 0)
+    ).length
+
+    // 5) Total Order Count (for these categories): sum of above 4
+    const totalCount = approved + fulfilled + partiallyRefunded + refunded
+
+    return {
+      all: totalCount,
+      approved,
+      fulfilled,
+      partiallyRefunded,
+      refunded
+    }
+  }, [orders])
+
+  const scopeText = contextBranchId
+    ? selectedBranch?.name || `Branch #${contextBranchId}`
     : organizationId
       ? selectedOrg?.name || "Selected organization"
       : "All organizations"
@@ -379,15 +400,6 @@ export default function OrdersManagementPage() {
             iconColor: "text-slate-600 dark:text-slate-400"
           },
           {
-            label: "Pending",
-            count: statusCounts.pending,
-            gradient: "from-yellow-50 to-yellow-100 dark:from-yellow-900/30 dark:to-yellow-800/20",
-            border: "border-yellow-200 dark:border-yellow-800",
-            textColor: "text-yellow-900 dark:text-yellow-200",
-            textSecondary: "text-yellow-700 dark:text-yellow-400",
-            iconColor: "text-yellow-600 dark:text-yellow-400"
-          },
-          {
             label: "Approved",
             count: statusCounts.approved,
             gradient: "from-blue-50 to-blue-100 dark:from-slate-900/30 dark:to-slate-800/20",
@@ -406,6 +418,15 @@ export default function OrdersManagementPage() {
             iconColor: "text-emerald-600 dark:text-emerald-400"
           },
           {
+            label: "Partial Refund",
+            count: statusCounts.partiallyRefunded,
+            gradient: "from-amber-50 to-amber-100 dark:from-amber-900/30 dark:to-amber-800/20",
+            border: "border-amber-200 dark:border-amber-800",
+            textColor: "text-amber-900 dark:text-amber-200",
+            textSecondary: "text-amber-700 dark:text-amber-400",
+            iconColor: "text-amber-600 dark:text-amber-400"
+          },
+          {
             label: "Refunded",
             count: statusCounts.refunded,
             gradient: "from-rose-50 to-rose-100 dark:from-rose-900/30 dark:to-rose-800/20",
@@ -414,7 +435,7 @@ export default function OrdersManagementPage() {
             textSecondary: "text-rose-700 dark:text-rose-400",
             iconColor: "text-rose-600 dark:text-rose-400"
           },
-        ].filter(stat => !(isSuperAdmin || isHeadOffice) || stat.label !== "Pending").map((stat) => (
+        ].map((stat) => (
           <div
             key={stat.label}
             className={`flex-1 min-w-[200px] bg-gradient-to-br border ${stat.gradient} ${stat.border} rounded-lg p-5 hover:shadow-md transition-shadow`}

@@ -140,8 +140,13 @@ export default function RefundOrdersReportPage() {
         setStartDate={setStartDate}
         endDate={endDate}
         setEndDate={setEndDate}
+<<<<<<< HEAD
         selectedBranchIds={selectedBranchIds}
         onBranchChange={setSelectedBranchIds}
+=======
+        selectedBranchIds={selectedBranchId ? [selectedBranchId] : []}
+        onBranchChange={(ids) => setSelectedBranchId(ids[0] || "")}
+>>>>>>> origin/yousuf
         onRefresh={() => mutate()}
         isLoading={isLoading}
         role={role}
