@@ -107,7 +107,7 @@ export function BranchAdminDashboard() {
   const rejectedCount = rejectedData?.totalOrders ?? 0
   const approvedCount = approvedData?.totalOrders ?? 0
 
-  const periodRevenue = perfData?.totalSales ?? 0
+  const periodPurchases = perfData?.totalSales ?? 0
   const periodOrders = perfData?.totalOrders ?? 0
 
   return (
@@ -130,8 +130,8 @@ export function BranchAdminDashboard() {
       {/* ━━━ KPI Cards ━━━ */}
       <div className="relative z-10 grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <BankingKPICard
-          icon={TrendingUp} title="Revenue"
-          value={formatPKR(periodRevenue, { maximumFractionDigits: 0 })}
+          icon={TrendingUp} title="Purchases"
+          value={formatPKR(periodPurchases, { maximumFractionDigits: 0 })}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
           onClick={() => handleKPIOpen("REVENUE")}
@@ -181,7 +181,7 @@ export function BranchAdminDashboard() {
               <TrendingUp className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
             </div>
             <div className="min-w-0">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Sales Performance</h3>
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Purchases Performance</h3>
               <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
                 {activePreset === "today" ? "Today" : activePreset === "3d" ? "Last 3 days" : activePreset === "7d" ? "Last 7 days" : activePreset === "monthly" ? "This month" : activePreset === "yearly" ? "This year" : "Custom period"}
               </p>
@@ -201,7 +201,7 @@ export function BranchAdminDashboard() {
               seriesData={perfData?.seriesData ?? []} totalSales={perfData?.totalSales ?? 0}
               avgSales={perfData?.avgSales ?? 0} totalOrders={perfData?.totalOrders ?? 0}
               peakPeriod={perfData?.peakPeriod ?? null} granularity={perfData?.granularity ?? "daily"}
-              label="Sales" dateRange={dateRange}
+              label="Purchases" dateRange={dateRange}
             />
           )}
         </CardContent>
@@ -214,6 +214,7 @@ export function BranchAdminDashboard() {
         organizationId={organizationId}
         branchId={branchId}
         defaultDateRange={dateRange}
+        title={drillDownType === "REVENUE" ? "Purchases Insights" : undefined}
       />
     </main>
   )

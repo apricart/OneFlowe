@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const startDateParam = searchParams.get("startDate")
     const endDateParam = searchParams.get("endDate")
 
-    if (!type || !["REVENUE", "REJECTED", "FULFILLED", "ORDERS"].includes(type)) {
+    if (!type || !["REVENUE", "REJECTED", "FULFILLED", "ORDERS", "REFUNDED"].includes(type)) {
         return error("Invalid or missing drill-down type")
     }
 
@@ -79,8 +79,10 @@ export async function GET(req: NextRequest) {
     } else if (type === "FULFILLED") {
         conditions.push(sql`UPPER(${orders.status}) = 'FULFILLED'`)
     } else if (type === "ORDERS") {
-        // all active orders
-        conditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED', 'REFUNDED')`)
+        // all orders including rejected/cancelled for volume analysis
+        conditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED', 'REFUNDED', 'REJECTED', 'CANCELLED')`)
+    } else if (type === "REFUNDED") {
+        conditions.push(sql`UPPER(${orders.status}) = 'REFUNDED' OR ${orders.refundAmountCents} > 0`)
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined

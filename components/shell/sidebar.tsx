@@ -40,7 +40,7 @@ const getNavigationByRole = (role: string) => {
         icon: BarChart3,
         subItems: [
           { href: "/reports/sales-summary", label: "Sales Summary" },
-          { href: "/reports/product-summary", label: "Product Analytics" },
+          { href: "/reports/product-summary", label: "Product Summary" },
           { href: "/reports/order-report", label: "Order Report" },
           { href: "/reports/branch-reports", label: "Branch Reports" },
           { href: "/reports/groups", label: "Groups Report" },
@@ -65,7 +65,7 @@ const getNavigationByRole = (role: string) => {
         icon: BarChart3,
         subItems: [
           { href: "/reports/sales-summary", label: "Sales Summary" },
-          { href: "/reports/product-summary", label: "Product Analytics" },
+          { href: "/reports/product-summary", label: "Product Summary" },
           { href: "/reports/order-report", label: "Order Report" },
           { href: "/reports/branch-reports", label: "Branch Reports" },
           { href: "/reports/groups", label: "Groups Report" },

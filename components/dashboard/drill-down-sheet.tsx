@@ -29,6 +29,7 @@ interface DrillDownSheetProps {
     branchId?: string | null
     branchIds?: string[]
     defaultDateRange?: DateRange | null
+    title?: string
 }
 
 const TYPE_CONFIG = {
@@ -99,7 +100,8 @@ export function DrillDownSheet({
     organizationId,
     branchId,
     branchIds,
-    defaultDateRange
+    defaultDateRange,
+    title
 }: DrillDownSheetProps): React.ReactElement | null {
     // Internal localized date range state for the drill down
     const [localDateRange, setLocalDateRange] = useState<DateRange | null>(null)
@@ -162,7 +164,7 @@ export function DrillDownSheet({
                             </div>
                             <div>
                                 <SheetTitle className="text-xl font-semibold tracking-tight">
-                                    {config.title}
+                                    {title || config.title}
                                 </SheetTitle>
                                 <SheetDescription className="mt-0.5 flex items-center gap-2">
                                     <span className="font-semibold text-slate-800 dark:text-slate-200">
@@ -233,6 +235,10 @@ export function DrillDownSheet({
                                                                 <span className="text-slate-900 dark:text-slate-100 font-semibold">{item[col.key]}</span>
                                                                 <span className="text-[10px] text-slate-400">{format(new Date(item.date), "MMM d, HH:mm")}</span>
                                                             </div>
+                                                        ) : col.key === "preparationTime" || col.key === "timeElapsed" ? (
+                                                            <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 italic">
+                                                                {item[col.key]}
+                                                            </span>
                                                         ) : col.isCurrency ? (
                                                             <span className="tabular-nums font-semibold text-slate-900 dark:text-slate-100">
                                                                 {formatPKR(item[col.key])}

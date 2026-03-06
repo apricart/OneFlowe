@@ -54,7 +54,7 @@ export default function ProductSummaryReportPage() {
   const role = (session?.user as any)?.role as Role
   const [hasMounted, setHasMounted] = useState(false)
 
-  const { visibleKeys, isVisible, setVisibleKeys } = useColumnSelector(ALL_COLUMNS, "product-analytics")
+  const { visibleKeys, isVisible, setVisibleKeys } = useColumnSelector(ALL_COLUMNS, "product-summary")
 
   const queryParams = new URLSearchParams()
   if (branchId) queryParams.set("branchId", branchId)
@@ -140,17 +140,17 @@ export default function ProductSummaryReportPage() {
 
     if (format === 'pdf') {
       const doc = new jsPDF({ orientation: "landscape" })
-      doc.setFontSize(20); doc.text("Product Analytics Report", 14, 20)
+      doc.setFontSize(20); doc.text("Product Summary Report", 14, 20)
       doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
       autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid', headStyles: { fillColor: [66, 66, 66], fontSize: 8 }, styles: { fontSize: 8 } })
-      doc.save(`product-analytics-${new Date().getTime()}.pdf`)
+      doc.save(`product-summary-${new Date().getTime()}.pdf`)
       return
     }
 
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Product Analytics")
-    XLSX.writeFile(workbook, `product-analytics-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Product Summary")
+    XLSX.writeFile(workbook, `product-summary-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
   }
 
   if (!hasMounted) {
@@ -163,7 +163,7 @@ export default function ProductSummaryReportPage() {
 
   return (
     <div className="space-y-5 pb-12">
-      <SectionHeader title="Product Analytics" subtitle="Analyze product performance and category-wise breakdown." />
+      <SectionHeader title="Product Summary" subtitle="Analyze product performance and category-wise breakdown." />
 
 
       <ReportFilters
@@ -194,8 +194,8 @@ export default function ProductSummaryReportPage() {
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-3">
           <h3 className="font-bold text-slate-900 dark:text-white text-sm">Product Transactions</h3>
           <div className="flex items-center gap-2">
-            <ColumnSelector columns={ALL_COLUMNS} storageKey="product-analytics" visibleKeys={visibleKeys} onChange={setVisibleKeys} />
-            <ScheduleReportModal reportName="Product Analytics" />
+            <ColumnSelector columns={ALL_COLUMNS} storageKey="product-summary" visibleKeys={visibleKeys} onChange={setVisibleKeys} />
+            <ScheduleReportModal reportName="Product Summary" />
           </div>
         </div>
         <Table>

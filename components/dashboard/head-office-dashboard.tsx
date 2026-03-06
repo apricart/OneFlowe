@@ -109,7 +109,7 @@ export function HeadOfficeDashboard() {
 
   const allBranchesSelected = !contextBranchId && selectedBranchIds.length === 0
 
-  const totalRevenue = perfData?.totalSales ?? 0
+  const totalPurchases = perfData?.totalSales ?? 0
   const totalOrders = perfData?.totalOrders ?? 0
   const fulfilledCount = fulfilledData?.totalOrders ?? 0
   const refundedCount = refundedData?.totalOrders ?? 0
@@ -149,8 +149,8 @@ export function HeadOfficeDashboard() {
       {/* ━━━ KPI Cards ━━━ */}
       <div className="relative z-10 grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <BankingKPICard
-          icon={TrendingUp} title="Revenue"
-          value={formatPKR(totalRevenue, { maximumFractionDigits: 0 })}
+          icon={TrendingUp} title="Purchases"
+          value={formatPKR(totalPurchases, { maximumFractionDigits: 0 })}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
           onClick={() => handleKPIOpen("REVENUE")}
@@ -200,7 +200,7 @@ export function HeadOfficeDashboard() {
               <TrendingUp className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
             </div>
             <div className="min-w-0">
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Sales Performance</h3>
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Purchases Performance</h3>
               <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
                 {activePreset === "today" ? "Today" : activePreset === "3d" ? "Last 3 days" : activePreset === "7d" ? "Last 7 days" : activePreset === "monthly" ? "This month" : activePreset === "yearly" ? "This year" : "Custom period"}
               </p>
@@ -220,7 +220,7 @@ export function HeadOfficeDashboard() {
               seriesData={perfData?.seriesData ?? []} totalSales={perfData?.totalSales ?? 0}
               avgSales={perfData?.avgSales ?? 0} totalOrders={perfData?.totalOrders ?? 0}
               peakPeriod={perfData?.peakPeriod ?? null} granularity={perfData?.granularity ?? "daily"}
-              label="Sales" dateRange={dateRange}
+              label="Purchases" dateRange={dateRange}
             />
           )}
         </CardContent>
@@ -234,14 +234,14 @@ export function HeadOfficeDashboard() {
               <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
                 <BarChart3 className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
               </div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Branch Sales Performance</h3>
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Branch Purchases Performance</h3>
             </div>
             {isLoadingPerf ? (
               <div className="h-56 flex items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                 <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-200 dark:border-slate-700 border-t-indigo-500" />
               </div>
             ) : (
-              <BranchSalesBarChart branchSales={perfData?.branchSales ?? []} label="Sales" />
+              <BranchSalesBarChart branchSales={perfData?.branchSales ?? []} label="Purchases" />
             )}
           </CardContent>
         </Card>
@@ -255,6 +255,7 @@ export function HeadOfficeDashboard() {
         branchId={contextBranchId}
         branchIds={selectedBranchIds}
         defaultDateRange={dateRange}
+        title={drillDownType === "REVENUE" ? "Purchases Insights" : undefined}
       />
     </main>
   )

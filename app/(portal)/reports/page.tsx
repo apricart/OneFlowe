@@ -38,7 +38,7 @@ const reportCards = [
     gradient: "from-rose-500 to-pink-500",
   },
   {
-    title: "Product Analytics",
+    title: "Product Summary",
     description: "Analyze product performance and category-wise breakdown",
     href: "/reports/product-summary",
     icon: Package,
