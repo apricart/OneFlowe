@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
     const branchIdsRaw = url.searchParams.get("branchIds")
     const organizationId = url.searchParams.get("organizationId")
     const groupId = url.searchParams.get("groupId")
+    const statusParam = url.searchParams.get("status")
 
     // Parsing branchIds
     const parsedBranchIds = branchIdsRaw
@@ -55,8 +56,14 @@ export async function GET(req: NextRequest) {
 
     const conditions = []
 
-    // Ensure only approved/fulfilled orders are counted for sales (exclude PENDING)
-    conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'COMPLETED')`)
+    // Status filter
+    if (statusParam && statusParam.toLowerCase() !== "all") {
+        if (statusParam.toUpperCase() === "REJECTED") {
+            conditions.push(sql`UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED')`)
+        } else {
+            conditions.push(eq(sql`UPPER(${orders.status})`, statusParam.toUpperCase()))
+        }
+    }
 
     // Security: RBAC
     const normalizedRole = roleName ? roleName.toUpperCase() : ""
@@ -112,10 +119,10 @@ export async function GET(req: NextRequest) {
 
     // Aggregation Query
     const summaryResult = await db.select({
-        totalSales: sum(orders.totalCents),
+        totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
         totalTax: sum(orders.taxCents),
         totalSubtotal: sum(orders.subtotalCents),
-        orderCount: count(orders.id),
+        orderCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
         totalRefunds: sum(orders.refundAmountCents),
     })
         .from(orders)
@@ -142,6 +149,9 @@ export async function GET(req: NextRequest) {
         tid: orders.tid,
         status: orders.status,
         totalCents: orders.totalCents,
+        subtotalCents: orders.subtotalCents,
+        taxCents: orders.taxCents,
+        refundAmountCents: orders.refundAmountCents,
         branchId: orders.branchId,
         branchName: branches.name,
         groupName: groups.name,
@@ -161,14 +171,17 @@ export async function GET(req: NextRequest) {
     const topPerformers = await db.select({
         branchId: orders.branchId,
         branchName: branches.name,
-        sales: sum(orders.totalCents).mapWith(Number),
-        orderCount: count(orders.id),
+        sales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+        orderCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
+        fulfilledCount: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END)`.mapWith(Number),
+        rejectedCount: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)`.mapWith(Number),
+        refundedCount: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END)`.mapWith(Number),
     })
         .from(orders)
         .leftJoin(branches, eq(orders.branchId, branches.id))
         .where(whereClause)
         .groupBy(orders.branchId, branches.name)
-        .orderBy(desc(sql`SUM(${orders.totalCents})`))
+        .orderBy(desc(sql`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`))
         .limit(10)
 
     return NextResponse.json({

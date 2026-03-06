@@ -15,6 +15,7 @@ import { SalesPerformanceLineChart, BranchSalesBarChart, OrganizationSalesBarCha
 import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
 import { GlobalDateFilter, type FilterPreset, getPresetLabel } from "@/components/dashboard/global-date-filter"
 import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
+import { DrillDownSheet, type DrillDownType } from "@/components/dashboard/drill-down-sheet"
 
 import { useAppContext } from "@/components/context/app-context"
 import { startOfDay, endOfDay } from "date-fns"
@@ -30,6 +31,14 @@ export function SuperAdminDashboard() {
   const [dateRange, setDateRange] = useState<DateRange | null>(getDefaultDateRange())
   const [activePreset, setActivePreset] = useState<FilterPreset>("today")
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
+
+  const [drillDownType, setDrillDownType] = useState<DrillDownType | null>(null)
+  const [isDrillDownOpen, setIsDrillDownOpen] = useState(false)
+
+  const handleKPIOpen = (type: DrillDownType) => {
+    setDrillDownType(type)
+    setIsDrillDownOpen(true)
+  }
 
   const { data: orgsData } = useOrganizations()
   const { data: usersData } = useUsers(organizationId || undefined)
@@ -118,30 +127,35 @@ export function SuperAdminDashboard() {
           value={formatPKR(totalRevenue, { maximumFractionDigits: 0 })}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
+          onClick={() => handleKPIOpen("REVENUE")}
         />
         <BankingKPICard
           icon={Package} title="Orders"
           value={totalOrders.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-500 to-indigo-600" iconBg="text-blue-600 bg-blue-600" delay={50}
+          onClick={() => handleKPIOpen("ORDERS")}
         />
         <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
           value={fulfilledCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={100}
+          onClick={() => handleKPIOpen("FULFILLED")}
         />
         <BankingKPICard
           icon={RotateCcw} title="Refunded"
           value={refundedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-red-500 to-rose-600" iconBg="text-red-600 bg-red-600" delay={150}
+          onClick={() => handleKPIOpen("REFUNDED")}
         />
         <BankingKPICard
           icon={XCircle} title="Rejected"
           value={rejectedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-slate-500 to-slate-700" iconBg="text-slate-600 bg-slate-600" delay={175}
+          onClick={() => handleKPIOpen("REJECTED")}
         />
         <BankingKPICard
           icon={CheckCircle2} title="Approved"
@@ -210,6 +224,17 @@ export function SuperAdminDashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* ━━━ Drill Down Sheet ━━━ */}
+      <DrillDownSheet
+        isOpen={isDrillDownOpen}
+        onOpenChange={setIsDrillDownOpen}
+        type={drillDownType}
+        organizationId={organizationId}
+        branchId={branchId}
+        branchIds={selectedBranchIds}
+        defaultDateRange={dateRange}
+      />
     </main>
   )
 }

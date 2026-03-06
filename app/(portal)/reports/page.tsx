@@ -14,7 +14,9 @@ import {
   Sparkles,
   ArrowRight,
   Building2,
-  FolderTree
+  FolderTree,
+  CreditCard,
+  ShoppingBag
 } from "lucide-react"
 
 import { useState, useEffect } from "react"
@@ -29,10 +31,10 @@ const reportCards = [
     gradient: "from-indigo-500 to-purple-500",
   },
   {
-    title: "Order Intelligence",
-    description: "Analyze order lifecycle, refund trends, and transaction reversal insights",
-    href: "/reports/refund-orders",
-    icon: RotateCcw,
+    title: "Order Report",
+    href: "/reports/order-report",
+    description: "Unified view of all orders (Fulfilled, Refunded, Rejected) with advanced filtering.",
+    icon: ShoppingBag,
     gradient: "from-rose-500 to-pink-500",
   },
   {
@@ -43,26 +45,13 @@ const reportCards = [
     gradient: "from-blue-500 to-cyan-500",
   },
   {
-    title: "Order Report",
-    description: "Comprehensive view of all orders with advanced filtering and insights",
-    href: "/reports/order-report",
-    icon: FileText,
-    gradient: "from-amber-500 to-orange-500",
-  },
-  {
     title: "Branch Reports",
     description: "Branch-level performance rankings, threshold alerts, and comparisons",
     href: "/reports/branch-reports",
     icon: Building2,
     gradient: "from-emerald-500 to-teal-500",
   },
-  {
-    title: "Product Summary Details",
-    description: "Detailed product-level insights and metrics",
-    href: "/reports/product-summary-details",
-    icon: BarChart3,
-    gradient: "from-sky-500 to-blue-500",
-  },
+
   {
     title: "Stock Reports",
     description: "Current stock levels and inventory status",

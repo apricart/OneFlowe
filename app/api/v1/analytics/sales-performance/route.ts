@@ -134,8 +134,8 @@ export async function GET(req: NextRequest) {
             .select({
                 bucket: dateExpr,
                 label: labelExpr,
-                totalSales: sql<number>`coalesce(sum(CASE WHEN UPPER(${orders.status}) NOT IN ('REJECTED', 'CANCELLED') THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
-                orderCount: sql<number>`coalesce(count(${orders.id}), 0)`.mapWith(Number),
+                totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+                orderCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
             })
             .from(orders)
             .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -183,8 +183,8 @@ export async function GET(req: NextRequest) {
             .select({
                 branchId: branches.id,
                 branchName: branches.name,
-                totalSales: sql<number>`coalesce(sum(CASE WHEN UPPER(${orders.status}) NOT IN ('REJECTED', 'CANCELLED') THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
-                orderCount: sql<number>`coalesce(count(${orders.id}), 0)`.mapWith(Number),
+                totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+                orderCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
             })
             .from(branches)
             .leftJoin(orders, and(eq(orders.branchId, branches.id), and(...branchConditions)))
@@ -212,8 +212,8 @@ export async function GET(req: NextRequest) {
                 .select({
                     organizationId: organizations.id,
                     organizationName: organizations.name,
-                    totalSales: sql<number>`coalesce(sum(CASE WHEN UPPER(${orders.status}) NOT IN ('REJECTED', 'CANCELLED') THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
-                    orderCount: sql<number>`coalesce(count(${orders.id}), 0)`.mapWith(Number),
+                    totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+                    orderCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
                 })
                 .from(organizations)
                 .leftJoin(orders, and(eq(orders.organizationId, organizations.id), whereClause))

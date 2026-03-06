@@ -7,7 +7,7 @@ import { SectionHeader } from "@/components/ui/section-header"
 import { Card } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Package, TrendingUp, Layers, BarChart3, Upload } from "lucide-react"
-import { formatPKR } from "@/lib/utils"
+import { formatPKR, cn } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
@@ -16,9 +16,7 @@ import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 
-import { QuickDateRange } from "@/components/reports/quick-date-range"
 import { KPICard } from "@/components/reports/kpi-card"
-import { FilterTagBar, type FilterTag } from "@/components/reports/filter-tag-bar"
 import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/reports/column-selector"
 import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expandable-row-drawer"
 import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
@@ -73,13 +71,7 @@ export default function ProductSummaryReportPage() {
     setGeneratedDate(new Date().toLocaleString())
   }, [])
 
-  if (!hasMounted) {
-    return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-      </div>
-    )
-  }
+
 
   const orderItems = data?.items || []
 
@@ -90,7 +82,11 @@ export default function ProductSummaryReportPage() {
     item.userEmail?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const totalRevenue = filteredItems.reduce((sum: number, item: any) => sum + (item.totalAmount || 0), 0)
+  const totalRevenue = filteredItems.reduce((sum: number, item: any) => {
+    const status = (item.orderStatus || "").toUpperCase()
+    if (status === "REJECTED" || status === "CANCELLED" || status === "REFUNDED") return sum
+    return sum + (item.totalAmount || 0)
+  }, 0)
   const totalVolume = filteredItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)
   const uniqueProducts = new Set(filteredItems.map((item: any) => item.productName)).size
 
@@ -112,17 +108,6 @@ export default function ProductSummaryReportPage() {
     return Object.values(daily).slice(-14)
   }, [filteredItems])
 
-  // Filter tags
-  const filterTags: FilterTag[] = []
-  if (organizationId) filterTags.push({ key: "org", label: "Org", value: String(organizationId), color: "blue" })
-  if (branchId) filterTags.push({ key: "branch", label: "Branch", value: String(branchId), color: "indigo" })
-  if (startDate || endDate) filterTags.push({ key: "dates", label: "Period", value: `${startDate || "..."} – ${endDate || "..."}`, color: "emerald" })
-  if (groupId) filterTags.push({ key: "group", label: "Group", value: groupId, color: "amber" })
-
-  const handleRemoveFilter = (key: string) => {
-    if (key === "dates") { setStartDate(""); setEndDate("") }
-    if (key === "group") setGroupId("")
-  }
 
   const handleRowClick = (item: any) => {
     setSelectedRow(item)
@@ -130,19 +115,19 @@ export default function ProductSummaryReportPage() {
   }
 
   const getDrawerFields = (item: any): DetailField[] => [
-    { label: "Product Name", value: item.productName },
-    { label: "Product Code", value: item.productCode || "-", type: "mono" },
-    { label: "Order Date", value: new Date(item.orderDate).toLocaleString(), type: "date" },
-    { label: "Employee ID", value: item.employeeId || "-", type: "mono" },
-    { label: "Organization", value: item.organizationName || "-" },
-    { label: "Group", value: item.groupName || "-" },
-    { label: "Category", value: item.categoryName || "-" },
-    { label: "Sub-Category", value: item.subCategoryName || "-" },
-    { label: "Branch", value: item.branchName },
-    { label: "Quantity", value: item.quantity },
-    { label: "Unit Price", value: formatPKR(item.priceCents / 100), type: "currency" },
-    { label: "Total", value: formatPKR(item.totalAmount / 100), type: "currency" },
-    { label: "Status", value: item.orderStatus, type: "badge" },
+    { key: "productName", label: "Product Name", value: item.productName },
+    { key: "productCode", label: "Product Code", value: item.productCode || "-", type: "mono" },
+    { key: "orderDate", label: "Order Date", value: new Date(item.orderDate).toLocaleString(), type: "date" },
+    { key: "employeeId", label: "Employee ID", value: item.employeeId || "-", type: "mono" },
+    { key: "organization", label: "Organization", value: item.organizationName || "-" },
+    { key: "group", label: "Group", value: item.groupName || "-" },
+    { key: "category", label: "Category", value: item.categoryName || "-" },
+    { key: "subCategory", label: "Sub-Category", value: item.subCategoryName || "-" },
+    { key: "branch", label: "Branch", value: item.branchName },
+    { key: "qty", label: "Quantity", value: item.quantity },
+    { key: "price", label: "Unit Price", value: formatPKR(item.priceCents / 100), type: "currency" },
+    { key: "total", label: "Total", value: formatPKR(item.totalAmount / 100), type: "currency" },
+    { key: "status", label: "Status", value: item.orderStatus, type: "badge" },
   ]
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
@@ -168,31 +153,40 @@ export default function ProductSummaryReportPage() {
     XLSX.writeFile(workbook, `product-analytics-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
   }
 
+  if (!hasMounted) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-12">
       <SectionHeader title="Product Analytics" subtitle="Analyze product performance and category-wise breakdown." />
 
-      <QuickDateRange startDate={startDate} endDate={endDate} onStartDateChange={setStartDate} onEndDateChange={setEndDate} storageKey="product-analytics-dates" />
-
-      <FilterTagBar tags={filterTags} onRemove={handleRemoveFilter} />
 
       <ReportFilters
         searchTerm={searchTerm} setSearchTerm={setSearchTerm}
         startDate={startDate} setStartDate={setStartDate}
         endDate={endDate} setEndDate={setEndDate}
         groupId={groupId} setGroupId={setGroupId}
-        onRefresh={() => mutate()} isLoading={isLoading}
+        onRefresh={() => {
+          setSearchTerm("")
+          setStartDate("")
+          setEndDate("")
+          setGroupId("")
+          mutate()
+        }} isLoading={isLoading}
         role={role} organizationId={organizationId || undefined}
         searchPlaceholder="Search Product, SKU, Branch, or User..."
         onExport={handleExport}
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <KPICard title="Total Revenue" value={formatPKR(totalRevenue / 100)} icon={TrendingUp} colorScheme="emerald" trendData={sparklineData} />
-        <KPICard title="Total Volume" value={totalVolume.toLocaleString()} icon={Package} colorScheme="blue" />
         <KPICard title="Unique Products" value={uniqueProducts} icon={Layers} colorScheme="violet" />
-        <KPICard title="Top Category" value={topCategory} icon={BarChart3} colorScheme="amber" />
       </div>
 
       {/* Table */}
@@ -256,7 +250,7 @@ export default function ProductSummaryReportPage() {
         open={drawerOpen} onClose={() => setDrawerOpen(false)}
         title={selectedRow?.productName || "Product Details"}
         subtitle={selectedRow ? `${selectedRow.branchName} • ${selectedRow.productCode || "N/A"}` : ""}
-        fields={selectedRow ? getDrawerFields(selectedRow) : []}
+        fields={selectedRow ? getDrawerFields(selectedRow).filter(f => !f.key || isVisible(f.key)) : []}
       />
     </div>
   )

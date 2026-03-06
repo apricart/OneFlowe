@@ -287,7 +287,7 @@ export default function HeadOfficeOrdersPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs tracking-[0.2em] text-white/70">HEAD OFFICE · ORDERS</p>
-            <h1 className="text-3xl font-semibold">Order intelligence overview</h1>
+            <h1 className="text-3xl font-semibold">Order overview</h1>
             <p className="text-sm text-white/80">
               Manage approvals and fulfillment pipelines across {scopeText.toLowerCase()}.
             </p>

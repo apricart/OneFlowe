@@ -30,8 +30,8 @@ export async function GET(req: NextRequest) {
         // Build order conditions for date filtering
         const orderConditions = []
 
-        // Only include FULFILLED orders for accurate revenue reporting
-        orderConditions.push(sql`UPPER(${orders.status}) = 'FULFILLED'`)
+        // Align revenue reporting logic
+        orderConditions.push(sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`)
 
         if (startDate) {
             const start = new Date(startDate)
@@ -67,6 +67,8 @@ export async function GET(req: NextRequest) {
                 organizationName: organizations.name,
                 totalOrders: sql<number>`count(${orders.id})::int`,
                 totalAmountCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int`,
+                totalRefundCents: sql<number>`coalesce(sum(${orders.refundAmountCents}), 0)::int`,
+                rejectedOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)::int`,
                 branchCount: sql<number>`count(distinct ${branches.id})::int`,
                 // Optimization: Aggregate branch data into a JSON array within the main query
                 branches: sql<any>`
@@ -107,6 +109,8 @@ export async function GET(req: NextRequest) {
                     groupId: branches.groupId,
                     orders: sql<number>`count(${orders.id})::int`,
                     revenue: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int`,
+                    refunds: sql<number>`coalesce(sum(${orders.refundAmountCents}), 0)::int`,
+                    rejected: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)::int`,
                 })
                 .from(branches)
                 .leftJoin(orders, and(

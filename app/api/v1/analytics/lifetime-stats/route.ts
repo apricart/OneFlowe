@@ -45,8 +45,8 @@ export async function GET(req: NextRequest) {
 
     // Build conditions
     const conditions: any[] = [
-        // Include APPROVED, FULFILLED, and REFUNDED orders
-        sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'REFUNDED')`
+        // Revenue rule: FULFILLED and REFUNDED only (APPROVED excluded)
+        sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`
     ]
 
     // Apply organization filter
@@ -70,10 +70,10 @@ export async function GET(req: NextRequest) {
             totalOrders: sql<number>`COUNT(*)::int`,
             fulfilledOrders: sql<number>`COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END)::int`,
             refundedOrders: sql<number>`COUNT(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END)::int`,
-            // Total revenue = sum of all orders minus refunds
-            totalRevenueCents: sql<number>`COALESCE(SUM(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::bigint`,
-            // Gross revenue (before refunds)
-            grossRevenueCents: sql<number>`COALESCE(SUM(${orders.totalCents}), 0)::bigint`,
+            // Revenue = FULFILLED-only (no refund deductions)
+            totalRevenueCents: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)::bigint`,
+            // Gross revenue (FULFILLED orders total)
+            grossRevenueCents: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)::bigint`,
             // Total refunded amount
             totalRefundedCents: sql<number>`COALESCE(SUM(${orders.refundAmountCents}), 0)::bigint`,
         })

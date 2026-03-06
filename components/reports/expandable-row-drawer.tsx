@@ -8,6 +8,7 @@ import { useState } from "react"
 import { cn } from "@/lib/utils"
 
 export interface DetailField {
+    key?: string
     label: string
     value: string | number | React.ReactNode
     type?: "text" | "badge" | "currency" | "date" | "mono"

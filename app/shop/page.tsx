@@ -1,6 +1,6 @@
 "use client"
 import React, { useMemo, useState } from "react"
-import { formatPKR } from "@/lib/utils"
+import { formatPKR, cn } from "@/lib/utils"
 import useSWR from "swr"
 import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
@@ -75,6 +75,7 @@ export default function OrderPortalPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [pageSize, setPageSize] = useState(12)
   const [currentPage, setCurrentPage] = useState(1)
+  const [activeCategory, setActiveCategory] = useState<string>("All")
 
   // Auth check
   React.useEffect(() => {
@@ -152,6 +153,16 @@ export default function OrderPortalPage() {
     return branchesData?.items?.find((b: any) => b.id === activeBranchId)?.name || "Loading..."
   }, [branchesData, activeBranchId])
 
+  const categories = useMemo(() => {
+    if (!inventoryData?.items) return ["All"]
+    const cats = new Set<string>()
+    cats.add("All")
+    inventoryData.items.forEach((item: any) => {
+      if (item.categoryName) cats.add(item.categoryName)
+    })
+    return Array.from(cats)
+  }, [inventoryData])
+
   const mappedProducts = useMemo(() => {
     if (!inventoryData?.items) return []
     return inventoryData.items.map((item: any) => ({
@@ -181,6 +192,13 @@ export default function OrderPortalPage() {
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.code.toLowerCase().includes(searchQuery.toLowerCase())
       )
+    }
+
+    if (activeCategory !== "All") {
+      filtered = filtered.filter(p => {
+        const item = inventoryData?.items?.find((i: any) => i.organizationInventoryId === p.id)
+        return item?.categoryName === activeCategory
+      })
     }
 
     if (sortBy === "price-low") filtered.sort((a, b) => a.priceCents - b.priceCents)
@@ -846,11 +864,32 @@ export default function OrderPortalPage() {
                 </select>
               </div>
 
+              {/* Category Ribbon */}
+              <div className="relative -mx-4 px-4 overflow-hidden">
+                <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar scroll-smooth">
+                  {categories.map((cat) => (
+                    <Button
+                      key={cat}
+                      onClick={() => setActiveCategory(cat)}
+                      variant={activeCategory === cat ? "default" : "outline"}
+                      className={cn(
+                        "rounded-full px-5 py-2 whitespace-nowrap text-xs font-bold transition-all duration-300",
+                        activeCategory === cat
+                          ? "shadow-lg shadow-blue-500/25 bg-blue-600 border-blue-600"
+                          : "bg-white/50 backdrop-blur-md dark:bg-slate-800/50 border-slate-200/50 dark:border-slate-700/50"
+                      )}
+                    >
+                      {cat}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
               {/* Budget Warning */}
               {cartTotal > remainingBudget && (
-                <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2">
+                <div className="p-3 bg-red-50/50 backdrop-blur-sm dark:bg-red-950/30 border border-red-200/50 dark:border-red-800/50 rounded-xl flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                  <p className="text-sm text-red-700 dark:text-red-300">Cart exceeds remaining budget</p>
+                  <p className="text-sm font-medium text-red-700 dark:text-red-300">Cart exceeds remaining budget</p>
                 </div>
               )}
             </div>
@@ -908,7 +947,7 @@ export default function OrderPortalPage() {
                       onClick={() => openProductDetail(product)}
                       className="group cursor-pointer"
                     >
-                      <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 h-full flex flex-col bg-white dark:bg-slate-900 dark:border-slate-800">
+                      <Card className="overflow-hidden hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-500 transform hover:-translate-y-2 h-full flex flex-col bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl border-white/20 dark:border-slate-800/50 shadow-sm ring-1 ring-black/5">
                         {/* Product Image */}
                         <div className="relative h-48 overflow-hidden group-hover:bg-gradient-to-tl transition-all bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700">
                           {product.imageUrl ? (
@@ -926,14 +965,19 @@ export default function OrderPortalPage() {
                           {/* Stock Badge */}
                           {product.stock !== undefined && (
                             <Badge
-                              className={`absolute top-2 right-2 ${product.stock > 10
-                                ? "bg-green-500"
-                                : product.stock > 0
-                                  ? "bg-yellow-500"
-                                  : "bg-red-500"
-                                }`}
+                              className={cn(
+                                "absolute top-2 right-2 border-0 shadow-sm",
+                                product.stock > 10
+                                  ? "bg-emerald-500 text-white"
+                                  : product.stock > 0
+                                    ? "bg-amber-500 text-white animate-pulse"
+                                    : "bg-rose-500 text-white"
+                              )}
                             >
-                              {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+                              <div className="flex items-center gap-1.5 px-0.5">
+                                <div className={cn("h-1.5 w-1.5 rounded-full bg-white", product.stock > 0 && "animate-ping")} />
+                                {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+                              </div>
                             </Badge>
                           )}
 
@@ -1193,6 +1237,26 @@ export default function OrderPortalPage() {
                     </Button>
                   </div>
                 </div>
+              </div>
+            )}
+            {/* Sticky Mini-Cart */}
+            {cart.length > 0 && !showCart && (
+              <div className="fixed bottom-6 right-6 z-40 transition-all duration-500 animate-in fade-in slide-in-from-bottom-5">
+                <Button
+                  onClick={() => setShowCart(true)}
+                  className="h-14 px-6 rounded-2xl shadow-2xl shadow-blue-500/40 bg-blue-600 hover:bg-blue-700 flex items-center gap-4 group ring-2 ring-white/20"
+                >
+                  <div className="relative">
+                    <ShoppingBag className="h-6 w-6 text-white group-hover:scale-110 transition-transform" />
+                    <span className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-white text-blue-600 text-[10px] font-bold flex items-center justify-center shadow-sm">
+                      {cart.length}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-start leading-tight">
+                    <span className="text-[10px] uppercase tracking-widest font-bold text-blue-100">Checkout</span>
+                    <span className="text-sm font-bold text-white font-mono">{formatPKR(cartTotal / 100)}</span>
+                  </div>
+                </Button>
               </div>
             )}
           </>

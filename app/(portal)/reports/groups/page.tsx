@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Download, Upload, RefreshCw, Loader2, Building, ChevronDown, ChevronRight, Users, FolderTree, ShoppingBag, TrendingUp, Calculator } from "lucide-react"
-import { formatPKR } from "@/lib/utils"
+import { formatPKR, cn } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
@@ -29,6 +29,8 @@ interface Branch {
     name: string
     orders: number
     revenue: number
+    refunds: number
+    rejected: number
 }
 
 interface Group {
@@ -39,6 +41,8 @@ interface Group {
     branchCount: number
     totalOrders: number
     totalAmountCents: number
+    totalRefundCents: number
+    rejectedOrders: number
     branches: Branch[]
 }
 
@@ -175,17 +179,6 @@ export default function GroupsReportPage() {
         <div className="space-y-5">
             <SectionHeader title="Groups Report" subtitle="Analyze group performance, member branches, order counts, and revenue breakdowns." />
 
-            <QuickDateRange startDate={startDate} endDate={endDate} onStartDateChange={setStartDate} onEndDateChange={setEndDate} storageKey="groups-report-dates" />
-
-            <FilterTagBar tags={filterTags} onRemove={handleRemoveFilter} />
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <KPICard title="Total Groups" value={isLoading ? "..." : summary.totalGroups} icon={FolderTree} colorScheme="blue" />
-                <KPICard title="Total Orders" value={isLoading ? "..." : summary.totalOrders} icon={ShoppingBag} colorScheme="violet" />
-                <KPICard title={role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue"} value={isLoading ? "..." : formatPKR(summary.totalRevenue / 100)} icon={TrendingUp} colorScheme="emerald" />
-                <KPICard title={role === "HEAD_OFFICE" ? "Avg Expense/Group" : "Avg Revenue/Group"} value={isLoading ? "..." : formatPKR(summary.avgRevenuePerGroup / 100)} icon={Calculator} colorScheme="amber" />
-            </div>
 
             <ReportFilters
                 searchTerm={searchTerm}
@@ -205,16 +198,25 @@ export default function GroupsReportPage() {
                 showGroupFilter={true}
             />
 
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <KPICard title="Total Groups" value={isLoading ? "..." : summary.totalGroups} icon={FolderTree} colorScheme="blue" />
+                <KPICard title="Total Orders" value={isLoading ? "..." : summary.totalOrders} icon={ShoppingBag} colorScheme="violet" />
+                <KPICard title={role === "HEAD_OFFICE" ? "Total Expense" : "Total Revenue"} value={isLoading ? "..." : formatPKR(summary.totalRevenue / 100)} icon={TrendingUp} colorScheme="emerald" />
+            </div>
+
             <Card className="overflow-hidden">
                 <Table>
                     <TableHeader>
-                        <TableRow>
+                        <TableRow className="bg-slate-50/50 dark:bg-slate-800/50">
                             <TableHead className="w-12"></TableHead>
-                            <TableHead>Group Name</TableHead>
-                            <TableHead>Organization</TableHead>
-                            <TableHead className="text-center">Branches</TableHead>
-                            <TableHead className="text-right">Orders</TableHead>
-                            <TableHead className="text-right">{role === "HEAD_OFFICE" ? "Expense" : "Revenue"}</TableHead>
+                            <TableHead className="text-[10px] font-bold uppercase">Group Name</TableHead>
+                            <TableHead className="text-[10px] font-bold uppercase">Organization</TableHead>
+                            <TableHead className="text-center text-[10px] font-bold uppercase">Units</TableHead>
+                            <TableHead className="text-right text-[10px] font-bold uppercase">Orders</TableHead>
+                            <TableHead className="text-right text-[10px] font-bold uppercase text-rose-500">Refunds</TableHead>
+                            <TableHead className="text-right text-[10px] font-bold uppercase text-amber-600">Rejected</TableHead>
+                            <TableHead className="text-right text-[10px] font-bold uppercase text-indigo-600">Net {role === "HEAD_OFFICE" ? "Expense" : "Revenue"}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -237,37 +239,40 @@ export default function GroupsReportPage() {
 
                                 return (
                                     <Fragment key={group.id}>
-                                        <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => hasBranches && toggleGroupExpansion(group.id)}>
+                                        <TableRow className="cursor-pointer hover:bg-muted/50 transition-colors group" onClick={() => hasBranches && toggleGroupExpansion(group.id)}>
                                             <TableCell>
                                                 {hasBranches && (
-                                                    isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+                                                    isExpanded ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />
                                                 )}
                                             </TableCell>
-                                            <TableCell className="font-medium">{group.name}</TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">{group.organizationName}</TableCell>
+                                            <TableCell className="font-bold text-slate-700 dark:text-slate-200">{group.name}</TableCell>
+                                            <TableCell className="text-[11px] text-muted-foreground">{group.organizationName}</TableCell>
                                             <TableCell className="text-center">
-                                                <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium">
-                                                    <Users className="h-3 w-3" />
+                                                <Badge variant="outline" className="text-[10px] font-bold">
                                                     {group.branchCount}
-                                                </div>
+                                                </Badge>
                                             </TableCell>
-                                            <TableCell className="text-right font-mono text-xs">{group.totalOrders}</TableCell>
-                                            <TableCell className="text-right font-mono text-xs font-medium">{formatPKR(group.totalAmountCents / 100)}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs font-bold">{group.totalOrders.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs text-rose-500">{formatPKR(group.totalRefundCents / 100)}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs text-amber-600">{group.rejectedOrders}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs font-bold text-indigo-600">{formatPKR(group.totalAmountCents / 100)}</TableCell>
                                         </TableRow>
                                         {isExpanded && hasBranches && (
                                             group.branches.map((branch) => (
-                                                <TableRow key={`${group.id}-${branch.id}`} className="bg-muted/30">
+                                                <TableRow key={`${group.id}-${branch.id}`} className="bg-slate-50/30 dark:bg-slate-800/20">
                                                     <TableCell></TableCell>
-                                                    <TableCell className="pl-8 text-xs text-muted-foreground">
-                                                        <span className="inline-flex items-center gap-2">
-                                                            <span className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-700"></span>
+                                                    <TableCell className="pl-8 text-[11px] text-muted-foreground font-medium">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></div>
                                                             {branch.name}
-                                                        </span>
+                                                        </div>
                                                     </TableCell>
-                                                    <TableCell className="text-xs text-muted-foreground">Branch</TableCell>
+                                                    <TableCell className="text-[10px] text-slate-400 italic">Branch unit</TableCell>
                                                     <TableCell></TableCell>
-                                                    <TableCell className="text-right font-mono text-xs text-muted-foreground">{branch.orders}</TableCell>
-                                                    <TableCell className="text-right font-mono text-xs text-muted-foreground">{formatPKR(branch.revenue / 100)}</TableCell>
+                                                    <TableCell className="text-right font-mono text-xs text-muted-foreground/70">{branch.orders}</TableCell>
+                                                    <TableCell className="text-right font-mono text-xs text-rose-400/70">{formatPKR(branch.refunds / 100)}</TableCell>
+                                                    <TableCell className="text-right font-mono text-xs text-amber-500/70">{branch.rejected}</TableCell>
+                                                    <TableCell className="text-right font-mono text-xs text-indigo-400/70">{formatPKR(branch.revenue / 100)}</TableCell>
                                                 </TableRow>
                                             ))
                                         )}

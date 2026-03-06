@@ -12,6 +12,7 @@ type BankingKPICardProps = {
     gradient: string
     iconBg: string
     delay?: number
+    onClick?: () => void
 }
 
 /* Decorative sparkline wave SVG */
@@ -54,12 +55,15 @@ export const BankingKPICard = ({
     gradient,
     iconBg,
     delay = 0,
+    onClick,
 }: BankingKPICardProps) => {
     const isPositive = trend === "up"
 
     return (
         <div
-            className={`group relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800/60 p-5 shadow-sm hover:shadow-2xl hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50 transition-all duration-500 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl`}
+            onClick={onClick}
+            className={`group relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800/60 p-5 shadow-sm transition-all duration-500 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl ${onClick ? "cursor-pointer hover:shadow-2xl hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50 hover:-translate-y-1 z-10 hover:z-20" : "hover:shadow-2xl hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50"
+                }`}
             style={{
                 animationDelay: `${delay}ms`,
                 animation: `kpiEntrance 0.6s ease-out ${delay}ms both`,
@@ -81,21 +85,28 @@ export const BankingKPICard = ({
                     </div>
                 </div>
 
-                {trend && (
-                    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border backdrop-blur-sm ${isPositive
-                        ? 'bg-emerald-50/80 border-emerald-200/60 dark:bg-emerald-900/20 dark:border-emerald-800/60'
-                        : 'bg-red-50/80 border-red-200/60 dark:bg-red-900/20 dark:border-red-800/60'
-                        }`}>
-                        {isPositive ? (
-                            <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                        ) : (
-                            <ArrowDownRight className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-                        )}
-                        <span className={`text-xs font-semibold ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {trendValue}
-                        </span>
-                    </div>
-                )}
+                <div className="flex items-center gap-2">
+                    {trend && (
+                        <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border backdrop-blur-sm ${isPositive
+                            ? 'bg-emerald-50/80 border-emerald-200/60 dark:bg-emerald-900/20 dark:border-emerald-800/60'
+                            : 'bg-red-50/80 border-red-200/60 dark:bg-red-900/20 dark:border-red-800/60'
+                            }`}>
+                            {isPositive ? (
+                                <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            ) : (
+                                <ArrowDownRight className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                            )}
+                            <span className={`text-xs font-semibold ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {trendValue}
+                            </span>
+                        </div>
+                    )}
+                    {onClick && (
+                        <div className="opacity-70 group-hover:opacity-100 group-hover:scale-110 transition-all p-1.5 rounded-full bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-slate-100 shadow-sm border border-slate-200/50 dark:border-slate-700/30">
+                            <ArrowUpRight className="w-4 h-4" />
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="relative space-y-1.5">

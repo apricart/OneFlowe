@@ -9,20 +9,17 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, ShoppingBag, TrendingUp, Package, Calculator, Upload, Building, Building2, Calendar, Users, Crown } from "lucide-react"
 import * as XLSX from "xlsx"
-import { formatPKR } from "@/lib/utils"
+import { formatPKR, cn } from "@/lib/utils"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import { Badge } from "@/components/ui/badge"
 import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
 
-import { QuickDateRange } from "@/components/reports/quick-date-range"
 import { KPICard } from "@/components/reports/kpi-card"
-import { FilterTagBar, type FilterTag } from "@/components/reports/filter-tag-bar"
 import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/reports/column-selector"
 import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expandable-row-drawer"
 import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
-import { ComparisonToggle } from "@/components/reports/comparison-toggle"
 import { ReportFilters } from "@/components/reports/report-filters"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -36,6 +33,9 @@ const ALL_COLUMNS: ColumnDef[] = [
   { key: "organization", label: "Organization", defaultVisible: false },
   { key: "group", label: "Group", defaultVisible: false },
   { key: "status", label: "Status", defaultVisible: false },
+  { key: "subtotal", label: "Subtotal", defaultVisible: false },
+  { key: "tax", label: "Tax", defaultVisible: false },
+  { key: "discount", label: "Discount", defaultVisible: false },
 ]
 
 export default function SalesSummaryReportPage() {
@@ -51,7 +51,6 @@ export default function SalesSummaryReportPage() {
   const [endDate, setEndDate] = useState("")
   const [groupId, setGroupId] = useState("")
   const [generatedDate, setGeneratedDate] = useState("")
-  const [comparisonEnabled, setComparisonEnabled] = useState(false)
   const [selectedRow, setSelectedRow] = useState<any>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -91,13 +90,7 @@ export default function SalesSummaryReportPage() {
     setGeneratedDate(new Date().toLocaleString())
   }, [])
 
-  if (!hasMounted) {
-    return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-      </div>
-    )
-  }
+
 
   const summary = data?.summary || { totalSales: 0, totalTax: 0, totalSubtotal: 0, orderCount: 0, totalItemsSold: 0 }
   const orders = data?.orders || []
@@ -108,42 +101,37 @@ export default function SalesSummaryReportPage() {
     (order.branchName && order.branchName.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
-  // Generate sparkline data from recent orders (aggregate by day)
+  // Use backend summary totals directly — single source of truth
+  const calculatedTotalRevenue = summary.totalSales || 0
+  const calculatedOrderVolume = summary.orderCount || 0
+  const calculatedAvgOrderValue = calculatedOrderVolume > 0 ? calculatedTotalRevenue / calculatedOrderVolume : 0
+
+  // Generate sparkline data from filtered orders (visual only, not for KPI values)
   const sparklineData = useMemo(() => {
-    if (!orders.length) return []
+    if (!filteredOrders.length) return []
     const daily: Record<string, number> = {}
-    orders.forEach((o: any) => {
-      const day = new Date(o.createdAt).toLocaleDateString()
-      daily[day] = (daily[day] || 0) + (o.totalCents || 0) / 100
+    filteredOrders.forEach((o: any) => {
+      if ((o.status || "").toUpperCase() === "FULFILLED") {
+        const day = new Date(o.createdAt).toLocaleDateString()
+        daily[day] = (daily[day] || 0) + (o.totalCents || 0) / 100
+      }
     })
     return Object.values(daily).slice(-14)
-  }, [orders])
+  }, [filteredOrders])
 
   const orderCountSparkline = useMemo(() => {
-    if (!orders.length) return []
+    if (!filteredOrders.length) return []
     const daily: Record<string, number> = {}
-    orders.forEach((o: any) => {
-      const day = new Date(o.createdAt).toLocaleDateString()
-      daily[day] = (daily[day] || 0) + 1
+    filteredOrders.forEach((o: any) => {
+      if ((o.status || "").toUpperCase() === "FULFILLED") {
+        const day = new Date(o.createdAt).toLocaleDateString()
+        daily[day] = (daily[day] || 0) + 1
+      }
     })
     return Object.values(daily).slice(-14)
-  }, [orders])
+  }, [filteredOrders])
 
-  // Build filter tags
-  const filterTags: FilterTag[] = []
-  if (organizationId) filterTags.push({ key: "org", label: "Org", value: String(organizationId), color: "blue" })
-  if (branchIds.length > 0) filterTags.push({ key: "branches", label: "Branches", value: `${branchIds.length} selected`, color: "indigo" })
-  else if (contextBranchId) filterTags.push({ key: "branch", label: "Branch", value: String(contextBranchId), color: "indigo" })
-  if (startDate || endDate) filterTags.push({ key: "dates", label: "Period", value: `${startDate || "..."} – ${endDate || "..."}`, color: "emerald" })
-  if (groupId) filterTags.push({ key: "group", label: "Group", value: groupId, color: "amber" })
 
-  const handleRemoveFilter = (key: string) => {
-    if (key === "org") { } // Can't remove org context
-    if (key === "branches") setContextBranchIds([])
-    if (key === "branch") setContextBranchId("")
-    if (key === "dates") { setStartDate(""); setEndDate("") }
-    if (key === "group") setGroupId("")
-  }
 
   const handleRowClick = (order: any) => {
     setSelectedRow(order)
@@ -151,13 +139,16 @@ export default function SalesSummaryReportPage() {
   }
 
   const getDrawerFields = (order: any): DetailField[] => [
-    { label: "Transaction ID", value: order.tid, type: "mono" },
-    { label: "Date", value: new Date(order.createdAt).toLocaleString(), type: "date" },
-    { label: "Organization", value: order.organizationName || "-" },
-    { label: "Group", value: order.groupName || "-" },
-    { label: "Branch", value: order.branchName || `ID: ${order.branchId}` },
-    { label: "Status", value: order.status, type: "badge" },
-    { label: "Amount", value: formatPKR((order.totalCents || 0) / 100), type: "currency" },
+    { key: "tid", label: "Transaction ID", value: order.tid, type: "mono" },
+    { key: "date", label: "Date", value: new Date(order.createdAt).toLocaleString(), type: "date" },
+    { key: "organization", label: "Organization", value: order.organizationName || "-" },
+    { key: "group", label: "Group", value: order.groupName || "-" },
+    { key: "branch", label: "Branch", value: order.branchName || `ID: ${order.branchId}` },
+    { key: "status", label: "Status", value: order.status, type: "badge" },
+    { key: "subtotal", label: "Subtotal", value: formatPKR((order.subtotalCents || 0) / 100), type: "currency" },
+    { key: "tax", label: "Tax", value: formatPKR((order.taxCents || 0) / 100), type: "currency" },
+    { key: "discount", label: "Discount", value: formatPKR((order.discountCents || 0) / 100), type: "currency" },
+    { key: "total", label: "Total Amount", value: formatPKR((order.totalCents || 0) / 100), type: "currency" },
   ]
 
   // Top performers with progress bars
@@ -202,31 +193,20 @@ export default function SalesSummaryReportPage() {
     }
   }
 
+  if (!hasMounted) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5 pb-12">
       <SectionHeader
         title={role === "HEAD_OFFICE" ? "Product Purchase Summary" : "Sales Summary"}
         subtitle={role === "HEAD_OFFICE" ? "Comprehensive view of purchase, taxes, and order volume." : "Comprehensive view of sales, taxes, and order volume."}
       />
-
-      {/* Quick Date Range Bar */}
-      <QuickDateRange
-        startDate={startDate}
-        endDate={endDate}
-        onStartDateChange={setStartDate}
-        onEndDateChange={setEndDate}
-        storageKey="sales-summary-dates"
-      />
-
-      {/* Filter Tag Bar + Comparison Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <FilterTagBar
-          tags={filterTags}
-          onRemove={handleRemoveFilter}
-          onClearAll={() => { setContextBranchIds([]); setStartDate(""); setEndDate(""); setGroupId("") }}
-        />
-        <ComparisonToggle enabled={comparisonEnabled} onToggle={setComparisonEnabled} />
-      </div>
 
       {/* Filters Row */}
       <ReportFilters
@@ -240,7 +220,14 @@ export default function SalesSummaryReportPage() {
         setGroupId={setGroupId}
         selectedBranchIds={branchIds}
         onBranchChange={handleBranchChange}
-        onRefresh={() => mutate()}
+        onRefresh={() => {
+          setSearchTerm("")
+          setStartDate("")
+          setEndDate("")
+          setGroupId("")
+          handleBranchChange([])
+          mutate()
+        }}
         onExport={handleExport}
         isLoading={isLoading}
         role={role}
@@ -250,37 +237,20 @@ export default function SalesSummaryReportPage() {
       />
 
       {/* Bento Box KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <KPICard
-          title="Total Revenue"
-          value={formatPKR((summary.totalSales || 0) / 100)}
+          title="Total Revenue (Fulfilled)"
+          value={formatPKR((summary?.totalSales ?? 0) / 100)}
           icon={TrendingUp}
           colorScheme="emerald"
           trendData={sparklineData}
-          trend={sparklineData.length >= 2 && sparklineData[sparklineData.length - 2] > 0
-            ? ((sparklineData[sparklineData.length - 1] - sparklineData[sparklineData.length - 2]) / sparklineData[sparklineData.length - 2]) * 100
-            : undefined}
         />
         <KPICard
-          title="Order Volume"
-          value={summary.orderCount || 0}
+          title="Order Volume (Fulfilled)"
+          value={summary?.totalOrders ?? 0}
           icon={ShoppingBag}
           colorScheme="blue"
           trendData={orderCountSparkline}
-        />
-        <KPICard
-          title="Items Sold"
-          value={(summary.totalItemsSold || 0).toLocaleString()}
-          icon={Package}
-          colorScheme="violet"
-          trendData={sparklineData}
-        />
-        <KPICard
-          title="Avg. Order Value"
-          value={formatPKR(((summary.totalSales || 0) / (summary.orderCount || 1)) / 100)}
-          icon={Calculator}
-          colorScheme="amber"
-          trendData={sparklineData}
         />
       </div>
 
@@ -366,7 +336,10 @@ export default function SalesSummaryReportPage() {
               {isVisible("group") && <TableHead>Group</TableHead>}
               {isVisible("branch") && <TableHead>Branch</TableHead>}
               {isVisible("status") && <TableHead>Status</TableHead>}
-              {isVisible("total") && <TableHead className="text-right pr-6">Amount</TableHead>}
+              {isVisible("subtotal") && <TableHead className="text-right">Subtotal</TableHead>}
+              {isVisible("tax") && <TableHead className="text-right">Tax</TableHead>}
+              {isVisible("discount") && <TableHead className="text-right">Discount</TableHead>}
+              {isVisible("total") && <TableHead className="text-right pr-6">Total</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -419,8 +392,23 @@ export default function SalesSummaryReportPage() {
                       </Badge>
                     </TableCell>
                   )}
+                  {isVisible("subtotal") && (
+                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                      {formatPKR((order.subtotalCents || 0) / 100)}
+                    </TableCell>
+                  )}
+                  {isVisible("tax") && (
+                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                      {formatPKR((order.taxCents || 0) / 100)}
+                    </TableCell>
+                  )}
+                  {isVisible("discount") && (
+                    <TableCell className="text-right font-mono text-xs text-rose-500">
+                      -{formatPKR((order.discountCents || 0) / 100)}
+                    </TableCell>
+                  )}
                   {isVisible("total") && (
-                    <TableCell className="text-right font-mono text-xs pr-6">
+                    <TableCell className="text-right font-mono font-medium text-xs pr-6">
                       {formatPKR((order.totalCents || 0) / 100)}
                     </TableCell>
                   )}
@@ -442,7 +430,7 @@ export default function SalesSummaryReportPage() {
         onClose={() => setDrawerOpen(false)}
         title={selectedRow?.tid || "Transaction Details"}
         subtitle={selectedRow ? `${selectedRow.branchName || 'Unknown'} • ${new Date(selectedRow.createdAt).toLocaleDateString()}` : ""}
-        fields={selectedRow ? getDrawerFields(selectedRow) : []}
+        fields={selectedRow ? getDrawerFields(selectedRow).filter(f => !f.key || isVisible(f.key)) : []}
       />
     </div>
   )

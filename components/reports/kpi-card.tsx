@@ -13,6 +13,7 @@ interface KPICardProps {
     colorScheme?: "indigo" | "emerald" | "rose" | "amber" | "blue" | "violet"
     comparisonValue?: string | number
     comparisonLabel?: string
+    subtitle?: string
 }
 
 const colorMap = {
@@ -75,6 +76,7 @@ export function KPICard({
     colorScheme = "indigo",
     comparisonValue,
     comparisonLabel,
+    subtitle,
 }: KPICardProps) {
     const colors = colorMap[colorScheme]
     const chartData = trendData?.map((v, i) => ({ value: v, index: i })) || []
@@ -125,6 +127,11 @@ export function KPICard({
                         {comparisonValue && (
                             <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
                                 {comparisonLabel}: <span className="font-semibold text-slate-500 dark:text-slate-400">{comparisonValue}</span>
+                            </p>
+                        )}
+                        {subtitle && (
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 italic">
+                                {subtitle}
                             </p>
                         )}
                     </div>

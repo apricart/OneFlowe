@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, branches } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 import { getCached, generateCacheKey } from "@/lib/cache-utils"
+import { FULFILLED_ONLY_FILTER } from "@/lib/metric-utils"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 
@@ -17,9 +18,8 @@ function getOrderConditions(role: Role | undefined, organizationId: number | nul
 
   const conditions = [gte(orders.createdAt, fromDate)]
 
-  if (role === "SUPER_ADMIN") {
-    conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'REFUNDED')`)
-  }
+  // Revenue rule: FULFILLED-only
+  conditions.push(FULFILLED_ONLY_FILTER)
 
   if (role !== "SUPER_ADMIN" && organizationId) {
     conditions.push(eq(orders.organizationId, organizationId))
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
     const gmvRows = await db
       .select({
         day: dayExpr,
-        totalCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`.mapWith(Number),
+        totalCents: sql<number>`COALESCE(SUM(${orders.totalCents}), 0)`.mapWith(Number),
       })
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -165,12 +165,7 @@ export async function GET(req: NextRequest) {
     const monthConditions: any[] = [
       gte(orders.createdAt, startOfMonth),
       lt(orders.createdAt, startOfNextMonth),
-      or(
-        eq(orders.status, "APPROVED"),
-        eq(orders.status, "approved"),
-        eq(orders.status, "FULFILLED"),
-        eq(orders.status, "fulfilled")
-      ),
+      FULFILLED_ONLY_FILTER,
     ]
     if (role !== "SUPER_ADMIN" && organizationId) {
       monthConditions.push(eq(orders.organizationId, organizationId))
@@ -183,7 +178,7 @@ export async function GET(req: NextRequest) {
       .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))
-      .where(and(...(monthConditions as any), sql`COALESCE(${orders.refundAmountCents}, 0) < ${orders.totalCents}`))
+      .where(and(...(monthConditions as any)))
 
     const ordersThisMonth = Number(((ordersMonthRow as any)[0]?.count) || 0)
 

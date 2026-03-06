@@ -69,13 +69,7 @@ export default function ProductSummaryDetailsReportPage() {
     setGeneratedDate(new Date().toLocaleString())
   }, [])
 
-  if (!hasMounted) {
-    return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-      </div>
-    )
-  }
+
 
   const detailsData = data?.items || []
 
@@ -86,7 +80,11 @@ export default function ProductSummaryDetailsReportPage() {
     d.createdByName?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const totalRevenue = filteredDetails.reduce((sum: number, d: any) => sum + (d.priceCents * d.quantity || 0), 0)
+  const totalRevenue = filteredDetails.reduce((sum: number, d: any) => {
+    const status = (d.orderStatus || "").toUpperCase()
+    if (status === "REJECTED" || status === "CANCELLED" || status === "REFUNDED") return sum
+    return sum + (d.priceCents * d.quantity || 0)
+  }, 0)
   const totalItems = filteredDetails.reduce((sum: number, d: any) => sum + (d.quantity || 0), 0)
 
   const sparklineData = useMemo(() => {
@@ -114,16 +112,16 @@ export default function ProductSummaryDetailsReportPage() {
   }
 
   const getDrawerFields = (d: any): DetailField[] => [
-    { label: "Product", value: d.productName },
-    { label: "SKU", value: d.productCode || "-", type: "mono" },
-    { label: "Transaction ID", value: d.tid, type: "mono" },
-    { label: "Order Date", value: new Date(d.orderDate).toLocaleString(), type: "date" },
-    { label: "Organization", value: d.organizationName || "-" },
-    { label: "Group", value: d.groupName || "-" },
-    { label: "Branch", value: d.branchName },
-    { label: "Processed By", value: d.createdByName || d.createdByEmail },
-    { label: "Quantity", value: d.quantity },
-    { label: "Total", value: formatPKR((d.priceCents * d.quantity) / 100), type: "currency" },
+    { key: "productName", label: "Product", value: d.productName },
+    { key: "sku", label: "SKU", value: d.productCode || "-", type: "mono" },
+    { key: "tid", label: "Transaction ID", value: d.tid, type: "mono" },
+    { key: "date", label: "Order Date", value: new Date(d.orderDate).toLocaleString(), type: "date" },
+    { key: "organization", label: "Organization", value: d.organizationName || "-" },
+    { key: "group", label: "Group", value: d.groupName || "-" },
+    { key: "branch", label: "Branch", value: d.branchName },
+    { key: "employee", label: "Processed By", value: d.createdByName || d.createdByEmail },
+    { key: "qty", label: "Quantity", value: d.quantity },
+    { key: "total", label: "Total", value: formatPKR((d.priceCents * d.quantity) / 100), type: "currency" },
   ]
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
@@ -149,8 +147,16 @@ export default function ProductSummaryDetailsReportPage() {
     XLSX.writeFile(workbook, `product-details-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
   }
 
+  if (!hasMounted) {
+    return (
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-12">
       <SectionHeader title="Product Summary Details" subtitle="Granular audit of every product transaction across locations." />
 
       <QuickDateRange startDate={startDate} endDate={endDate} onStartDateChange={setStartDate} onEndDateChange={setEndDate} storageKey="product-details-dates" />
@@ -162,17 +168,21 @@ export default function ProductSummaryDetailsReportPage() {
         startDate={startDate} setStartDate={setStartDate}
         endDate={endDate} setEndDate={setEndDate}
         groupId={groupId} setGroupId={setGroupId}
-        onRefresh={() => mutate()} isLoading={isLoading}
+        onRefresh={() => {
+          setSearchTerm("")
+          setStartDate("")
+          setEndDate("")
+          setGroupId("")
+          mutate()
+        }} isLoading={isLoading}
         role={role} organizationId={organizationId || undefined}
         searchPlaceholder="Search Product, TID, or User..."
         onExport={handleExport}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <KPICard title="Total Revenue" value={formatPKR(totalRevenue / 100)} icon={TrendingUp} colorScheme="emerald" trendData={sparklineData} />
-        <KPICard title="Total Items" value={totalItems.toLocaleString()} icon={Package} colorScheme="blue" />
         <KPICard title="Transactions" value={filteredDetails.length} icon={FileText} colorScheme="violet" />
-        <KPICard title="Avg. Item Value" value={formatPKR(totalItems > 0 ? totalRevenue / totalItems / 100 : 0)} icon={Hash} colorScheme="amber" />
       </div>
 
       <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900">
@@ -236,7 +246,7 @@ export default function ProductSummaryDetailsReportPage() {
         open={drawerOpen} onClose={() => setDrawerOpen(false)}
         title={selectedRow?.productName || "Transaction Details"}
         subtitle={selectedRow ? `${selectedRow.branchName} • TID: ${selectedRow.tid}` : ""}
-        fields={selectedRow ? getDrawerFields(selectedRow) : []}
+        fields={selectedRow ? getDrawerFields(selectedRow).filter(f => !f.key || isVisible(f.key)) : []}
       />
     </div>
   )
