@@ -1,40 +1,85 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import useSWR from "swr"
 import { useAppContext } from "@/components/context/app-context"
-import { SectionHeader } from "@/components/ui/section-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, Building2, TrendingUp, ShoppingBag, AlertTriangle, Crown, Trophy } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+    Loader2, Building2, TrendingUp, Search, Download, FileText, FileSpreadsheet, FileIcon as FilePdf, RefreshCw, Trophy, Crown, BarChart3
+} from "lucide-react"
+import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import { Badge } from "@/components/ui/badge"
 import { Role } from "@/lib/rbac"
 import { useSession } from "next-auth/react"
+import { Input } from "@/components/ui/input"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
-import { QuickDateRange } from "@/components/reports/quick-date-range"
+import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { GroupFilter } from "@/components/reports/group-filter"
+import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
 import { KPICard } from "@/components/reports/kpi-card"
-import { ReportFilters } from "@/components/reports/report-filters"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function BranchReportsPage() {
-    const { organizationId, branchId: contextBranchId } = useAppContext()
+    const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+
+    const {
+        organizationId,
+        setBranchIds: setContextBranchIds
+    } = useAppContext()
+
     const [searchTerm, setSearchTerm] = useState("")
-    const [startDate, setStartDate] = useState("")
-    const [endDate, setEndDate] = useState("")
-    const [groupId, setGroupId] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
+    const [groupId, setGroupId] = useState("")
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
     const [hasMounted, setHasMounted] = useState(false)
 
+    // URL States for filtering
+    const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "thisMonth"
+    const startFromUrl = searchParams.get("startDate") || ""
+    const endFromUrl = searchParams.get("endDate") || ""
+
+    const activePreset = presetFromUrl
+    const dateRange = useMemo(() => {
+        if (startFromUrl && endFromUrl) {
+            return { startDate: new Date(startFromUrl), endDate: new Date(endFromUrl) }
+        }
+        return null
+    }, [startFromUrl, endFromUrl])
+
+    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset) => {
+        const params = new URLSearchParams(searchParams.toString())
+        params.set("preset", preset)
+        if (range) {
+            params.set("startDate", range.startDate.toISOString())
+            params.set("endDate", range.endDate.toISOString())
+        } else {
+            params.delete("startDate")
+            params.delete("endDate")
+        }
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    }, [searchParams, pathname, router])
+
     const queryParams = new URLSearchParams()
     if (organizationId) queryParams.set("organizationId", organizationId.toString())
-    if (startDate) queryParams.set("startDate", startDate)
-    if (endDate) queryParams.set("endDate", endDate)
+    if (startFromUrl) queryParams.set("startDate", startFromUrl)
+    if (endFromUrl) queryParams.set("endDate", endFromUrl)
     if (groupId) queryParams.set("groupId", groupId)
     queryParams.set("limit", "10000")
 
@@ -45,56 +90,33 @@ export default function BranchReportsPage() {
         setGeneratedDate(new Date().toLocaleString())
     }, [])
 
-
-
     const topPerformers = data?.topPerformers || []
     const summary = data?.summary || { totalSales: 0, orderCount: 0 }
-    const maxSales = topPerformers.length > 0 ? Math.max(...topPerformers.map((p: any) => p.sales)) : 0
-    const totalBranches = topPerformers.length
-    const avgRevenue = totalBranches > 0 ? (topPerformers.reduce((s: number, p: any) => s + (p.sales || 0), 0) / totalBranches) : 0
 
-    // Filter branches by search
     const filteredBranches = topPerformers.filter((p: any) =>
         (p.branchName || "").toLowerCase().includes(searchTerm.toLowerCase())
     )
 
-    // Threshold alert: branches with concerning metrics (simulated — highlight bottom performers)
-    const avgOrders = totalBranches > 0 ? topPerformers.reduce((s: number, p: any) => s + (p.orderCount || 0), 0) / totalBranches : 0
-    const alertBranches = topPerformers.filter((p: any) => p.orderCount < avgOrders * 0.3)
-
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Rank", "Branch", "Group", "Revenue", "Fulfilled", "Rejected", "Refunded"]
-        const rows = topPerformers.map((p: any, i: number) => [
-            `#${i + 1}`,
-            p.branchName,
-            p.groupName || "-",
-            (p.sales / 100).toFixed(2), // Changed p.revenue to p.sales based on existing data structure
-            p.fulfilledCount || 0,
-            p.rejectedCount || 0,
-            p.refundedCount || 0
+        const headers = ["Rank", "Branch", "Group", "Orders", "Fulfilled", "Revenue"]
+        const rows = filteredBranches.map((p: any, i: number) => [
+            `#${i + 1}`, p.branchName, p.groupName || "-", p.orderCount, p.fulfilledCount, (p.sales / 100).toFixed(2)
         ])
 
         if (format === 'pdf') {
             const doc = new jsPDF()
-            doc.setFontSize(20); doc.text("Branch Performance Report", 14, 20)
+            doc.setFontSize(20); doc.text("Branch Performance Ledger", 14, 20)
             doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
             autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid' })
-            doc.save(`branch-report-${new Date().getTime()}.pdf`)
-        } else if (format === 'csv') {
-            const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r: string[]) => r.join(","))].join("\n")
-            const encodedUri = encodeURI(csvContent); const link = document.createElement("a")
-            link.setAttribute("href", encodedUri); link.setAttribute("download", `branch-report-${new Date().getTime()}.csv`)
-            document.body.appendChild(link); link.click(); document.body.removeChild(link)
+            doc.save(`branch-performance-${new Date().getTime()}.pdf`)
+            return
         }
-    }
 
-    const getRankColor = (index: number) => {
-        if (index === 0) return "from-amber-400 to-amber-500"
-        if (index === 1) return "from-slate-300 to-slate-400"
-        if (index === 2) return "from-orange-400 to-orange-500"
-        return "from-slate-200 to-slate-300"
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Branches")
+        XLSX.writeFile(workbook, `branch-performance-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
     }
-
 
     if (!hasMounted) {
         return (
@@ -105,125 +127,195 @@ export default function BranchReportsPage() {
     }
 
     return (
-        <div className="space-y-5 pb-12">
-            <SectionHeader title="Branch Reports" subtitle="Branch-level performance rankings, threshold alerts, and comparisons." />
+        <div className="space-y-5 pb-12 bg-slate-50 dark:bg-slate-950 min-h-screen">
 
-
-            <ReportFilters
-                searchTerm={searchTerm} setSearchTerm={setSearchTerm}
-                startDate={startDate} setStartDate={setStartDate}
-                endDate={endDate} setEndDate={setEndDate}
-                groupId={groupId} setGroupId={setGroupId}
-                onRefresh={() => {
-                    setSearchTerm("")
-                    setStartDate("")
-                    setEndDate("")
-                    setGroupId("")
-                    mutate()
-                }} isLoading={isLoading}
-                role={role} organizationId={organizationId || undefined}
-                searchPlaceholder="Search branches..."
-                showGroupFilter={true}
-                onExport={handleExport}
-            />
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <KPICard title="Total Branches" value={totalBranches} icon={Building2} colorScheme="blue" />
-                <KPICard title="Total Revenue" value={formatPKR((summary.totalSales || 0) / 100)} icon={TrendingUp} colorScheme="emerald" />
+            {/* ━━━ GLOBAL STICKY HEADER ━━━ */}
+            <div className="sticky top-0 z-30 flex flex-wrap items-center gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                <GlobalDateFilter
+                    value={dateRange}
+                    onChange={handleDateChange}
+                    activePreset={activePreset}
+                    hidePresets={false}
+                />
+                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                    <GroupFilter
+                        value={groupId}
+                        onChange={setGroupId}
+                        organizationId={organizationId || undefined}
+                    />
+                )}
+                <div className="flex-1" />
+                <ScheduleReportModal reportName="Branch Performance" />
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => mutate()}
+                    disabled={isLoading}
+                    className="h-9 text-[12px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-full px-4"
+                >
+                    <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+                    REFRESH
+                </Button>
             </div>
 
+            <div className="px-4 md:px-6 space-y-5">
 
-            {/* Branch Detailed Report */}
-            <Card className="overflow-hidden border-none shadow-sm bg-white dark:bg-slate-900">
-                <CardHeader className="pb-3 border-b border-slate-50 dark:border-slate-800">
-                    <div className="flex items-center justify-between">
-                        <CardTitle className="text-sm font-bold flex items-center gap-2 uppercase tracking-tight">
-                            <Building2 className="h-4 w-4 text-indigo-500" />
-                            Detailed Branch Performance
-                        </CardTitle>
-                        <Badge variant="secondary" className="text-[10px] font-bold">
-                            {filteredBranches.length} units
-                        </Badge>
+                {/* ━━━ "INTELLIGENCE" HEADER ━━━ */}
+                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#064e3b] via-[#065f46] to-[#047857] px-6 py-8 text-white shadow-xl ring-1 ring-emerald-500/30">
+                    <div className="flex flex-col gap-2 relative z-10">
+                        <p className="text-xs tracking-[0.3em] text-emerald-200 font-bold uppercase">Multi-Unit Surveillance</p>
+                        <h1 className="text-4xl font-bold tracking-tight">Branch Performance</h1>
+                        <p className="text-sm text-emerald-100/80 font-medium max-w-xl">
+                            Comparative analysis of branch output, fulfillment efficiency, and market share across <strong>{topPerformers.length}</strong> active units.
+                        </p>
                     </div>
-                </CardHeader>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Branch Name</th>
-                                <th className="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Total Orders</th>
-                                <th className="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right text-emerald-600">Fulfilled</th>
-                                <th className="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right text-rose-500">Rejected</th>
-                                <th className="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right text-amber-600">Refunded</th>
-                                <th className="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Net Revenue</th>
-                                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Market Share</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                            {isLoading ? (
-                                <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></td></tr>
-                            ) : filteredBranches.length === 0 ? (
-                                <tr><td colSpan={7} className="py-12 text-center text-muted-foreground italic text-sm">No branch data matched your filters.</td></tr>
-                            ) : (
-                                filteredBranches.map((performer: any, index: number) => {
-                                    const marketShare = summary.totalSales > 0 ? (performer.sales / summary.totalSales) * 100 : 0
-
-                                    return (
-                                        <tr key={performer.branchId} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-8 w-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs border border-indigo-100/50 dark:border-indigo-800/30">
-                                                        {index + 1}
-                                                    </div>
-                                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 transition-colors">
-                                                        {performer.branchName || `Branch #${performer.branchId}`}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4 text-right">
-                                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                                                    {performer.orderCount.toLocaleString()}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-4 text-right">
-                                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[10px] font-bold px-2 py-0.5">
-                                                    {performer.fulfilledCount?.toLocaleString() || 0}
-                                                </Badge>
-                                            </td>
-                                            <td className="px-4 py-4 text-right">
-                                                <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-100 text-[10px] font-bold px-2 py-0.5">
-                                                    {performer.rejectedCount?.toLocaleString() || 0}
-                                                </Badge>
-                                            </td>
-                                            <td className="px-4 py-4 text-right">
-                                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-100 text-[10px] font-bold px-2 py-0.5">
-                                                    {performer.refundedCount?.toLocaleString() || 0}
-                                                </Badge>
-                                            </td>
-                                            <td className="px-4 py-4 text-right">
-                                                <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                                                    {formatPKR(performer.sales / 100)}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex flex-col items-end gap-1">
-                                                    <span className="text-[10px] font-bold text-slate-500">{marketShare.toFixed(1)}%</span>
-                                                    <div className="w-16 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                                                        <div className="h-full bg-indigo-500" style={{ width: `${marketShare}%` }} />
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )
-                                })
-                            )}
-                        </tbody>
-                    </table>
+                    <div className="absolute top-0 right-0 -translate-y-12 translate-x-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
                 </div>
-            </Card>
 
-            <div className="text-xs text-muted-foreground text-center">Report Generated: {generatedDate}</div>
+                {/* ━━━ KPI BENTO GRID ━━━ */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <KPICard
+                        title="Top Performer"
+                        value={topPerformers[0]?.branchName || "N/A"}
+                        icon={Trophy}
+                        colorScheme="amber"
+                        subtitle="Highest revenue branch"
+                    />
+                    <KPICard
+                        title="Total Units"
+                        value={topPerformers.length}
+                        icon={Building2}
+                        colorScheme="blue"
+                    />
+                    <KPICard
+                        title="Network Revenue"
+                        value={formatPKR(summary.totalSales / 100)}
+                        icon={TrendingUp}
+                        colorScheme="emerald"
+                    />
+                    <KPICard
+                        title="Avg Order Value"
+                        value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)}
+                        icon={BarChart3}
+                        colorScheme="indigo"
+                    />
+                </div>
+
+                {/* ━━━ REFINED TABLE ━━━ */}
+                <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/50 backdrop-blur-xl">
+                    <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-4">
+                        <div className="flex items-center gap-3">
+                            <h3 className="font-bold text-slate-900 dark:text-white text-sm uppercase tracking-wider">Performance Rankings</h3>
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                <Input
+                                    placeholder="Search branches..."
+                                    className="pl-9 h-10 w-64 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-10 text-xs font-bold gap-2 rounded-lg border-slate-200 dark:border-slate-800">
+                                    <Download className="h-4 w-4" />
+                                    EXPORT
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                                <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2.5 cursor-pointer">
+                                    <FileText className="mr-2 h-4 w-4" /> CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2.5 cursor-pointer">
+                                    <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2.5 cursor-pointer">
+                                    <FilePdf className="mr-2 h-4 w-4 text-rose-500" /> PDF
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="bg-slate-50/50 dark:bg-slate-800/30">
+                                    <TableHead className="pl-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Unit Name</TableHead>
+                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Orders</TableHead>
+                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Fulfilled</TableHead>
+                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Rejected</TableHead>
+                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Refunded</TableHead>
+                                    <TableHead className="text-right pr-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Net Revenue</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {isLoading ? (
+                                    <TableRow><TableCell colSpan={6} className="h-40 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-emerald-500/50" /></TableCell></TableRow>
+                                ) : filteredBranches.length === 0 ? (
+                                    <TableRow><TableCell colSpan={6} className="h-40 text-center text-slate-500">No matching branches found.</TableCell></TableRow>
+                                ) : (
+                                    filteredBranches.map((p: any, index: number) => {
+                                        const marketShare = summary.totalSales > 0 ? (p.sales / summary.totalSales) * 100 : 0
+                                        return (
+                                            <TableRow key={p.branchId} className="group hover:bg-emerald-50/20 transition-colors">
+                                                <TableCell className="pl-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={cn(
+                                                            "h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold border",
+                                                            index === 0 ? "bg-amber-100 border-amber-200 text-amber-700 shadow-sm" :
+                                                                index === 1 ? "bg-slate-100 border-slate-200 text-slate-700" :
+                                                                    index === 2 ? "bg-orange-100 border-orange-200 text-orange-700" :
+                                                                        "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400"
+                                                        )}>
+                                                            {index === 0 ? <Crown className="h-3.5 w-3.5" /> : index + 1}
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-xs text-slate-900 dark:text-white">{p.branchName}</span>
+                                                            <span className="text-[10px] text-slate-400 font-medium lowercase tracking-tighter">{p.groupName || "no category"}</span>
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono text-xs font-medium text-slate-500">{p.orderCount.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[10px] font-bold h-5">
+                                                        {p.fulfilledCount || 0}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-100 text-[10px] font-bold h-5">
+                                                        {p.rejectedCount || 0}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-100 text-[10px] font-bold h-5">
+                                                        {p.refundedCount || 0}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-right pr-6 font-mono font-bold text-xs text-slate-900 dark:text-white py-4">
+                                                    <div className="flex flex-col items-end">
+                                                        <span>{formatPKR(p.sales / 100)}</span>
+                                                        <div className="flex items-center gap-1.5 mt-1">
+                                                            <div className="w-12 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                                                                <div className="h-full bg-emerald-500" style={{ width: `${marketShare}%` }} />
+                                                            </div>
+                                                            <span className="text-[9px] text-slate-400 uppercase font-black">{marketShare.toFixed(1)}%</span>
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        )
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                    <div className="p-4 bg-slate-50/50 dark:bg-slate-900/20 text-center border-t border-slate-100 dark:border-slate-800">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">Ledger State Finalized at {generatedDate}</p>
+                    </div>
+                </Card>
+            </div>
         </div>
     )
 }

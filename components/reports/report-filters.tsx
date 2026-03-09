@@ -89,7 +89,8 @@ export function ReportFilters({
                 {/* Group Filter */}
                 {showGroupFilter && setGroupId && (role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <GroupFilter
-                        onGroupChange={setGroupId}
+                        value={groupId}
+                        onChange={setGroupId}
                         organizationId={organizationId}
                     />
                 )}

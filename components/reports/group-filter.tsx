@@ -19,28 +19,28 @@ interface Group {
 }
 
 interface GroupFilterProps {
-    onGroupChange: (groupId: string) => void
+    value?: string
+    onChange: (groupId: string) => void
     organizationId?: string | number
 }
 
-export function GroupFilter({ onGroupChange, organizationId }: GroupFilterProps) {
-    const [selectedGroup, setSelectedGroup] = useState<string>("all")
+export function GroupFilter({ value, onChange, organizationId }: GroupFilterProps) {
+    const internalValue = value || "all"
 
     const { data } = useSWR(
         organizationId ? `/api/v1/groups?organizationId=${organizationId}` : "/api/v1/groups",
         fetcher
     )
 
-    const handleValueChange = (value: string) => {
-        setSelectedGroup(value)
-        onGroupChange(value === "all" ? "" : value)
+    const handleValueChange = (val: string) => {
+        onChange(val === "all" ? "" : val)
     }
 
     const groups = data?.groups || []
 
     return (
         <div className="flex items-center gap-2">
-            <Select value={selectedGroup} onValueChange={handleValueChange}>
+            <Select value={internalValue} onValueChange={handleValueChange}>
                 <SelectTrigger className="w-[200px] h-9 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm focus:ring-blue-500">
                     <div className="flex items-center gap-2 overflow-hidden">
                         <LayoutGrid size={16} className="text-blue-600 shrink-0" />

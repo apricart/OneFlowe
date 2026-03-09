@@ -5,13 +5,14 @@ import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, startO
 import { Calendar, X } from "lucide-react"
 import type { DateRange } from "@/lib/hooks/use-sales-performance"
 
-export type FilterPreset = "today" | "3d" | "7d" | "monthly" | "yearly" | "all" | "custom"
+export type FilterPreset = "today" | "3d" | "7d" | "monthly" | "thisMonth" | "yearly" | "all" | "custom"
 
 interface GlobalDateFilterProps {
     value: DateRange | null
     onChange: (range: DateRange | null, preset: FilterPreset) => void
     activePreset: FilterPreset
     className?: string
+    hidePresets?: boolean
 }
 
 export const presets: { id: FilterPreset; label: string }[] = [
@@ -41,6 +42,7 @@ function getPresetRange(preset: FilterPreset): DateRange {
         case "7d":
             return { startDate: startOfDay(subDays(now, 6)), endDate: endOfDay(now) }
         case "monthly":
+        case "thisMonth":
             return { startDate: startOfMonth(now), endDate: endOfMonth(now) }
         case "yearly":
             return { startDate: startOfYear(now), endDate: endOfYear(now) }
@@ -51,7 +53,7 @@ function getPresetRange(preset: FilterPreset): DateRange {
     }
 }
 
-export function GlobalDateFilter({ value, onChange, activePreset, className }: GlobalDateFilterProps) {
+export function GlobalDateFilter({ value, onChange, activePreset, className, hidePresets }: GlobalDateFilterProps) {
     const [showCalendar, setShowCalendar] = useState(false)
     const [fromDate, setFromDate] = useState<string>("")
     const [toDate, setToDate] = useState<string>("")
@@ -82,7 +84,7 @@ export function GlobalDateFilter({ value, onChange, activePreset, className }: G
     return (
         <div className={`relative ${className || ""}`}>
             <div className="flex items-center gap-1.5 flex-wrap">
-                {presets.map(p => (
+                {!hidePresets && presets.map(p => (
                     <button
                         key={p.id}
                         onClick={() => handlePreset(p.id)}

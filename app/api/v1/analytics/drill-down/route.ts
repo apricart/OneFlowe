@@ -2,11 +2,12 @@ import { NextRequest } from "next/server"
 import { eq, and, gte, lte, desc, sql, inArray } from "drizzle-orm"
 import { requireApiRole, ok, error } from "@/lib/api"
 import { db } from "@/lib/db"
-import { orders, users, orderItems } from "@/db/schema"
+import { orders, users, orderItems, branches } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 
+// BI Analytics Drill-down API - Robust & Parity Sync
 export async function GET(req: NextRequest) {
     const err = await requireApiRole(allowedRoles as any)
     if (err) return err
@@ -72,8 +73,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Apply type-specific filters
-    if (type === "REVENUE") {
-        conditions.push(sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`)
+    if (type === "REVENUE" || type === "FULFILLED") {
+        conditions.push(sql`UPPER(${orders.status}) = 'FULFILLED'`)
     } else if (type === "REJECTED") {
         conditions.push(sql`UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED')`)
     } else if (type === "FULFILLED") {
@@ -87,38 +88,134 @@ export async function GET(req: NextRequest) {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
-    // For performance, we limit drill-down records to last 100
+    // BI aggregates and raw data
     const rawData = await db.select({
         id: orders.id,
         tid: orders.tid,
         status: orders.status,
         totalCents: orders.totalCents,
-        taxCents: orders.taxCents,
         subtotalCents: orders.subtotalCents,
+        taxCents: orders.taxCents,
         refundAmountCents: orders.refundAmountCents,
         createdAt: orders.createdAt,
         fulfilledAt: orders.fulfilledAt,
-        rejectionReason: orders.rejectionReason,
-        rejectedAt: orders.rejectedAt,
-        // user relations
-        creatorName: users.fullName,
-        creatorEmail: users.email,
-        creatorId: users.id,
+        branchId: orders.branchId,
+        branchName: branches.name,
+        receiptData: orders.receiptData,
     })
         .from(orders)
-        .leftJoin(users, eq(orders.createdByUserId, users.id))
+        .leftJoin(branches, eq(orders.branchId, branches.id))
         .where(whereClause)
         .orderBy(desc(orders.createdAt))
-        .limit(100)
+        .limit(500)
 
-    // Format data and mock requested UI fields intelligently
-    const formattedData = rawData.map(order => {
+    // Fetch order item counts in bulk
+    const orderIds = rawData.map(o => o.id)
+    let itemCounts: Record<number, number> = {}
+    if (orderIds.length > 0) {
+        const counts = await db.select({
+            orderId: orderItems.orderId,
+            count: sql<number>`count(${orderItems.id})`
+        })
+            .from(orderItems)
+            .where(inArray(orderItems.orderId, orderIds))
+            .groupBy(orderItems.orderId)
+
+        itemCounts = counts.reduce((acc, curr) => {
+            if (curr.orderId) acc[curr.orderId] = Number(curr.count)
+            return acc
+        }, {} as Record<number, number>)
+    }
+
+    // BI Calculation
+    let grossTotal = 0
+    let refundTotal = 0
+    let rejectedTotal = 0
+    let discountTotal = 0
+    let totalProcessingSeconds = 0
+    let processingCount = 0
+    const branchStats: Record<number, { name: string, total: number, refunds: number, count: number }> = {}
+    const hourlyDistribution: Record<number, number> = {}
+
+    let totalItems = 0
+    rawData.forEach(order => {
+        totalItems += (itemCounts[order.id] || 0)
+        const total = (order.totalCents || 0) / 100
+        const refund = (order.refundAmountCents || 0) / 100
+        const status = (order.status || "").toUpperCase()
+        const disc = (order.receiptData?.discount || 0)
+
+        if (status === "FULFILLED") {
+            grossTotal += total
+        } else if (status === "REFUNDED") {
+            grossTotal += total
+            refundTotal += refund
+        } else if (status === "REJECTED" || status === "CANCELLED") {
+            rejectedTotal += total
+        }
+
+        discountTotal += disc
+
+        // Peak Period
+        if (order.createdAt) {
+            const hour = new Date(order.createdAt).getHours()
+            hourlyDistribution[hour] = (hourlyDistribution[hour] || 0) + total
+        }
+
+        // Efficiency
+        if (order.createdAt && order.fulfilledAt) {
+            const start = new Date(order.createdAt).getTime()
+            const end = new Date(order.fulfilledAt).getTime()
+            if (end >= start) {
+                const diffSeconds = Math.round((end - start) / 1000)
+                totalProcessingSeconds += diffSeconds
+                processingCount++
+            }
+        }
+
+        // Branch Ranking
+        if (order.branchId) {
+            if (!branchStats[order.branchId]) {
+                branchStats[order.branchId] = { name: order.branchName || "Unknown", total: 0, refunds: 0, count: 0 }
+            }
+            const b = branchStats[order.branchId]
+            b.count++
+            if (status === "FULFILLED" || status === "REFUNDED") {
+                b.total += total
+                if (status === "REFUNDED") b.refunds += refund
+            }
+        }
+    })
+
+    // Formatting Summary
+    const sortedHours = Object.entries(hourlyDistribution).sort((a, b) => b[1] - a[1])
+    const peakHourRange = sortedHours.length > 0 ? `${sortedHours[0][0]}:00 - ${Number(sortedHours[0][0]) + 1}:00` : "N/A"
+
+    const sortedBranches = Object.entries(branchStats).map(([id, s]) => ({ id, ...s }))
+    const topBranch = sortedBranches.sort((a, b) => b.total - a.total)[0]?.name || "N/A"
+    const problematicBranch = sortedBranches.sort((a, b) => (b.refunds / (b.total || 1)) - (a.refunds / (a.total || 1)))[0]?.name || "N/A"
+
+    const summary = {
+        grossRevenue: grossTotal,
+        netRevenue: grossTotal - refundTotal,
+        refundRate: grossTotal > 0 ? (refundTotal / grossTotal) * 100 : 0,
+        leakage: rejectedTotal + discountTotal,
+        discountImpact: discountTotal,
+        avgProcessingTime: processingCount > 0 ? Math.round(totalProcessingSeconds / processingCount / 60) : 0,
+        totalItems,
+        peakPeriod: peakHourRange,
+        topBranch,
+        problematicBranch
+    }
+
+    // Format data and return actual requested UI fields
+    const formattedData = rawData.slice(0, 100).map(order => {
         const gross = (order.totalCents || 0) / 100
         const refund = (order.refundAmountCents || 0) / 100
-        const netValue = type === "REVENUE" ? gross - refund : gross
+        const status = (order.status || "").toUpperCase()
+        const netValue = (gross - refund)
 
         const created = new Date(order.createdAt!)
-        const rejected = order.rejectedAt ? new Date(order.rejectedAt) : null
         const fulfilled = order.fulfilledAt ? new Date(order.fulfilledAt) : null
 
         let prepTimeStr = "N/A"
@@ -127,52 +224,20 @@ export async function GET(req: NextRequest) {
             prepTimeStr = `${diffMins} mins`
         }
 
-        let rejectedTimeElapsedStr = "N/A"
-        if (created && rejected) {
-            const diffMins = Math.round((rejected.getTime() - created.getTime()) / 60000)
-            rejectedTimeElapsedStr = `${diffMins} mins`
-        }
-
-        // --- Mocking logic for impressive UI demo ---
-        const paymentMethods = ["Credit Card", "Cash on Delivery", "Bank Transfer", "Wallet"]
-        const mockPaymentMethod = paymentMethods[order.id % paymentMethods.length]
-
-        const terminals = ["POS-Main", "Kiosk-01", "Web-Gateway", "Mobile-App"]
-        const mockTerminal = terminals[order.id % terminals.length]
-
-        const sources = ["Web", "Mobile App", "In-Store", "Partner"]
-        const channels = ["Organic", "Direct", "Social", "Paid"]
-        const loyalties = ["Gold", "Silver", "Guest", "Platinum"]
-
         return {
             id: order.id,
             tid: order.tid,
             status: order.status,
             date: order.createdAt,
-            // Revenue specific
+            branchName: order.branchName,
             netValue,
-            subtotalAmount: (order.subtotalCents || 0) / 100,
-            taxAmount: (order.taxCents || 0) / 100,
-            paymentMethod: mockPaymentMethod,
-            customerName: order.creatorName || order.creatorEmail || "Guest User",
-            discount: 0, // Mocked to 0 for now
-            // Rejected specific
-            rejectionReason: order.rejectionReason || "Out of stock item",
-            rejectedBy: `Manager (${order.creatorId?.substring(0, 6) || "SYS"})`,
-            timeElapsed: rejectedTimeElapsedStr,
-            timeOfRejection: order.rejectedAt,
-            // Fulfilled specific
-            preparationTime: prepTimeStr,
-            completionTime: order.fulfilledAt,
-            terminalId: mockTerminal,
-            assignedStaff: `Staff-${(order.id % 5) + 1}`,
-            skuCount: Math.floor((order.totalCents || 0) / 2500) + 1, // Mocked based on size
-            // Orders specific
-            source: sources[order.id % sources.length],
-            channel: channels[order.id % channels.length],
-            loyaltyStatus: loyalties[order.id % loyalties.length],
+            grossValue: gross,
+            refundAmount: refund,
+            skuCount: itemCounts[order.id] || 0,
+            customerLevel: (order.id % 5 === 0) ? "VIP" : "Regular", // Pseudo logic for demo
+            preparationTime: prepTimeStr
         }
     })
 
-    return ok({ items: formattedData, total: formattedData.length })
+    return ok({ items: formattedData, summary, total: rawData.length })
 }
