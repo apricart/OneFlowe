@@ -8,8 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-  Loader2, ShoppingBag, TrendingUp, Package, Calculator, Upload,
-  Crown, RefreshCw, Zap, ArrowUpRight, ArrowDownRight, Search, FileText, FileSpreadsheet, FileIcon as FilePdf
+  Loader2, ShoppingBag, TrendingUp, Calculator, Upload,
+  Crown, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf,
+  DollarSign, Package, BarChart3, ListOrdered
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -29,39 +30,62 @@ import {
 import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/reports/column-selector"
 import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expandable-row-drawer"
 import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
-import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { CompactDateFilter } from "@/components/reports/compact-date-filter"
+import { type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
 
 import {
   ResponsiveContainer,
-  ComposedChart,
-  Area,
+  BarChart,
   Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
 } from 'recharts'
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
-// Column definitions for this report
-const ALL_COLUMNS: ColumnDef[] = [
+// Column definitions for the Orders ledger
+const ORDER_COLUMNS: ColumnDef[] = [
   { key: "date", label: "Date", defaultVisible: true },
   { key: "tid", label: "Transaction ID", defaultVisible: true },
   { key: "branch", label: "Branch", defaultVisible: true },
-  { key: "total", label: "Amount", defaultVisible: true },
+  { key: "status", label: "Status", defaultVisible: true },
+  { key: "subtotal", label: "Subtotal", defaultVisible: true },
+  { key: "tax", label: "Tax", defaultVisible: true },
+  { key: "discount", label: "Discount", defaultVisible: false },
+  { key: "total", label: "Total", defaultVisible: true },
   { key: "organization", label: "Organization", defaultVisible: false },
   { key: "group", label: "Group", defaultVisible: false },
-  { key: "status", label: "Status", defaultVisible: false },
-  { key: "subtotal", label: "Subtotal", defaultVisible: false },
-  { key: "tax", label: "Tax", defaultVisible: false },
-  { key: "discount", label: "Discount", defaultVisible: false },
 ]
 
-export default function SalesIntelligencePage() {
+// Column definitions for the Line Items ledger
+const ITEM_COLUMNS: ColumnDef[] = [
+  { key: "date", label: "Date", defaultVisible: true },
+  { key: "product", label: "Product / SKU", defaultVisible: true },
+  { key: "branch", label: "Branch", defaultVisible: true },
+  { key: "qty", label: "Qty", defaultVisible: true },
+  { key: "unitPrice", label: "Unit Price", defaultVisible: true },
+  { key: "lineTotal", label: "Line Total", defaultVisible: true },
+  { key: "status", label: "Status", defaultVisible: true },
+]
+
+// Donut chart colors
+const STATUS_COLORS: Record<string, string> = {
+  FULFILLED: "#10b981",
+  PENDING: "#f59e0b",
+  CANCELLED: "#ef4444",
+  REJECTED: "#ef4444",
+  REFUNDED: "#8b5cf6",
+}
+
+export default function SalesSummaryPage() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -73,22 +97,24 @@ export default function SalesIntelligencePage() {
     setBranchIds: setContextBranchIds
   } = useAppContext()
 
-  const [searchTerm, setSearchTerm] = useState("")
+  const [orderSearch, setOrderSearch] = useState("")
   const [generatedDate, setGeneratedDate] = useState("")
   const [selectedRow, setSelectedRow] = useState<any>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [groupId, setGroupId] = useState("")
+  const [orderDetails, setOrderDetails] = useState<any>(null)
+  const [isDetailLoading, setIsDetailLoading] = useState(false)
 
   const { data: session } = useSession()
   const role = (session?.user as any)?.role as Role
   const [hasMounted, setHasMounted] = useState(false)
 
-  // URL States for filtering
+  // URL States
   const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "today"
   const startFromUrl = searchParams.get("startDate") || ""
   const endFromUrl = searchParams.get("endDate") || ""
-
   const activePreset = presetFromUrl
+
   const dateRange = useMemo(() => {
     if (startFromUrl && endFromUrl) {
       return { startDate: new Date(startFromUrl), endDate: new Date(endFromUrl) }
@@ -109,29 +135,29 @@ export default function SalesIntelligencePage() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }, [searchParams, pathname, router])
 
-  // Column selector
-  const { visibleKeys, toggleColumn, resetToDefaults, isVisible, setVisibleKeys } = useColumnSelector(ALL_COLUMNS, "sales-summary")
+  // Column selectors
+  const { visibleKeys: orderVisibleKeys, isVisible: isOrderVisible, setVisibleKeys: setOrderVisibleKeys } = useColumnSelector(ORDER_COLUMNS, "sales-summary-orders-v2")
 
   const handleBranchChange = useCallback((ids: string[]) => {
     setContextBranchIds(ids)
   }, [setContextBranchIds])
 
-  // Build query string
+  // Build query strings
   const queryParams = new URLSearchParams()
   if (organizationId) queryParams.set("organizationId", organizationId.toString())
   if (startFromUrl) queryParams.set("startDate", startFromUrl)
   if (endFromUrl) queryParams.set("endDate", endFromUrl)
   if (groupId) queryParams.set("groupId", groupId)
-
   if (contextBranchIds.length > 0) {
     queryParams.set("branchIds", contextBranchIds.join(","))
   } else if (contextBranchId) {
     queryParams.set("branchId", contextBranchId)
   }
 
-  queryParams.set("limit", "10000")
-
-  const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${queryParams.toString()}`, fetcher)
+  // Orders summary (aggregated)
+  const ordersParams = new URLSearchParams(queryParams.toString())
+  ordersParams.set("limit", "10000")
+  const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${ordersParams.toString()}`, fetcher)
 
   useEffect(() => {
     setHasMounted(true)
@@ -140,62 +166,153 @@ export default function SalesIntelligencePage() {
 
   const summary = data?.summary || { totalSales: 0, totalTax: 0, totalSubtotal: 0, orderCount: 0, totalItemsSold: 0 }
   const orders = data?.orders || []
-
-  const filteredOrders = orders.filter((order: any) =>
-    order.tid?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.status?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (order.branchName && order.branchName.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
-
-  const calculatedTotalRevenue = summary.totalSales || 0
-  const calculatedOrderVolume = summary.orderCount || 0
-  const calculatedAvgOrderValue = calculatedOrderVolume > 0 ? calculatedTotalRevenue / calculatedOrderVolume : 0
-
-  const chartData = useMemo(() => {
-    if (!filteredOrders.length) return []
-    const daily: Record<string, { revenue: number, volume: number }> = {}
-
-    // Process backwards to sort properly
-    const sortedOrders = [...filteredOrders].sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-
-    sortedOrders.forEach((o: any) => {
-      if ((o.status || "").toUpperCase() === "FULFILLED") {
-        const day = new Date(o.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-        if (!daily[day]) daily[day] = { revenue: 0, volume: 0 }
-        daily[day].revenue += (o.totalCents || 0) / 100
-        daily[day].volume += 1
-      }
-    })
-    return Object.entries(daily).map(([date, data]) => ({
-      date,
-      revenue: data.revenue,
-      volume: data.volume
-    }))
-  }, [filteredOrders])
-
-  // Top performers logic
   const topPerformers = data?.topPerformers || []
 
-  const handleRowClick = (order: any) => {
+  // Filtered data
+  const filteredOrders = orders.filter((order: any) =>
+    order.tid?.toLowerCase().includes(orderSearch.toLowerCase()) ||
+    order.status?.toLowerCase().includes(orderSearch.toLowerCase()) ||
+    (order.branchName && order.branchName.toLowerCase().includes(orderSearch.toLowerCase()))
+  )
+
+  // KPIs (real values from API)
+  const totalRevenue = summary.totalSales || 0
+  const orderCount = summary.orderCount || 0
+  const avgOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0
+  const totalItemsSold = Number(summary.totalItemsSold) || 0
+  const totalTax = Number(summary.totalTax) || 0
+
+  // Daily revenue chart data
+  const dailyChartData = useMemo(() => {
+    if (!filteredOrders.length) return []
+    const daily: Record<string, { revenue: number; orders: number }> = {}
+    const sorted = [...filteredOrders].sort((a: any, b: any) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    )
+    sorted.forEach((o: any) => {
+      if ((o.status || "").toUpperCase() === "FULFILLED") {
+        const day = new Date(o.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        if (!daily[day]) daily[day] = { revenue: 0, orders: 0 }
+        daily[day].revenue += (o.totalCents || 0) / 100
+        daily[day].orders += 1
+      }
+    })
+    return Object.entries(daily).map(([date, d]) => ({ date, revenue: d.revenue, orders: d.orders }))
+  }, [filteredOrders])
+
+  // Status breakdown for donut chart
+  const statusChartData = useMemo(() => {
+    if (!orders.length) return []
+    const counts: Record<string, number> = {}
+    orders.forEach((o: any) => {
+      const s = (o.status || "UNKNOWN").toUpperCase()
+      counts[s] = (counts[s] || 0) + 1
+    })
+    return Object.entries(counts).map(([name, value]) => ({ name, value }))
+  }, [orders])
+
+  const handleRowClick = async (order: any) => {
     setSelectedRow(order)
     setDrawerOpen(true)
+    setOrderDetails(null)
+    setIsDetailLoading(true)
+    try {
+      const res = await fetch(`/api/v1/orders/${order.id}`)
+      const d = await res.json()
+      if (d.item) {
+        setOrderDetails(d.item)
+      }
+    } catch (e) {
+      console.error("Failed to fetch order details", e)
+    } finally {
+      setIsDetailLoading(false)
+    }
   }
 
-  const getDrawerFields = (order: any): DetailField[] => [
-    { key: "tid", label: "Transaction ID", value: order.tid, type: "mono" },
-    { key: "date", label: "Date", value: new Date(order.createdAt).toLocaleString(), type: "date" },
-    { key: "organization", label: "Organization", value: order.organizationName || "-" },
-    { key: "group", label: "Group", value: order.groupName || "-" },
-    { key: "branch", label: "Branch", value: order.branchName || `ID: ${order.branchId}` },
-    { key: "status", label: "Status", value: order.status, type: "badge" },
-    { key: "subtotal", label: "Subtotal", value: formatPKR((order.subtotalCents || 0) / 100), type: "currency" },
-    { key: "tax", label: "Tax", value: formatPKR((order.taxCents || 0) / 100), type: "currency" },
-    { key: "discount", label: "Discount", value: formatPKR((order.discountCents || 0) / 100), type: "currency" },
-    { key: "total", label: "Total Amount", value: formatPKR((order.totalCents || 0) / 100), type: "currency" },
-  ]
+  const getOrderDrawerFields = (order: any): DetailField[] => {
+    const fields: DetailField[] = [
+      { type: "section", label: "Order Overview", value: null },
+      { key: "tid", label: "Transaction ID", value: order.tid, type: "mono" },
+      { key: "date", label: "Date", value: new Date(order.createdAt).toLocaleString(), type: "date" },
+      { key: "branch", label: "Branch", value: order.branchName || `ID: ${order.branchId}` },
+      { key: "status", label: "Status", value: order.status, type: "badge" },
+
+      {
+        type: "section", label: "Financial Summary", value: (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Subtotal</p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white font-mono">{formatPKR((order.subtotalCents || 0) / 100)}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tax</p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white font-mono">{formatPKR((order.taxCents || 0) / 100)}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100/50 dark:border-rose-900/30">
+              <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-1">Discount</p>
+              <p className="text-sm font-bold text-rose-600 dark:text-rose-400 font-mono">-{formatPKR((order.discountCents || 0) / 100)}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-500/20 text-white">
+              <p className="text-[10px] font-bold text-indigo-100 uppercase tracking-widest mb-1">Total</p>
+              <p className="text-base font-black font-mono leading-none">{formatPKR((order.totalCents || 0) / 100)}</p>
+            </div>
+          </div>
+        )
+      },
+
+      {
+        type: "section", label: "Line Items", value: (
+          <div className="space-y-3">
+            {isDetailLoading ? (
+              <div className="flex flex-col items-center justify-center py-12 rounded-3xl bg-slate-50/50 dark:bg-slate-900/30 border border-dashed border-slate-200 dark:border-slate-800/50">
+                <Loader2 className="h-6 w-6 animate-spin text-indigo-500 mb-2" />
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Syncing line items...</p>
+              </div>
+            ) : orderDetails?.orderItems && orderDetails.orderItems.length > 0 ? (
+              <div className="overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {orderDetails.orderItems.map((item: any, idx: number) => (
+                    <div key={idx} className="p-5 flex justify-between items-start gap-6 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group/item">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                          <p className="font-black text-slate-900 dark:text-white leading-tight truncate text-[13px]">{item.productName}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] font-bold font-mono text-slate-500 uppercase">{item.productCode || 'N/A'}</span>
+                          <span className="text-[11px] font-bold text-slate-400">{item.quantity} × {item.unit || 'units'}</span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[12px] font-black font-mono text-slate-900 dark:text-white">{formatPKR((item.priceCents * item.quantity) / 100)}</p>
+                        <p className="text-[10px] font-bold text-indigo-500 mt-1">@ {formatPKR(item.priceCents / 100)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-slate-50/50 dark:bg-slate-800/30 p-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <span>Items Count</span>
+                    <span className="text-slate-900 dark:text-white">{orderDetails.orderItems.length} Products</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl">
+                <ShoppingBag className="h-8 w-8 opacity-10 mb-2" />
+                <p className="text-[10px] font-black uppercase tracking-widest italic">No item data found</p>
+              </div>
+            )}
+          </div>
+        )
+      }
+    ]
+
+    return fields
+  }
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-    const headers = ["Date", "Transaction ID", "Organization", "Group", "Branch", "Status", "Amount (PKR)"]
+    const headers = ["Date", "Transaction ID", "Organization", "Group", "Branch", "Status", "Subtotal (PKR)", "Tax (PKR)", "Total (PKR)"]
     const rows = filteredOrders.map((order: any) => [
       new Date(order.createdAt).toLocaleDateString(),
       order.tid,
@@ -203,454 +320,532 @@ export default function SalesIntelligencePage() {
       order.groupName || '-',
       order.branchName || `ID: ${order.branchId}`,
       order.status?.toUpperCase(),
-      (order.totalCents / 100).toFixed(2)
+      ((order.subtotalCents || 0) / 100).toFixed(2),
+      ((order.taxCents || 0) / 100).toFixed(2),
+      ((order.totalCents || 0) / 100).toFixed(2),
     ])
-
     if (format === 'pdf') {
       const doc = new jsPDF()
-      doc.setFontSize(20)
-      doc.text("Sales Intelligence Report", 14, 20)
-      doc.setFontSize(10)
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
-      autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid', headStyles: { fillColor: [66, 66, 66] } })
-      doc.save(`sales-intelligence-${new Date().getTime()}.pdf`)
-      return
+      doc.setFontSize(18); doc.text("Sales Summary — Orders", 14, 20)
+      doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
+      autoTable(doc, { startY: 38, head: [headers], body: rows, theme: 'grid', headStyles: { fillColor: [79, 70, 229] } })
+      doc.save(`sales-orders-${Date.now()}.pdf`); return
     }
-
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Sales Intelligence")
-
-    if (format === 'excel') {
-      XLSX.writeFile(workbook, `sales-intelligence-${new Date().getTime()}.xlsx`)
-    } else {
-      XLSX.writeFile(workbook, `sales-intelligence-${new Date().getTime()}.csv`)
-    }
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Orders")
+    XLSX.writeFile(wb, `sales-orders-${Date.now()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
   }
 
-  // Custom tooltips
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
+  // Custom tooltip for bar chart
+  const BarTooltip = ({ active, payload, label }: any) => {
+    if (active && payload?.length) {
       return (
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/50 p-3 rounded-lg shadow-xl">
-          <p className="text-white font-medium text-sm mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center gap-2 text-xs">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-              <span className="text-slate-300">{entry.name}:</span>
-              <span className="text-white font-mono font-bold">
-                {entry.name === "Revenue" ? formatPKR(entry.value) : entry.value}
+        <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-2xl text-xs space-y-1.5 min-w-[160px]">
+          <p className="text-slate-300 font-semibold mb-2">{label}</p>
+          {payload.map((entry: any, i: number) => (
+            <div key={i} className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.fill || entry.color }} />
+                <span className="text-slate-400">{entry.name}</span>
+              </div>
+              <span className="text-white font-bold font-mono">
+                {entry.name === "Revenue (PKR)" ? formatPKR(entry.value) : entry.value}
               </span>
             </div>
           ))}
         </div>
-      );
+      )
     }
-    return null;
-  };
+    return null
+  }
 
-  // Sparkline generator
-  const renderSparkline = (dataKey: 'revenue' | 'volume', color: string) => (
-    <div className="h-10 w-full mt-2 opacity-80">
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData.slice(-14)}>
-          <Area type="monotone" dataKey={dataKey} stroke={color} fill={color} fillOpacity={0.2} strokeWidth={2} isAnimationActive={false} />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
-  )
+  // Donut custom label
+  const renderDonutLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: any) => {
+    if (percent < 0.05) return null
+    const RADIAN = Math.PI / 180
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5
+    const x = cx + radius * Math.cos(-midAngle * RADIAN)
+    const y = cy + radius * Math.sin(-midAngle * RADIAN)
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight="700">
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    )
+  }
 
   if (!hasMounted) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
       </div>
     )
   }
 
   return (
-    <div className="space-y-5 pb-12 bg-slate-50 dark:bg-slate-950 min-h-screen">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0b0f1a] pb-16">
 
-      {/* ━━━ GLOBAL STICKY HEADER ━━━ */}
-      <div className="sticky top-0 z-30 flex flex-wrap items-center gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-        <GlobalDateFilter
-          value={dateRange}
-          onChange={handleDateChange}
-          activePreset={activePreset}
-        />
-        {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-          <BranchFilter
-            selectedIds={contextBranchIds}
-            onChange={handleBranchChange}
-            organizationId={organizationId || undefined}
-          />
-        )}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => mutate()}
-          disabled={isLoading}
-          className="h-9 ml-auto text-[12px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-full px-4"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          REFRESH
-        </Button>
+      {/* ── Banking-Grade Filter Toolbar ── */}
+      <div className="sticky top-0 z-40 bg-white/80 dark:bg-[#0b0f1a]/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-6 h-14 flex items-center shadow-sm">
+        <div className="flex items-center gap-3">
+          <CompactDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
+
+          {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+            <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
+              <BranchFilter selectedIds={contextBranchIds} onChange={handleBranchChange} organizationId={organizationId || undefined} />
+              <GroupFilter value={groupId} onChange={setGroupId} organizationId={organizationId || undefined} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1" />
+
+        <div className="flex items-center gap-4">
+          <ScheduleReportModal reportName="Sales Summary" />
+        </div>
       </div>
 
-      <div className="px-4 md:px-6 space-y-5">
+      <div className="px-4 md:px-6 pt-6 space-y-6">
 
-        {/* ━━━ "INTELLIGENCE" HEADER ━━━ */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0A1C92] via-[#2F2CC9] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
-          <div className="flex flex-wrap flex-col gap-2">
-            <p className="text-xs tracking-[0.2em] text-white/70 font-bold">EXECUTIVE DASHBOARD</p>
-            <h1 className="text-3xl font-semibold tracking-tight">Sales Intelligence</h1>
-            <p className="text-sm text-white/80 font-medium max-w-2xl">
-              Tracking <strong className="text-white">{formatPKR(calculatedTotalRevenue / 100)}</strong> across <strong className="text-white">{contextBranchIds.length || "all"}</strong> selected branches for the current period.
-            </p>
+        <div className="px-6 py-8 space-y-8 max-w-[1600px] mx-auto">
+
+          {/* ── Page Header (Refined) ── */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500/80 mb-2">
+                <div className="w-8 h-[1px] bg-indigo-500/30" />
+                Analytics & Reports
+              </div>
+              <h1 className="text-4xl font-black tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
+                Sales Summary
+                <Badge variant="outline" className="h-5 text-[9px] font-black uppercase tracking-widest border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">Live</Badge>
+              </h1>
+              <p className="text-sm font-medium text-slate-400 dark:text-slate-500 max-w-xl">
+                Consolidated financial oversight across all branches and groups.
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* ━━━ KPI BENTO GRID ━━━ */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="relative overflow-hidden p-5 rounded-2xl border border-indigo-200 dark:border-indigo-800/50 shadow-sm dark:shadow-indigo-900/20 bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl before:absolute before:inset-0 before:bg-gradient-to-br before:from-indigo-500/5 before:to-purple-500/5">
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-2">
-                <div className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400">
-                  <TrendingUp className="h-4 w-4" />
-                </div>
-                <Badge variant="outline" className="border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 text-[10px] uppercase font-bold tracking-wider">Revenue</Badge>
-              </div>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{formatPKR(calculatedTotalRevenue / 100)}</p>
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                <ArrowUpRight className="h-3 w-3" />
-                <span>+12.5%</span>
-                <span className="text-slate-400 dark:text-slate-500 ml-1 font-medium">vs prior</span>
-              </div>
-              {renderSparkline("revenue", "#6366f1")}
-            </div>
-          </Card>
+          {/* ── KPI Grid (2-Column Focused) ── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
-          <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
-                <ShoppingBag className="h-4 w-4" />
-              </div>
-              <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Volume</Badge>
-            </div>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{calculatedOrderVolume}</p>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              <ArrowUpRight className="h-3 w-3" />
-              <span>+8.2%</span>
-            </div>
-            {renderSparkline("volume", "#3b82f6")}
-          </Card>
-
-          <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">
-                <Calculator className="h-4 w-4" />
-              </div>
-              <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Average order value</Badge>
-            </div>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{formatPKR(calculatedAvgOrderValue / 100)}</p>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-500 dark:text-rose-400">
-              <ArrowDownRight className="h-3 w-3" />
-              <span>-1.4%</span>
-            </div>
-            {renderSparkline("revenue", "#10b981")}
-          </Card>
-
-          <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-50/50 via-white to-white dark:from-indigo-900/20 dark:via-slate-900 dark:to-slate-900">
-            <div className="flex items-center justify-between mb-2">
-              <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400">
-                <Zap className="h-4 w-4" />
-              </div>
-              <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Revenue Performance</Badge>
-            </div>
-            <p className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500 dark:from-indigo-400 dark:to-blue-300 mb-1">+24%</p>
-            <p className="text-xs font-medium text-slate-500 mt-2 leading-relaxed">Overall business growth accelerated by high Average Order Value orders in metropolitan branches.</p>
-          </Card>
-        </div>
-
-        {/* ━━━ CENTERPIECE DASHBOARD ━━━ */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <Card className="xl:col-span-2 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-            <CardHeader className="pb-4 border-b border-slate-100 dark:border-slate-800/50">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2 uppercase tracking-tight text-slate-800 dark:text-slate-200">
-                Revenue vs Order Volume
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-6">
-              <div className="h-[350px] w-full">
-                {chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
-                      <XAxis
-                        dataKey="date"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 11, fill: '#64748b' }}
-                        dy={10}
-                      />
-                      <YAxis
-                        yAxisId="left"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 11, fill: '#64748b' }}
-                        tickFormatter={(v) => `Rs ${v / 1000}k`}
-                        dx={-10}
-                      />
-                      <YAxis
-                        yAxisId="right"
-                        orientation="right"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 11, fill: '#64748b' }}
-                        dx={10}
-                      />
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
-                      <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
-                      <Bar yAxisId="right" dataKey="volume" name="Orders" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
-                      <Area yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3">
-                    <TrendingUp className="h-10 w-10 opacity-20" />
-                    <p className="text-sm font-medium">Insufficient data for visualization</p>
+            {/* Revenue */}
+            <Card className="relative overflow-hidden group bg-white dark:bg-slate-900/50 border-slate-100 dark:border-slate-800/50 shadow-xl shadow-slate-200/50 dark:shadow-none hover:shadow-indigo-500/10 transition-all duration-500 rounded-3xl pt-2">
+              <CardContent className="p-8">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="p-4 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                    <DollarSign className="h-6 w-6" />
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none font-black text-[10px] px-2.5 py-1 tracking-tighter uppercase">Fulfilled</Badge>
+                </div>
+                <p className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Total Revenue</p>
+                <h3 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white font-mono leading-none">
+                  {isLoading ? <Loader2 className="h-8 w-8 animate-spin text-slate-200" /> : formatPKR(totalRevenue / 100)}
+                </h3>
+              </CardContent>
+            </Card>
 
-          {/* ━━━ TOP PERFORMING BRANCHES ━━━ */}
-          <Card className="xl:col-span-1 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl flex flex-col">
-            <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/50">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2 uppercase tracking-tight text-slate-800 dark:text-slate-200">
-                  <Crown className="h-4 w-4 text-emerald-500" />
-                  Branch Leaderboard
-                </CardTitle>
-                <Badge variant="secondary" className="text-[9px] font-bold tracking-widest bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border-none">BY REVENUE</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0 flex-1 overflow-y-auto max-h-[360px]">
-              {topPerformers.length > 0 ? (
-                <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                  {topPerformers.slice(0, 10).map((performer: any, index: number) => (
-                    <div key={performer.branchId} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors flex items-center justify-between group">
+            {/* Orders */}
+            <Card className="relative overflow-hidden group bg-white dark:bg-slate-900/50 border-slate-100 dark:border-slate-800/50 shadow-xl shadow-slate-200/50 dark:shadow-none hover:shadow-blue-500/10 transition-all duration-500 rounded-3xl pt-2">
+              <CardContent className="p-8">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                    <ShoppingBag className="h-6 w-6" />
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter">Live Monitor</span>
+                  </div>
+                </div>
+                <p className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Total Order Volume</p>
+                <h3 className="text-5xl font-black tracking-tight text-slate-900 dark:text-white leading-none">
+                  {isLoading ? <Loader2 className="h-8 w-8 animate-spin text-slate-200" /> : orderCount.toLocaleString()}
+                </h3>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Charts ── */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+            {/* Daily Revenue Bar Chart */}
+            <Card className="xl:col-span-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <CardHeader className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-indigo-500" />
+                  <CardTitle className="text-sm font-semibold text-slate-800 dark:text-slate-200">Daily Revenue & Order Volume</CardTitle>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">Fulfilled orders only · grouped by day</p>
+              </CardHeader>
+              <CardContent className="p-4">
+                <div className="h-[300px]">
+                  {isLoading ? (
+                    <div className="h-full flex items-center justify-center">
+                      <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+                    </div>
+                  ) : dailyChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dailyChartData} margin={{ top: 5, right: 5, left: 5, bottom: 5 }} barCategoryGap="30%">
+                        <defs>
+                          <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />
+                            <stop offset="100%" stopColor="#818cf8" stopOpacity={0.7} />
+                          </linearGradient>
+                          <linearGradient id="ordGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#06b6d4" stopOpacity={1} />
+                            <stop offset="100%" stopColor="#22d3ee" stopOpacity={0.6} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-700" />
+                        <XAxis
+                          dataKey="date"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fontSize: 11, fill: '#94a3b8' }}
+                          dy={8}
+                        />
+                        <YAxis
+                          yAxisId="rev"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fontSize: 11, fill: '#94a3b8' }}
+                          tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                          width={45}
+                        />
+                        <YAxis
+                          yAxisId="ord"
+                          orientation="right"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={{ fontSize: 11, fill: '#94a3b8' }}
+                          width={30}
+                        />
+                        <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(99,102,241,0.06)', radius: 6 }} />
+                        <Legend
+                          iconType="circle"
+                          iconSize={8}
+                          wrapperStyle={{ paddingTop: 16, fontSize: 12, color: '#64748b' }}
+                        />
+                        <Bar yAxisId="rev" dataKey="revenue" name="Revenue (PKR)" fill="url(#revGrad)" radius={[5, 5, 0, 0]} maxBarSize={40} />
+                        <Bar yAxisId="ord" dataKey="orders" name="Orders" fill="url(#ordGrad)" radius={[5, 5, 0, 0]} maxBarSize={20} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-3">
+                      <TrendingUp className="h-10 w-10 opacity-20" />
+                      <p className="text-sm font-medium">No fulfilled order data for this period</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Right panel: Status Breakdown + Top Branch */}
+            <div className="flex flex-col gap-5">
+
+              {/* Order Status Donut */}
+              <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm flex-1">
+                <CardHeader className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <CardTitle className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <ShoppingBag className="h-4 w-4 text-blue-500" />
+                    Order Status Breakdown
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4">
+                  {isLoading ? (
+                    <div className="h-[170px] flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
+                  ) : statusChartData.length > 0 ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="h-[150px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={statusChartData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={42}
+                              outerRadius={70}
+                              paddingAngle={3}
+                              dataKey="value"
+                              labelLine={false}
+                              label={renderDonutLabel}
+                            >
+                              {statusChartData.map((entry, index) => (
+                                <Cell
+                                  key={`cell-${index}`}
+                                  fill={STATUS_COLORS[entry.name] || "#94a3b8"}
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              formatter={(value: any, name: any) => [value, name]}
+                              contentStyle={{
+                                background: '#1e293b', border: '1px solid #334155',
+                                borderRadius: 8, fontSize: 12, color: '#e2e8f0'
+                              }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      {/* Legend */}
+                      <div className="flex flex-wrap gap-x-3 gap-y-1.5 justify-center">
+                        {statusChartData.map((entry) => (
+                          <div key={entry.name} className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_COLORS[entry.name] || '#94a3b8' }} />
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">{entry.name}</span>
+                            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{entry.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-[170px] flex items-center justify-center text-slate-400 text-sm">No data</div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* #1 Branch */}
+              {topPerformers.length > 0 && (
+                <Card className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-white dark:bg-slate-900 shadow-sm">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Crown className="h-4 w-4 text-amber-500" />
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Top Branch</p>
+                    </div>
+                    <p className="text-base font-bold text-slate-900 dark:text-white truncate">
+                      {topPerformers[0]?.branchName || `Branch #${topPerformers[0]?.branchId}`}
+                    </p>
+                    <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                      {formatPKR((topPerformers[0]?.sales || 0) / 100)}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">{topPerformers[0]?.orderCount || 0} fulfilled orders</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+
+          {/* ── Branch Leaderboard ── */}
+          {topPerformers.length > 1 && (
+            <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <CardHeader className="px-5 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <Crown className="h-4 w-4 text-amber-500" />
+                    Branch Leaderboard
+                  </CardTitle>
+                  <Badge variant="secondary" className="text-[10px] font-bold tracking-widest bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-none uppercase">By Revenue</Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {topPerformers.slice(0, 8).map((p: any, i: number) => (
+                    <div key={p.branchId} className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                       <div className="flex items-center gap-3">
                         <div className={cn(
-                          "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white",
-                          index === 0 ? "bg-amber-500 shadow-md shadow-amber-500/20" :
-                            index === 1 ? "bg-slate-400" :
-                              index === 2 ? "bg-amber-700" : "bg-slate-200 dark:bg-slate-800 text-slate-500"
+                          "w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0",
+                          i === 0 ? "bg-amber-400 shadow-md shadow-amber-400/30" :
+                            i === 1 ? "bg-slate-400" :
+                              i === 2 ? "bg-orange-600" :
+                                "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
                         )}>
-                          {index + 1}
+                          {i + 1}
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                            {performer.branchName || `Branch #${performer.branchId}`}
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {p.branchName || `Branch #${p.branchId}`}
                           </p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-slate-200 dark:border-slate-700 font-mono text-slate-500">ID: {performer.branchId}</Badge>
-                            <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center">
-                              <ArrowUpRight className="h-2.5 w-2.5 mr-0.5" /> {((10 - index) * 1.5 + 4).toFixed(1)}%
-                            </span>
-                          </div>
+                          <p className="text-[11px] text-slate-400">{p.orderCount} fulfilled orders</p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold font-mono text-slate-900 dark:text-slate-100">{formatPKR(performer.sales / 100)}</p>
-                        <p className="text-[10px] font-semibold text-slate-400">{performer.orderCount} orders</p>
+                        <p className="text-sm font-bold font-mono text-slate-900 dark:text-white">{formatPKR(p.sales / 100)}</p>
+                        {/* Revenue share bar */}
+                        <div className="flex items-center gap-1.5 mt-1 justify-end">
+                          <div className="w-20 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-indigo-500"
+                              style={{ width: `${Math.max(4, ((p.sales / (topPerformers[0]?.sales || 1)) * 100))}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono w-8 text-right">
+                            {((p.sales / (topPerformers[0]?.sales || 1)) * 100).toFixed(0)}%
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="h-full flex items-center justify-center p-8 text-center">
-                  <p className="text-sm text-slate-500 font-medium">No branch data available</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ── Tab Bar: Orders | Line Items ── */}
+          <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+
+            {/* Tab header */}
+            <div className="px-5 pt-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <ListOrdered className="h-4 w-4 text-indigo-500" />
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 uppercase tracking-tight">Order Activity Ledger</h3>
+                  {!isLoading && <Badge variant="secondary" className="ml-1 h-4 text-[10px] px-1.5 font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-none">{filteredOrders.length}</Badge>}
                 </div>
-              )}
-            </CardContent>
+
+                {/* Search + Controls */}
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      placeholder="Search by ID, branch…"
+                      className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg"
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                    />
+                  </div>
+                  <ColumnSelector columns={ORDER_COLUMNS} storageKey="sales-summary-orders-v2" visibleKeys={orderVisibleKeys} onChange={setOrderVisibleKeys} />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg" disabled={isLoading}>
+                        <Upload className="h-3.5 w-3.5" />
+                        EXPORT
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-[148px] rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl">
+                      <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs font-medium cursor-pointer py-2">
+                        <FileText className="mr-2. h-3.5 w-3.5 text-slate-400" /> CSV
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs font-medium cursor-pointer py-2">
+                        <FileSpreadsheet className="mr-2 h-3.5 w-3.5 text-emerald-500" /> Excel
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs font-medium cursor-pointer py-2">
+                        <FilePdf className="mr-2 h-3.5 w-3.5 text-rose-500" /> PDF
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Orders Table ── */}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                    {isOrderVisible("date") && <TableHead className="pl-5 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Date</TableHead>}
+                    {isOrderVisible("tid") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Transaction ID</TableHead>}
+                    {isOrderVisible("organization") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Org</TableHead>}
+                    {isOrderVisible("group") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Group</TableHead>}
+                    {isOrderVisible("branch") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Branch</TableHead>}
+                    {isOrderVisible("status") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Status</TableHead>}
+                    {isOrderVisible("subtotal") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Subtotal</TableHead>}
+                    {isOrderVisible("tax") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Tax</TableHead>}
+                    {isOrderVisible("discount") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Discount</TableHead>}
+                    {isOrderVisible("total") && <TableHead className="text-right pr-5 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Total</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={orderVisibleKeys.length} className="h-32 text-center">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-400" />
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredOrders.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={orderVisibleKeys.length} className="h-32 text-center">
+                        <div className="flex flex-col items-center justify-center text-slate-400 gap-2">
+                          <Search className="h-8 w-8 opacity-20" />
+                          <p className="text-sm text-slate-500">No orders found for the selected filters.</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredOrders.map((order: any) => (
+                      <TableRow
+                        key={order.id}
+                        className="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 transition-colors"
+                        onClick={() => handleRowClick(order)}
+                      >
+                        {isOrderVisible("date") && (
+                          <TableCell className="pl-5 py-3 font-mono text-xs text-slate-500 whitespace-nowrap" suppressHydrationWarning>
+                            {new Date(order.createdAt).toLocaleDateString()}
+                          </TableCell>
+                        )}
+                        {isOrderVisible("tid") && (
+                          <TableCell className="py-3 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                            {order.tid}
+                          </TableCell>
+                        )}
+                        {isOrderVisible("organization") && (
+                          <TableCell className="py-3 text-xs text-slate-500">{order.organizationName || '-'}</TableCell>
+                        )}
+                        {isOrderVisible("group") && (
+                          <TableCell className="py-3 text-xs text-slate-500">{order.groupName || '-'}</TableCell>
+                        )}
+                        {isOrderVisible("branch") && (
+                          <TableCell className="py-3 text-xs font-medium text-slate-700 dark:text-slate-300">
+                            {order.branchName || `ID: ${order.branchId}`}
+                          </TableCell>
+                        )}
+                        {isOrderVisible("status") && (
+                          <TableCell className="py-3">
+                            <Badge variant="outline" className={cn(
+                              "text-[9px] uppercase font-bold tracking-widest border-none px-2 py-0.5",
+                              order.status === 'FULFILLED' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400' :
+                                order.status === 'PENDING' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400' :
+                                  order.status === 'REFUNDED' ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-400' :
+                                    'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400'
+                            )}>
+                              {order.status}
+                            </Badge>
+                          </TableCell>
+                        )}
+                        {isOrderVisible("subtotal") && (
+                          <TableCell className="py-3 text-right font-mono text-xs text-slate-500">
+                            {formatPKR((order.subtotalCents || 0) / 100)}
+                          </TableCell>
+                        )}
+                        {isOrderVisible("tax") && (
+                          <TableCell className="py-3 text-right font-mono text-xs text-slate-400">
+                            {formatPKR((order.taxCents || 0) / 100)}
+                          </TableCell>
+                        )}
+                        {isOrderVisible("discount") && (
+                          <TableCell className="py-3 text-right font-mono text-xs text-rose-500 dark:text-rose-400">
+                            -{formatPKR((order.discountCents || 0) / 100)}
+                          </TableCell>
+                        )}
+                        {isOrderVisible("total") && (
+                          <TableCell className="py-3 text-right pr-5 font-mono font-bold text-xs text-slate-900 dark:text-white">
+                            {formatPKR((order.totalCents || 0) / 100)}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 bg-slate-50/70 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                {filteredOrders.length} order{filteredOrders.length !== 1 ? "s" : ""} shown
+              </p>
+              <p className="text-[10px] text-slate-300 dark:text-slate-600" suppressHydrationWarning>
+                Generated {generatedDate}
+              </p>
+            </div>
           </Card>
         </div>
 
-        {/* ━━━ TRANSACTION LOGS TABLE ━━━ */}
-        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl pt-1">
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800/50 flex flex-wrap justify-between items-center gap-3 bg-white/50 dark:bg-slate-900/20">
-            <h3 className="font-semibold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200 flex items-center gap-2">
-              <FileText className="h-4 w-4 text-indigo-500" />
-              Transaction Ledger
-            </h3>
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-1 rounded-lg border border-slate-100 dark:border-slate-800">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                <Input
-                  placeholder="Search ID..."
-                  className="pl-8 h-8 w-40 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700 focus:ring-1 focus:ring-indigo-500/50 transition-all rounded-md"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1" />
-              <ColumnSelector
-                columns={ALL_COLUMNS}
-                storageKey="sales-summary-refactor"
-                visibleKeys={visibleKeys}
-                onChange={setVisibleKeys}
-              />
-              <ScheduleReportModal reportName="Sales Intelligence" />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="sm"
-                    className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm gap-1.5 px-3 rounded-md"
-                    disabled={isLoading}
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    EXPORT
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[140px] rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl">
-                  <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs font-medium cursor-pointer py-2">
-                    <FileText className="mr-2.5 h-3.5 w-3.5 text-slate-400" />
-                    CSV Export
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs font-medium cursor-pointer py-2">
-                    <FileSpreadsheet className="mr-2.5 h-3.5 w-3.5 text-emerald-500" />
-                    Excel Workbook
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs font-medium cursor-pointer py-2">
-                    <FilePdf className="mr-2.5 h-3.5 w-3.5 text-rose-500" />
-                    PDF Document
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800">
-                  {isVisible("date") && <TableHead className="pl-6 h-10 text-xs font-semibold uppercase tracking-wider text-slate-500">Date</TableHead>}
-                  {isVisible("tid") && <TableHead className="h-10 text-xs font-semibold uppercase tracking-wider text-slate-500">Transaction ID</TableHead>}
-                  {isVisible("organization") && <TableHead className="h-10 text-xs font-semibold uppercase tracking-wider text-slate-500">Organization</TableHead>}
-                  {isVisible("group") && <TableHead className="h-10 text-xs font-semibold uppercase tracking-wider text-slate-500">Group</TableHead>}
-                  {isVisible("branch") && <TableHead className="h-10 text-xs font-semibold uppercase tracking-wider text-slate-500">Branch</TableHead>}
-                  {isVisible("status") && <TableHead className="h-10 text-xs font-semibold uppercase tracking-wider text-slate-500">Status</TableHead>}
-                  {isVisible("subtotal") && <TableHead className="text-right h-10 text-xs font-semibold uppercase tracking-wider text-slate-500">Subtotal</TableHead>}
-                  {isVisible("tax") && <TableHead className="text-right h-10 text-xs font-semibold uppercase tracking-wider text-slate-500">Tax</TableHead>}
-                  {isVisible("discount") && <TableHead className="text-right h-10 text-xs font-semibold uppercase tracking-wider text-slate-500">Discount</TableHead>}
-                  {isVisible("total") && <TableHead className="text-right pr-6 h-10 text-xs font-semibold uppercase tracking-wider text-slate-500">Total</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={visibleKeys.length} className="h-32 text-center">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-500" />
-                    </TableCell>
-                  </TableRow>
-                ) : filteredOrders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={visibleKeys.length} className="h-32 text-center">
-                      <div className="flex flex-col items-center justify-center text-slate-400 space-y-2">
-                        <Search className="h-8 w-8 opacity-20" />
-                        <p className="text-sm font-medium text-slate-500">No orders found for the selected criteria.</p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredOrders.map((order: any) => (
-                    <TableRow
-                      key={order.id}
-                      className="hover:bg-indigo-50/40 dark:hover:bg-indigo-900/10 transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800/50"
-                      onClick={() => handleRowClick(order)}
-                    >
-                      {isVisible("date") && (
-                        <TableCell className="font-mono text-xs pl-6 text-slate-600 dark:text-slate-400 py-3" suppressHydrationWarning>
-                          {new Date(order.createdAt).toLocaleDateString()}
-                        </TableCell>
-                      )}
-                      {isVisible("tid") && (
-                        <TableCell className="font-mono text-xs font-bold text-slate-900 dark:text-slate-200 py-3">{order.tid}</TableCell>
-                      )}
-                      {isVisible("organization") && (
-                        <TableCell className="text-xs text-slate-500 font-medium py-3">
-                          {order.organizationName || '-'}
-                        </TableCell>
-                      )}
-                      {isVisible("group") && (
-                        <TableCell className="text-xs text-slate-500 font-medium py-3">
-                          {order.groupName || '-'}
-                        </TableCell>
-                      )}
-                      {isVisible("branch") && (
-                        <TableCell className="text-xs text-slate-600 dark:text-slate-300 font-medium py-3">
-                          {order.branchName || `ID: ${order.branchId}`}
-                        </TableCell>
-                      )}
-                      {isVisible("status") && (
-                        <TableCell className="py-3">
-                          <Badge variant="outline" className={cn(
-                            "text-[9px] uppercase font-bold tracking-widest border-none px-2 py-0.5",
-                            order.status === 'FULFILLED' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400' :
-                              order.status === 'PENDING' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400' :
-                                'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                          )}>
-                            {order.status}
-                          </Badge>
-                        </TableCell>
-                      )}
-                      {isVisible("subtotal") && (
-                        <TableCell className="text-right font-mono text-xs text-slate-500 py-3">
-                          {formatPKR((order.subtotalCents || 0) / 100)}
-                        </TableCell>
-                      )}
-                      {isVisible("tax") && (
-                        <TableCell className="text-right font-mono text-xs text-slate-500 py-3">
-                          {formatPKR((order.taxCents || 0) / 100)}
-                        </TableCell>
-                      )}
-                      {isVisible("discount") && (
-                        <TableCell className="text-right font-mono text-xs text-rose-500 dark:text-rose-400 font-medium py-3">
-                          -{formatPKR((order.discountCents || 0) / 100)}
-                        </TableCell>
-                      )}
-                      {isVisible("total") && (
-                        <TableCell className="text-right font-mono font-bold text-xs pr-6 text-slate-900 dark:text-white py-3">
-                          {formatPKR((order.totalCents || 0) / 100)}
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="p-3 bg-slate-50/50 dark:bg-slate-900/20 text-center">
-            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-              Report Generated: {generatedDate}
-            </p>
-          </div>
-        </Card>
-
-        {/* Expandable Row Drawer */}
         <ExpandableRowDrawer
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           title={selectedRow?.tid || "Transaction Details"}
-          subtitle={selectedRow ? `${selectedRow.branchName || 'Unknown'} • ${new Date(selectedRow.createdAt).toLocaleDateString()}` : ""}
-          fields={selectedRow ? getDrawerFields(selectedRow).filter(f => !f.key || isVisible(f.key)) : []}
+          subtitle={`${selectedRow?.branchName || ""} · ${selectedRow ? new Date(selectedRow.createdAt).toLocaleDateString() : ""}`}
+          fields={selectedRow ? getOrderDrawerFields(selectedRow).filter(f => !f.key || isOrderVisible(f.key)) : []}
         />
       </div>
     </div>
