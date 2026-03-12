@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
         const session = await getServerSession(authOptions)
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-        const userRole = ((session.user as any).role || "").toUpperCase()
+        const userRole = ((session.user as any).role || "").toUpperCase().replace(/\s+/g, '_')
         const userOrgId = (session.user as any).organizationId
         const userBranchId = (session.user as any).branchId
 
@@ -18,11 +18,12 @@ export async function GET(req: NextRequest) {
         const startDateParam = url.searchParams.get("startDate")
         const endDateParam = url.searchParams.get("endDate")
         const branchIdsParam = url.searchParams.get("branchIds")
+        const compare = url.searchParams.get("compare") === "true"
 
         // RBAC Context Parsing
         let branchIds: number[] = []
         if (branchIdsParam) {
-            branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id))
+            branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {
             branchIds = [userBranchId]
         } else {
@@ -66,7 +67,48 @@ export async function GET(req: NextRequest) {
 
         const results = await q
 
-        return NextResponse.json({ data: results })
+        // COMPARISON logic for overall KPIs
+        let comparisonSummary = null
+        if (compare && startDateParam && endDateParam) {
+            const start = new Date(startDateParam)
+            const end = new Date(endDateParam)
+            const duration = end.getTime() - start.getTime()
+            const prevStart = new Date(start.getTime() - duration - 1)
+            const prevEnd = new Date(start.getTime() - 1)
+
+            const compResults = await db
+                .select({
+                    orderId: orders.id,
+                    status: orders.status,
+                    totalSpentCents: orders.totalCents,
+                    userId: orders.createdByUserId
+                })
+                .from(orders)
+                .where(
+                    and(
+                        inArray(orders.branchId, branchIds),
+                        gte(orders.createdAt, prevStart),
+                        lte(orders.createdAt, prevEnd)
+                    )
+                )
+
+            let compOrders = compResults.length
+            let compFulfilled = compResults.filter(r => ['FULFILLED', 'APPROVED'].includes(r.status || "")).length
+            let compSpent = compResults.reduce((sum, r) => sum + (['FULFILLED', 'APPROVED'].includes(r.status || "") ? (r.totalSpentCents || 0) : 0), 0)
+            let compUsers = new Set(compResults.map(r => r.userId)).size
+
+            comparisonSummary = {
+                totalOrders: compOrders,
+                totalFulfilled: compFulfilled,
+                totalSpentCents: compSpent,
+                totalUsers: compUsers
+            }
+        }
+
+        return NextResponse.json({
+            data: results,
+            comparison: comparisonSummary
+        })
     } catch (error: any) {
         console.error("User Performance Request failed: ", error)
         return NextResponse.json({ error: "Failed to fetch user performance" }, { status: 500 })

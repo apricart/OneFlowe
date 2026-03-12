@@ -107,11 +107,11 @@ export function ColumnSelector({ columns, storageKey, onChange, visibleKeys }: C
                     {columns.map((col) => {
                         const isActive = visibleKeys.includes(col.key)
                         return (
-                            <button
+                            <div
                                 key={col.key}
                                 onClick={() => handleToggle(col.key)}
                                 className={cn(
-                                    "w-full flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-colors",
+                                    "w-full flex items-center gap-3 px-3 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer",
                                     isActive
                                         ? "text-slate-700 dark:text-slate-200 bg-indigo-50/50 dark:bg-indigo-900/10"
                                         : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50"
@@ -123,7 +123,7 @@ export function ColumnSelector({ columns, storageKey, onChange, visibleKeys }: C
                                     className="h-4 w-4 border-slate-300 dark:border-slate-600 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
                                 />
                                 <span className="truncate">{col.label}</span>
-                            </button>
+                            </div>
                         )
                     })}
                 </div>

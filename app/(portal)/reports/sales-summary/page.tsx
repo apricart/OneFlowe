@@ -31,7 +31,7 @@ import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/
 import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expandable-row-drawer"
 import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
 import { CompactDateFilter } from "@/components/reports/compact-date-filter"
-import { type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { type FilterPreset, getPresetRange } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
 
@@ -104,6 +104,7 @@ export default function SalesSummaryPage() {
   const [groupId, setGroupId] = useState("")
   const [orderDetails, setOrderDetails] = useState<any>(null)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
+  const [compare, setCompare] = useState(searchParams.get("compare") === "true")
 
   const { data: session } = useSession()
   const role = (session?.user as any)?.role as Role
@@ -122,13 +123,22 @@ export default function SalesSummaryPage() {
     return null
   }, [startFromUrl, endFromUrl])
 
-  const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset) => {
+  const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean) => {
     const params = new URLSearchParams(searchParams.toString())
     params.set("preset", preset)
-    if (range) {
-      params.set("startDate", range.startDate.toISOString())
-      params.set("endDate", range.endDate.toISOString())
-    } else {
+    if (compareMode !== undefined) {
+      params.set("compare", String(compareMode))
+      setCompare(compareMode)
+    }
+
+    // Calculate range for presets if not provided
+    const finalRange = range || (preset !== "custom" ? getPresetRange(preset) : null)
+
+    if (finalRange) {
+      params.set("startDate", finalRange.startDate.toISOString())
+      params.set("endDate", finalRange.endDate.toISOString())
+    } else if (preset !== "custom") {
+      // Fallback for custom with no range should not delete, but presets should always have range
       params.delete("startDate")
       params.delete("endDate")
     }
@@ -153,6 +163,7 @@ export default function SalesSummaryPage() {
   } else if (contextBranchId) {
     queryParams.set("branchId", contextBranchId)
   }
+  if (compare) queryParams.set("compare", "true")
 
   // Orders summary (aggregated)
   const ordersParams = new URLSearchParams(queryParams.toString())
@@ -181,6 +192,21 @@ export default function SalesSummaryPage() {
   const avgOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0
   const totalItemsSold = Number(summary.totalItemsSold) || 0
   const totalTax = Number(summary.totalTax) || 0
+
+  // Comparison logic calculations
+  const comparison = summary.comparison
+  const getTrend = (current: number, prev: number) => {
+    if (!prev || prev === 0) return null
+    const diff = ((current - prev) / prev) * 100
+    return {
+      value: Math.abs(diff).toFixed(1),
+      isUp: diff > 0,
+      isDown: diff < 0
+    }
+  }
+
+  const revenueTrend = getTrend(totalRevenue, comparison?.totalSales || 0)
+  const orderTrend = getTrend(orderCount, comparison?.orderCount || 0)
 
   // Daily revenue chart data
   const dailyChartData = useMemo(() => {
@@ -388,7 +414,12 @@ export default function SalesSummaryPage() {
       {/* ── Banking-Grade Filter Toolbar ── */}
       <div className="sticky top-0 z-40 bg-white/80 dark:bg-[#0b0f1a]/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-6 h-14 flex items-center shadow-sm">
         <div className="flex items-center gap-3">
-          <CompactDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
+          <CompactDateFilter
+            value={dateRange}
+            onChange={handleDateChange}
+            activePreset={activePreset}
+            compare={compare}
+          />
 
           {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
             <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
@@ -414,7 +445,7 @@ export default function SalesSummaryPage() {
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500/80 mb-2">
                 <div className="w-8 h-[1px] bg-indigo-500/30" />
-                Analytics & Reports
+                Records & Reports
               </div>
               <h1 className="text-4xl font-black tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
                 Sales Summary
@@ -436,12 +467,29 @@ export default function SalesSummaryPage() {
                   <div className="p-4 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
                     <DollarSign className="h-6 w-6" />
                   </div>
-                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none font-black text-[10px] px-2.5 py-1 tracking-tighter uppercase">Fulfilled</Badge>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none font-black text-[10px] px-2.5 py-1 tracking-tighter uppercase">Fulfilled</Badge>
+                    {revenueTrend && (
+                      <div className={cn(
+                        "flex items-center gap-1 text-[10px] font-black tracking-tighter",
+                        revenueTrend.isUp ? "text-emerald-500" : revenueTrend.isDown ? "text-rose-500" : "text-slate-400"
+                      )}>
+                        {revenueTrend.isUp ? "↑" : revenueTrend.isDown ? "↓" : "•"} {revenueTrend.value}%
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <p className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Total Revenue</p>
-                <h3 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white font-mono leading-none">
-                  {isLoading ? <Loader2 className="h-8 w-8 animate-spin text-slate-200" /> : formatPKR(totalRevenue / 100)}
-                </h3>
+                <div className="flex items-baseline gap-3">
+                  <h3 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white font-mono leading-none">
+                    {isLoading ? <Loader2 className="h-8 w-8 animate-spin text-slate-200" /> : formatPKR(totalRevenue / 100)}
+                  </h3>
+                  {compare && comparison && (
+                    <span className="text-xs font-bold text-slate-400 dark:text-slate-600 line-through opacity-50">
+                      {formatPKR(comparison.totalSales / 100)}
+                    </span>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -452,15 +500,32 @@ export default function SalesSummaryPage() {
                   <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
                     <ShoppingBag className="h-6 w-6" />
                   </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter">Live Monitor</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                      <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter">Live Monitor</span>
+                    </div>
+                    {orderTrend && (
+                      <div className={cn(
+                        "flex items-center gap-1 text-[10px] font-black tracking-tighter",
+                        orderTrend.isUp ? "text-emerald-500" : orderTrend.isDown ? "text-rose-500" : "text-slate-400"
+                      )}>
+                        {orderTrend.isUp ? "↑" : orderTrend.isDown ? "↓" : "•"} {orderTrend.value}%
+                      </div>
+                    )}
                   </div>
                 </div>
                 <p className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Total Order Volume</p>
-                <h3 className="text-5xl font-black tracking-tight text-slate-900 dark:text-white leading-none">
-                  {isLoading ? <Loader2 className="h-8 w-8 animate-spin text-slate-200" /> : orderCount.toLocaleString()}
-                </h3>
+                <div className="flex items-baseline gap-3">
+                  <h3 className="text-5xl font-black tracking-tight text-slate-900 dark:text-white leading-none">
+                    {isLoading ? <Loader2 className="h-8 w-8 animate-spin text-slate-200" /> : orderCount.toLocaleString()}
+                  </h3>
+                  {compare && comparison && (
+                    <span className="text-xs font-bold text-slate-400 dark:text-slate-600 line-through opacity-50">
+                      {comparison.orderCount.toLocaleString()}
+                    </span>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>

@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Download, X, Printer, FileText, CheckCircle2, ChevronRight } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import useSWR from "swr"
 import Image from "next/image"
 

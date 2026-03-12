@@ -736,39 +736,80 @@ const formatCurrency = (value: number) => {
   return `₨${value}`
 }
 
-const SalesPerfTooltip = ({ active, payload, label: tooltipLabel, activeMetric }: any) => {
+const SalesPerfTooltip = ({ active, payload, label: tooltipLabel, activeMetric, hasComparison }: any) => {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   const sales = d.sales ?? 0
   const orders = d.orders ?? 0
+  const compSales = d.compSales ?? 0
+  const compOrders = d.compOrders ?? 0
 
   const isRevenue = activeMetric === 'revenue'
+  const currentVal = isRevenue ? sales : orders
+  const prevVal = isRevenue ? compSales : compOrders
+  const metricLabel = isRevenue ? 'Revenue' : 'Orders'
+  const formatVal = (v: number) => isRevenue ? `Rs ${v.toLocaleString()}` : v.toLocaleString()
+
+  // Calculate change if comparison
+  let changePercent = 0
+  let changeDir: 'up' | 'down' | 'same' = 'same'
+  if (hasComparison && prevVal > 0) {
+    changePercent = ((currentVal - prevVal) / prevVal) * 100
+    changeDir = currentVal >= prevVal ? 'up' : 'down'
+  }
 
   return (
-    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.15)] border border-slate-100 dark:border-slate-800 min-w-[220px] ring-1 ring-black/5 dark:ring-white/5">
-      <p className="font-bold text-slate-800 dark:text-slate-200 text-base mb-3 pb-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.15)] border border-slate-100 dark:border-slate-800 min-w-[260px] ring-1 ring-black/5 dark:ring-white/5">
+      <p className="font-bold text-slate-800 dark:text-slate-200 text-base mb-3 pb-2 border-b border-slate-100 dark:border-slate-800">
         {tooltipLabel}
-        <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-widest">Snap-shot</span>
       </p>
 
-      <div className="space-y-4">
-        <div className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${isRevenue ? 'bg-emerald-50 dark:bg-emerald-900/20' : ''}`}>
-          <div className={`h-3 w-3 rounded-full shadow-sm ${isRevenue ? 'bg-emerald-400 scale-125' : 'bg-slate-300 dark:bg-slate-700'}`} />
-          <div className="flex-1">
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5 uppercase tracking-tighter">Total Revenue</span>
-            <span className={`text-base font-black ${isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>₨{sales.toLocaleString()}</span>
+      <div className="space-y-3">
+        {/* Current Period */}
+        <div className={`p-2.5 rounded-lg ${isRevenue ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-blue-50 dark:bg-blue-900/20'}`}>
+          <div className="flex items-center gap-2 mb-1">
+            <div className={`h-3 w-3 rounded-full ${isRevenue ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+            <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Current Period</span>
           </div>
-          {isRevenue && <TrendingUp className="w-4 h-4 text-emerald-500" />}
+          <span className={`text-lg font-black ${isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
+            {formatVal(currentVal)}
+          </span>
         </div>
 
-        <div className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${!isRevenue ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-          <div className={`h-3 w-3 rounded-full shadow-sm ${!isRevenue ? 'bg-blue-500 scale-125' : 'bg-slate-300 dark:bg-slate-700'}`} />
-          <div className="flex-1">
-            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5 uppercase tracking-tighter">Orders Count</span>
-            <span className={`text-base font-black ${!isRevenue ? 'text-blue-600 dark:text-blue-400' : 'text-slate-900 dark:text-white'}`}>{orders.toLocaleString()}</span>
+        {/* Previous Period - only in comparison mode */}
+        {hasComparison && (
+          <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="h-3 w-3 rounded-full bg-amber-500" />
+              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Previous Period</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-black text-amber-600 dark:text-amber-400">
+                {formatVal(prevVal)}
+              </span>
+              <span className={`text-xs font-black px-2 py-0.5 rounded-full ${
+                changeDir === 'up'
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                  : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+              }`}>
+                {changeDir === 'up' ? '▲' : '▼'} {Math.abs(changePercent).toFixed(1)}%
+              </span>
+            </div>
           </div>
-          {!isRevenue && <Activity className="w-4 h-4 text-blue-500" />}
-        </div>
+        )}
+
+        {/* Secondary metric (only when NOT comparing) */}
+        {!hasComparison && (
+          <div className={`p-2.5 rounded-lg ${!isRevenue ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-blue-50 dark:bg-blue-900/20'}`}>
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`h-3 w-3 rounded-full ${!isRevenue ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">{isRevenue ? 'Orders' : 'Revenue'}</span>
+            </div>
+            <span className={`text-lg font-black ${!isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
+              {isRevenue ? orders.toLocaleString() : `Rs ${sales.toLocaleString()}`}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -776,6 +817,7 @@ const SalesPerfTooltip = ({ active, payload, label: tooltipLabel, activeMetric }
 
 export function SalesPerformanceLineChart({
   seriesData,
+  comparisonSeries,
   totalSales,
   avgSales,
   totalOrders,
@@ -783,20 +825,15 @@ export function SalesPerformanceLineChart({
   label = "Sales",
   granularity = "daily",
   dateRange,
-}: SalesPerformanceLineChartProps) {
+}: SalesPerformanceLineChartProps & { comparisonSeries?: SalesSeriesPoint[] }) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const [activeMetric, setActiveMetric] = useState<'revenue' | 'orders'>('revenue')
 
+  const hasComparison = !!comparisonSeries && comparisonSeries.length > 0
+
   const safeData = useMemo(() => {
     if (!dateRange || !dateRange.startDate || !dateRange.endDate) {
-      if (!seriesData || seriesData.length === 0) {
-        return Array.from({ length: 7 }).map((_, i) => ({
-          label: `Day ${i + 1}`,
-          sales: 0,
-          orders: 0
-        }))
-      }
       return seriesData
     }
 
@@ -813,7 +850,7 @@ export function SalesPerformanceLineChart({
       intervals = eachMonthOfInterval({ start: startOfMonth(startDate), end: endOfMonth(endDate) })
     }
 
-    const padded = intervals.map(date => {
+    const padded = intervals.map((date, index) => {
       let labelStr = ""
       if (granularity === 'hourly') labelStr = format(date, 'hh:mm a')
       else if (granularity === 'daily') labelStr = format(date, 'dd MMM')
@@ -821,41 +858,40 @@ export function SalesPerformanceLineChart({
       else labelStr = format(date, 'MMM yyyy')
 
       const match = seriesData?.find(d => d.label === labelStr)
+      // Comparison data might have different labels if granularity is daily/monthly
+      // In many cases, we want to overlay point-for-point
+      const compMatch = comparisonSeries ? (comparisonSeries[index] || null) : null
 
       return {
         label: labelStr,
         sales: match?.sales ?? 0,
         orders: match?.orders ?? 0,
+        compSales: compMatch?.sales ?? 0,
+        compOrders: compMatch?.orders ?? 0,
         fullDate: date
       }
     })
 
     const mapped = padded.map(d => {
-      // Calculate visual (sqrt) values to "pump" lower ranges
       const vSales = Math.sqrt(d.sales || 0)
       const vOrders = Math.sqrt(d.orders || 0)
+      const vCompSales = Math.sqrt(d.compSales || 0)
+      const vCompOrders = Math.sqrt(d.compOrders || 0)
 
       return {
         ...d,
         vSales,
         vOrders,
-        // Active visual value for the Area and Primary Line
+        vCompSales,
+        vCompOrders,
         vActive: activeMetric === 'revenue' ? vSales : vOrders,
-        // Inactive visual value for the Secondary Line
+        vCompActive: activeMetric === 'revenue' ? vCompSales : vCompOrders,
         vSecondary: activeMetric === 'revenue' ? vOrders : vSales
       }
     })
 
-    // Truncate leading zero-data points for large ranges (monthly/yearly)
-    if (granularity === 'monthly' || granularity === 'yearly') {
-      const firstActiveIndex = mapped.findIndex(d => d.sales > 0 || d.orders > 0)
-      if (firstActiveIndex > 0) {
-        return mapped.slice(firstActiveIndex)
-      }
-    }
-
     return mapped
-  }, [seriesData, dateRange, granularity, activeMetric])
+  }, [seriesData, comparisonSeries, dateRange, granularity, activeMetric])
 
   const isEmpty = useMemo(() => !seriesData || seriesData.length === 0 || totalSales === 0, [seriesData, totalSales])
 
@@ -922,6 +958,10 @@ export function SalesPerformanceLineChart({
                   <stop offset="0%" stopColor={activeMetric === 'revenue' ? (isDark ? "#34d399" : "#10b981") : (isDark ? "#60a5fa" : "#3b82f6")} stopOpacity={0.25} />
                   <stop offset="100%" stopColor={activeMetric === 'revenue' ? (isDark ? "#34d399" : "#10b981") : (isDark ? "#60a5fa" : "#3b82f6")} stopOpacity={0.02} />
                 </linearGradient>
+                <linearGradient id="comparisonMetricGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={isDark ? "#fbbf24" : "#f59e0b"} stopOpacity={0.15} />
+                  <stop offset="100%" stopColor={isDark ? "#fbbf24" : "#f59e0b"} stopOpacity={0.02} />
+                </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
               <XAxis
@@ -947,21 +987,47 @@ export function SalesPerformanceLineChart({
                 domain={[0, 'auto']}
               />
               <Tooltip
-                content={<SalesPerfTooltip activeMetric={activeMetric} />}
+                content={<SalesPerfTooltip activeMetric={activeMetric} hasComparison={hasComparison} />}
                 cursor={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1.5, strokeDasharray: "4 4" }}
               />
 
-              {/* Secondary Metric Line (Subtle dashed) */}
-              <Line
-                type="monotone"
-                dataKey="vSecondary"
-                stroke={isDark ? "#475569" : "#cbd5e1"}
-                strokeWidth={2}
-                strokeDasharray="8 6"
-                dot={false}
-                activeDot={false}
-                animationDuration={1500}
-              />
+              {/* Comparison Line (Solid, same style as current but amber color) */}
+              {hasComparison && (
+                <Area
+                  type="monotone"
+                  dataKey="vCompActive"
+                  stroke={isDark ? "#fbbf24" : "#f59e0b"}
+                  strokeWidth={3}
+                  fill="url(#comparisonMetricGrad)"
+                  dot={{
+                    r: 3,
+                    strokeWidth: 2,
+                    fill: isDark ? "#0f172a" : "#ffffff",
+                    stroke: isDark ? "#fbbf24" : "#f59e0b"
+                  }}
+                  activeDot={{
+                    r: 6,
+                    strokeWidth: 2,
+                    fill: isDark ? "#fbbf24" : "#f59e0b",
+                    stroke: isDark ? "#f59e0b" : "#ffffff"
+                  }}
+                  animationDuration={1500}
+                />
+              )}
+
+              {/* Secondary Metric Line (Subtle dashed) - only if not comparing */}
+              {!hasComparison && (
+                <Line
+                  type="monotone"
+                  dataKey="vSecondary"
+                  stroke={isDark ? "#475569" : "#cbd5e1"}
+                  strokeWidth={2}
+                  strokeDasharray="8 6"
+                  dot={false}
+                  activeDot={false}
+                  animationDuration={1500}
+                />
+              )}
 
               {/* Primary Active Metric Area */}
               <Area
@@ -992,10 +1058,25 @@ export function SalesPerformanceLineChart({
             </AreaChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Comparison Legend */}
+        {hasComparison && (
+          <div className="flex items-center justify-center gap-8 mt-4 p-3 bg-slate-50/80 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-6 h-1 rounded-full ${activeMetric === 'revenue' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Current Period</span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-6 h-1 rounded-full bg-amber-500" />
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Previous Period</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
 }
+
 
 // ── Branch Sales Horizontal Bar Chart ──
 const HorizontalBranchTooltip = ({ active, payload }: any) => {

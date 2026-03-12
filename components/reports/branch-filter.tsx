@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useMemo } from "react"
 import { Check, ChevronDown, Building2, X, Search } from "lucide-react"
 import { useBranches } from "@/lib/hooks/use-api"
+import { cn } from "@/lib/utils"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -55,15 +56,18 @@ export function BranchFilter({ selectedIds, onChange, organizationId, placeholde
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
-                    className={`h-10 justify-between gap-2 min-w-[200px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all ${selectedIds.length > 0 ? "border-blue-500/50 ring-1 ring-blue-500/10" : ""}`}
+                    className={cn(
+                        "h-10 justify-between gap-2.5 min-w-[200px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all rounded-xl ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                        selectedIds.length > 0 ? "border-blue-500/50 ring-1 ring-blue-500/10" : ""
+                    )}
                 >
-                    <div className="flex items-center gap-2 overflow-hidden">
-                        <Building2 className={`h-4 w-4 ${selectedIds.length > 0 ? "text-blue-600" : "text-slate-400"}`} />
-                        <span className="truncate text-xs font-medium">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                        <Building2 className={cn("h-4 w-4 shrink-0", selectedIds.length > 0 ? "text-blue-600" : "text-slate-400")} />
+                        <span className="truncate text-xs font-bold text-slate-700 dark:text-slate-300">
                             {label}
                         </span>
                     </div>
-                    <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50 transition-transform duration-200" style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[280px] p-0 border-slate-200 dark:border-slate-800 shadow-xl" align="start">

@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
         const session = await getServerSession(authOptions)
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-        const userRole = ((session.user as any).role || "").toUpperCase()
+        const userRole = ((session.user as any).role || "").toUpperCase().replace(/\s+/g, '_')
         const userOrgId = (session.user as any).organizationId
         const userBranchId = (session.user as any).branchId
 
@@ -18,11 +18,13 @@ export async function GET(req: NextRequest) {
         const startDateParam = url.searchParams.get("startDate")
         const endDateParam = url.searchParams.get("endDate")
         const branchIdsParam = url.searchParams.get("branchIds")
+        const compare = url.searchParams.get("compare") === "true"
+        const status = url.searchParams.get("status")
 
         // RBAC Context Parsing
         let branchIds: number[] = []
         if (branchIdsParam) {
-            branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id))
+            branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {
             branchIds = [userBranchId]
         } else {
@@ -98,6 +100,8 @@ export async function GET(req: NextRequest) {
         }
 
         const flattened = results.map(row => {
+            // ... (keep existing mapping logic)
+            // I'll use ReplacementContent instead of trying to match the whole map
             const refundedCount = refundQuantities[row.orderItemId] || 0
 
             let qtyDelivered = 0
@@ -112,7 +116,6 @@ export async function GET(req: NextRequest) {
                 qtyDelivered = row.qtyOrdered
                 valueFulfilledCents = totalItemValue
             } else if (row.status === 'APPROVED') {
-                // Approved items are processed but not yet fulfilled = Revenue Pending
                 valuePendingCents = totalItemValue
             } else if (row.status === 'REFUNDED') {
                 qtyDelivered = Math.max(0, row.qtyOrdered - refundedCount)
@@ -131,7 +134,7 @@ export async function GET(req: NextRequest) {
                 status: row.status,
                 orderCreatedAt: row.orderCreatedAt,
                 userId: row.userId,
-                empNumber: row.userId.split('-')[0], // Pseudo employee number
+                empNumber: row.userId.split('-')[0],
                 userName: row.userName || row.userEmail?.split('@')[0],
                 userEmail: row.userEmail,
                 group: row.branchName,
@@ -143,14 +146,53 @@ export async function GET(req: NextRequest) {
                 qtyOrdered: row.qtyOrdered,
                 qtyDelivered: qtyDelivered,
                 priceCents: row.priceCents,
-                valueDeliveredCents: valueFulfilledCents, // This is exactly what the user wants for "Net Revenue"
+                valueDeliveredCents: valueFulfilledCents,
                 valueRefundedCents,
                 valueRejectedCents,
                 valuePendingCents
             }
         })
 
-        return NextResponse.json({ data: flattened })
+        // COMPARISON logic for overall KPIs
+        let comparisonSummary = null
+        if (compare && startDateParam && endDateParam) {
+            const start = new Date(startDateParam)
+            const end = new Date(endDateParam)
+            const duration = end.getTime() - start.getTime()
+            const prevStart = new Date(start.getTime() - duration - 1)
+            const prevEnd = new Date(start.getTime() - 1)
+
+            const compResults = await db
+                .select({
+                    id: orders.id,
+                    status: orders.status,
+                    totalCents: orders.totalCents,
+                    refundAmountCents: orders.refundAmountCents
+                })
+                .from(orders)
+                .where(
+                    and(
+                        inArray(orders.branchId, branchIds),
+                        gte(orders.createdAt, prevStart),
+                        lte(orders.createdAt, prevEnd)
+                    )
+                )
+
+            const compFulfilled = compResults.filter(r => ['FULFILLED', 'REFUNDED'].includes(r.status || ""))
+            const compRejected = compResults.filter(r => ['REJECTED', 'CANCELLED'].includes(r.status || ""))
+
+            comparisonSummary = {
+                totalOrders: compResults.length,
+                totalRevenue: compFulfilled.reduce((sum, r) => sum + ((r.totalCents || 0) - (r.refundAmountCents || 0)), 0),
+                totalRejected: compRejected.reduce((sum, r) => sum + (r.totalCents || 0), 0),
+                totalRefunded: compResults.reduce((sum, r) => sum + (r.refundAmountCents || 0), 0)
+            }
+        }
+
+        return NextResponse.json({
+            data: flattened,
+            comparison: comparisonSummary
+        })
     } catch (error: any) {
         console.error("Orders Itemized Request failed: ", error)
         return NextResponse.json({ error: "Failed to fetch itemized orders" }, { status: 500 })

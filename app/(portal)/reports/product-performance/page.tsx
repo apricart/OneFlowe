@@ -73,6 +73,9 @@ export default function ProductPerformancePage() {
     const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "thisMonth"
     const startFromUrl = searchParams.get("startDate") || ""
     const endFromUrl = searchParams.get("endDate") || ""
+    const compareFromUrl = searchParams.get("compare") === "true"
+
+    const [compare, setCompare] = useState(compareFromUrl)
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -82,9 +85,13 @@ export default function ProductPerformancePage() {
         return null
     }, [startFromUrl, endFromUrl])
 
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset) => {
+    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean) => {
         const params = new URLSearchParams(searchParams.toString())
         params.set("preset", preset)
+        if (compareMode !== undefined) {
+            params.set("compare", String(compareMode))
+            setCompare(compareMode)
+        }
         if (range) {
             params.set("startDate", range.startDate.toISOString())
             params.set("endDate", range.endDate.toISOString())
@@ -111,6 +118,7 @@ export default function ProductPerformancePage() {
     } else if (contextBranchId) {
         queryParams.set("branchId", contextBranchId)
     }
+    if (compare) queryParams.set("compare", "true")
 
     // Performance Data (Aggregated)
     const { data: perfData, isLoading: isPerfLoading, mutate: mutatePerf } = useSWR(`/api/v1/analytics/products/performance?${queryParams.toString()}`, fetcher)
@@ -139,6 +147,22 @@ export default function ProductPerformancePage() {
     const totalRefundLoss = products.reduce((sum: number, p: any) => sum + (p.refundLossCents || 0), 0)
 
     const refundRate = (totalVolume + totalRefunds) > 0 ? (totalRefunds / (totalVolume + totalRefunds)) * 100 : 0
+
+    // Comparison Trends
+    const comparison = perfData?.comparison
+    const getTrend = (current: number, prev: number) => {
+        if (!prev || prev === 0) return null
+        const diff = ((current - prev) / prev) * 100
+        return {
+            value: Math.abs(diff).toFixed(1),
+            isUp: diff > 0,
+            isDown: diff < 0
+        }
+    }
+
+    const revenueTrend = getTrend(totalRevenue, comparison?.totalRevenue || 0)
+    const volumeTrend = getTrend(totalVolume, comparison?.totalVolume || 0)
+    const refundTrend = getTrend(totalRefunds, comparison?.totalRefunds || 0)
 
     const handleRowClick = (item: any) => {
         setSelectedRow(item)
@@ -196,6 +220,7 @@ export default function ProductPerformancePage() {
                     onChange={handleDateChange}
                     activePreset={activePreset}
                     hidePresets={false}
+                    compare={compare}
                 />
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <>
@@ -230,7 +255,7 @@ export default function ProductPerformancePage() {
                 {/* ━━━ "INTELLIGENCE" HEADER ━━━ */}
                 <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#eab308] via-[#ca8a04] to-[#c2410c] px-6 py-6 text-white shadow-xl ring-1 ring-amber-500/30">
                     <div className="flex flex-wrap flex-col gap-2 relative z-10">
-                        <p className="text-xs tracking-[0.2em] text-white/80 font-bold uppercase">Consolidated Analytics</p>
+                        <p className="text-xs tracking-[0.2em] text-white/80 font-bold uppercase">Centralized Reporting</p>
                         <h1 className="text-3xl font-semibold tracking-tight">Product Intelligence</h1>
                         <p className="text-sm text-white/90 font-medium max-w-2xl">
                             Unified view of product performance and transactional history. Analyze top-line yield alongside ground-level order logs.
@@ -246,9 +271,26 @@ export default function ProductPerformancePage() {
                             <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">
                                 <TrendingUp className="h-4 w-4" />
                             </div>
-                            <Badge variant="outline" className="border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 text-[10px] uppercase font-bold tracking-wider">Product Revenue</Badge>
+                            <div className="flex flex-col items-end gap-1">
+                                <Badge variant="outline" className="border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 text-[10px] uppercase font-bold tracking-wider">Product Revenue</Badge>
+                                {revenueTrend && (
+                                    <div className={cn(
+                                        "text-[10px] font-black tracking-tighter",
+                                        revenueTrend.isUp ? "text-emerald-500" : revenueTrend.isDown ? "text-rose-500" : "text-slate-400"
+                                    )}>
+                                        {revenueTrend.isUp ? "↑" : revenueTrend.isDown ? "↓" : "•"} {revenueTrend.value}%
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{formatPKR(totalRevenue / 100)}</p>
+                        <div className="flex items-baseline gap-2">
+                            <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{formatPKR(totalRevenue / 100)}</p>
+                            {compare && comparison && (
+                                <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">
+                                    {formatPKR(comparison.totalRevenue / 100)}
+                                </span>
+                            )}
+                        </div>
                         <p className="text-xs font-semibold text-slate-400 mt-2">Yield from fulfilled products.</p>
                     </Card>
 
@@ -257,9 +299,26 @@ export default function ProductPerformancePage() {
                             <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
                                 <Package className="h-4 w-4" />
                             </div>
-                            <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Qty Fulfilled</Badge>
+                            <div className="flex flex-col items-end gap-1">
+                                <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Qty Fulfilled</Badge>
+                                {volumeTrend && (
+                                    <div className={cn(
+                                        "text-[10px] font-black tracking-tighter",
+                                        volumeTrend.isUp ? "text-emerald-500" : volumeTrend.isDown ? "text-rose-500" : "text-slate-400"
+                                    )}>
+                                        {volumeTrend.isUp ? "↑" : volumeTrend.isDown ? "↓" : "•"} {volumeTrend.value}%
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{totalVolume.toLocaleString()}</p>
+                        <div className="flex items-baseline gap-2">
+                            <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{totalVolume.toLocaleString()}</p>
+                            {compare && comparison && (
+                                <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">
+                                    {comparison.totalVolume.toLocaleString()}
+                                </span>
+                            )}
+                        </div>
                         <p className="text-xs font-semibold text-slate-400 mt-2">Total successful units delivered.</p>
                     </Card>
 
@@ -268,9 +327,26 @@ export default function ProductPerformancePage() {
                             <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
                                 <AlertOctagon className="h-4 w-4" />
                             </div>
-                            <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Refund Rate</Badge>
+                            <div className="flex flex-col items-end gap-1">
+                                <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Refund Rate</Badge>
+                                {refundTrend && (
+                                    <div className={cn(
+                                        "text-[10px] font-black tracking-tighter",
+                                        refundTrend.isUp ? "text-rose-500" : refundTrend.isDown ? "text-emerald-500" : "text-slate-400"
+                                    )}>
+                                        {refundTrend.isUp ? "↑" : refundTrend.isDown ? "↓" : "•"} {refundTrend.value}%
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-3xl font-bold text-rose-600 dark:text-rose-400 mb-1">{refundRate.toFixed(2)}%</p>
+                        <div className="flex items-baseline gap-2">
+                            <p className="text-3xl font-bold text-rose-600 dark:text-rose-400 mb-1">{refundRate.toFixed(2)}%</p>
+                            {compare && comparison && (
+                                <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">
+                                    {comparison.totalRefunds.toLocaleString()} items
+                                </span>
+                            )}
+                        </div>
                         <p className="text-xs font-semibold text-slate-400 mt-2">{totalRefunds.toLocaleString()} items refunded.</p>
                     </Card>
 

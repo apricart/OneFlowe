@@ -26,6 +26,16 @@ export type SalesPerformanceResponse = {
     peakPeriod: { label: string; sales: number; orders: number } | null
     branchSales: BranchSalesPoint[]
     organizationSales?: { organizationId: number; organizationName: string; sales: number; orders: number }[]
+    comparison?: {
+        totalSales: number
+        totalOrders: number
+        totalItemsSold?: number
+        fulfilledCount?: number
+        refundedCount?: number
+        rejectedCount?: number
+        approvedCount?: number
+        seriesData?: SalesSeriesPoint[]
+    } | null
 }
 
 export type DateRange = {
@@ -41,7 +51,8 @@ export function useSalesPerformance(
     branchIds?: string[], // multi-branch selection
     groupId?: string | null,
     dateRange?: DateRange | null,
-    status?: DashboardStatus
+    status?: DashboardStatus,
+    compare?: boolean
 ) {
     const url = useMemo(() => {
         const params = new URLSearchParams()
@@ -78,8 +89,12 @@ export function useSalesPerformance(
             params.set("status", status)
         }
 
+        if (compare) {
+            params.set("compare", "true")
+        }
+
         return `/api/v1/analytics/sales-performance?${params.toString()}`
-    }, [organizationId, branchId, branchIds, groupId, dateRange, status])
+    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare])
 
     return useSWR<SalesPerformanceResponse>(url, fetcher, {
         revalidateOnFocus: false,
@@ -95,7 +110,8 @@ export function useDashboardKPIs(
     branchIds?: string[],
     groupId?: string | null,
     dateRange?: DateRange | null,
-    status?: DashboardStatus
+    status?: DashboardStatus,
+    compare?: boolean
 ) {
-    return useSalesPerformance(organizationId, branchId, branchIds, groupId, dateRange, status)
+    return useSalesPerformance(organizationId, branchId, branchIds, groupId, dateRange, status, compare)
 }

@@ -27,7 +27,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     Loader2, Calendar, AlertCircle, CheckCircle2, Package, TrendingUp,
-    ArrowUpRight, ArrowDownRight, Activity, Zap, Clock, Award, Hash, Search, Info, Box, ChevronRight
+    ArrowUpRight, ArrowDownRight, Activity, Zap, Clock, Award, Hash, Search, Info, Box, ChevronRight, ArrowDownAZ, ArrowDown01
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
@@ -45,6 +45,7 @@ interface DrillDownSheetProps {
     branchIds?: string[]
     defaultDateRange?: DateRange | null
     title?: string
+    compare?: boolean
 }
 
 const TYPE_CONFIG = {
@@ -139,18 +140,22 @@ export function DrillDownSheet({
     branchId,
     branchIds,
     defaultDateRange,
-    title
+    title,
+    compare
 }: DrillDownSheetProps): React.ReactElement | null {
     // Internal localized date range state for the drill down
     const [localDateRange, setLocalDateRange] = useState<DateRange | null>(null)
     const [activePreset, setActivePreset] = useState<FilterPreset>("today")
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
+    const [refundType, setRefundType] = useState<"all" | "full" | "partial">("all")
+    const [sortBy, setSortBy] = useState<"date" | "value">("date")
 
     useEffect(() => {
         if (isOpen) {
             setLocalDateRange(defaultDateRange || null)
             setActivePreset(defaultDateRange ? "custom" : "today")
             setExpandedRow(null)
+            setSortBy("date")
         }
     }, [isOpen, defaultDateRange])
 
@@ -164,6 +169,14 @@ export function DrillDownSheet({
             params.set("startDate", localDateRange.startDate.toISOString())
             params.set("endDate", localDateRange.endDate.toISOString())
         }
+        params.set("sortBy", sortBy)
+        if (compare) params.set("compare", "true")
+        if (type === "REFUNDED") {
+            params.set("refundType", refundType)
+        }
+        if (sortBy === "value") {
+            params.set("sortBy", "value")
+        }
 
         if (organizationId && organizationId !== "null") params.set("organizationId", organizationId)
         if (branchIds && branchIds.length > 0) {
@@ -173,15 +186,24 @@ export function DrillDownSheet({
         }
 
         return `/api/v1/analytics/drill-down?${params.toString()}`
-    }, [isOpen, type, organizationId, branchId, branchIds, localDateRange])
+    }, [isOpen, type, organizationId, branchId, branchIds, localDateRange, refundType, sortBy])
 
-    const { data, isLoading } = useSWR<{ items: any[], summary: any, total: number }>(url, fetcher, {
+    const { data, isLoading } = useSWR<{ items: any[], summary: any, comparison: any, total: number }>(url, fetcher, {
         revalidateOnFocus: false
     })
 
     const items = data?.items || []
     const summary = data?.summary || {}
+    const comparison = data?.comparison || null
     const config = type ? TYPE_CONFIG[type] : null
+
+    const getTrend = useCallback((current: number, prev: number) => {
+        if (!prev || prev === 0) return null
+        const diff = current - prev
+        const percentage = (diff / prev) * 100
+        const isUp = diff >= 0
+        return `${isUp ? '+' : ''}${percentage.toFixed(1)}%`
+    }, [])
 
     const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
         setLocalDateRange(range)
@@ -215,12 +237,85 @@ export function DrillDownSheet({
                                 </div>
                             </div>
                         </div>
-                        <GlobalDateFilter
-                            value={localDateRange}
-                            onChange={handleDateChange}
-                            activePreset={activePreset}
-                            className="scale-90"
-                        />
+                        <div className="flex items-center gap-2">
+                            <div className="flex p-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <button
+                                    onClick={() => setSortBy("date")}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all",
+                                        sortBy === "date"
+                                            ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                                            : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                    )}
+                                >
+                                    <ArrowDownAZ className="w-3 h-3" /> Date
+                                </button>
+                                <button
+                                    onClick={() => setSortBy("value")}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all",
+                                        sortBy === "value"
+                                            ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                                            : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                    )}
+                                >
+                                    <ArrowDown01 className="w-3 h-3" /> Value
+                                </button>
+                            </div>
+                            <GlobalDateFilter
+                                value={localDateRange}
+                                onChange={handleDateChange}
+                                activePreset={activePreset}
+                                className="scale-90"
+                            />
+                        </div>
+                    </div>
+
+                    {type === "REFUNDED" && (
+                        <div className="flex gap-1 mb-4 p-1.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
+                            {[
+                                { id: "all", label: "All Refunds" },
+                                { id: "full", label: "Fully Refunded" },
+                                { id: "partial", label: "Partially Refunded" },
+                            ].map((t) => (
+                                <button
+                                    key={t.id}
+                                    onClick={() => setRefundType(t.id as any)}
+                                    className={cn(
+                                        "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                        refundType === t.id
+                                            ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                                            : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                    )}
+                                >
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Sort Toggle */}
+                    <div className="flex items-center gap-3 mb-2">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sort by:</span>
+                        <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-xl">
+                            {[
+                                { id: "date", label: "Latest" },
+                                { id: "value", label: "Highest Value" },
+                            ].map((s) => (
+                                <button
+                                    key={s.id}
+                                    onClick={() => setSortBy(s.id as any)}
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all",
+                                        sortBy === s.id
+                                            ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                                            : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                    )}
+                                >
+                                    {s.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {/* ━━━ BI SNAPSHOT CARDS ━━━ */}
@@ -228,26 +323,77 @@ export function DrillDownSheet({
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2 animate-in fade-in slide-in-from-top-4 duration-500">
                             {type === "REVENUE" && (
                                 <>
-                                    <BIInsightCard title="Net Revenue" value={formatPKR(summary.netRevenue)} subvalue={`Gross: ${formatPKR(summary.grossRevenue)}`} icon={TrendingUp} colorClass="border-emerald-100 dark:border-emerald-900/30" />
-                                    <BIInsightCard title="Refund Rate" value={`${summary.refundRate.toFixed(1)}%`} trend={summary.refundRate > 5 ? "+ Leakage" : "- Healthy"} icon={AlertCircle} colorClass={summary.refundRate > 5 ? "border-rose-100 dark:border-rose-900/30" : ""} />
-                                    <BIInsightCard title="Leakage (Lost)" value={formatPKR(summary.leakage)} subvalue={`Inc. ${formatPKR(summary.discountImpact)} discounts`} icon={Zap} colorClass="border-rose-100 dark:border-rose-900/30" />
+                                    <BIInsightCard 
+                                        title="Net Revenue" 
+                                        value={formatPKR(summary.netRevenue)} 
+                                        subvalue={`Gross: ${formatPKR(summary.grossRevenue)}`} 
+                                        icon={TrendingUp} 
+                                        trend={comparison ? getTrend(summary.netRevenue, comparison.netRevenue) : undefined}
+                                        colorClass="border-emerald-100 dark:border-emerald-900/30" 
+                                    />
+                                    <BIInsightCard 
+                                        title="Refund Rate" 
+                                        value={`${summary.refundRate.toFixed(1)}%`} 
+                                        trend={summary.refundRate > 5 ? "+ Leakage" : "- Healthy"} 
+                                        icon={AlertCircle} 
+                                        colorClass={summary.refundRate > 5 ? "border-rose-100 dark:border-rose-900/30" : ""} 
+                                    />
+                                    <BIInsightCard 
+                                        title="Leakage (Lost)" 
+                                        value={formatPKR(summary.leakage)} 
+                                        subvalue={`Inc. ${formatPKR(summary.discountImpact)} discounts`} 
+                                        trend={comparison ? getTrend(summary.leakage, comparison.leakage) : undefined}
+                                        icon={Zap} 
+                                        colorClass="border-rose-100 dark:border-rose-900/30" 
+                                    />
                                     <BIInsightCard title="Peak Hours" value={summary.peakPeriod} subvalue="Highest yield window" icon={Clock} />
                                 </>
                             )}
                             {type === "ORDERS" && (
                                 <>
                                     <BIInsightCard title="Top Branch" value={summary.topBranch} subvalue="By Growth Volume" icon={Award} colorClass="border-indigo-100 dark:border-indigo-900/30" />
-                                    <BIInsightCard title="Total Items" value={summary.totalItems} subvalue="Across all orders" icon={Box} colorClass="border-indigo-100 dark:border-indigo-900/30" />
+                                    <BIInsightCard 
+                                        title="Total Items" 
+                                        value={summary.totalItems} 
+                                        subvalue="Across all orders" 
+                                        trend={comparison ? getTrend(summary.totalItems, comparison.totalItems) : undefined}
+                                        icon={Box} 
+                                        colorClass="border-indigo-100 dark:border-indigo-900/30" 
+                                    />
                                     <BIInsightCard title="Problematic" value={summary.problematicBranch} subvalue="High Refund Risk" icon={AlertCircle} colorClass="border-rose-100 dark:border-rose-900/30" />
-                                    <BIInsightCard title="Total Orders" value={items.length} subvalue="Processed volume" icon={Package} />
+                                    <BIInsightCard 
+                                        title="Total Orders" 
+                                        value={items.length} 
+                                        subvalue="Processed volume" 
+                                        trend={comparison ? getTrend(items.length, comparison.totalOrders) : undefined}
+                                        icon={Package} 
+                                    />
                                 </>
                             )}
                             {(type === "FULFILLED" || type === "REJECTED" || type === "REFUNDED") && (
                                 <>
-                                    <BIInsightCard title="Top Location" value={summary.topBranch} icon={Award} />
-                                    <BIInsightCard title="Total Value" value={formatPKR(summary.grossRevenue || 0)} icon={TrendingUp} />
-                                    <BIInsightCard title="Total Items" value={summary.totalItems} icon={Box} />
-                                    <BIInsightCard title="Total Volume" value={items.length} icon={Hash} />
+                                    <BIInsightCard title="Top Performing Branch" value={summary.topBranch} subvalue="Highest Activity" icon={Award} colorClass="border-indigo-100 dark:border-indigo-900/30" />
+                                    <BIInsightCard 
+                                        title="Total Value" 
+                                        value={formatPKR(summary.grossRevenue || 0)} 
+                                        subvalue="Gross Amount" 
+                                        trend={comparison ? getTrend(summary.grossRevenue, comparison.grossRevenue) : undefined}
+                                        icon={TrendingUp} 
+                                    />
+                                    <BIInsightCard 
+                                        title="Total Items" 
+                                        value={summary.totalItems} 
+                                        subvalue="Product SKU Count" 
+                                        trend={comparison ? getTrend(summary.totalItems, comparison.totalItems) : undefined}
+                                        icon={Box} 
+                                    />
+                                    <BIInsightCard 
+                                        title="Order Count" 
+                                        value={items.length} 
+                                        subvalue="Total Transactions" 
+                                        trend={comparison ? getTrend(items.length, comparison.totalOrders) : undefined}
+                                        icon={Hash} 
+                                    />
                                 </>
                             )}
                         </div>

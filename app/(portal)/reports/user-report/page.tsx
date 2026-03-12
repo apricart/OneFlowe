@@ -54,6 +54,9 @@ export default function UserReportPage() {
     const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "thisMonth"
     const startFromUrl = searchParams.get("startDate") || ""
     const endFromUrl = searchParams.get("endDate") || ""
+    const compareFromUrl = searchParams.get("compare") === "true"
+
+    const [compare, setCompare] = useState(compareFromUrl)
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -63,9 +66,13 @@ export default function UserReportPage() {
         return null
     }, [startFromUrl, endFromUrl])
 
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset) => {
+    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean) => {
         const params = new URLSearchParams(searchParams.toString())
         params.set("preset", preset)
+        if (compareMode !== undefined) {
+            params.set("compare", String(compareMode))
+            setCompare(compareMode)
+        }
         if (range) {
             params.set("startDate", range.startDate.toISOString())
             params.set("endDate", range.endDate.toISOString())
@@ -91,6 +98,7 @@ export default function UserReportPage() {
     } else if (contextBranchId) {
         queryParams.set("branchId", contextBranchId)
     }
+    if (compare) queryParams.set("compare", "true")
 
     const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/users/performance?${queryParams.toString()}`, fetcher)
 
@@ -111,6 +119,26 @@ export default function UserReportPage() {
     const totalOrders = usersData.reduce((sum: number, u: any) => sum + (Number(u.totalOrders) || 0), 0)
     const totalFulfilled = usersData.reduce((sum: number, u: any) => sum + (Number(u.fulfilledOrders) || 0), 0)
     const totalSpent = usersData.reduce((sum: number, u: any) => sum + (Number(u.totalSpentCents) || 0), 0)
+
+    // Comparison Trends
+    const comparison = data?.comparison
+    const getTrend = (current: number, prev: number) => {
+        if (!prev || prev === 0) return null
+        const diff = ((current - prev) / prev) * 100
+        return {
+            value: Math.abs(diff).toFixed(1),
+            isUp: diff > 0,
+            isDown: diff < 0
+        }
+    }
+
+    const usersTrend = getTrend(totalUsers, comparison?.totalUsers || 0)
+    const ordersTrend = getTrend(totalOrders, comparison?.totalOrders || 0)
+    const spentTrend = getTrend(totalSpent, comparison?.totalSpentCents || 0)
+
+    const currentSuccess = totalOrders > 0 ? (totalFulfilled / totalOrders) * 100 : 0
+    const prevSuccess = (comparison?.totalOrders || 0) > 0 ? (comparison.totalFulfilled / comparison.totalOrders) * 100 : 0
+    const successTrend = getTrend(currentSuccess, prevSuccess)
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
         const headers = ["Name", "Email", "Branch", "Total Orders", "Fulfilled", "Refunded", "Total Spent"]
@@ -154,6 +182,7 @@ export default function UserReportPage() {
                     onChange={handleDateChange}
                     activePreset={activePreset}
                     hidePresets={false}
+                    compare={compare}
                 />
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <BranchFilter
@@ -181,7 +210,7 @@ export default function UserReportPage() {
                 {/* ━━━ "INTELLIGENCE" HEADER ━━━ */}
                 <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0f172a] via-[#1e293b] to-[#334155] px-6 py-8 text-white shadow-xl ring-1 ring-slate-700/50">
                     <div className="flex flex-col gap-2 relative z-10">
-                        <p className="text-xs tracking-[0.3em] text-slate-400 font-bold uppercase">Personnel Analytics</p>
+                        <p className="text-xs tracking-[0.3em] text-slate-400 font-bold uppercase">Purchasing Patterns</p>
                         <h1 className="text-4xl font-bold tracking-tight">User Ordering Statistics</h1>
                         <p className="text-sm text-slate-400 font-medium max-w-xl">
                             Holistic consumption overview for <strong className="text-white">{totalUsers}</strong> active users across filtered branches.
@@ -197,9 +226,26 @@ export default function UserReportPage() {
                             <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
                                 <Users className="h-5 w-5" />
                             </div>
-                            <Badge variant="secondary" className="text-[10px] font-bold">Active Transactors</Badge>
+                            <div className="flex flex-col items-end gap-1">
+                                <Badge variant="secondary" className="text-[10px] font-bold">Active Transactors</Badge>
+                                {usersTrend && (
+                                    <div className={cn(
+                                        "text-[10px] font-black tracking-tighter",
+                                        usersTrend.isUp ? "text-emerald-500" : usersTrend.isDown ? "text-rose-500" : "text-slate-400"
+                                    )}>
+                                        {usersTrend.isUp ? "↑" : usersTrend.isDown ? "↓" : "•"} {usersTrend.value}%
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">{totalUsers}</p>
+                        <div className="flex items-baseline gap-2">
+                            <p className="text-3xl font-bold text-slate-900 dark:text-white">{totalUsers}</p>
+                            {compare && comparison && (
+                                <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">
+                                    {comparison.totalUsers}
+                                </span>
+                            )}
+                        </div>
                         <p className="text-xs text-slate-500 mt-1 font-medium">Distinct ordering profiles found.</p>
                     </Card>
 
@@ -208,9 +254,26 @@ export default function UserReportPage() {
                             <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                                 <Package className="h-5 w-5" />
                             </div>
-                            <Badge variant="secondary" className="text-[10px] font-bold">Volume</Badge>
+                            <div className="flex flex-col items-end gap-1">
+                                <Badge variant="secondary" className="text-[10px] font-bold">Volume</Badge>
+                                {ordersTrend && (
+                                    <div className={cn(
+                                        "text-[10px] font-black tracking-tighter",
+                                        ordersTrend.isUp ? "text-emerald-500" : ordersTrend.isDown ? "text-rose-500" : "text-slate-400"
+                                    )}>
+                                        {ordersTrend.isUp ? "↑" : ordersTrend.isDown ? "↓" : "•"} {ordersTrend.value}%
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">{totalOrders}</p>
+                        <div className="flex items-baseline gap-2">
+                            <p className="text-3xl font-bold text-slate-900 dark:text-white">{totalOrders}</p>
+                            {compare && comparison && (
+                                <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">
+                                    {comparison.totalOrders}
+                                </span>
+                            )}
+                        </div>
                         <p className="text-xs text-slate-500 mt-1 font-medium">Total orders initiated by users.</p>
                     </Card>
 
@@ -219,11 +282,28 @@ export default function UserReportPage() {
                             <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
                                 <CheckCircle className="h-5 w-5" />
                             </div>
-                            <Badge variant="secondary" className="text-[10px] font-bold">Success Rate</Badge>
+                            <div className="flex flex-col items-end gap-1">
+                                <Badge variant="secondary" className="text-[10px] font-bold">Success Rate</Badge>
+                                {successTrend && (
+                                    <div className={cn(
+                                        "text-[10px] font-black tracking-tighter",
+                                        successTrend.isUp ? "text-emerald-500" : successTrend.isDown ? "text-rose-500" : "text-slate-400"
+                                    )}>
+                                        {successTrend.isUp ? "↑" : successTrend.isDown ? "↓" : "•"} {successTrend.value}%
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                            {totalOrders > 0 ? ((totalFulfilled / totalOrders) * 100).toFixed(1) : 0}%
-                        </p>
+                        <div className="flex items-baseline gap-2">
+                            <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                                {currentSuccess.toFixed(1)}%
+                            </p>
+                            {compare && comparison && (
+                                <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">
+                                    {prevSuccess.toFixed(1)}%
+                                </span>
+                            )}
+                        </div>
                         <p className="text-xs text-slate-500 mt-1 font-medium">{totalFulfilled} fulfilled orders.</p>
                     </Card>
 
@@ -232,9 +312,26 @@ export default function UserReportPage() {
                             <div className="p-2.5 rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none">
                                 <TrendingUp className="h-5 w-5" />
                             </div>
-                            <Badge className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 text-[10px] font-bold">Yield</Badge>
+                            <div className="flex flex-col items-end gap-1">
+                                <Badge className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 text-[10px] font-bold">Yield</Badge>
+                                {spentTrend && (
+                                    <div className={cn(
+                                        "text-[10px] font-black tracking-tighter",
+                                        spentTrend.isUp ? "text-emerald-500" : spentTrend.isDown ? "text-rose-500" : "text-slate-400"
+                                    )}>
+                                        {spentTrend.isUp ? "↑" : spentTrend.isDown ? "↓" : "•"} {spentTrend.value}%
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white">{formatPKR(totalSpent / 100)}</p>
+                        <div className="flex items-baseline gap-2">
+                            <p className="text-3xl font-bold text-slate-900 dark:text-white">{formatPKR(totalSpent / 100)}</p>
+                            {compare && comparison && (
+                                <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">
+                                    {formatPKR(comparison.totalSpentCents / 100)}
+                                </span>
+                            )}
+                        </div>
                         <p className="text-xs text-slate-500 mt-1 font-medium">Total net value across all users.</p>
                     </Card>
                 </div>

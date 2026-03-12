@@ -12,7 +12,7 @@ const EMAIL_CONFIG = {
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
   user: process.env.SMTP_USER,
-  pass: process.env.SMTP_PASS,
+  pass: process.env.SMTP_PASS?.replace(/\s+/g, ''),
   from: process.env.SMTP_USER || 'noreply@example.com',
 } as const
 
@@ -215,6 +215,111 @@ export async function verifyEmailConfig(): Promise<boolean> {
     return true
   } catch (error) {
     logError(error, 'EMAIL_VERIFY_CONFIG')
+    return false
+  }
+}
+
+/**
+ * Generate HTML email template for Reports
+ */
+function generateReportEmailHTML(reportName: string, frequency: string): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${reportName} Delivery</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f8fafc;">
+      <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 40px 0;">
+            <table role="presentation" style="width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);">
+              <!-- Header -->
+              <tr>
+                <td style="background-color: #4f46e5; padding: 40px 30px; text-align: center;">
+                  <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 800; letter-spacing: -0.025em; text-transform: uppercase; font-style: italic;">OneFlowe BI</h1>
+                  <p style="margin: 10px 0 0 0; color: #e0e7ff; font-size: 14px; font-weight: 500; opacity: 0.9;">Automated Intel Delivery</p>
+                </td>
+              </tr>
+              
+              <!-- Content -->
+              <tr>
+                <td style="padding: 40px 30px;">
+                  <div style="display: flex; align-items: center; margin-bottom: 24px;">
+                    <span style="background-color: #f0f9ff; color: #0369a1; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">${frequency} REPORT</span>
+                  </div>
+                  <h2 style="margin: 0 0 16px 0; color: #1e293b; font-size: 20px; font-weight: 700;">${reportName}</h2>
+                  <p style="margin: 0 0 24px 0; color: #475569; font-size: 15px; line-height: 1.6;">
+                    Hello, please find your scheduled ${reportName.toLowerCase()} attached below. This report contains the latest data audits and performance metrics based on your configuration.
+                  </p>
+                  
+                  <div style="padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9; margin-bottom: 24px;">
+                    <p style="margin: 0 0 8px 0; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">Delivery Details</p>
+                    <p style="margin: 0; color: #1e293b; font-size: 14px; font-weight: 500;">
+                      <strong>Generated At:</strong> ${new Date().toLocaleString()}<br>
+                      <strong>Frequency:</strong> ${frequency}<br>
+                      <strong>Format:</strong> CSV Attachment
+                    </p>
+                  </div>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td style="background-color: #f8fafc; padding: 30px; text-align: center; border-top: 1px solid #f1f5f9;">
+                  <p style="margin: 0 0 10px 0; color: #94a3b8; font-size: 13px;">
+                    To modify this schedule, please login to your OneFlowe Portal.
+                  </p>
+                  <p style="margin: 0; color: #cbd5e1; font-size: 12px;">
+                    © ${new Date().getFullYear()} OneFlowe BI Solutions. All rights reserved.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `
+}
+
+/**
+ * Send Automated Report email
+ */
+export async function sendReportEmail(
+  to: string | string[],
+  reportName: string,
+  frequency: string,
+  attachmentData: Buffer | string,
+  fileName: string
+): Promise<boolean> {
+  try {
+    const transport = getTransporter()
+    if (!transport) return false
+
+    const recipients = Array.isArray(to) ? to.join(', ') : to
+    const subject = `[REPORT] ${reportName} - ${new Date().toLocaleDateString()}`
+
+    await transport.sendMail({
+      from: `"OneFlowe BI" <${EMAIL_CONFIG.from}>`,
+      to: recipients,
+      subject,
+      html: generateReportEmailHTML(reportName, frequency),
+      attachments: [
+        {
+          filename: fileName,
+          content: attachmentData,
+        },
+      ],
+    })
+
+    return true
+  } catch (error) {
+    console.error(`[Email] Failed to send report email:`, error)
+    logError(error, 'EMAIL_SEND_REPORT', { to, reportName })
     return false
   }
 }

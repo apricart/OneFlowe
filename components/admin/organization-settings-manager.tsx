@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { toast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { 
   Settings, 
   Plus, 
@@ -132,6 +132,7 @@ const PREDEFINED_SETTINGS = [
 ]
 
 export function OrganizationSettingsManager() {
+  const { toast } = useToast()
   const [selectedOrg, setSelectedOrg] = useState<number | null>(null)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [newSetting, setNewSetting] = useState({

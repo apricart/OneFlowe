@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/skeleton"
 import { MFAVerificationDialog } from "@/components/mfa/mfa-verification-dialog"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import Image from "next/image"
 import { Eye, EyeOff } from "lucide-react"
 

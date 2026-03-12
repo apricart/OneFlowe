@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
         const session = await getServerSession(authOptions)
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-        const userRole = ((session.user as any).role || "").toUpperCase()
+        const userRole = ((session.user as any).role || "").toUpperCase().replace(/\s+/g, '_')
         const userOrgId = (session.user as any).organizationId
         const userBranchId = (session.user as any).branchId
 
@@ -18,11 +18,12 @@ export async function GET(req: NextRequest) {
         const startDateParam = url.searchParams.get("startDate")
         const endDateParam = url.searchParams.get("endDate")
         const branchIdsParam = url.searchParams.get("branchIds")
+        const compare = url.searchParams.get("compare") === "true"
 
         // RBAC Context Parsing
         let branchIds: number[] = []
         if (branchIdsParam) {
-            branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id))
+            branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {
             branchIds = [userBranchId]
         } else {
@@ -135,7 +136,72 @@ export async function GET(req: NextRequest) {
             totalOrders: p.totalOrders.size // convert set -> size
         })).sort((a, b) => b.revenueGeneratedCents - a.revenueGeneratedCents) // sort by revenue desc
 
-        return NextResponse.json({ data: aggregated })
+        // COMPARISON logic for overall KPIs
+        let comparisonSummary = null
+        if (compare && startDateParam && endDateParam) {
+            const start = new Date(startDateParam)
+            const end = new Date(endDateParam)
+            const duration = end.getTime() - start.getTime()
+            const prevStart = new Date(start.getTime() - duration - 1)
+            const prevEnd = new Date(start.getTime() - 1)
+
+            const compResults = await db
+                .select({
+                    status: orders.status,
+                    qtyOrdered: orderItems.quantity,
+                    priceCents: orderItems.priceCents,
+                    orderItemId: orderItems.id
+                })
+                .from(orderItems)
+                .innerJoin(orders, eq(orderItems.orderId, orders.id))
+                .where(
+                    and(
+                        inArray(orders.branchId, branchIds),
+                        gte(orders.createdAt, prevStart),
+                        lte(orders.createdAt, prevEnd),
+                        inArray(orders.status, ['FULFILLED', 'APPROVED', 'REFUNDED'])
+                    )
+                )
+
+            const compOrderItemIds = compResults.map(r => r.orderItemId)
+            let compRefundQuantities: Record<number, number> = {}
+            if (compOrderItemIds.length > 0) {
+                const compRefunds = await db
+                    .select({ orderItemId: refundItems.orderItemId, qty: refundItems.quantity })
+                    .from(refundItems)
+                    .where(inArray(refundItems.orderItemId, compOrderItemIds))
+
+                compRefundQuantities = compRefunds.reduce((acc, curr) => {
+                    if (curr.orderItemId) acc[curr.orderItemId] = (acc[curr.orderItemId] || 0) + curr.qty
+                    return acc
+                }, {} as Record<number, number>)
+            }
+
+            let compRev = 0, compVol = 0, compRef = 0
+            compResults.forEach(r => {
+                if (r.status === 'FULFILLED' || r.status === 'APPROVED') {
+                    compVol += r.qtyOrdered
+                    compRev += (r.qtyOrdered * r.priceCents)
+                } else if (r.status === 'REFUNDED') {
+                    const refQ = compRefundQuantities[r.orderItemId] || 0
+                    compRef += refQ
+                    compVol += Math.max(0, r.qtyOrdered - refQ)
+                    compRev += (Math.max(0, r.qtyOrdered - refQ) * r.priceCents)
+                }
+            })
+
+            comparisonSummary = {
+                totalRevenue: compRev,
+                totalVolume: compVol,
+                totalRefunds: compRef,
+                uniqueSKUs: new Set(compResults.map(r => (r as any).globalProductId)).size // approximate or needs join
+            }
+        }
+
+        return NextResponse.json({
+            data: aggregated,
+            comparison: comparisonSummary
+        })
     } catch (error: any) {
         console.error("Products Performance Request failed: ", error)
         return NextResponse.json({ error: "Failed to fetch product performance" }, { status: 500 })

@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from "react"
 import useSWR from "swr"
 import { useSession } from "next-auth/react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

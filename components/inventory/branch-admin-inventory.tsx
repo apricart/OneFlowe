@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import useSWR from "swr"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 

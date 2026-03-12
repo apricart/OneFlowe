@@ -1,7 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Clock, Mail, FileText, FileSpreadsheet, FileIcon as FilePdf, CalendarClock, Check } from "lucide-react"
+import { Clock, Mail, FileText, FileSpreadsheet, FileIcon as FilePdf, CalendarClock, Check, Loader2, Play } from "lucide-react"
+import useSWR, { mutate } from "swr"
+import { fetcher } from "@/lib/fetcher"
+import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -37,32 +40,105 @@ interface ScheduleConfig {
 export function ScheduleReportModal({ reportName, storageKey = "schedule-report" }: ScheduleReportModalProps) {
     const [open, setOpen] = useState(false)
     const [saved, setSaved] = useState(false)
+    const [isSaving, setIsSaving] = useState(false)
+    const [isTesting, setIsTesting] = useState(false)
+    const [emailInput, setEmailInput] = useState("")
+    const { toast } = useToast()
+
+    const { data: schedules, isLoading } = useSWR<any[]>("/api/v1/reports/schedule", fetcher)
+    const activeSchedule = schedules?.find(s => s.reportName === reportName)
+
     const [config, setConfig] = useState<ScheduleConfig>({
         frequency: "weekly",
         format: "pdf",
         emails: [],
         enabled: false,
     })
-    const [emailInput, setEmailInput] = useState("")
 
     useEffect(() => {
-        try {
-            const savedConfig = localStorage.getItem(`${storageKey}-${reportName}`)
-            if (savedConfig) setConfig(JSON.parse(savedConfig))
-        } catch { }
-    }, [storageKey, reportName])
+        if (activeSchedule) {
+            setConfig({
+                frequency: activeSchedule.frequency,
+                format: activeSchedule.format,
+                emails: activeSchedule.emails || [],
+                enabled: activeSchedule.enabled,
+            })
+        }
+    }, [activeSchedule])
 
-    const handleSave = () => {
-        const newConfig = { ...config, enabled: true }
-        setConfig(newConfig)
+    const handleSave = async () => {
+        setIsSaving(true)
         try {
-            localStorage.setItem(`${storageKey}-${reportName}`, JSON.stringify(newConfig))
-        } catch { }
-        setSaved(true)
-        setTimeout(() => {
-            setSaved(false)
-            setOpen(false)
-        }, 1500)
+            const res = await fetch("/api/v1/reports/schedule", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    ...config,
+                    reportName,
+                    id: activeSchedule?.id
+                }),
+            })
+            if (res.ok) {
+                mutate("/api/v1/reports/schedule")
+                setSaved(true)
+                toast({
+                    title: "Schedule Saved",
+                    description: `The delivery schedule for ${reportName} has been updated.`,
+                })
+                setTimeout(() => {
+                    setSaved(false)
+                    setOpen(false)
+                }, 1500)
+            } else {
+                toast({
+                    title: "Failed to Save",
+                    description: "There was an error saving your schedule. Please try again.",
+                    variant: "destructive",
+                })
+            }
+        } catch (error) {
+            console.error(error)
+            toast({
+                title: "Error",
+                description: "A network error occurred while saving the schedule.",
+                variant: "destructive",
+            })
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
+    const handleTestNow = async () => {
+        if (!activeSchedule?.id) return
+        setIsTesting(true)
+        try {
+            const res = await fetch("/api/v1/reports/process-schedules", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ scheduleId: activeSchedule.id, isTest: true }),
+            })
+            
+            if (res.ok) {
+                toast({
+                    title: "Test Successful",
+                    description: "The report has been processed and sent to the recipients.",
+                })
+            } else {
+                toast({
+                    title: "Test Failed",
+                    description: "The server failed to process the report test.",
+                    variant: "destructive",
+                })
+            }
+        } catch (error) {
+            toast({
+                title: "Test Error",
+                description: "A network error occurred during the test.",
+                variant: "destructive",
+            })
+        } finally {
+            setIsTesting(false)
+        }
     }
 
     const addEmail = () => {
@@ -193,24 +269,45 @@ export function ScheduleReportModal({ reportName, storageKey = "schedule-report"
                     </div>
 
                     {/* Save Button */}
-                    <Button
-                        onClick={handleSave}
-                        className={cn(
-                            "w-full h-10 text-xs font-bold transition-all",
-                            saved
-                                ? "bg-emerald-600 hover:bg-emerald-600 text-white"
-                                : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                    <div className="flex gap-2">
+                        <Button
+                            onClick={handleSave}
+                            className={cn(
+                                "flex-[2] h-10 text-xs font-bold transition-all",
+                                saved
+                                    ? "bg-emerald-600 hover:bg-emerald-600 text-white"
+                                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                            )}
+                            disabled={config.emails.length === 0 || isSaving}
+                        >
+                            {isSaving ? (
+                                "Saving..."
+                            ) : saved ? (
+                                <span className="flex items-center gap-2"><Check className="h-4 w-4" /> Saved Successfully</span>
+                            ) : (
+                                "Save Schedule"
+                            )}
+                        </Button>
+
+                        {activeSchedule && (
+                            <Button
+                                variant="outline"
+                                onClick={handleTestNow}
+                                disabled={isTesting}
+                                className="flex-1 h-10 text-xs font-bold border-slate-200 dark:border-slate-700"
+                            >
+                                {isTesting ? (
+                                    "Testing..."
+                                ) : (
+                                    <span className="flex items-center gap-2"><Play className="h-3.5 w-3.5" /> Test</span>
+                                )}
+                            </Button>
                         )}
-                        disabled={config.emails.length === 0}
-                    >
-                        {saved ? (
-                            <span className="flex items-center gap-2"><Check className="h-4 w-4" /> Saved Successfully</span>
-                        ) : (
-                            "Save Schedule"
-                        )}
-                    </Button>
+                    </div>
                     <p className="text-[10px] text-center text-slate-400">
-                        Schedule is saved locally. Server-side email delivery requires additional configuration.
+                        {activeSchedule?.lastExecutedAt
+                            ? `Last sent: ${new Date(activeSchedule.lastExecutedAt).toLocaleDateString()}`
+                            : "Server-side email delivery is active for this schedule."}
                     </p>
                 </div>
             </DialogContent>

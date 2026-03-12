@@ -33,6 +33,7 @@ export function BranchAdminDashboard() {
   // Filter state
   const [dateRange, setDateRange] = useState<DateRange | null>(getDefaultDateRange())
   const [activePreset, setActivePreset] = useState<FilterPreset>("today")
+  const [compare, setCompare] = useState(false)
 
   const [drillDownType, setDrillDownType] = useState<DrillDownType | null>(null)
   const [isDrillDownOpen, setIsDrillDownOpen] = useState(false)
@@ -49,57 +50,34 @@ export function BranchAdminDashboard() {
     undefined,
     undefined,
     dateRange,
-    "all"
+    "all",
+    compare
   )
 
   const { data: fulfilledData } = useSalesPerformance(
-    organizationId,
-    branchId,
-    undefined,
-    undefined,
-    dateRange,
-    "FULFILLED"
+    organizationId, branchId, undefined, undefined, dateRange, "FULFILLED", compare
   )
 
   const { data: refundedData } = useSalesPerformance(
-    organizationId,
-    branchId,
-    undefined,
-    undefined,
-    dateRange,
-    "REFUNDED"
+    organizationId, branchId, undefined, undefined, dateRange, "REFUNDED", compare
   )
 
   const { data: rejectedData } = useSalesPerformance(
-    organizationId,
-    branchId,
-    undefined,
-    undefined,
-    dateRange,
-    "REJECTED"
+    organizationId, branchId, undefined, undefined, dateRange, "REJECTED", compare
   )
 
   const { data: approvedData } = useSalesPerformance(
-    organizationId,
-    branchId,
-    undefined,
-    undefined,
-    dateRange,
-    "APPROVED"
+    organizationId, branchId, undefined, undefined, dateRange, "APPROVED", compare
   )
 
   const { data: pendingData } = useSalesPerformance(
-    organizationId,
-    branchId,
-    undefined,
-    undefined,
-    dateRange,
-    "PENDING"
+    organizationId, branchId, undefined, undefined, dateRange, "PENDING", compare
   )
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
+  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean) => {
     setDateRange(range)
     setActivePreset(preset)
+    if (compareMode !== undefined) setCompare(compareMode)
   }, [])
 
   const fulfilledCount = fulfilledData?.totalOrders ?? 0
@@ -124,7 +102,7 @@ export function BranchAdminDashboard() {
       {/* ━━━ Compact Filter Bar ━━━ */}
       <div className="relative z-30 flex items-center gap-2 flex-wrap bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/60 rounded-xl px-3 py-2 shadow-sm">
         <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-        <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
+        <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} compare={compare} />
       </div>
 
       {/* ━━━ KPI Cards ━━━ */}
@@ -135,6 +113,8 @@ export function BranchAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
           onClick={() => handleKPIOpen("REVENUE")}
+          comparisonValue={compare && perfData?.comparison ? formatPKR(perfData.comparison.totalSales) : undefined}
+          comparisonLabel="Prev"
         />
         <BankingKPICard
           icon={Package} title="Orders"
@@ -142,12 +122,16 @@ export function BranchAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-500 to-indigo-600" iconBg="text-blue-600 bg-blue-600" delay={50}
           onClick={() => handleKPIOpen("ORDERS")}
+          comparisonValue={compare && perfData?.comparison ? perfData.comparison.totalOrders.toLocaleString() : undefined}
+          comparisonLabel="Prev"
         />
         <BankingKPICard
           icon={CheckCircle2} title="Approved"
           value={approvedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={190}
+          comparisonValue={compare && perfData?.comparison?.approvedCount != null ? perfData.comparison.approvedCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
         />
         <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
@@ -155,6 +139,8 @@ export function BranchAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={150}
           onClick={() => handleKPIOpen("FULFILLED")}
+          comparisonValue={compare && perfData?.comparison?.fulfilledCount != null ? perfData.comparison.fulfilledCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
         />
         <BankingKPICard
           icon={RotateCcw} title="Refunded"
@@ -162,6 +148,8 @@ export function BranchAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-red-500 to-rose-600" iconBg="text-red-600 bg-red-600" delay={200}
           onClick={() => handleKPIOpen("REFUNDED")}
+          comparisonValue={compare && perfData?.comparison?.refundedCount != null ? perfData.comparison.refundedCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
         />
         <BankingKPICard
           icon={XCircle} title="Rejected"
@@ -169,6 +157,8 @@ export function BranchAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-slate-500 to-slate-700" iconBg="text-slate-600 bg-slate-600" delay={225}
           onClick={() => handleKPIOpen("REJECTED")}
+          comparisonValue={compare && perfData?.comparison?.rejectedCount != null ? perfData.comparison.rejectedCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
         />
 
       </div>
@@ -201,7 +191,7 @@ export function BranchAdminDashboard() {
               seriesData={perfData?.seriesData ?? []} totalSales={perfData?.totalSales ?? 0}
               avgSales={perfData?.avgSales ?? 0} totalOrders={perfData?.totalOrders ?? 0}
               peakPeriod={perfData?.peakPeriod ?? null} granularity={perfData?.granularity ?? "daily"}
-              label="Purchases" dateRange={dateRange}
+              label="Purchases" dateRange={dateRange} comparisonSeries={compare ? perfData?.comparison?.seriesData : undefined}
             />
           )}
         </CardContent>

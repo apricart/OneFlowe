@@ -938,3 +938,29 @@ export const groupAuditLogs = pgTable(
   }),
 )
 
+
+// ========================================
+// REPORTING & SCHEDULING SYSTEM
+// ========================================
+
+export const scheduledReports = pgTable(
+  "scheduled_reports",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id").references(() => organizations.id),
+    userId: uuid("user_id").references(() => users.id).notNull(),
+    reportName: varchar("report_name", { length: 255 }).notNull(),
+    frequency: varchar("frequency", { length: 32 }).notNull(), // daily, weekly, monthly
+    format: varchar("format", { length: 16 }).notNull(), // pdf, csv, excel
+    emails: jsonb("emails").$type<string[]>().notNull().default([]),
+    enabled: boolean("enabled").notNull().default(true),
+    lastExecutedAt: timestamp("last_executed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    userIdx: index("scheduled_reports_user_idx").on(t.userId),
+    orgIdx: index("scheduled_reports_org_idx").on(t.organizationId),
+    enabledIdx: index("scheduled_reports_enabled_idx").on(t.enabled),
+  }),
+)

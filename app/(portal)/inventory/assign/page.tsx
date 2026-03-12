@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatPKR } from "@/lib/utils"
 import { Search, Package, Sparkles, Check, Edit, Plus, Building2 } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { useAppContext } from "@/components/context/app-context"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())

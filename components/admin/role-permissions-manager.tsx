@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
-import { toast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { 
   Shield, 
   ShieldAlert, 
@@ -37,6 +37,7 @@ interface RolePermissionsManagerProps {
 }
 
 export function RolePermissionsManager({ roleId, roleName }: RolePermissionsManagerProps) {
+  const { toast } = useToast()
   const [selectedRole, setSelectedRole] = useState<number | null>(roleId || null)
   const [permissions, setPermissions] = useState<Set<string>>(new Set())
   const [hasChanges, setHasChanges] = useState(false)

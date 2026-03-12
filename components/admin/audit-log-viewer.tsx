@@ -12,8 +12,11 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
+import { cn } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
+
+import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 
 export function AuditLogViewer() {
   const { organizationId, branchId } = useAppContext()
@@ -21,7 +24,19 @@ export function AuditLogViewer() {
   const [resourceTypeFilter, setResourceTypeFilter] = useState<string>("all")
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
+  const [activePreset, setActivePreset] = useState<FilterPreset>("today")
   const [searchTerm, setSearchTerm] = useState("")
+
+  const handleDateChange = (range: any, preset: FilterPreset) => {
+    setActivePreset(preset)
+    if (range) {
+      setStartDate(range.startDate.toISOString())
+      setEndDate(range.endDate.toISOString())
+    } else {
+      setStartDate("")
+      setEndDate("")
+    }
+  }
 
   // Build query parameters based on global context and local filters
   const queryParams = new URLSearchParams()
@@ -47,7 +62,7 @@ export function AuditLogViewer() {
     let filterText = ""
     if (organizationId) filterText += `Org: ${organizationId} `
     if (branchId) filterText += `Branch: ${branchId} `
-    if (startDate || endDate) filterText += `Range: ${startDate || "..."} - ${endDate || "..."}`
+    if (startDate || endDate) filterText += `Range: ${new Date(startDate).toLocaleDateString()} - ${new Date(endDate).toLocaleDateString()}`
     if (filterText) doc.text(filterText, 14, 33)
 
     const tableData = (data?.items || []).map((log: any) => [
@@ -66,7 +81,7 @@ export function AuditLogViewer() {
       body: tableData,
       theme: 'grid',
       styles: { fontSize: 8 },
-      headStyles: { fillColor: [41, 128, 185] }
+      headStyles: { fillColor: [79, 70, 229] }
     })
 
     doc.save(`audit-logs-${new Date().getTime()}.pdf`)
@@ -78,94 +93,90 @@ export function AuditLogViewer() {
     log.userEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     log.action?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     log.resourceType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    JSON.stringify(log.details).toLowerCase().includes(searchTerm.toLowerCase())
+    (log.details && JSON.stringify(log.details).toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   return (
-    <div className="space-y-4">
-      {/* Context Indicator */}
-      {(organizationId || branchId || startDate || endDate) && (
-        <div className="flex flex-wrap gap-4 text-sm text-muted-foreground bg-muted/30 p-2 rounded-md border border-dashed">
-          <span className="font-medium">Active Filters:</span>
-          {organizationId && (
-            <span className="flex items-center gap-1">
-              <Building className="h-3 w-3" /> Org ID: {organizationId}
-            </span>
-          )}
-          {branchId && branchId !== "all" && (
-            <span className="flex items-center gap-1">
-              <Building2 className="h-3 w-3" /> Branch ID: {branchId}
-            </span>
-          )}
-          {(startDate || endDate) && (
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" /> {startDate || "..."} — {endDate || "..."}
-            </span>
-          )}
-        </div>
-      )}
+    <div className="space-y-6">
+      {/* Premium Filter Header */}
+      <Card className="p-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-slate-200 dark:border-slate-800 shadow-xl rounded-2xl">
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* Standardized Date Filter */}
+            <GlobalDateFilter
+              value={startDate && endDate ? { startDate: new Date(startDate), endDate: new Date(endDate) } : null}
+              onChange={handleDateChange}
+              activePreset={activePreset}
+            />
 
-      {/* Filter Bar */}
-      <Card className="p-4">
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {/* Dates */}
-            <div className="col-span-1 md:col-span-1">
-              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-xs" />
-            </div>
-            <div className="col-span-1 md:col-span-1">
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-xs" />
-            </div>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden md:block" />
 
-            {/* Action Filter */}
+            {/* Premium Action Filter */}
             <Select value={actionFilter} onValueChange={setActionFilter}>
-              <SelectTrigger className="text-xs">
+              <SelectTrigger className="w-[160px] h-10 rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-xs font-bold ring-offset-background focus:ring-2 focus:ring-ring">
                 <SelectValue placeholder="Action" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Actions</SelectItem>
-                <SelectItem value="LOGIN">LOGIN</SelectItem>
-                <SelectItem value="CREATE">CREATE</SelectItem>
-                <SelectItem value="UPDATE">UPDATE</SelectItem>
-                <SelectItem value="DELETE">DELETE</SelectItem>
+              <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 shadow-2xl p-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
+                <SelectItem value="all" className="rounded-lg px-3 py-2 text-xs font-semibold focus:bg-indigo-50 dark:focus:bg-indigo-900/40 focus:text-indigo-600 dark:focus:text-indigo-400">All Actions</SelectItem>
+                <SelectItem value="LOGIN" className="rounded-lg px-3 py-2 text-xs font-semibold focus:bg-indigo-50 dark:focus:bg-indigo-900/40 focus:text-indigo-600 dark:focus:text-indigo-400">LOGIN</SelectItem>
+                <SelectItem value="CREATE" className="rounded-lg px-3 py-2 text-xs font-semibold focus:bg-indigo-50 dark:focus:bg-indigo-900/40 focus:text-indigo-600 dark:focus:text-indigo-400">CREATE</SelectItem>
+                <SelectItem value="UPDATE" className="rounded-lg px-3 py-2 text-xs font-semibold focus:bg-indigo-50 dark:focus:bg-indigo-900/40 focus:text-indigo-600 dark:focus:text-indigo-400">UPDATE</SelectItem>
+                <SelectItem value="DELETE" className="rounded-lg px-3 py-2 text-xs font-semibold focus:bg-indigo-50 dark:focus:bg-indigo-900/40 focus:text-indigo-600 dark:focus:text-indigo-400">DELETE</SelectItem>
               </SelectContent>
             </Select>
 
-            {/* Resource Filter */}
+            {/* Premium Resource Filter */}
             <Select value={resourceTypeFilter} onValueChange={setResourceTypeFilter}>
-              <SelectTrigger className="text-xs">
+              <SelectTrigger className="w-[160px] h-10 rounded-xl bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-xs font-bold ring-offset-background focus:ring-2 focus:ring-ring">
                 <SelectValue placeholder="Resource" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Resources</SelectItem>
-                <SelectItem value="ORDER">ORDER</SelectItem>
-                <SelectItem value="USER">USER</SelectItem>
-                <SelectItem value="BRANCH">BRANCH</SelectItem>
-                <SelectItem value="BUDGET">BUDGET</SelectItem>
+              <SelectContent className="rounded-xl border-slate-200 dark:border-slate-800 shadow-2xl p-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
+                <SelectItem value="all" className="rounded-lg px-3 py-2 text-xs font-semibold focus:bg-indigo-50 dark:focus:bg-indigo-900/40 focus:text-indigo-600 dark:focus:text-indigo-400">All Resources</SelectItem>
+                <SelectItem value="ORDER" className="rounded-lg px-3 py-2 text-xs font-semibold focus:bg-indigo-50 dark:focus:bg-indigo-900/40 focus:text-indigo-600 dark:focus:text-indigo-400">ORDER</SelectItem>
+                <SelectItem value="USER" className="rounded-lg px-3 py-2 text-xs font-semibold focus:bg-indigo-50 dark:focus:bg-indigo-900/40 focus:text-indigo-600 dark:focus:text-indigo-400">USER</SelectItem>
+                <SelectItem value="BRANCH" className="rounded-lg px-3 py-2 text-xs font-semibold focus:bg-indigo-50 dark:focus:bg-indigo-900/40 focus:text-indigo-600 dark:focus:text-indigo-400">BRANCH</SelectItem>
+                <SelectItem value="BUDGET" className="rounded-lg px-3 py-2 text-xs font-semibold focus:bg-indigo-50 dark:focus:bg-indigo-900/40 focus:text-indigo-600 dark:focus:text-indigo-400">BUDGET</SelectItem>
               </SelectContent>
             </Select>
 
             {/* Search */}
-            <div className="relative col-span-1 md:col-span-2">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search logs..."
+                placeholder="Search by User, Action, Resource or Details..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                className="pl-8 text-xs"
+                className="pl-9 h-10 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl focus:ring-indigo-500/50"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => mutate()} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button size="sm" onClick={handleExportPDF} disabled={logs.length === 0}>
-              <Download className="h-4 w-4 mr-2" />
-              Download PDF
-            </Button>
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+              <RefreshCw className={cn("h-3 w-3", isLoading && "animate-spin")} />
+              {isLoading ? "Syncing Logs..." : `${filteredLogs.length} Records Found`}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => mutate()}
+                disabled={isLoading}
+                className="h-9 rounded-lg text-xs font-bold gap-2 px-4"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", isLoading && "animate-spin")} />
+                Refresh
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleExportPDF}
+                disabled={logs.length === 0}
+                className="h-9 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-2 px-4 shadow-lg shadow-indigo-500/20"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export PDF
+              </Button>
+            </div>
           </div>
         </div>
       </Card>

@@ -10,7 +10,7 @@ import { Spinner } from "@/components/ui/skeleton"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { handleError } from "@/lib/error-handler"
 
 type UserRow = { id: string; firstName: string; lastName: string; email: string; role: string; organizationId?: number | null; branchId?: number | null; phone?: string; mfaEnabled?: boolean; createdAt: string }

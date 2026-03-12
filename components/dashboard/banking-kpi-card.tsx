@@ -13,6 +13,8 @@ type BankingKPICardProps = {
     iconBg: string
     delay?: number
     onClick?: () => void
+    comparisonValue?: string | number
+    comparisonLabel?: string
 }
 
 /* Decorative sparkline wave SVG */
@@ -56,6 +58,8 @@ export const BankingKPICard = ({
     iconBg,
     delay = 0,
     onClick,
+    comparisonValue,
+    comparisonLabel,
 }: BankingKPICardProps) => {
     const isPositive = trend === "up"
 
@@ -119,6 +123,11 @@ export const BankingKPICard = ({
                 {subtitle && (
                     <p className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-1.5">
                         {subtitle}
+                    </p>
+                )}
+                {comparisonValue && (
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                        {comparisonLabel}: <span className="font-semibold text-slate-500 dark:text-slate-400">{comparisonValue}</span>
                     </p>
                 )}
             </div>

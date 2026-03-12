@@ -44,10 +44,11 @@ export async function GET(req: NextRequest) {
     const organizationId = url.searchParams.get("organizationId")
     const groupId = url.searchParams.get("groupId")
     const statusParam = url.searchParams.get("status")
+    const compare = url.searchParams.get("compare") === "true"
 
     // Parsing branchIds
     const parsedBranchIds = branchIdsRaw
-        ? branchIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id))
+        ? branchIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         : []
 
     const page = parseInt(url.searchParams.get("page") || "1")
@@ -66,12 +67,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Security: RBAC
-    const normalizedRole = roleName ? roleName.toUpperCase() : ""
+    const normalizedRole = (roleName || "").toUpperCase().replace(/\s+/g, '_')
     console.log(`[Summary API] User: ${userId}, Role: ${normalizedRole}, Params: Branch=${branchId}, Org=${organizationId}, Group=${groupId}`)
 
     if (normalizedRole === "SUPER_ADMIN") {
-        if (organizationId && organizationId !== "null" && organizationId !== "undefined") {
-            conditions.push(eq(orders.organizationId, Number(organizationId)))
+        if (organizationId && organizationId !== "null" && organizationId !== "undefined" && organizationId !== "0") {
+            const orgId = Number(organizationId)
+            if (orgId > 0) conditions.push(eq(orders.organizationId, orgId))
         }
         if (parsedBranchIds.length > 0) {
             conditions.push(inArray(orders.branchId, parsedBranchIds))
@@ -115,14 +117,71 @@ export async function GET(req: NextRequest) {
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined
+
+    // COMPARISON LOGIC
+    let comparisonSummary = null
+    if (compare && startDate && endDate) {
+        const start = new Date(startDate)
+        const end = new Date(endDate)
+        const duration = end.getTime() - start.getTime()
+
+        const prevStart = new Date(start.getTime() - duration - 1)
+        const prevEnd = new Date(start.getTime() - 1)
+
+        // Correctly filter out createdAt conditions to avoid overlapping periods
+        const compConditions = conditions.filter(c => {
+            const str = String(c);
+            return !str.includes("createdAt") && !str.includes("created_at");
+        })
+        compConditions.push(gte(orders.createdAt, prevStart))
+        compConditions.push(lte(orders.createdAt, prevEnd))
+
+        const compWhere = and(...compConditions)
+
+        const compSummaryResult = await db.select({
+            totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+            orderCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
+            fulfilledCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
+            refundedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END), 0)`.mapWith(Number),
+            rejectedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END), 0)`.mapWith(Number),
+            approvedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' THEN 1 END), 0)`.mapWith(Number),
+        })
+            .from(orders)
+            .leftJoin(branches, eq(orders.branchId, branches.id))
+            .where(compWhere)
+
+        const compItemsResult = await db.select({
+            totalItemsSold: sum(orderItems.quantity)
+        })
+            .from(orderItems)
+            .innerJoin(orders, eq(orderItems.orderId, orders.id))
+            .leftJoin(branches, eq(orders.branchId, branches.id))
+            .where(compWhere)
+
+        comparisonSummary = {
+            totalSales: compSummaryResult[0]?.totalSales || 0,
+            totalOrders: compSummaryResult[0]?.orderCount || 0,
+            fulfilledCount: compSummaryResult[0]?.fulfilledCount || 0,
+            refundedCount: compSummaryResult[0]?.refundedCount || 0,
+            rejectedCount: compSummaryResult[0]?.rejectedCount || 0,
+            approvedCount: compSummaryResult[0]?.approvedCount || 0,
+            totalItemsSold: Number(compItemsResult[0]?.totalItemsSold) || 0
+        }
+    }
     console.log(`[Summary API] Final where clause established. Filtering logic active.`)
+
+    const isFilteredByStatus = statusParam && statusParam.toLowerCase() !== "all"
 
     // Aggregation Query
     const summaryResult = await db.select({
-        totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+        totalSales: isFilteredByStatus
+            ? sql<number>`COALESCE(SUM(${orders.totalCents}), 0)`.mapWith(Number)
+            : sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
         totalTax: sum(orders.taxCents),
         totalSubtotal: sum(orders.subtotalCents),
-        orderCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
+        orderCount: isFilteredByStatus
+            ? count(orders.id)
+            : sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
         totalRefunds: sum(orders.refundAmountCents),
     })
         .from(orders)
@@ -185,7 +244,10 @@ export async function GET(req: NextRequest) {
         .limit(10)
 
     return NextResponse.json({
-        summary,
+        summary: {
+            ...summary,
+            comparison: comparisonSummary
+        },
         orders: recentOrders,
         topPerformers,
         pagination: {

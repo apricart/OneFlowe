@@ -15,7 +15,7 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
-  captionLayout = 'label',
+  captionLayout = 'dropdown-buttons',
   buttonVariant = 'ghost',
   formatters,
   components,
@@ -40,6 +40,8 @@ function Calendar({
           date.toLocaleString('default', { month: 'short' }),
         ...formatters,
       }}
+      fromYear={2015}
+      toYear={2050}
       classNames={{
         root: cn('w-fit', defaultClassNames.root),
         months: cn(

@@ -12,15 +12,19 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { GroupFilter } from "./group-filter"
 import { BranchFilter } from "./branch-filter"
+import { CompactDateFilter } from "./compact-date-filter"
+import { FilterPreset } from "@/components/dashboard/global-date-filter"
 import { Role } from "@/lib/rbac"
+import { DateRange } from "@/lib/hooks/use-sales-performance"
+import { parseISO } from "date-fns"
 
 interface ReportFiltersProps {
     searchTerm: string
     setSearchTerm: (value: string) => void
     startDate: string
-    setStartDate: (value: string) => void
     endDate: string
-    setEndDate: (value: string) => void
+    onDateChange: (range: DateRange | null, preset: FilterPreset) => void
+    activePreset: FilterPreset
     groupId?: string
     setGroupId?: (value: string) => void
     selectedBranchIds?: string[]
@@ -39,9 +43,9 @@ export function ReportFilters({
     searchTerm,
     setSearchTerm,
     startDate,
-    setStartDate,
     endDate,
-    setEndDate,
+    onDateChange,
+    activePreset,
     groupId,
     setGroupId,
     selectedBranchIds = [],
@@ -68,22 +72,15 @@ export function ReportFilters({
                 />
             </div>
 
-            {/* Date Range Selection - Compact */}
-            <div className="flex items-center gap-1 bg-slate-50/50 dark:bg-slate-950/50 rounded-lg p-1 border border-slate-100 dark:border-slate-800/50">
-                <Input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="text-[10px] h-7 w-[110px] bg-transparent border-none focus-visible:ring-0 p-1"
-                />
-                <span className="text-[10px] text-slate-400 font-bold uppercase px-1">to</span>
-                <Input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="text-[10px] h-7 w-[110px] bg-transparent border-none focus-visible:ring-0 p-1"
-                />
-            </div>
+            {/* Date Range Selection - Premium Dropdown */}
+            <CompactDateFilter
+                value={{
+                    startDate: parseISO(startDate),
+                    endDate: parseISO(endDate)
+                }}
+                onChange={onDateChange}
+                activePreset={activePreset}
+            />
 
             <div className="flex items-center gap-1.5 ml-auto">
                 {/* Group Filter */}

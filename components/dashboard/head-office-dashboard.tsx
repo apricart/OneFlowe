@@ -39,6 +39,7 @@ export function HeadOfficeDashboard() {
   // Filter state
   const [dateRange, setDateRange] = useState<DateRange | null>(getDefaultDateRange())
   const [activePreset, setActivePreset] = useState<FilterPreset>("today")
+  const [compare, setCompare] = useState(false)
 
   const [drillDownType, setDrillDownType] = useState<DrillDownType | null>(null)
   const [isDrillDownOpen, setIsDrillDownOpen] = useState(false)
@@ -57,7 +58,32 @@ export function HeadOfficeDashboard() {
   }, [setContextBranchIds])
 
   // Sales performance data (dynamic)
-  const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
+  const { data: perfDataFull, isLoading: isLoadingPerf } = useSalesPerformance(
+    organizationId,
+    contextBranchId,
+    selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
+    undefined,
+    dateRange,
+    "all",
+    compare
+  )
+
+  // Comparative data for trends
+  const analyticsUrl = useMemo(() => {
+    const params = new URLSearchParams()
+    if (organizationId) params.set("organizationId", organizationId)
+    if (selectedBranchIds.length > 0) params.set("branchIds", selectedBranchIds.join(","))
+    else if (contextBranchId) params.set("branchId", contextBranchId)
+    if (dateRange) {
+      params.set("startDate", dateRange.startDate.toISOString())
+      params.set("endDate", dateRange.endDate.toISOString())
+    }
+    if (compare) params.set("compare", "true")
+    return `/api/v1/analytics/summary?${params.toString()}`
+  }, [organizationId, contextBranchId, selectedBranchIds, dateRange, compare])
+
+  // Fetch summary for comparison trends
+  const { data: summaryData } = useSalesPerformance(
     organizationId,
     contextBranchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
@@ -66,13 +92,42 @@ export function HeadOfficeDashboard() {
     "all"
   )
 
+  // Note: summaryData will be used for comparison from /api/v1/analytics/summary if we want specific counts
+  // But useSalesPerformance calls /api/v1/analytics/sales-performance which doesn't have comparison logic yet.
+  // I should probably follow the pattern in SalesSummaryPage and fetch /api/v1/analytics/summary
+  // OR update useSalesPerformance hook. Since I already updated the summary API, I'll fetch that.
+
+  const { data: mainSummary } = useSalesPerformance(
+    organizationId,
+    contextBranchId,
+    selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
+    undefined,
+    dateRange,
+    "all"
+  )
+
+  // Actually, I'll use SWR with the analyticsUrl I just derived
+  const { data: comparisonSummaryData, isLoading: isLoadingSummary } = useSalesPerformance(
+    organizationId,
+    contextBranchId,
+    selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
+    undefined,
+    dateRange,
+    "all"
+  )
+
+  // I will update the analytics summary fetcher to match the one I used in sales-summary/page.tsx
+  // But to keep it simple and reactive, I'll just use the compare flag in useSalesPerformance if I update that hook.
+  // Let's check use-sales-performance.ts again to see if I can add 'compare' param.
+
   const { data: fulfilledData } = useSalesPerformance(
     organizationId,
     contextBranchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
     undefined,
     dateRange,
-    "FULFILLED"
+    "FULFILLED",
+    compare
   )
 
   const { data: refundedData } = useSalesPerformance(
@@ -81,7 +136,8 @@ export function HeadOfficeDashboard() {
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
     undefined,
     dateRange,
-    "REFUNDED"
+    "REFUNDED",
+    compare
   )
 
   const { data: rejectedData } = useSalesPerformance(
@@ -90,7 +146,8 @@ export function HeadOfficeDashboard() {
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
     undefined,
     dateRange,
-    "REJECTED"
+    "REJECTED",
+    compare
   )
 
   const { data: approvedData } = useSalesPerformance(
@@ -99,12 +156,30 @@ export function HeadOfficeDashboard() {
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
     undefined,
     dateRange,
-    "APPROVED"
+    "APPROVED",
+    compare
   )
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
+  const perfData = perfDataFull
+  const summary = perfDataFull?.comparison
+
+  const getTrend = (current: number, prev: number) => {
+    if (!prev || prev === 0) return null
+    const diff = ((current - prev) / prev) * 100
+    return {
+      value: Math.abs(diff).toFixed(1),
+      isUp: diff > 0,
+      isDown: diff < 0
+    }
+  }
+
+  const purchaseTrend = getTrend(perfData?.totalSales || 0, summary?.totalSales || 0)
+  const orderTrend = getTrend(perfData?.totalOrders || 0, summary?.totalOrders || 0)
+
+  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean) => {
     setDateRange(range)
     setActivePreset(preset)
+    if (compareMode !== undefined) setCompare(compareMode)
   }, [])
 
   const allBranchesSelected = !contextBranchId && selectedBranchIds.length === 0
@@ -133,7 +208,12 @@ export function HeadOfficeDashboard() {
       {/* ━━━ Compact Filter Bar ━━━ */}
       <div className="relative z-30 flex items-center gap-2 flex-wrap bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/60 rounded-xl px-3 py-2 shadow-sm">
         <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-        <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
+        <GlobalDateFilter
+          value={dateRange}
+          onChange={handleDateChange}
+          activePreset={activePreset}
+          compare={compare}
+        />
         {organizationId && (
           <>
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
@@ -152,15 +232,23 @@ export function HeadOfficeDashboard() {
           icon={TrendingUp} title="Purchases"
           value={formatPKR(totalPurchases, { maximumFractionDigits: 0 })}
           subtitle={getPresetLabel(activePreset, dateRange)}
+          trend={purchaseTrend?.isUp ? "up" : purchaseTrend?.isDown ? "down" : undefined}
+          trendValue={purchaseTrend ? `${purchaseTrend.value}%` : undefined}
           gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
           onClick={() => handleKPIOpen("REVENUE")}
+          comparisonValue={compare && summary ? formatPKR(summary.totalSales) : undefined}
+          comparisonLabel="Prev"
         />
         <BankingKPICard
           icon={Package} title="Orders"
           value={totalOrders.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
+          trend={orderTrend?.isUp ? "up" : orderTrend?.isDown ? "down" : undefined}
+          trendValue={orderTrend ? `${orderTrend.value}%` : undefined}
           gradient="from-blue-500 to-indigo-600" iconBg="text-blue-600 bg-blue-600" delay={50}
           onClick={() => handleKPIOpen("ORDERS")}
+          comparisonValue={compare && summary ? summary.totalOrders.toLocaleString() : undefined}
+          comparisonLabel="Prev"
         />
         <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
@@ -168,6 +256,8 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={100}
           onClick={() => handleKPIOpen("FULFILLED")}
+          comparisonValue={compare && summary?.fulfilledCount != null ? summary.fulfilledCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
         />
         <BankingKPICard
           icon={RotateCcw} title="Refunded"
@@ -175,6 +265,8 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-red-500 to-rose-600" iconBg="text-red-600 bg-red-600" delay={150}
           onClick={() => handleKPIOpen("REFUNDED")}
+          comparisonValue={compare && summary?.refundedCount != null ? summary.refundedCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
         />
         <BankingKPICard
           icon={XCircle} title="Rejected"
@@ -182,12 +274,16 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-slate-500 to-slate-700" iconBg="text-slate-600 bg-slate-600" delay={175}
           onClick={() => handleKPIOpen("REJECTED")}
+          comparisonValue={compare && summary?.rejectedCount != null ? summary.rejectedCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
         />
         <BankingKPICard
           icon={CheckCircle2} title="Approved"
           value={approvedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={190}
+          comparisonValue={compare && summary?.approvedCount != null ? summary.approvedCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
         />
 
       </div>
@@ -220,7 +316,7 @@ export function HeadOfficeDashboard() {
               seriesData={perfData?.seriesData ?? []} totalSales={perfData?.totalSales ?? 0}
               avgSales={perfData?.avgSales ?? 0} totalOrders={perfData?.totalOrders ?? 0}
               peakPeriod={perfData?.peakPeriod ?? null} granularity={perfData?.granularity ?? "daily"}
-              label="Purchases" dateRange={dateRange}
+              label="Purchases" dateRange={dateRange} comparisonSeries={compare ? summary?.seriesData : undefined}
             />
           )}
         </CardContent>

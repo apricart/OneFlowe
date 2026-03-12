@@ -71,6 +71,9 @@ export default function GroupsReportPage() {
     const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "thisMonth"
     const startFromUrl = searchParams.get("startDate") || ""
     const endFromUrl = searchParams.get("endDate") || ""
+    const compareFromUrl = searchParams.get("compare") === "true"
+
+    const [compare, setCompare] = useState(compareFromUrl)
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -80,9 +83,13 @@ export default function GroupsReportPage() {
         return null
     }, [startFromUrl, endFromUrl])
 
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset) => {
+    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean) => {
         const params = new URLSearchParams(searchParams.toString())
         params.set("preset", preset)
+        if (compareMode !== undefined) {
+            params.set("compare", String(compareMode))
+            setCompare(compareMode)
+        }
         if (range) {
             params.set("startDate", range.startDate.toISOString())
             params.set("endDate", range.endDate.toISOString())
@@ -97,6 +104,7 @@ export default function GroupsReportPage() {
     if (organizationId) queryParams.set("organizationId", organizationId.toString())
     if (startFromUrl) queryParams.set("startDate", startFromUrl)
     if (endFromUrl) queryParams.set("endDate", endFromUrl)
+    if (compare) queryParams.set("compare", "true")
 
     const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/groups?${queryParams.toString()}`, fetcher)
 
@@ -107,6 +115,16 @@ export default function GroupsReportPage() {
 
     const groups: Group[] = data?.groups || []
     const summary = data?.summary || { totalGroups: 0, totalOrders: 0, totalRevenue: 0 }
+    const comparison = data?.comparison
+
+    const getTrendPercentage = (current: number, prev: number) => {
+        if (!prev || prev === 0) return undefined
+        return ((current - prev) / prev) * 100
+    }
+
+    const orderTrend = getTrendPercentage(summary.totalOrders, comparison?.totalOrders || 0)
+    const revenueTrend = getTrendPercentage(summary.totalRevenue, comparison?.totalRevenue || 0)
+    const groupsTrend = getTrendPercentage(summary.totalGroups, comparison?.totalGroups || 0)
 
     const filteredGroups = groups.filter((group) =>
         group.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -161,6 +179,7 @@ export default function GroupsReportPage() {
                     onChange={handleDateChange}
                     activePreset={activePreset}
                     hidePresets={false}
+                    compare={compare}
                 />
                 <div className="flex-1" />
                 <ScheduleReportModal reportName="Groups Performance" />
@@ -181,7 +200,7 @@ export default function GroupsReportPage() {
                 {/* ━━━ "INTELLIGENCE" HEADER ━━━ */}
                 <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#4338ca] via-[#3730a3] to-[#312e81] px-6 py-8 text-white shadow-xl ring-1 ring-indigo-500/30">
                     <div className="flex flex-col gap-2 relative z-10">
-                        <p className="text-xs tracking-[0.3em] text-indigo-200 font-bold uppercase">Consolidated Unit Analytics</p>
+                        <p className="text-xs tracking-[0.3em] text-indigo-200 font-bold uppercase">Branch Cluster Summary</p>
                         <h1 className="text-4xl font-bold tracking-tight">Organization Groups</h1>
                         <p className="text-sm text-indigo-100/80 font-medium max-w-xl">
                             Cluster-level performance breakdown of <strong>{groups.length}</strong> identified organization groups and their constituent units.
@@ -197,18 +216,27 @@ export default function GroupsReportPage() {
                         value={summary.totalGroups}
                         icon={FolderTree}
                         colorScheme="blue"
+                        trend={groupsTrend}
+                        comparisonValue={compare && comparison ? comparison.totalGroups : undefined}
+                        comparisonLabel="Prev"
                     />
                     <KPICard
                         title="Clustered Orders"
                         value={summary.totalOrders}
                         icon={ShoppingBag}
                         colorScheme="violet"
+                        trend={orderTrend}
+                        comparisonValue={compare && comparison ? comparison.totalOrders : undefined}
+                        comparisonLabel="Prev"
                     />
                     <KPICard
                         title="Group Revenue"
                         value={formatPKR(summary.totalRevenue / 100)}
                         icon={TrendingUp}
                         colorScheme="emerald"
+                        trend={revenueTrend}
+                        comparisonValue={compare && comparison ? formatPKR(comparison.totalRevenue / 100) : undefined}
+                        comparisonLabel="Prev"
                     />
                 </div>
 

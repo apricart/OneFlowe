@@ -30,6 +30,7 @@ export function SuperAdminDashboard() {
 
   const [dateRange, setDateRange] = useState<DateRange | null>(getDefaultDateRange())
   const [activePreset, setActivePreset] = useState<FilterPreset>("today")
+  const [compare, setCompare] = useState(false)
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
 
   const [drillDownType, setDrillDownType] = useState<DrillDownType | null>(null)
@@ -57,37 +58,38 @@ export function SuperAdminDashboard() {
   const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "all"
+    undefined, dateRange, "all", compare
   )
 
   const { data: fulfilledData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "FULFILLED"
+    undefined, dateRange, "FULFILLED", compare
   )
 
   const { data: refundedData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "REFUNDED"
+    undefined, dateRange, "REFUNDED", compare
   )
 
   const { data: rejectedData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "REJECTED"
+    undefined, dateRange, "REJECTED", compare
   )
 
   const { data: approvedData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "APPROVED"
+    undefined, dateRange, "APPROVED", compare
   )
 
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
+  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean) => {
     setDateRange(range)
     setActivePreset(preset)
+    if (compareMode !== undefined) setCompare(compareMode)
     setSelectedBranchIds([])
   }, [])
 
@@ -97,6 +99,45 @@ export function SuperAdminDashboard() {
   const refundedCount = refundedData?.totalOrders || 0
   const rejectedCount = rejectedData?.totalOrders || 0
   const approvedCount = approvedData?.totalOrders || 0
+
+  // Helper for building trend data
+  const buildTrend = useCallback((current: number, prev: number | undefined, formatFn?: (v: number) => string) => {
+    if (!compare || prev === undefined || prev === null) return undefined
+    const diff = current - prev
+    const percentage = prev > 0 ? (diff / prev) * 100 : (current > 0 ? 100 : 0)
+    const fmt = formatFn || ((v: number) => v.toLocaleString())
+    return {
+      type: diff >= 0 ? "up" : "down" as const,
+      value: `${Math.abs(percentage).toFixed(1)}%`,
+      label: `${fmt(current)} vs ${fmt(prev)}`
+    }
+  }, [compare])
+
+  // Trend Calculations for all KPI cards
+  const revenueTrend = useMemo(() => buildTrend(
+    totalRevenue, perfData?.comparison?.totalSales,
+    (v) => formatPKR(v, { maximumFractionDigits: 0 })
+  ), [buildTrend, totalRevenue, perfData?.comparison])
+
+  const ordersTrend = useMemo(() => buildTrend(
+    totalOrders, perfData?.comparison?.totalOrders
+  ), [buildTrend, totalOrders, perfData?.comparison])
+
+  const fulfilledTrend = useMemo(() => buildTrend(
+    fulfilledCount, perfData?.comparison?.fulfilledCount
+  ), [buildTrend, fulfilledCount, perfData?.comparison])
+
+  const refundedTrend = useMemo(() => buildTrend(
+    refundedCount, perfData?.comparison?.refundedCount
+  ), [buildTrend, refundedCount, perfData?.comparison])
+
+  const rejectedTrend = useMemo(() => buildTrend(
+    rejectedCount, perfData?.comparison?.rejectedCount
+  ), [buildTrend, rejectedCount, perfData?.comparison])
+
+  const approvedTrend = useMemo(() => buildTrend(
+    approvedCount, perfData?.comparison?.approvedCount
+  ), [buildTrend, approvedCount, perfData?.comparison])
 
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-4">
@@ -111,7 +152,8 @@ export function SuperAdminDashboard() {
 
       {/* ━━━ Compact Filter Bar ━━━ */}
       <div className="relative z-30 flex items-center gap-2 flex-wrap bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/60 rounded-xl px-3 py-2 shadow-sm">
-        <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />        <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
+        <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+        <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} compare={compare} />
         {organizationId && (
           <>
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
@@ -128,6 +170,10 @@ export function SuperAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
           onClick={() => handleKPIOpen("REVENUE")}
+          trend={revenueTrend?.type as "up" | "down" | undefined}
+          trendValue={revenueTrend?.value}
+          comparisonValue={revenueTrend?.label}
+          comparisonLabel="Period Comparison"
         />
         <BankingKPICard
           icon={Package} title="Orders"
@@ -135,6 +181,10 @@ export function SuperAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-500 to-indigo-600" iconBg="text-blue-600 bg-blue-600" delay={50}
           onClick={() => handleKPIOpen("ORDERS")}
+          trend={ordersTrend?.type as "up" | "down" | undefined}
+          trendValue={ordersTrend?.value}
+          comparisonValue={ordersTrend?.label}
+          comparisonLabel="Period Comparison"
         />
         <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
@@ -142,6 +192,10 @@ export function SuperAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={100}
           onClick={() => handleKPIOpen("FULFILLED")}
+          trend={fulfilledTrend?.type as "up" | "down" | undefined}
+          trendValue={fulfilledTrend?.value}
+          comparisonValue={fulfilledTrend?.label}
+          comparisonLabel="Period Comparison"
         />
         <BankingKPICard
           icon={RotateCcw} title="Refunded"
@@ -149,6 +203,10 @@ export function SuperAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-red-500 to-rose-600" iconBg="text-red-600 bg-red-600" delay={150}
           onClick={() => handleKPIOpen("REFUNDED")}
+          trend={refundedTrend?.type as "up" | "down" | undefined}
+          trendValue={refundedTrend?.value}
+          comparisonValue={refundedTrend?.label}
+          comparisonLabel="Period Comparison"
         />
         <BankingKPICard
           icon={XCircle} title="Rejected"
@@ -156,12 +214,20 @@ export function SuperAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-slate-500 to-slate-700" iconBg="text-slate-600 bg-slate-600" delay={175}
           onClick={() => handleKPIOpen("REJECTED")}
+          trend={rejectedTrend?.type as "up" | "down" | undefined}
+          trendValue={rejectedTrend?.value}
+          comparisonValue={rejectedTrend?.label}
+          comparisonLabel="Period Comparison"
         />
         <BankingKPICard
           icon={CheckCircle2} title="Approved"
           value={approvedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={190}
+          trend={approvedTrend?.type as "up" | "down" | undefined}
+          trendValue={approvedTrend?.value}
+          comparisonValue={approvedTrend?.label}
+          comparisonLabel="Period Comparison"
         />
 
       </div>
@@ -195,6 +261,7 @@ export function SuperAdminDashboard() {
               avgSales={perfData?.avgSales ?? 0} totalOrders={perfData?.totalOrders ?? 0}
               peakPeriod={perfData?.peakPeriod ?? null} granularity={perfData?.granularity ?? "daily"}
               label="Sales" dateRange={dateRange}
+              comparisonSeries={perfData?.comparison?.seriesData}
             />
           )}
         </CardContent>
@@ -234,6 +301,7 @@ export function SuperAdminDashboard() {
         branchId={branchId}
         branchIds={selectedBranchIds}
         defaultDateRange={dateRange}
+        compare={compare}
       />
     </main>
   )

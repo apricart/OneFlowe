@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
         const groupIdParam = searchParams.get("groupId")
         const startDate = searchParams.get("startDate")
         const endDate = searchParams.get("endDate")
+        const compare = searchParams.get("compare") === "true"
 
         if (orgIdParam && role === "SUPER_ADMIN") {
             const parsedOrgId = parseInt(orgIdParam)
@@ -167,6 +168,38 @@ export async function GET(req: NextRequest) {
             .groupBy(branches.id, organizations.id)
             .orderBy(sql`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int desc`)
 
+        // COMPARISON logic for summary statistics
+        let comparisonSummary = null
+        if (compare && startDate && endDate) {
+            const start = new Date(startDate)
+            const end = new Date(endDate)
+            const duration = end.getTime() - start.getTime()
+            const prevStart = new Date(start.getTime() - duration - 1)
+            const prevEnd = new Date(start.getTime() - 1)
+
+            const compStats = await db
+                .select({
+                    totalOrders: sql<number>`count(${orders.id})::int`,
+                    totalAmountCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int`,
+                })
+                .from(orders)
+                .innerJoin(branches, eq(orders.branchId, branches.id))
+                .innerJoin(groups, eq(branches.groupId, groups.id))
+                .where(and(
+                    sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`,
+                    gte(orders.createdAt, prevStart),
+                    lte(orders.createdAt, prevEnd),
+                    orgId ? eq(groups.organizationId, orgId) : undefined
+                ))
+
+            const compSummary = compStats[0]
+            comparisonSummary = {
+                totalOrders: compSummary?.totalOrders || 0,
+                totalRevenue: compSummary?.totalAmountCents || 0,
+                totalGroups: totalGroups // usually remains constant unless groups added/removed
+            }
+        }
+
         return NextResponse.json({
             summary: {
                 totalGroups,
@@ -174,6 +207,7 @@ export async function GET(req: NextRequest) {
                 totalRevenue,
                 avgRevenuePerGroup
             },
+            comparison: comparisonSummary,
             groups: groupsWithBranches,
             ungroupedBranches: ungroupedStats
         })

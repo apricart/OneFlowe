@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { formatPKR } from "@/lib/utils"
 import { Search, Package, Sparkles, Plus, Edit, Trash2, Building2, AlertTriangle, Loader2 } from "lucide-react"
 import { ProductForm } from "@/components/global-inventory/product-form"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 

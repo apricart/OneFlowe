@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         const userId = (session.user as any).id
-        const userRole = ((session.user as any).role || "").toUpperCase()
+        const userRole = ((session.user as any).role || "").toUpperCase().replace(/\s+/g, '_')
         const userOrgId = (session.user as any).organizationId
         const userBranchId = (session.user as any).branchId
 
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
         let branchIds: number[] = []
         if (branchIdsParam) {
-            branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id))
+            branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         } else if (branchIdParam && branchIdParam !== "all") {
             branchIds = [Number(branchIdParam)]
         } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {

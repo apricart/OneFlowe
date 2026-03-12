@@ -229,6 +229,96 @@ export async function GET(req: NextRequest) {
             }))
         }
 
+        // ── Comparison Logic ──
+        let comparison: any = null
+        if (searchParams.get("compare") === "true") {
+            const start = new Date(startDate)
+            const end = new Date(endDate)
+            const duration = end.getTime() - start.getTime()
+            const prevStart = new Date(start.getTime() - duration - 1)
+            const prevEnd = new Date(start.getTime() - 1)
+
+            const compConditions: any[] = [
+                gte(orders.createdAt, prevStart),
+                lte(orders.createdAt, prevEnd),
+            ]
+
+            if (upperStatus && upperStatus !== "ALL") {
+                if (upperStatus === "REJECTED") {
+                    compConditions.push(or(eq(sql`UPPER(${orders.status})`, "REJECTED"), eq(sql`UPPER(${orders.status})`, "CANCELLED")))
+                } else {
+                    compConditions.push(eq(sql`UPPER(${orders.status})`, upperStatus))
+                }
+            }
+
+            if (organizationId) compConditions.push(eq(orders.organizationId, organizationId))
+            if (branchIds.length > 0) {
+                compConditions.push(inArray(orders.branchId, branchIds))
+            } else if (branchId) {
+                compConditions.push(eq(orders.branchId, branchId))
+            }
+            if (groupId) compConditions.push(eq(branches.groupId, groupId))
+
+            const compWhere = and(...compConditions)
+
+            // Series for comparison
+            const compSeriesRows = await db
+                .select({
+                    bucket: dateExpr,
+                    label: labelExpr,
+                    totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+                    orderCount: sql<number>`COALESCE(COUNT(1), 0)`.mapWith(Number),
+                })
+                .from(orders)
+                .leftJoin(branches, eq(orders.branchId, branches.id))
+                .where(compWhere)
+                .groupBy(dateExpr, labelExpr)
+                .orderBy(dateExpr)
+
+            const compSeriesData = compSeriesRows.map(r => ({
+                label: r.label,
+                sales: (r.totalSales || 0) / 100,
+                orders: Number(r.orderCount || 0),
+            }))
+
+            const compTotalSales = compSeriesData.reduce((s, r) => s + r.sales, 0)
+            const compTotalOrders = compSeriesData.reduce((s, r) => s + r.orders, 0)
+
+            // Aggregated counts for all statuses (for KPI comparison)
+            const compAllStatusConditions: any[] = [
+                gte(orders.createdAt, prevStart),
+                lte(orders.createdAt, prevEnd),
+            ]
+            if (organizationId) compAllStatusConditions.push(eq(orders.organizationId, organizationId))
+            if (branchIds.length > 0) {
+                compAllStatusConditions.push(inArray(orders.branchId, branchIds))
+            } else if (branchId) {
+                compAllStatusConditions.push(eq(orders.branchId, branchId))
+            }
+            if (groupId) compAllStatusConditions.push(eq(branches.groupId, groupId))
+
+            const compAllWhere = and(...compAllStatusConditions)
+            const compStatusCounts = await db.select({
+                fulfilledCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
+                refundedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END), 0)`.mapWith(Number),
+                rejectedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END), 0)`.mapWith(Number),
+                approvedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' THEN 1 END), 0)`.mapWith(Number),
+            })
+                .from(orders)
+                .leftJoin(branches, eq(orders.branchId, branches.id))
+                .where(compAllWhere)
+
+            comparison = {
+                totalSales: compTotalSales,
+                totalOrders: compTotalOrders,
+                fulfilledCount: compStatusCounts[0]?.fulfilledCount || 0,
+                refundedCount: compStatusCounts[0]?.refundedCount || 0,
+                rejectedCount: compStatusCounts[0]?.rejectedCount || 0,
+                approvedCount: compStatusCounts[0]?.approvedCount || 0,
+                seriesData: compSeriesData
+            }
+        }
+
         return {
             granularity,
             seriesData,
@@ -238,6 +328,7 @@ export async function GET(req: NextRequest) {
             peakPeriod,
             branchSales,
             organizationSales,
+            comparison
         }
     }
 

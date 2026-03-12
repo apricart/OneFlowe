@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { formatPKR } from "@/lib/utils"
 import { Search, Package, Building2, Loader2, Power, ToggleLeft } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { useAppContext } from "@/components/context/app-context"
 
 import { fetcher, apiFetch } from "@/lib/fetcher"
