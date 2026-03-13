@@ -74,6 +74,7 @@ export default function GroupsReportPage() {
     const compareFromUrl = searchParams.get("compare") === "true"
 
     const [compare, setCompare] = useState(compareFromUrl)
+    const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -83,12 +84,15 @@ export default function GroupsReportPage() {
         return null
     }, [startFromUrl, endFromUrl])
 
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean) => {
+    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
         const params = new URLSearchParams(searchParams.toString())
         params.set("preset", preset)
         if (compareMode !== undefined) {
             params.set("compare", String(compareMode))
             setCompare(compareMode)
+        }
+        if (compRange !== undefined) {
+            setCompareRange(compRange)
         }
         if (range) {
             params.set("startDate", range.startDate.toISOString())
@@ -104,7 +108,13 @@ export default function GroupsReportPage() {
     if (organizationId) queryParams.set("organizationId", organizationId.toString())
     if (startFromUrl) queryParams.set("startDate", startFromUrl)
     if (endFromUrl) queryParams.set("endDate", endFromUrl)
-    if (compare) queryParams.set("compare", "true")
+    if (compare) {
+        queryParams.set("compare", "true")
+        if (compareRange) {
+            queryParams.set("compareStartDate", compareRange.startDate.toISOString())
+            queryParams.set("compareEndDate", compareRange.endDate.toISOString())
+        }
+    }
 
     const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/groups?${queryParams.toString()}`, fetcher)
 
@@ -180,6 +190,7 @@ export default function GroupsReportPage() {
                     activePreset={activePreset}
                     hidePresets={false}
                     compare={compare}
+                    compareRange={compareRange}
                 />
                 <div className="flex-1" />
                 <ScheduleReportModal reportName="Groups Performance" />

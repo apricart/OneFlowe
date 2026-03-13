@@ -31,6 +31,7 @@ export function SuperAdminDashboard() {
   const [dateRange, setDateRange] = useState<DateRange | null>(getDefaultDateRange())
   const [activePreset, setActivePreset] = useState<FilterPreset>("today")
   const [compare, setCompare] = useState(false)
+  const [compareRange, setCompareRange] = useState<DateRange | null>(null)
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
 
   const [drillDownType, setDrillDownType] = useState<DrillDownType | null>(null)
@@ -58,38 +59,39 @@ export function SuperAdminDashboard() {
   const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "all", compare
+    undefined, dateRange, "all", compare, compareRange
   )
 
   const { data: fulfilledData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "FULFILLED", compare
+    undefined, dateRange, "FULFILLED", compare, compareRange
   )
 
   const { data: refundedData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "REFUNDED", compare
+    undefined, dateRange, "REFUNDED", compare, compareRange
   )
 
   const { data: rejectedData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "REJECTED", compare
+    undefined, dateRange, "REJECTED", compare, compareRange
   )
 
   const { data: approvedData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "APPROVED", compare
+    undefined, dateRange, "APPROVED", compare, compareRange
   )
 
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean) => {
+  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean, compRange?: DateRange | null) => {
     setDateRange(range)
     setActivePreset(preset)
     if (compareMode !== undefined) setCompare(compareMode)
+    if (compRange !== undefined) setCompareRange(compRange)
     setSelectedBranchIds([])
   }, [])
 
@@ -153,7 +155,7 @@ export function SuperAdminDashboard() {
       {/* ━━━ Compact Filter Bar ━━━ */}
       <div className="relative z-30 flex items-center gap-2 flex-wrap bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/60 rounded-xl px-3 py-2 shadow-sm">
         <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-        <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} compare={compare} />
+        <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} compare={compare} compareRange={compareRange} />
         {organizationId && (
           <>
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
@@ -302,6 +304,7 @@ export function SuperAdminDashboard() {
         branchIds={selectedBranchIds}
         defaultDateRange={dateRange}
         compare={compare}
+        compareRange={compareRange}
       />
     </main>
   )

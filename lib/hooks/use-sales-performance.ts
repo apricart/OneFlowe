@@ -52,7 +52,8 @@ export function useSalesPerformance(
     groupId?: string | null,
     dateRange?: DateRange | null,
     status?: DashboardStatus,
-    compare?: boolean
+    compare?: boolean,
+    compareRange?: DateRange | null
 ) {
     const url = useMemo(() => {
         const params = new URLSearchParams()
@@ -91,10 +92,14 @@ export function useSalesPerformance(
 
         if (compare) {
             params.set("compare", "true")
+            if (compareRange) {
+                params.set("compareStartDate", compareRange.startDate.toISOString())
+                params.set("compareEndDate", compareRange.endDate.toISOString())
+            }
         }
 
         return `/api/v1/analytics/sales-performance?${params.toString()}`
-    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare])
+    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange])
 
     return useSWR<SalesPerformanceResponse>(url, fetcher, {
         revalidateOnFocus: false,
@@ -111,7 +116,8 @@ export function useDashboardKPIs(
     groupId?: string | null,
     dateRange?: DateRange | null,
     status?: DashboardStatus,
-    compare?: boolean
+    compare?: boolean,
+    compareRange?: DateRange | null
 ) {
-    return useSalesPerformance(organizationId, branchId, branchIds, groupId, dateRange, status, compare)
+    return useSalesPerformance(organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange)
 }

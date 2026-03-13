@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
         const startDate = searchParams.get("startDate")
         const endDate = searchParams.get("endDate")
         const compare = searchParams.get("compare") === "true"
+        const compareStartDateParam = searchParams.get("compareStartDate")
+        const compareEndDateParam = searchParams.get("compareEndDate")
 
         if (orgIdParam && role === "SUPER_ADMIN") {
             const parsedOrgId = parseInt(orgIdParam)
@@ -171,11 +173,21 @@ export async function GET(req: NextRequest) {
         // COMPARISON logic for summary statistics
         let comparisonSummary = null
         if (compare && startDate && endDate) {
-            const start = new Date(startDate)
-            const end = new Date(endDate)
-            const duration = end.getTime() - start.getTime()
-            const prevStart = new Date(start.getTime() - duration - 1)
-            const prevEnd = new Date(start.getTime() - 1)
+            let prevStart: Date
+            let prevEnd: Date
+            
+            if (compareStartDateParam && compareEndDateParam) {
+                prevStart = new Date(compareStartDateParam)
+                prevEnd = new Date(compareEndDateParam)
+                prevStart.setHours(0, 0, 0, 0)
+                prevEnd.setHours(23, 59, 59, 999)
+            } else {
+                const start = new Date(startDate)
+                const end = new Date(endDate)
+                const duration = end.getTime() - start.getTime()
+                prevStart = new Date(start.getTime() - duration - 1)
+                prevEnd = new Date(start.getTime() - 1)
+            }
 
             const compStats = await db
                 .select({

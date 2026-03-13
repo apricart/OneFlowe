@@ -78,10 +78,12 @@ type StatusFilter = "all" | "approved" | "fulfilled" | "refunded" | "rejected"
         })
         const [activePreset, setActivePreset] = useState<FilterPreset>("thisMonth")
         const [compare, setCompare] = useState(false)
+        const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
 
-        const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean) => {
+        const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
             setActivePreset(preset)
             if (compareMode !== undefined) setCompare(compareMode)
+            if (compRange !== undefined) setCompareRange(compRange)
             if (range) {
                 setStartDate(range.startDate.toISOString())
                 setEndDate(range.endDate.toISOString())
@@ -105,7 +107,13 @@ type StatusFilter = "all" | "approved" | "fulfilled" | "refunded" | "rejected"
         } else if (contextBranchId) {
             queryParams.set("branchId", contextBranchId)
         }
-        if (compare) queryParams.set("compare", "true")
+        if (compare) {
+            queryParams.set("compare", "true")
+            if (compareRange) {
+                queryParams.set("compareStartDate", compareRange.startDate.toISOString())
+                queryParams.set("compareEndDate", compareRange.endDate.toISOString())
+            }
+        }
 
         const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/orders/itemized?${queryParams.toString()}`, fetcher)
 
@@ -214,6 +222,7 @@ type StatusFilter = "all" | "approved" | "fulfilled" | "refunded" | "rejected"
                         activePreset={activePreset}
                         hidePresets={false}
                         compare={compare}
+                        compareRange={compareRange}
                     />
                     {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                         <BranchFilter
@@ -462,10 +471,22 @@ type StatusFilter = "all" | "approved" | "fulfilled" | "refunded" | "rejected"
                                                 {isVisible("empNumber") && <TableCell className="pl-6 whitespace-nowrap font-mono text-[11px] text-slate-500">{order.empNumber}</TableCell>}
                                                 {isVisible("userName") && <TableCell className="whitespace-nowrap text-xs font-medium text-slate-800 dark:text-slate-200">{order.userName}</TableCell>}
                                                 {isVisible("userEmail") && <TableCell className="whitespace-nowrap text-[11px] text-slate-400 font-mono italic">{order.userEmail}</TableCell>}
-                                                {isVisible("group") && <TableCell className="whitespace-nowrap"><Badge variant="secondary" className="text-[10px] font-medium opacity-70">{order.group}</Badge></TableCell>}
-                                                {isVisible("tid") && <TableCell className="whitespace-nowrap font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{order.tid}</TableCell>}
-                                                {isVisible("orderDate") && <TableCell className="whitespace-nowrap text-xs text-slate-500">{new Date(order.orderCreatedAt).toLocaleDateString()}</TableCell>}
-                                                {isVisible("branch") && <TableCell className="whitespace-nowrap text-xs font-semibold text-slate-600 dark:text-slate-400">{order.branchName}</TableCell>}
+                                                {isVisible("group") && (
+                                                    <TableCell className="max-w-[120px]">
+                                                        <Badge variant="secondary" className="text-[9px] font-bold uppercase tracking-tight bg-slate-100 text-slate-600 truncate block text-center">
+                                                            {order.group || "No Group"}
+                                                        </Badge>
+                                                    </TableCell>
+                                                )}
+                                                {isVisible("tid") && <TableCell className="whitespace-nowrap font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-700 dark:text-slate-300">{order.tid}</TableCell>}
+                                                {isVisible("orderDate") && <TableCell className="whitespace-nowrap text-xs text-slate-500 font-medium">{new Date(order.orderCreatedAt).toLocaleDateString()}</TableCell>}
+                                                {isVisible("branch") && (
+                                                    <TableCell className="max-w-[140px]">
+                                                        <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 truncate" title={order.branchName}>
+                                                            {order.branchName}
+                                                        </div>
+                                                    </TableCell>
+                                                )}
                                                 {isVisible("itemCode") && <TableCell className="whitespace-nowrap font-mono text-[11px] bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{order.itemCode}</TableCell>}
                                                 {isVisible("itemCategory") && <TableCell className="whitespace-nowrap text-xs text-slate-600 dark:text-slate-400">{order.itemCategory}</TableCell>}
                                                 {isVisible("unitRate") && <TableCell className="whitespace-nowrap text-right font-mono text-xs text-slate-500">{formatPKR(order.unitRateCents / 100)}</TableCell>}

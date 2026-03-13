@@ -24,6 +24,7 @@ interface BudgetAllocation {
   amountHeldCents: number
   amountCreditedCents: number
   remainingCents: number
+  baselineBudgetCents: number
 }
 
 export default function BudgetsPage() {
@@ -349,6 +350,8 @@ export default function BudgetsPage() {
               <TableRow className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                 <TableHead className="font-semibold text-slate-900 dark:text-slate-200">Branch (ID / Org)</TableHead>
                 <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Monthly Budget</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Baseline</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Add-on</TableHead>
                 <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Spent (Month)</TableHead>
                 <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Remaining (Month)</TableHead>
                 <TableHead className="text-center font-semibold text-slate-900 dark:text-slate-200">Usage</TableHead>
@@ -385,6 +388,18 @@ export default function BudgetsPage() {
                       </TableCell>
                       <TableCell className="text-right font-bold text-lg">
                         <span className="text-blue-600 dark:text-blue-400">{formatAmount(budget.amountAllocatedCents)}</span>
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-slate-500">
+                        {formatAmount(budget.baselineBudgetCents)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {budget.amountAllocatedCents > budget.baselineBudgetCents ? (
+                          <Badge className="bg-amber-500 text-white font-bold h-7 px-2">
+                            +{formatAmount(budget.amountAllocatedCents - budget.baselineBudgetCents)}
+                          </Badge>
+                        ) : (
+                          <span className="text-slate-400 text-xs">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <span className="text-orange-600" title={`Actual Spent: ${formatAmount(budget.amountSpentCents)}, Pending: ${formatAmount(budget.amountHeldCents)}`}>

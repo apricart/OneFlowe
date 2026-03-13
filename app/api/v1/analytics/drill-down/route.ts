@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
     const branchIdsParam = searchParams.get("branchIds")
     const startDateParam = searchParams.get("startDate")
     const endDateParam = searchParams.get("endDate")
+    const compareStartDateParam = searchParams.get("compareStartDate")
+    const compareEndDateParam = searchParams.get("compareEndDate")
     const refundType = searchParams.get("refundType")?.toLowerCase() // all, full, partial
     const sortBy = searchParams.get("sortBy")?.toLowerCase() === "value" ? "value" : "date"
     if (!type || !["REVENUE", "REJECTED", "FULFILLED", "ORDERS", "REFUNDED"].includes(type)) {
@@ -245,11 +247,21 @@ export async function GET(req: NextRequest) {
         // COMPARISON LOGIC
         let comparisonSummary = null
         if (searchParams.get("compare") === "true" && startDateParam && endDateParam) {
-            const start = new Date(startDateParam)
-            const end = new Date(endDateParam)
-            const duration = end.getTime() - start.getTime()
-            const prevStart = new Date(start.getTime() - duration - 1)
-            const prevEnd = new Date(start.getTime() - 1)
+            let prevStart: Date
+            let prevEnd: Date
+            
+            if (compareStartDateParam && compareEndDateParam) {
+                prevStart = new Date(compareStartDateParam)
+                prevEnd = new Date(compareEndDateParam)
+                prevStart.setHours(0, 0, 0, 0)
+                prevEnd.setHours(23, 59, 59, 999)
+            } else {
+                const start = new Date(startDateParam)
+                const end = new Date(endDateParam)
+                const duration = end.getTime() - start.getTime()
+                prevStart = new Date(start.getTime() - duration - 1)
+                prevEnd = new Date(start.getTime() - 1)
+            }
 
             // Correctly filter out createdAt conditions by rebuilding them
             const compConditions: any[] = []

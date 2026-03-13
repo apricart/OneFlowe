@@ -19,6 +19,8 @@ export async function GET(req: NextRequest) {
         const endDateParam = url.searchParams.get("endDate")
         const branchIdsParam = url.searchParams.get("branchIds")
         const compare = url.searchParams.get("compare") === "true"
+        const compareStartDateParam = url.searchParams.get("compareStartDate")
+        const compareEndDateParam = url.searchParams.get("compareEndDate")
 
         // RBAC Context Parsing
         let branchIds: number[] = []
@@ -46,6 +48,7 @@ export async function GET(req: NextRequest) {
                 userId: users.id,
                 userName: users.fullName,
                 userEmail: users.email,
+                employeeId: users.employeeId,
                 branchName: branches.name,
                 totalOrders: sql<number>`count(${orders.id})`,
                 fulfilledOrders: sql<number>`count(CASE WHEN ${orders.status} IN ('FULFILLED', 'APPROVED') THEN 1 END)`,
@@ -70,11 +73,21 @@ export async function GET(req: NextRequest) {
         // COMPARISON logic for overall KPIs
         let comparisonSummary = null
         if (compare && startDateParam && endDateParam) {
-            const start = new Date(startDateParam)
-            const end = new Date(endDateParam)
-            const duration = end.getTime() - start.getTime()
-            const prevStart = new Date(start.getTime() - duration - 1)
-            const prevEnd = new Date(start.getTime() - 1)
+            let prevStart: Date
+            let prevEnd: Date
+            
+            if (compareStartDateParam && compareEndDateParam) {
+                prevStart = new Date(compareStartDateParam)
+                prevEnd = new Date(compareEndDateParam)
+                prevStart.setHours(0, 0, 0, 0)
+                prevEnd.setHours(23, 59, 59, 999)
+            } else {
+                const start = new Date(startDateParam)
+                const end = new Date(endDateParam)
+                const duration = end.getTime() - start.getTime()
+                prevStart = new Date(start.getTime() - duration - 1)
+                prevEnd = new Date(start.getTime() - 1)
+            }
 
             const compResults = await db
                 .select({

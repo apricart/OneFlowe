@@ -30,8 +30,7 @@ import {
 import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/reports/column-selector"
 import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expandable-row-drawer"
 import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
-import { CompactDateFilter } from "@/components/reports/compact-date-filter"
-import { type FilterPreset, getPresetRange } from "@/components/dashboard/global-date-filter"
+import { GlobalDateFilter, type FilterPreset, getPresetRange } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
 
@@ -105,6 +104,7 @@ export default function SalesSummaryPage() {
   const [orderDetails, setOrderDetails] = useState<any>(null)
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [compare, setCompare] = useState(searchParams.get("compare") === "true")
+  const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
 
   const { data: session } = useSession()
   const role = (session?.user as any)?.role as Role
@@ -123,12 +123,15 @@ export default function SalesSummaryPage() {
     return null
   }, [startFromUrl, endFromUrl])
 
-  const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean) => {
+  const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
     const params = new URLSearchParams(searchParams.toString())
     params.set("preset", preset)
     if (compareMode !== undefined) {
       params.set("compare", String(compareMode))
       setCompare(compareMode)
+    }
+    if (compRange !== undefined) {
+      setCompareRange(compRange)
     }
 
     // Calculate range for presets if not provided
@@ -163,7 +166,13 @@ export default function SalesSummaryPage() {
   } else if (contextBranchId) {
     queryParams.set("branchId", contextBranchId)
   }
-  if (compare) queryParams.set("compare", "true")
+  if (compare) {
+    queryParams.set("compare", "true")
+    if (compareRange) {
+      queryParams.set("compareStartDate", compareRange.startDate.toISOString())
+      queryParams.set("compareEndDate", compareRange.endDate.toISOString())
+    }
+  }
 
   // Orders summary (aggregated)
   const ordersParams = new URLSearchParams(queryParams.toString())
@@ -414,11 +423,13 @@ export default function SalesSummaryPage() {
       {/* ── Banking-Grade Filter Toolbar ── */}
       <div className="sticky top-0 z-40 bg-white/80 dark:bg-[#0b0f1a]/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-6 h-14 flex items-center shadow-sm">
         <div className="flex items-center gap-3">
-          <CompactDateFilter
+          <GlobalDateFilter
             value={dateRange}
             onChange={handleDateChange}
             activePreset={activePreset}
+            hidePresets={false}
             compare={compare}
+            compareRange={compareRange}
           />
 
           {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (

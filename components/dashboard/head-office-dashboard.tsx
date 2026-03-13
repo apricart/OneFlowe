@@ -40,6 +40,7 @@ export function HeadOfficeDashboard() {
   const [dateRange, setDateRange] = useState<DateRange | null>(getDefaultDateRange())
   const [activePreset, setActivePreset] = useState<FilterPreset>("today")
   const [compare, setCompare] = useState(false)
+  const [compareRange, setCompareRange] = useState<DateRange | null>(null)
 
   const [drillDownType, setDrillDownType] = useState<DrillDownType | null>(null)
   const [isDrillDownOpen, setIsDrillDownOpen] = useState(false)
@@ -65,7 +66,8 @@ export function HeadOfficeDashboard() {
     undefined,
     dateRange,
     "all",
-    compare
+    compare,
+    compareRange
   )
 
   // Comparative data for trends
@@ -78,9 +80,15 @@ export function HeadOfficeDashboard() {
       params.set("startDate", dateRange.startDate.toISOString())
       params.set("endDate", dateRange.endDate.toISOString())
     }
-    if (compare) params.set("compare", "true")
+    if (compare) {
+      params.set("compare", "true")
+      if (compareRange) {
+        params.set("compareStartDate", compareRange.startDate.toISOString())
+        params.set("compareEndDate", compareRange.endDate.toISOString())
+      }
+    }
     return `/api/v1/analytics/summary?${params.toString()}`
-  }, [organizationId, contextBranchId, selectedBranchIds, dateRange, compare])
+  }, [organizationId, contextBranchId, selectedBranchIds, dateRange, compare, compareRange])
 
   // Fetch summary for comparison trends
   const { data: summaryData } = useSalesPerformance(
@@ -127,7 +135,8 @@ export function HeadOfficeDashboard() {
     undefined,
     dateRange,
     "FULFILLED",
-    compare
+    compare,
+    compareRange
   )
 
   const { data: refundedData } = useSalesPerformance(
@@ -137,7 +146,8 @@ export function HeadOfficeDashboard() {
     undefined,
     dateRange,
     "REFUNDED",
-    compare
+    compare,
+    compareRange
   )
 
   const { data: rejectedData } = useSalesPerformance(
@@ -147,7 +157,8 @@ export function HeadOfficeDashboard() {
     undefined,
     dateRange,
     "REJECTED",
-    compare
+    compare,
+    compareRange
   )
 
   const { data: approvedData } = useSalesPerformance(
@@ -157,7 +168,8 @@ export function HeadOfficeDashboard() {
     undefined,
     dateRange,
     "APPROVED",
-    compare
+    compare,
+    compareRange
   )
 
   const perfData = perfDataFull
@@ -176,10 +188,11 @@ export function HeadOfficeDashboard() {
   const purchaseTrend = getTrend(perfData?.totalSales || 0, summary?.totalSales || 0)
   const orderTrend = getTrend(perfData?.totalOrders || 0, summary?.totalOrders || 0)
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean) => {
+  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean, compRange?: DateRange | null) => {
     setDateRange(range)
     setActivePreset(preset)
     if (compareMode !== undefined) setCompare(compareMode)
+    if (compRange !== undefined) setCompareRange(compRange)
   }, [])
 
   const allBranchesSelected = !contextBranchId && selectedBranchIds.length === 0
@@ -213,6 +226,7 @@ export function HeadOfficeDashboard() {
           onChange={handleDateChange}
           activePreset={activePreset}
           compare={compare}
+          compareRange={compareRange}
         />
         {organizationId && (
           <>

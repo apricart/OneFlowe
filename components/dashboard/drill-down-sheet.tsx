@@ -46,6 +46,7 @@ interface DrillDownSheetProps {
     defaultDateRange?: DateRange | null
     title?: string
     compare?: boolean
+    compareRange?: DateRange | null
 }
 
 const TYPE_CONFIG = {
@@ -141,10 +142,12 @@ export function DrillDownSheet({
     branchIds,
     defaultDateRange,
     title,
-    compare
+    compare,
+    compareRange
 }: DrillDownSheetProps): React.ReactElement | null {
     // Internal localized date range state for the drill down
     const [localDateRange, setLocalDateRange] = useState<DateRange | null>(null)
+    const [localCompareRange, setLocalCompareRange] = useState<DateRange | null>(null)
     const [activePreset, setActivePreset] = useState<FilterPreset>("today")
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
     const [refundType, setRefundType] = useState<"all" | "full" | "partial">("all")
@@ -153,11 +156,12 @@ export function DrillDownSheet({
     useEffect(() => {
         if (isOpen) {
             setLocalDateRange(defaultDateRange || null)
+            setLocalCompareRange(compareRange || null)
             setActivePreset(defaultDateRange ? "custom" : "today")
             setExpandedRow(null)
             setSortBy("date")
         }
-    }, [isOpen, defaultDateRange])
+    }, [isOpen, defaultDateRange, compareRange])
 
     const url = useMemo(() => {
         if (!isOpen || !type) return null
@@ -170,7 +174,13 @@ export function DrillDownSheet({
             params.set("endDate", localDateRange.endDate.toISOString())
         }
         params.set("sortBy", sortBy)
-        if (compare) params.set("compare", "true")
+        if (compare) {
+            params.set("compare", "true")
+            if (localCompareRange) {
+                params.set("compareStartDate", localCompareRange.startDate.toISOString())
+                params.set("compareEndDate", localCompareRange.endDate.toISOString())
+            }
+        }
         if (type === "REFUNDED") {
             params.set("refundType", refundType)
         }
@@ -205,9 +215,10 @@ export function DrillDownSheet({
         return `${isUp ? '+' : ''}${percentage.toFixed(1)}%`
     }, [])
 
-    const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
+    const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean, compRange?: DateRange | null) => {
         setLocalDateRange(range)
         setActivePreset(preset)
+        if (compRange !== undefined) setLocalCompareRange(compRange)
     }, [])
 
     if (!config) return null
@@ -266,6 +277,8 @@ export function DrillDownSheet({
                                 value={localDateRange}
                                 onChange={handleDateChange}
                                 activePreset={activePreset}
+                                compare={compare}
+                                compareRange={localCompareRange}
                                 className="scale-90"
                             />
                         </div>
@@ -334,12 +347,12 @@ export function DrillDownSheet({
                                     <BIInsightCard 
                                         title="Refund Rate" 
                                         value={`${summary.refundRate.toFixed(1)}%`} 
-                                        trend={summary.refundRate > 5 ? "+ Leakage" : "- Healthy"} 
+                                        trend={summary.refundRate > 5 ? "+ Portal Integrity" : "- Healthy"} 
                                         icon={AlertCircle} 
                                         colorClass={summary.refundRate > 5 ? "border-rose-100 dark:border-rose-900/30" : ""} 
                                     />
                                     <BIInsightCard 
-                                        title="Leakage (Lost)" 
+                                        title="Portal Integrity" 
                                         value={formatPKR(summary.leakage)} 
                                         subvalue={`Inc. ${formatPKR(summary.discountImpact)} discounts`} 
                                         trend={comparison ? getTrend(summary.leakage, comparison.leakage) : undefined}

@@ -10,11 +10,12 @@ export type FilterPreset = "today" | "3d" | "7d" | "monthly" | "thisMonth" | "ye
 
 interface GlobalDateFilterProps {
     value: DateRange | null
-    onChange: (range: DateRange | null, preset: FilterPreset, compare?: boolean) => void
+    onChange: (range: DateRange | null, preset: FilterPreset, compare?: boolean, compareRange?: DateRange | null) => void
     activePreset: FilterPreset
     className?: string
     hidePresets?: boolean
     compare?: boolean
+    compareRange?: DateRange | null
 }
 
 export const presets: { id: FilterPreset; label: string }[] = [
@@ -93,8 +94,9 @@ import { Switch } from "@/components/ui/switch"
 import { Check, ChevronDown, Calendar as CalendarIcon, ArrowRightLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-export function GlobalDateFilter({ value, onChange, activePreset, className, hidePresets, compare }: GlobalDateFilterProps) {
+export function GlobalDateFilter({ value, onChange, activePreset, className, hidePresets, compare, compareRange }: GlobalDateFilterProps) {
     const [calendarOpen, setCalendarOpen] = useState(false)
+    const [compareCalendarOpen, setCompareCalendarOpen] = useState(false)
 
     const handleSelectPreset = (preset: FilterPreset) => {
         if (preset === "custom") {
@@ -102,11 +104,11 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
             return
         }
         const range = getPresetRange(preset)
-        onChange(range, preset, compare)
+        onChange(range, preset, compare, compareRange)
     }
 
     const toggleCompare = (checked: boolean) => {
-        onChange(value, activePreset, checked)
+        onChange(value, activePreset, checked, compareRange)
     }
 
     const selectedLabel = getPresetLabel(activePreset, value)
@@ -179,7 +181,7 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
                         )}>
                             <div className="flex items-center gap-2">
                                 <ArrowRightLeft className={cn("w-3.5 h-3.5", compare ? "text-indigo-600" : "text-slate-400")} />
-                                <span className={cn("text-[11px] font-bold", compare ? "text-indigo-600" : "text-slate-600")}>Compare to Previous</span>
+                                <span className={cn("text-[11px] font-bold", compare ? "text-indigo-600" : "text-slate-600")}>Compare To</span>
                             </div>
                             <Switch
                                 checked={compare}
@@ -187,6 +189,65 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
                                 className="scale-75 data-[state=checked]:bg-indigo-600"
                             />
                         </div>
+                        {compare && (
+                            <div className="mt-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                <Popover open={compareCalendarOpen} onOpenChange={setCompareCalendarOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" size="sm" className="w-full h-8 text-[11px] justify-start px-2.5 font-semibold text-slate-600 dark:text-slate-400 border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/50 hover:bg-indigo-100/50 hover:text-indigo-600">
+                                            <CalendarIcon className="mr-2 h-3.5 w-3.5 opacity-60" />
+                                            {compareRange ? `${format(compareRange.startDate, "dd MMM yyyy")} – ${format(compareRange.endDate, "dd MMM yyyy")}` : "Previous Period (Auto)"}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent
+                                        className="w-auto p-0 rounded-3xl border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden z-[100]"
+                                        align="center"
+                                        side="bottom"
+                                        sideOffset={8}
+                                        onInteractOutside={(e) => e.preventDefault()}
+                                        onOpenAutoFocus={(e) => e.preventDefault()}
+                                    >
+                                        <div onClick={(e) => e.stopPropagation()}>
+                                            <div className="px-4 pt-3 pb-1 border-b border-slate-100 dark:border-slate-800">
+                                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Select Comparison Range</p>
+                                            </div>
+                                            <Calendar
+                                                initialFocus
+                                                mode="range"
+                                                defaultMonth={compareRange?.startDate || value?.startDate || new Date()}
+                                                selected={{
+                                                    from: compareRange?.startDate,
+                                                    to: compareRange?.endDate,
+                                                }}
+                                                onSelect={(range: any) => {
+                                                    if (range?.from && range?.to) {
+                                                        const newCompareRange = { startDate: range.from, endDate: range.to }
+                                                        onChange(value, activePreset, compare, newCompareRange)
+                                                        setCompareCalendarOpen(false)
+                                                    }
+                                                }}
+                                                numberOfMonths={2}
+                                                className="p-4 bg-white dark:bg-slate-900"
+                                            />
+                                            {compareRange && (
+                                                <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex justify-center">
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="sm" 
+                                                        className="h-8 text-[11px] text-rose-500 hover:text-rose-600 hover:bg-rose-50 w-full"
+                                                        onClick={() => {
+                                                            onChange(value, activePreset, compare, undefined);
+                                                            setCompareCalendarOpen(false);
+                                                        }}
+                                                    >
+                                                        Clear & Use Default Previous
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        )}
                     </div>
 
                     <DropdownMenuSeparator className="my-1.5 bg-slate-100 dark:border-slate-800" />
@@ -228,7 +289,7 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
                                     }}
                                     onSelect={(range: any) => {
                                         if (range?.from && range?.to) {
-                                            onChange({ startDate: range.from, endDate: range.to }, "custom", compare)
+                                            onChange({ startDate: range.from, endDate: range.to }, "custom", compare, compareRange)
                                             setCalendarOpen(false)
                                         }
                                     }}

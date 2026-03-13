@@ -76,6 +76,7 @@ export default function ProductPerformancePage() {
     const compareFromUrl = searchParams.get("compare") === "true"
 
     const [compare, setCompare] = useState(compareFromUrl)
+    const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -85,12 +86,15 @@ export default function ProductPerformancePage() {
         return null
     }, [startFromUrl, endFromUrl])
 
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean) => {
+    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
         const params = new URLSearchParams(searchParams.toString())
         params.set("preset", preset)
         if (compareMode !== undefined) {
             params.set("compare", String(compareMode))
             setCompare(compareMode)
+        }
+        if (compRange !== undefined) {
+            setCompareRange(compRange)
         }
         if (range) {
             params.set("startDate", range.startDate.toISOString())
@@ -118,7 +122,13 @@ export default function ProductPerformancePage() {
     } else if (contextBranchId) {
         queryParams.set("branchId", contextBranchId)
     }
-    if (compare) queryParams.set("compare", "true")
+    if (compare) {
+        queryParams.set("compare", "true")
+        if (compareRange) {
+            queryParams.set("compareStartDate", compareRange.startDate.toISOString())
+            queryParams.set("compareEndDate", compareRange.endDate.toISOString())
+        }
+    }
 
     // Performance Data (Aggregated)
     const { data: perfData, isLoading: isPerfLoading, mutate: mutatePerf } = useSWR(`/api/v1/analytics/products/performance?${queryParams.toString()}`, fetcher)
@@ -221,6 +231,7 @@ export default function ProductPerformancePage() {
                     activePreset={activePreset}
                     hidePresets={false}
                     compare={compare}
+                    compareRange={compareRange}
                 />
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <>
@@ -402,8 +413,10 @@ export default function ProductPerformancePage() {
                                     <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Category</TableHead>
                                     <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Orders</TableHead>
                                     <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-emerald-600">Fulfilled</TableHead>
+                                    {compare && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Δ Volume</TableHead>}
                                     <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-rose-500">Refunded</TableHead>
                                     <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Revenue</TableHead>
+                                    {compare && <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Δ Rev</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -424,8 +437,31 @@ export default function ProductPerformancePage() {
                                             <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.category}</TableCell>
                                             <TableCell className="text-center font-mono text-xs">{p.totalOrders}</TableCell>
                                             <TableCell className="text-center font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">{p.qtyFulfilled}</TableCell>
+                                            {compare && (
+                                                <TableCell className="text-center">
+                                                    <div className="flex flex-col items-center">
+                                                        <span className={`text-[10px] font-bold ${p.qtyFulfilled >= p.compareQty ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                            {p.qtyFulfilled >= p.compareQty ? '↑' : '↓'} {Math.abs(p.qtyFulfilled - p.compareQty)}
+                                                        </span>
+                                                        <span className="text-[8px] text-slate-400 font-mono">from {p.compareQty}</span>
+                                                    </div>
+                                                </TableCell>
+                                            )}
                                             <TableCell className="text-center font-mono font-bold text-xs text-rose-500">{p.qtyRefunded}</TableCell>
-                                            <TableCell className="text-right font-mono font-bold text-xs pr-6 text-slate-900 dark:text-white">{formatPKR(p.revenueGeneratedCents / 100)}</TableCell>
+                                            <TableCell className="text-right font-mono font-bold text-xs text-slate-900 dark:text-white">{formatPKR(p.revenueGeneratedCents / 100)}</TableCell>
+                                            {compare && (
+                                                <TableCell className="text-right pr-6">
+                                                    <div className="flex flex-col items-end">
+                                                        <span className={`text-[10px] font-bold ${p.revenueGeneratedCents >= p.compareRevenue ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                            {p.revenueGeneratedCents >= p.compareRevenue ? '↑' : '↓'} 
+                                                            {((Math.abs(p.revenueGeneratedCents - p.compareRevenue) / (p.compareRevenue || 1)) * 100).toFixed(0)}%
+                                                        </span>
+                                                        <span className="text-[8px] text-slate-400 font-mono italic">
+                                                            {p.revenueGeneratedCents >= p.compareRevenue ? '+' : '-'} {formatPKR(Math.abs(p.revenueGeneratedCents - p.compareRevenue) / 100)}
+                                                        </span>
+                                                    </div>
+                                                </TableCell>
+                                            )}
                                         </TableRow>
                                     ))
                                 )}

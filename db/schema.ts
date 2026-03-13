@@ -45,6 +45,8 @@ export const branches = pgTable(
     status: varchar("status", { length: 32 }).default("active"),
     // Group assignment for reporting and analytics
     groupId: integer("group_id"),
+    // Base budget for "Add-on" calculation
+    baselineBudgetCents: bigint("baseline_budget_cents", { mode: "number" }).notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
@@ -99,6 +101,7 @@ export const users = pgTable(
     firstName: varchar("first_name", { length: 100 }),
     lastName: varchar("last_name", { length: 100 }),
     phone: varchar("phone", { length: 32 }),
+    employeeId: varchar("employee_id", { length: 64 }),
     mfaEnabled: boolean("mfa_enabled").notNull().default(false),
     organizationId: integer("organization_id").references(() => organizations.id),
     // Avoid circular type init; store branch id without FK

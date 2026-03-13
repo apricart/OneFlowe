@@ -45,6 +45,8 @@ export async function GET(req: NextRequest) {
     const groupId = url.searchParams.get("groupId")
     const statusParam = url.searchParams.get("status")
     const compare = url.searchParams.get("compare") === "true"
+    const compareStartDateParam = url.searchParams.get("compareStartDate")
+    const compareEndDateParam = url.searchParams.get("compareEndDate")
 
     // Parsing branchIds
     const parsedBranchIds = branchIdsRaw
@@ -121,12 +123,21 @@ export async function GET(req: NextRequest) {
     // COMPARISON LOGIC
     let comparisonSummary = null
     if (compare && startDate && endDate) {
-        const start = new Date(startDate)
-        const end = new Date(endDate)
-        const duration = end.getTime() - start.getTime()
-
-        const prevStart = new Date(start.getTime() - duration - 1)
-        const prevEnd = new Date(start.getTime() - 1)
+        let prevStart: Date
+        let prevEnd: Date
+            
+        if (compareStartDateParam && compareEndDateParam) {
+            prevStart = new Date(compareStartDateParam)
+            prevEnd = new Date(compareEndDateParam)
+            prevStart.setHours(0, 0, 0, 0)
+            prevEnd.setHours(23, 59, 59, 999)
+        } else {
+            const start = new Date(startDate)
+            const end = new Date(endDate)
+            const duration = end.getTime() - start.getTime()
+            prevStart = new Date(start.getTime() - duration - 1)
+            prevEnd = new Date(start.getTime() - 1)
+        }
 
         // Correctly filter out createdAt conditions to avoid overlapping periods
         const compConditions = conditions.filter(c => {

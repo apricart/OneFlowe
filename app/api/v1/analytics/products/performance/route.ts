@@ -19,6 +19,8 @@ export async function GET(req: NextRequest) {
         const endDateParam = url.searchParams.get("endDate")
         const branchIdsParam = url.searchParams.get("branchIds")
         const compare = url.searchParams.get("compare") === "true"
+        const compareStartDateParam = url.searchParams.get("compareStartDate")
+        const compareEndDateParam = url.searchParams.get("compareEndDate")
 
         // RBAC Context Parsing
         let branchIds: number[] = []
@@ -139,11 +141,21 @@ export async function GET(req: NextRequest) {
         // COMPARISON logic for overall KPIs
         let comparisonSummary = null
         if (compare && startDateParam && endDateParam) {
-            const start = new Date(startDateParam)
-            const end = new Date(endDateParam)
-            const duration = end.getTime() - start.getTime()
-            const prevStart = new Date(start.getTime() - duration - 1)
-            const prevEnd = new Date(start.getTime() - 1)
+            let prevStart: Date
+            let prevEnd: Date
+            
+            if (compareStartDateParam && compareEndDateParam) {
+                prevStart = new Date(compareStartDateParam)
+                prevEnd = new Date(compareEndDateParam)
+                prevStart.setHours(0, 0, 0, 0)
+                prevEnd.setHours(23, 59, 59, 999)
+            } else {
+                const start = new Date(startDateParam)
+                const end = new Date(endDateParam)
+                const duration = end.getTime() - start.getTime()
+                prevStart = new Date(start.getTime() - duration - 1)
+                prevEnd = new Date(start.getTime() - 1)
+            }
 
             const compResults = await db
                 .select({
@@ -194,8 +206,40 @@ export async function GET(req: NextRequest) {
                 totalRevenue: compRev,
                 totalVolume: compVol,
                 totalRefunds: compRef,
-                uniqueSKUs: new Set(compResults.map(r => (r as any).globalProductId)).size // approximate or needs join
+                uniqueSKUs: new Set(compResults.map(r => (r as any).globalProductId)).size
             }
+
+            // Product-level comparison map
+            const compProductMap: Record<number, any> = {}
+            compResults.forEach(row => {
+                const gpid = (row as any).globalProductId
+                if (!gpid) return
+                if (!compProductMap[gpid]) {
+                    compProductMap[gpid] = { qtyFulfilled: 0, revenueGeneratedCents: 0 }
+                }
+                const pInfo = compProductMap[gpid]
+                if (row.status === 'FULFILLED' || row.status === 'APPROVED') {
+                    pInfo.qtyFulfilled += row.qtyOrdered
+                    pInfo.revenueGeneratedCents += (row.qtyOrdered * row.priceCents)
+                } else if (row.status === 'REFUNDED') {
+                    const refQ = compRefundQuantities[row.orderItemId] || 0
+                    const fulfilledCount = Math.max(0, row.qtyOrdered - refQ)
+                    pInfo.qtyFulfilled += fulfilledCount
+                    pInfo.revenueGeneratedCents += (fulfilledCount * row.priceCents)
+                }
+            })
+
+            // Attach comparison data to aggregated results
+            aggregated.forEach((p: any) => {
+                const comp = compProductMap[p.productId]
+                if (comp) {
+                    p.compareQty = comp.qtyFulfilled
+                    p.compareRevenue = comp.revenueGeneratedCents
+                } else {
+                    p.compareQty = 0
+                    p.compareRevenue = 0
+                }
+            })
         }
 
         return NextResponse.json({

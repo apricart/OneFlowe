@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
     const statusParam = searchParams.get("status") // PENDING | FULFILLED | REFUNDED | all
     const startDateParam = searchParams.get("startDate")
     const endDateParam = searchParams.get("endDate")
+    const compareStartDateParam = searchParams.get("compareStartDate")
+    const compareEndDateParam = searchParams.get("compareEndDate")
 
     let organizationId: number | null = null
     let branchId: number | null = null
@@ -79,6 +81,8 @@ export async function GET(req: NextRequest) {
         groupId, status: statusParam,
         start: startDate.toISOString().slice(0, 16),
         end: endDate.toISOString().slice(0, 16),
+        compareStart: compareStartDateParam || "",
+        compareEnd: compareEndDateParam || "",
         granularity,
     })
 
@@ -232,11 +236,21 @@ export async function GET(req: NextRequest) {
         // ── Comparison Logic ──
         let comparison: any = null
         if (searchParams.get("compare") === "true") {
-            const start = new Date(startDate)
-            const end = new Date(endDate)
-            const duration = end.getTime() - start.getTime()
-            const prevStart = new Date(start.getTime() - duration - 1)
-            const prevEnd = new Date(start.getTime() - 1)
+            let prevStart: Date
+            let prevEnd: Date
+            
+            if (compareStartDateParam && compareEndDateParam) {
+                prevStart = new Date(compareStartDateParam)
+                prevEnd = new Date(compareEndDateParam)
+                prevStart.setHours(0, 0, 0, 0)
+                prevEnd.setHours(23, 59, 59, 999)
+            } else {
+                const start = new Date(startDate)
+                const end = new Date(endDate)
+                const duration = end.getTime() - start.getTime()
+                prevStart = new Date(start.getTime() - duration - 1)
+                prevEnd = new Date(start.getTime() - 1)
+            }
 
             const compConditions: any[] = [
                 gte(orders.createdAt, prevStart),

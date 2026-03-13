@@ -85,6 +85,7 @@ export async function GET(req: NextRequest) {
             amountSpentCents: budgets.amountSpentCents,
             amountHeldCents: budgets.amountHeldCents,
             amountCreditedCents: budgets.amountCreditedCents,
+            baselineBudgetCents: branches.baselineBudgetCents,
           })
           .from(branches)
           .leftJoin(
@@ -101,14 +102,21 @@ export async function GET(req: NextRequest) {
               : eq(branches.organizationId, orgId)
           )
 
-        const budgetsWithRemaining = allBranches.map(b => ({
-          ...b,
-          amountAllocatedCents: b.amountAllocatedCents || 0,
-          amountSpentCents: b.amountSpentCents || 0,
-          amountHeldCents: b.amountHeldCents || 0,
-          amountCreditedCents: b.amountCreditedCents || 0,
-          remainingCents: ((b.amountAllocatedCents || 0) + (b.amountCreditedCents || 0)) - ((b.amountSpentCents || 0) + (b.amountHeldCents || 0)),
-        }))
+        const budgetsWithRemaining = allBranches.map(b => {
+          const allocated = b.amountAllocatedCents ?? b.baselineBudgetCents ?? 0
+          const credited = b.amountCreditedCents || 0
+          const spent = b.amountSpentCents || 0
+          const held = b.amountHeldCents || 0
+          
+          return {
+            ...b,
+            amountAllocatedCents: allocated,
+            amountSpentCents: spent,
+            amountHeldCents: held,
+            amountCreditedCents: credited,
+            remainingCents: (allocated + credited) - (spent + held),
+          }
+        })
 
         return NextResponse.json({ budgets: budgetsWithRemaining })
       } catch (err: any) {
@@ -127,12 +135,27 @@ export async function GET(req: NextRequest) {
     }
 
     const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
-    const [b] = await db.select().from(budgets).where(
-      and(
-        eq(budgets.branchId, branchId),
-        eq(budgets.period, currentMonth)
-      )
-    ).limit(1)
+    const [b] = await db.select({
+      id: budgets.id,
+      organizationId: budgets.organizationId,
+      branchId: budgets.branchId,
+      period: budgets.period,
+      amountAllocatedCents: budgets.amountAllocatedCents,
+      amountSpentCents: budgets.amountSpentCents,
+      amountHeldCents: budgets.amountHeldCents,
+      amountCreditedCents: budgets.amountCreditedCents,
+      createdAt: budgets.createdAt,
+      updatedAt: budgets.updatedAt,
+      baselineBudgetCents: branches.baselineBudgetCents
+    })
+      .from(budgets)
+      .innerJoin(branches, eq(budgets.branchId, branches.id))
+      .where(
+        and(
+          eq(budgets.branchId, branchId),
+          eq(budgets.period, currentMonth)
+        )
+      ).limit(1)
 
     if (!b) {
       return NextResponse.json({
@@ -151,6 +174,7 @@ export async function GET(req: NextRequest) {
       amountHeldCents: b.amountHeldCents,
       amountCreditedCents: b.amountCreditedCents,
       remainingCents,
+      baselineBudgetCents: b.baselineBudgetCents,
       period: b.period,
     })
   } catch (e: any) {

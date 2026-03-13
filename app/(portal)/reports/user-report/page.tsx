@@ -57,6 +57,7 @@ export default function UserReportPage() {
     const compareFromUrl = searchParams.get("compare") === "true"
 
     const [compare, setCompare] = useState(compareFromUrl)
+    const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -66,12 +67,15 @@ export default function UserReportPage() {
         return null
     }, [startFromUrl, endFromUrl])
 
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean) => {
+    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
         const params = new URLSearchParams(searchParams.toString())
         params.set("preset", preset)
         if (compareMode !== undefined) {
             params.set("compare", String(compareMode))
             setCompare(compareMode)
+        }
+        if (compRange !== undefined) {
+            setCompareRange(compRange)
         }
         if (range) {
             params.set("startDate", range.startDate.toISOString())
@@ -98,7 +102,13 @@ export default function UserReportPage() {
     } else if (contextBranchId) {
         queryParams.set("branchId", contextBranchId)
     }
-    if (compare) queryParams.set("compare", "true")
+    if (compare) {
+        queryParams.set("compare", "true")
+        if (compareRange) {
+            queryParams.set("compareStartDate", compareRange.startDate.toISOString())
+            queryParams.set("compareEndDate", compareRange.endDate.toISOString())
+        }
+    }
 
     const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/users/performance?${queryParams.toString()}`, fetcher)
 
@@ -183,6 +193,7 @@ export default function UserReportPage() {
                     activePreset={activePreset}
                     hidePresets={false}
                     compare={compare}
+                    compareRange={compareRange}
                 />
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <BranchFilter
@@ -377,8 +388,9 @@ export default function UserReportPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow className="bg-slate-50/50 dark:bg-slate-800/30">
-                                    <TableHead className="pl-6 h-12 text-[11px] font-bold uppercase text-slate-500">User Identity</TableHead>
-                                    <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500">Email Address</TableHead>
+                                    <TableHead className="pl-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Employee</TableHead>
+                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Emp ID</TableHead>
+                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Orders</TableHead>
                                     <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500">Branch Assignment</TableHead>
                                     <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500 text-center">Total Orders</TableHead>
                                     <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500 text-center">Fulfilled</TableHead>
@@ -388,21 +400,24 @@ export default function UserReportPage() {
                             </TableHeader>
                             <TableBody>
                                 {isLoading ? (
-                                    <TableRow><TableCell colSpan={7} className="h-40 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-500 opacity-50" /></TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={8} className="h-40 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-500 opacity-50" /></TableCell></TableRow>
                                 ) : filteredUsers.length === 0 ? (
-                                    <TableRow><TableCell colSpan={7} className="h-40 text-center text-slate-500 italic">No user activity recorded in this period.</TableCell></TableRow>
+                                    <TableRow><TableCell colSpan={8} className="h-40 text-center text-slate-500 italic">No user activity recorded in this period.</TableCell></TableRow>
                                 ) : (
                                     filteredUsers.map((u: any) => (
                                         <TableRow key={u.userId} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
                                             <TableCell className="pl-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-8 w-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
-                                                        <UserCircle className="h-5 w-5" />
-                                                    </div>
+                                                <div className="flex flex-col gap-1">
                                                     <span className="font-semibold text-xs text-slate-900 dark:text-white capitalize">{u.userName || "Anonymous"}</span>
+                                                    <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">{u.userEmail}</span>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-xs text-slate-500 dark:text-slate-400 font-mono">{u.userEmail}</TableCell>
+                                            <TableCell className="py-4">
+                                                <Badge variant="outline" className="text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                                                    {u.employeeId || "-"}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono text-xs font-medium text-slate-500">{u.totalOrders.toLocaleString()}</TableCell>
                                             <TableCell>
                                                 <Badge variant="outline" className="text-[10px] font-medium border-slate-200 dark:border-slate-800">{u.branchName || "Unassigned"}</Badge>
                                             </TableCell>

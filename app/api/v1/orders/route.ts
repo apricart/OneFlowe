@@ -340,13 +340,37 @@ export async function POST(req: NextRequest) {
     ).limit(1)
     const budget = budgetRows[0]
 
-    if (!budget) {
-      return NextResponse.json({
-        error: `Budget not configured for current month (${currentMonth}). Please contact head office to allocate budget.`
-      }, { status: 400 })
+    let currentBudget = budget
+    if (!currentBudget) {
+      // Check if branch has a baseline budget to auto-initialize
+      const [branchData] = await db.select({ 
+        baselineBudgetCents: branches.baselineBudgetCents,
+        organizationId: branches.organizationId 
+      })
+      .from(branches)
+      .where(eq(branches.id, branchId))
+      .limit(1)
+
+      if (branchData?.baselineBudgetCents && branchData.baselineBudgetCents > 0) {
+        // Auto-initialize budget from baseline
+        const [newBudget] = await db.insert(budgets).values({
+          organizationId: branchData.organizationId,
+          branchId,
+          period: currentMonth,
+          amountAllocatedCents: branchData.baselineBudgetCents,
+          amountSpentCents: 0,
+          amountHeldCents: 0,
+          amountCreditedCents: 0,
+        }).returning()
+        currentBudget = newBudget
+      } else {
+        return NextResponse.json({
+          error: `Budget not configured for current month (${currentMonth}). Please contact head office to allocate budget.`
+        }, { status: 400 })
+      }
     }
 
-    const remaining = (budget.amountAllocatedCents + budget.amountCreditedCents) - (budget.amountSpentCents + budget.amountHeldCents)
+    const remaining = (currentBudget.amountAllocatedCents + currentBudget.amountCreditedCents) - (currentBudget.amountSpentCents + currentBudget.amountHeldCents)
 
     // Prevent negative budgets
     if (remaining < 0) {
@@ -449,7 +473,7 @@ export async function POST(req: NextRequest) {
         // Don't fail the order if receipt generation fails
       }
 
-      const budgetId = budget?.id
+      const budgetId = currentBudget?.id
       if (!budgetId) throw new Error("Budget ID missing")
 
       await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} + ${total}` }).where(eq(budgets.id, budgetId))
