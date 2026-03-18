@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, orderItems, branches, users, globalProducts, categories, refundItems, groups } from "@/db/schema"
-import { and, eq, gte, lte, inArray, desc, leftJoin } from "drizzle-orm"
+import { and, eq, gte, lte, inArray, desc } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
     try {
