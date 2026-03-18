@@ -25,10 +25,10 @@ export async function GET(req: NextRequest) {
 
         // RBAC Context Parsing
         let branchIds: number[] = []
-        if (branchIdsParam) {
+        if (branchIdsParam && branchIdsParam.trim() !== "") {
             branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {
-            branchIds = [userBranchId]
+            if (userBranchId) branchIds = [userBranchId]
         } else {
             const b = await db.select({ id: branches.id }).from(branches).where(userOrgId ? eq(branches.organizationId, userOrgId) : undefined)
             branchIds = b.map(br => br.id)
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "No branches resolved" }, { status: 400 })
         }
 
-        let startDate = startDateParam ? new Date(startDateParam) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        let startDate = startDateParam ? new Date(startDateParam) : new Date()
         let endDate = endDateParam ? new Date(endDateParam) : new Date()
         startDate.setHours(0, 0, 0, 0)
         endDate.setHours(23, 59, 59, 999)
@@ -82,51 +82,51 @@ export async function GET(req: NextRequest) {
 
         // Get refund data for calculating exact valid quantities
         const validOrderItemIds = results.map(r => r.orderItemId)
-        let refundQuantities: Record<number, number> = {}
+        let refundQuantities: Record<number, { qty: number; amount: number }> = {}
 
         if (validOrderItemIds.length > 0) {
             const refundsObj = await db
                 .select({
                     orderItemId: refundItems.orderItemId,
                     qty: refundItems.quantity,
+                    amount: refundItems.amountCents,
                 })
                 .from(refundItems)
                 .where(inArray(refundItems.orderItemId, validOrderItemIds))
 
             refundQuantities = refundsObj.reduce((acc, curr) => {
                 if (curr.orderItemId) {
-                    acc[curr.orderItemId] = (acc[curr.orderItemId] || 0) + curr.qty
+                    acc[curr.orderItemId] = {
+                        qty: (acc[curr.orderItemId]?.qty || 0) + curr.qty,
+                        amount: (acc[curr.orderItemId]?.amount || 0) + (curr.amount || 0)
+                    }
                 }
                 return acc
-            }, {} as Record<number, number>)
+            }, {} as Record<number, { qty: number, amount: number }>)
         }
 
         const flattened = results.map(row => {
-            // ... (keep existing mapping logic)
-            // I'll use ReplacementContent instead of trying to match the whole map
-            const refundedCount = refundQuantities[row.orderItemId] || 0
+            const refundData = refundQuantities[row.orderItemId] || { qty: 0, amount: 0 }
+            const totalItemValue = row.qtyOrdered * row.priceCents
 
-            let qtyDelivered = 0
+            // Cap refunds at item total to prevent "Refund > Subtotal" errors
+            const valueRefundedCents = Math.min(totalItemValue, refundData.amount || (refundData.qty * row.priceCents))
+            const effectiveRefundedQty = Math.min(row.qtyOrdered, refundData.qty)
+
+            let qtyDelivered = row.qtyOrdered
             let valueFulfilledCents = 0
-            let valueRefundedCents = 0
             let valueRejectedCents = 0
             let valuePendingCents = 0
 
-            const totalItemValue = row.qtyOrdered * row.priceCents
-
-            if (row.status === 'FULFILLED') {
-                qtyDelivered = row.qtyOrdered
-                valueFulfilledCents = totalItemValue
-            } else if (row.status === 'APPROVED') {
-                valuePendingCents = totalItemValue
-            } else if (row.status === 'REFUNDED') {
-                qtyDelivered = Math.max(0, row.qtyOrdered - refundedCount)
-                valueFulfilledCents = qtyDelivered * row.priceCents
-                valueRefundedCents = refundedCount * row.priceCents
+            if (row.status === 'FULFILLED' || row.status === 'REFUNDED' || row.status === 'APPROVED') {
+                qtyDelivered = Math.max(0, row.qtyOrdered - effectiveRefundedQty)
+                valueFulfilledCents = Math.max(0, totalItemValue - valueRefundedCents)
             } else if (row.status === 'REJECTED' || row.status === 'CANCELLED') {
                 valueRejectedCents = totalItemValue
+                qtyDelivered = 0
             } else if (row.status === 'PENDING') {
                 valuePendingCents = totalItemValue
+                qtyDelivered = 0
             }
 
             return {
@@ -148,6 +148,10 @@ export async function GET(req: NextRequest) {
                 qtyOrdered: row.qtyOrdered,
                 qtyDelivered: qtyDelivered,
                 priceCents: row.priceCents,
+                subtotalCents: totalItemValue,
+                refundAmountCents: valueRefundedCents,
+                netTotalCents: (row.status === 'REJECTED' || row.status === 'CANCELLED') ? 0 : valueFulfilledCents,
+                valueFulfilledCents,
                 valueDeliveredCents: valueFulfilledCents,
                 valueRefundedCents,
                 valueRejectedCents,
@@ -160,7 +164,7 @@ export async function GET(req: NextRequest) {
         if (compare && startDateParam && endDateParam) {
             let prevStart: Date
             let prevEnd: Date
-            
+
             if (compareStartDateParam && compareEndDateParam) {
                 prevStart = new Date(compareStartDateParam)
                 prevEnd = new Date(compareEndDateParam)
@@ -190,7 +194,7 @@ export async function GET(req: NextRequest) {
                     )
                 )
 
-            const compFulfilled = compResults.filter(r => ['FULFILLED', 'REFUNDED'].includes(r.status || ""))
+            const compFulfilled = compResults.filter(r => ['FULFILLED', 'REFUNDED', 'APPROVED'].includes(r.status || ""))
             const compRejected = compResults.filter(r => ['REJECTED', 'CANCELLED'].includes(r.status || ""))
 
             comparisonSummary = {
