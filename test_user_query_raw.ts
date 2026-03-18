@@ -50,7 +50,7 @@ async function run() {
 
         const res = await client.query(sql, [branchIds, startDate, endDate]);
         console.log('Query Result Count:', res.rowCount);
-if (res.rowCount > 0) {
+        if (res.rowCount && res.rowCount > 0) {
             console.log('Sample Results:', res.rows.slice(0, 5));
         }
 
