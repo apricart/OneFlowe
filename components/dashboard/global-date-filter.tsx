@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns"
-import { X } from "lucide-react"
+import { X, Loader2 } from "lucide-react"
 import type { DateRange } from "@/lib/hooks/use-sales-performance"
 
 export type MonthPreset = "jan" | "feb" | "mar" | "apr" | "may" | "jun" | "jul" | "aug" | "sep" | "oct" | "nov" | "dec"
@@ -74,7 +74,9 @@ export function getPresetRange(preset: FilterPreset): DateRange {
         case "yearly":
             return { startDate: startOfYear(now), endDate: endOfYear(now) }
         case "all":
-            return { startDate: new Date("2000-01-01"), endDate: endOfDay(now) }
+            // Fallback if earliestDate is not provided by the component state
+            // Default to start of 2024 as a more reasonable recent beginning for this system
+            return { startDate: new Date("2024-01-01"), endDate: endOfDay(now) }
         default:
             return { startDate: startOfDay(now), endDate: endOfDay(now) }
     }
@@ -97,13 +99,32 @@ import { cn } from "@/lib/utils"
 export function GlobalDateFilter({ value, onChange, activePreset, className, hidePresets, compare, compareRange }: GlobalDateFilterProps) {
     const [calendarOpen, setCalendarOpen] = useState(false)
     const [compareCalendarOpen, setCompareCalendarOpen] = useState(false)
+    const [earliestDate, setEarliestDate] = useState<Date | null>(null)
+
+    useEffect(() => {
+        const fetchEarliest = async () => {
+            try {
+                const res = await fetch('/api/v1/analytics/earliest-record')
+                const data = await res.json()
+                if (data.earliestDate) {
+                    setEarliestDate(new Date(data.earliestDate))
+                }
+            } catch (e) {
+                console.error("Failed to fetch earliest record:", e)
+            }
+        }
+        fetchEarliest()
+    }, [])
 
     const handleSelectPreset = (preset: FilterPreset) => {
         if (preset === "custom") {
             setCalendarOpen(true)
             return
         }
-        const range = getPresetRange(preset)
+        let range = getPresetRange(preset)
+        if (preset === "all" && earliestDate) {
+            range = { startDate: startOfDay(earliestDate), endDate: endOfDay(new Date()) }
+        }
         onChange(range, preset, compare, compareRange)
     }
 

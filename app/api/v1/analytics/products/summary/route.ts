@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, branches, users, groups, categories, globalProducts, organizations } from "@/db/schema"
+import { orders, orderItems, branches, users, groups, categories, globalProducts, organizations, refundItems } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
@@ -132,6 +132,7 @@ export async function GET(req: NextRequest) {
             const data = await db
                 .select({
                     orderDate: orders.createdAt,
+                    tid: orders.tid,
                     userEmail: users.email,
                     employeeId: users.id,
                     groupName: groups.name,
@@ -143,7 +144,8 @@ export async function GET(req: NextRequest) {
                     branchName: branches.name,
                     quantity: orderItems.quantity,
                     priceCents: orderItems.priceCents,
-                    totalAmount: sql<number>`(${orderItems.priceCents} * ${orderItems.quantity})`.mapWith(Number),
+                    refundedQuantity: sql<number>`COALESCE(${refundItems.quantity}, 0)`.mapWith(Number),
+                    refundAmountCents: sql<number>`COALESCE(${refundItems.amountCents}, 0)`.mapWith(Number),
                     orderStatus: orders.status,
                     orderId: orders.id
                 })
@@ -155,6 +157,7 @@ export async function GET(req: NextRequest) {
                 .leftJoin(groups, eq(branches.groupId, groups.id))
                 .leftJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
                 .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+                .leftJoin(refundItems, eq(orderItems.id, refundItems.orderItemId))
                 .where(conditions.length > 0 ? and(...conditions) : undefined)
                 .orderBy(desc(orders.createdAt))
                 .limit(5000)

@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw, Trash2 } from "lucide-react"
-import { formatPKR } from "@/lib/utils"
+import { formatPKR, cn } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -43,6 +43,7 @@ export default function BudgetsPage() {
   const [showEmptyDialog, setShowEmptyDialog] = useState(false)
   const [showEmptyAllDialog, setShowEmptyAllDialog] = useState(false)
   const [emptyingBudget, setEmptyingBudget] = useState<BudgetAllocation | null>(null)
+  const [allocationType, setAllocationType] = useState<"monthly" | "addon">("addon")
 
   // Build endpoint respecting context (organization scope)
   const budgetsEndpoint = useMemo(() => {
@@ -86,6 +87,7 @@ export default function BudgetsPage() {
   const handleEditBudget = (budget: BudgetAllocation) => {
     setEditingBudget(budget)
     setNewAmount("") // Start with empty field since we're adding, not replacing
+    setAllocationType("addon")
     setShowDialog(true)
   }
 
@@ -103,6 +105,7 @@ export default function BudgetsPage() {
         body: JSON.stringify({
           branchId: editingBudget.branchId,
           amountAllocatedCents: amountCents,
+          type: allocationType,
         })
       })
 
@@ -494,10 +497,48 @@ export default function BudgetsPage() {
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
           <DialogHeader>
-            <DialogTitle className="text-slate-900 dark:text-white">Add to Monthly Budget</DialogTitle>
-            <DialogDescription className="text-slate-600 dark:text-slate-400">Add budget allocation for {editingBudget?.branchName}. The amount will be ADDED to the existing budget.</DialogDescription>
+            <DialogTitle className="text-slate-900 dark:text-white">Allocate Budget</DialogTitle>
+            <DialogDescription className="text-slate-600 dark:text-slate-400">Configure budget allocation for {editingBudget?.branchName}.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => setAllocationType("monthly")}
+                className={cn(
+                  "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                  allocationType === "monthly"
+                    ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                )}
+              >
+                Monthly Base
+              </button>
+              <button
+                onClick={() => setAllocationType("addon")}
+                className={cn(
+                  "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                  allocationType === "addon"
+                    ? "bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                )}
+              >
+                One-time Add-on
+              </button>
+            </div>
+
+            {allocationType === "monthly" ? (
+              <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/30 rounded-lg">
+                <p className="text-[11px] text-indigo-700 dark:text-indigo-300 font-medium">
+                  <strong>Monthly Base:</strong> This sets the recurring baseline budget for this branch. It will persist every month.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/30 rounded-lg">
+                <p className="text-[11px] text-amber-700 dark:text-amber-300 font-medium">
+                  <strong>One-time Add-on:</strong> This adds extra budget for the current month ONLY. It will reset at the end of the month.
+                </p>
+              </div>
+            )}
             <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-lg space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Monthly Budget</span>
@@ -514,22 +555,31 @@ export default function BudgetsPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-900 dark:text-white">Amount to Add (PKR)</label>
+              <label className="block text-sm font-semibold mb-2 text-slate-900 dark:text-white">
+                {allocationType === "monthly" ? "New Baseline Amount (PKR)" : "Amount to Add (PKR)"}
+              </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">PKR</span>
                 <Input type="number" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-12 text-lg font-bold h-11" />
               </div>
               <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 font-medium">
-                New remaining will be: {formatPKR((editingBudget?.remainingCents || 0) / 100 + parseFloat(newAmount || "0"))}
+                {allocationType === "monthly"
+                  ? `Branch baseline will be updated to ${formatPKR(parseFloat(newAmount || "0"))}`
+                  : `New total budget will be: ${formatPKR((editingBudget?.amountAllocatedCents || 0) / 100 + parseFloat(newAmount || "0"))}`
+                }
               </p>
-              <p className="text-xs text-muted-foreground mt-1">This amount will be added to the current budget allocation</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {allocationType === "monthly"
+                  ? "Changes will affect future months automatically."
+                  : "This amount will be added to the current month's allocation."}
+              </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
-            <Button onClick={handleSaveBudget} className="gap-2">
+            <Button onClick={handleSaveBudget} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white">
               <CheckCircle2 className="h-4 w-4" />
-              Save Monthly Budget
+              {allocationType === "monthly" ? "Update Baseline" : "Apply Add-on"}
             </Button>
           </DialogFooter>
         </DialogContent>

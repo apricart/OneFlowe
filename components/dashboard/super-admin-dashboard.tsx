@@ -95,7 +95,7 @@ export function SuperAdminDashboard() {
     setSelectedBranchIds([])
   }, [])
 
-  const totalRevenue = perfData?.totalSales ?? 0
+  const totalRevenue = perfData?.totalNetSales ?? perfData?.totalSales ?? 0
   const totalOrders = perfData?.totalOrders ?? 0
   const fulfilledCount = fulfilledData?.totalOrders ?? 0
   const refundedCount = refundedData?.totalOrders || 0
@@ -117,7 +117,7 @@ export function SuperAdminDashboard() {
 
   // Trend Calculations for all KPI cards
   const revenueTrend = useMemo(() => buildTrend(
-    totalRevenue, perfData?.comparison?.totalSales,
+    totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales,
     (v) => formatPKR(v, { maximumFractionDigits: 0 })
   ), [buildTrend, totalRevenue, perfData?.comparison])
 
@@ -303,6 +303,7 @@ export function SuperAdminDashboard() {
         branchId={branchId}
         branchIds={selectedBranchIds}
         defaultDateRange={dateRange}
+        activePreset={activePreset}
         compare={compare}
         compareRange={compareRange}
       />

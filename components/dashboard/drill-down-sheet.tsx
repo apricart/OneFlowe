@@ -27,7 +27,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     Loader2, Calendar, AlertCircle, CheckCircle2, Package, TrendingUp,
-    ArrowUpRight, ArrowDownRight, Activity, Zap, Clock, Award, Hash, Search, Info, Box, ChevronRight, ArrowDownAZ, ArrowDown01
+    ArrowUpRight, ArrowDownRight, Activity, Zap, Clock, Award, Hash, Search, Info, Box, ChevronRight, ArrowDownAZ, ArrowDown01,
+    User, RotateCcw
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
@@ -47,6 +48,7 @@ interface DrillDownSheetProps {
     title?: string
     compare?: boolean
     compareRange?: DateRange | null
+    activePreset?: FilterPreset
 }
 
 const TYPE_CONFIG = {
@@ -143,7 +145,8 @@ export function DrillDownSheet({
     defaultDateRange,
     title,
     compare,
-    compareRange
+    compareRange,
+    activePreset: parentActivePreset
 }: DrillDownSheetProps): React.ReactElement | null {
     // Internal localized date range state for the drill down
     const [localDateRange, setLocalDateRange] = useState<DateRange | null>(null)
@@ -157,11 +160,11 @@ export function DrillDownSheet({
         if (isOpen) {
             setLocalDateRange(defaultDateRange || null)
             setLocalCompareRange(compareRange || null)
-            setActivePreset(defaultDateRange ? "custom" : "today")
+            setActivePreset(parentActivePreset || (defaultDateRange ? "custom" : "today"))
             setExpandedRow(null)
             setSortBy("date")
         }
-    }, [isOpen, defaultDateRange, compareRange])
+    }, [isOpen, defaultDateRange, compareRange, parentActivePreset])
 
     const url = useMemo(() => {
         if (!isOpen || !type) return null
@@ -239,13 +242,9 @@ export function DrillDownSheet({
                             <div>
                                 <h2 className="text-2xl font-black tracking-tighter text-slate-900 dark:text-white uppercase italic">
                                     {title || config.title}
+                                    {activePreset === "all" && " (All Time)"}
+                                    {activePreset === "yearly" && " (This Year)"}
                                 </h2>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <Badge variant="outline" className="text-[10px] font-bold border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-900/20">
-                                        <Activity className="w-3 h-3 mr-1" />
-                                        {items.length} REAL-TIME AUDITS
-                                    </Badge>
-                                </div>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -347,19 +346,11 @@ export function DrillDownSheet({
                                     <BIInsightCard 
                                         title="Refund Rate" 
                                         value={`${summary.refundRate.toFixed(1)}%`} 
-                                        trend={summary.refundRate > 5 ? "+ Portal Integrity" : "- Healthy"} 
+                                        subvalue={`Total: ${formatPKR(summary.grossRevenue - summary.netRevenue)}`}
+                                        trend={summary.refundRate > 5 ? undefined : "- Healthy"} 
                                         icon={AlertCircle} 
                                         colorClass={summary.refundRate > 5 ? "border-rose-100 dark:border-rose-900/30" : ""} 
                                     />
-                                    <BIInsightCard 
-                                        title="Portal Integrity" 
-                                        value={formatPKR(summary.leakage)} 
-                                        subvalue={`Inc. ${formatPKR(summary.discountImpact)} discounts`} 
-                                        trend={comparison ? getTrend(summary.leakage, comparison.leakage) : undefined}
-                                        icon={Zap} 
-                                        colorClass="border-rose-100 dark:border-rose-900/30" 
-                                    />
-                                    <BIInsightCard title="Peak Hours" value={summary.peakPeriod} subvalue="Highest yield window" icon={Clock} />
                                 </>
                             )}
                             {type === "ORDERS" && (
@@ -493,8 +484,74 @@ export function DrillDownSheet({
                                                         initial={{ opacity: 0, height: 0 }}
                                                         animate={{ opacity: 1, height: "auto" }}
                                                         exit={{ opacity: 0, height: 0 }}
-                                                        className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4"
+                                                        className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-4"
                                                     >
+                                                        {/* ━━━ CUSTOMER & TRANSIT AUDIT ━━━ */}
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            <div className="p-3 rounded-xl bg-indigo-50/30 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/30">
+                                                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 mb-2">Customer Information</h4>
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center border border-indigo-100 dark:border-indigo-900">
+                                                                        <User className="w-4 h-4 text-indigo-500" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs font-bold text-slate-900 dark:text-white">{item.buyerName}</p>
+                                                                        <p className="text-[10px] text-slate-500">{item.buyerPhone}</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                                                                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Network Origin</h4>
+                                                                <div className="grid grid-cols-2 gap-2">
+                                                                    <div>
+                                                                        <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">Company</p>
+                                                                        <p className="text-xs font-black text-slate-900 dark:text-white truncate">{item.organizationName}</p>
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-[9px] font-bold text-slate-400 uppercase leading-none mb-1">Branch</p>
+                                                                        <p className="text-xs font-black text-indigo-600 dark:text-indigo-400 truncate">{item.branchName}</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* ━━━ ITEMIZED COMPOSITION ━━━ */}
+                                                        <div className="space-y-2">
+                                                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Itemized Composition</h4>
+                                                            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+                                                                <table className="w-full text-left text-[11px]">
+                                                                    <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
+                                                                        <tr>
+                                                                            <th className="px-3 py-2 font-bold text-slate-500 uppercase tracking-widest">Product</th>
+                                                                            <th className="px-3 py-2 font-bold text-slate-500 uppercase tracking-widest text-center">Qty</th>
+                                                                            <th className="px-3 py-2 font-bold text-slate-500 uppercase tracking-widest text-right">Price</th>
+                                                                            <th className="px-3 py-2 font-bold text-slate-500 uppercase tracking-widest text-right">Total</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950">
+                                                                        {item.items?.map((prod: any) => (
+                                                                            <tr key={prod.id} className="group/row hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
+                                                                                <td className="px-3 py-2">
+                                                                                    <div className="font-bold text-slate-900 dark:text-slate-100">{prod.name}</div>
+                                                                                    {prod.refundQuantity > 0 && (
+                                                                                        <div className="text-[9px] text-rose-500 font-black uppercase mt-0.5 flex items-center gap-1">
+                                                                                            <RotateCcw className="w-2.5 h-2.5" /> Refunded {prod.refundQuantity} Units
+                                                                                        </div>
+                                                                                    )}
+                                                                                </td>
+                                                                                <td className="px-3 py-2 text-center font-medium">x{prod.quantity}</td>
+                                                                                <td className="px-3 py-2 text-right text-slate-500 tabular-nums">{formatPKR(prod.price)}</td>
+                                                                                <td className="px-3 py-2 text-right font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                                                                                    {formatPKR(prod.price * prod.quantity)}
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                         <div className="space-y-3">
                                                             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Order Composition</h4>
                                                             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
@@ -544,6 +601,7 @@ export function DrillDownSheet({
                                                                         {item.status}
                                                                     </Badge>
                                                                 </div>
+                                                            </div>
                                                             </div>
                                                         </div>
                                                     </motion.div>

@@ -88,7 +88,7 @@ export function BranchAdminDashboard() {
   const rejectedCount = rejectedData?.totalOrders ?? 0
   const approvedCount = approvedData?.totalOrders ?? 0
 
-  const periodPurchases = perfData?.totalSales ?? 0
+  const periodPurchases = perfData?.totalNetSales ?? perfData?.totalSales ?? 0
   const periodOrders = perfData?.totalOrders ?? 0
 
   return (
@@ -116,7 +116,7 @@ export function BranchAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
           onClick={() => handleKPIOpen("REVENUE")}
-          comparisonValue={compare && perfData?.comparison ? formatPKR(perfData.comparison.totalSales) : undefined}
+          comparisonValue={compare && perfData?.comparison ? formatPKR(perfData.comparison.totalNetSales ?? perfData.comparison.totalSales) : undefined}
           comparisonLabel="Prev"
         />
         <BankingKPICard
@@ -207,6 +207,7 @@ export function BranchAdminDashboard() {
         organizationId={organizationId}
         branchId={branchId}
         defaultDateRange={dateRange}
+        activePreset={activePreset}
         title={drillDownType === "REVENUE" ? "Purchases Insights" : undefined}
       />
     </main>

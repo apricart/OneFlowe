@@ -8,18 +8,27 @@ import { getRequestScope } from "@/lib/auth"
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 
 export async function GET(req: NextRequest) {
-    const err = await requireApiRole(allowedRoles as any)
-    if (err) return err
+    try {
+        const err = await requireApiRole(allowedRoles as any)
+        if (err) return err
 
-    const scope = await getRequestScope()
-    if (!scope?.userId) return error("Unauthorized", 401)
+        const scope = await getRequestScope()
+        if (!scope?.userId) return error("Unauthorized", 401)
 
-    const userSchedules = await db
-        .select()
-        .from(scheduledReports)
-        .where(eq(scheduledReports.userId, scope.userId))
+        const userSchedules = await db
+            .select()
+            .from(scheduledReports)
+            .where(eq(scheduledReports.userId, scope.userId))
 
-    return ok(userSchedules)
+        return ok(userSchedules)
+    } catch (e: any) {
+        console.error("Schedule Fetch Error:", e)
+        // If table doesn't exist, return empty array instead of 500ing
+        if (e.message?.includes('relation "scheduled_reports" does not exist')) {
+            return ok([])
+        }
+        return error(e.message || "Failed to fetch schedules", 500)
+    }
 }
 
 export async function POST(req: NextRequest) {

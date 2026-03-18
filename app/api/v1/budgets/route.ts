@@ -211,7 +211,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
     }
 
-    const { branchId, amountAllocatedCents, setAbsolute } = body
+    const { branchId, amountAllocatedCents, setAbsolute, type = "addon" } = body
 
     // Validate required fields
     if (!branchId) {
@@ -262,6 +262,62 @@ export async function PUT(req: NextRequest) {
       .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
       .limit(1)
 
+    if (type === "monthly") {
+      // Update baseline on the branch record
+      await db.update(branches)
+        .set({
+          baselineBudgetCents: amountAllocatedCents,
+          updatedAt: new Date(),
+        })
+        .where(eq(branches.id, branchId))
+
+      // If budget record exists for current month, we might want to reconcile it
+      // For simplicity, if it exists, we update it IF it was just using the old baseline
+      if (budget) {
+        await db.update(budgets)
+          .set({
+            amountAllocatedCents,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
+      } else {
+        // Create it if it doesn't exist
+        await db.insert(budgets).values({
+          organizationId: branch.organizationId,
+          branchId,
+          period: currentMonth,
+          amountAllocatedCents,
+          amountSpentCents: 0,
+          amountHeldCents: 0,
+          amountCreditedCents: 0,
+        })
+      }
+
+      // Log action
+      try {
+        await db.insert(auditLogs).values({
+          userId,
+          organizationId: branch.organizationId,
+          action: "UPDATE_BRANCH_BASELINE",
+          entity: "BRANCH",
+          entityId: String(branchId),
+          metadata: {
+            branchName: branch.name,
+            oldBaseline: (branch.baselineBudgetCents || 0) / 100,
+            newBaseline: amountAllocatedCents / 100,
+          },
+        })
+      } catch (auditError) {
+        logError(auditError, 'BUDGETS_AUDIT_LOG')
+      }
+
+      return NextResponse.json({
+        message: "Baseline budget updated successfully",
+        baseline: amountAllocatedCents / 100
+      })
+    }
+
+    // Default 'addon' logic (current month only)
     if (budget) {
       const oldAmount = budget.amountAllocatedCents
       let newAmount: number
@@ -294,7 +350,7 @@ export async function PUT(req: NextRequest) {
         updatedAt: new Date(),
       }
 
-      console.log(`[BUDGETS] Processing PUT request for branchId: ${branchId}, amount: ${amountAllocatedCents / 100} PKR, setAbsolute: ${setAbsolute}`)
+      console.log(`[BUDGETS] Processing PUT request for branchId: ${branchId}, amount: ${amountAllocatedCents / 100} PKR, setAbsolute: ${setAbsolute}, type: ${type}`)
 
       const isReset = setAbsolute && amountAllocatedCents === 0
 

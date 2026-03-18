@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import { eq, and, gte, lte, desc, sql, inArray } from "drizzle-orm"
 import { requireApiRole, ok, error } from "@/lib/api"
 import { db } from "@/lib/db"
-import { orders, users, orderItems, branches } from "@/db/schema"
+import { orders, users, orderItems, branches, organizations, refundItems } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
@@ -108,16 +108,59 @@ export async function GET(req: NextRequest) {
             fulfilledAt: orders.fulfilledAt,
             branchId: orders.branchId,
             branchName: branches.name,
+            organizationName: organizations.name,
             receiptData: orders.receiptData,
         })
             .from(orders)
             .leftJoin(branches, eq(orders.branchId, branches.id))
+            .leftJoin(organizations, eq(orders.organizationId, organizations.id))
             .where(whereClause)
             .orderBy(sortBy === "value" ? desc(orders.totalCents) : desc(orders.createdAt))
             .limit(1000) // Increase limit for aggregation accuracy
 
-        // Fetch order item counts in bulk
+        // Fetch order items & refunds in bulk for the top 100 display items
         const orderIds = rawData.map(o => o.id)
+        const displayOrderIds = orderIds.slice(0, 100)
+        let detailedItemsMap: Record<number, any[]> = {}
+        if (displayOrderIds.length > 0) {
+            const allItems = await db.select({
+                id: orderItems.id,
+                orderId: orderItems.orderId,
+                productName: orderItems.productName,
+                quantity: orderItems.quantity,
+                priceCents: orderItems.priceCents,
+                refundQuantity: sql<number>`COALESCE(${refundItems.quantity}, 0)`.mapWith(Number),
+                refundAmountCents: sql<number>`COALESCE(${refundItems.amountCents}, 0)`.mapWith(Number)
+            })
+                .from(orderItems)
+                .leftJoin(refundItems, eq(orderItems.id, refundItems.orderItemId))
+                .where(inArray(orderItems.orderId, displayOrderIds))
+
+            detailedItemsMap = allItems.reduce((acc, curr) => {
+                if (curr.orderId) {
+                    if (!acc[curr.orderId]) acc[curr.orderId] = []
+                    
+                    const existing = acc[curr.orderId].find(i => i.name === curr.productName)
+                    if (existing) {
+                        existing.quantity += curr.quantity
+                        existing.refundQuantity += curr.refundQuantity
+                        existing.refundAmount += curr.refundAmountCents / 100
+                    } else {
+                        acc[curr.orderId].push({
+                            id: curr.id,
+                            name: curr.productName,
+                            quantity: curr.quantity,
+                            price: curr.priceCents / 100,
+                            refundQuantity: curr.refundQuantity,
+                            refundAmount: curr.refundAmountCents / 100
+                        })
+                    }
+                }
+                return acc
+            }, {} as Record<number, any[]>)
+        }
+
+        // Fetch counts for ALL returned orders for correct aggregation
         let itemCounts: Record<number, number> = {}
         if (orderIds.length > 0) {
             const counts = await db.select({
@@ -235,12 +278,16 @@ export async function GET(req: NextRequest) {
                 status: order.status,
                 date: order.createdAt,
                 branchName: order.branchName,
+                organizationName: order.organizationName || order.receiptData?.organizationName,
                 netValue,
                 grossValue: gross,
                 refundAmount: refund,
                 skuCount: itemCounts[order.id] || 0,
-                customerLevel: (order.id % 5 === 0) ? "VIP" : "Regular", // Pseudo logic for demo
-                preparationTime: prepTimeStr
+                customerLevel: (order.id % 5 === 0) ? "VIP" : "Regular",
+                preparationTime: prepTimeStr,
+                buyerName: order.receiptData?.buyerName || "Walk-in Customer",
+                buyerPhone: order.receiptData?.buyerPhone || "N/A",
+                items: detailedItemsMap[order.id] || []
             }
         })
 

@@ -90,7 +90,7 @@ export const BankingKPICard = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {trend && (
+                    {trend && trendValue !== "0.0%" && (
                         <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border backdrop-blur-sm ${isPositive
                             ? 'bg-emerald-50/80 border-emerald-200/60 dark:bg-emerald-900/20 dark:border-emerald-800/60'
                             : 'bg-red-50/80 border-red-200/60 dark:bg-red-900/20 dark:border-red-800/60'
@@ -125,9 +125,9 @@ export const BankingKPICard = ({
                         {subtitle}
                     </p>
                 )}
-                {comparisonValue && (
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                        {comparisonLabel}: <span className="font-semibold text-slate-500 dark:text-slate-400">{comparisonValue}</span>
+                {comparisonValue && trendValue !== "0.0%" && (
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 italic">
+                        {comparisonLabel}: <span className="font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-tighter">{comparisonValue}</span>
                     </p>
                 )}
             </div>

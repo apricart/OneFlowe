@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
                 userId: users.id,
                 userName: users.fullName,
                 userEmail: users.email,
-                employeeId: users.employeeId,
+                employeeId: sql<string>`COALESCE(${users.employeeId}, SPLIT_PART(${users.id}::text, '-', 1))`,
                 branchName: branches.name,
                 totalOrders: sql<number>`count(${orders.id})`,
                 fulfilledOrders: sql<number>`count(CASE WHEN ${orders.status} IN ('FULFILLED', 'APPROVED') THEN 1 END)`,

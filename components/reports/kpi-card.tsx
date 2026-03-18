@@ -108,7 +108,7 @@ export function KPICard({
                         <h3 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{value}</h3>
 
                         {/* Trend indicator */}
-                        {trend !== undefined && (
+                        {trend !== undefined && Math.abs(trend).toFixed(1) !== "0.0" && (
                             <div className="flex items-center gap-1.5 mt-1.5">
                                 <div className={cn(
                                     "flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold",
@@ -119,7 +119,7 @@ export function KPICard({
                                     {TrendIcon && <TrendIcon className="h-3 w-3" />}
                                     {Math.abs(trend).toFixed(1)}%
                                 </div>
-                                <span className="text-[10px] text-slate-400 dark:text-slate-500">vs prev period</span>
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">vs prior</span>
                             </div>
                         )}
 

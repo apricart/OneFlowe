@@ -21,6 +21,7 @@ export type SalesPerformanceResponse = {
     granularity: "hourly" | "daily" | "monthly" | "yearly"
     seriesData: SalesSeriesPoint[]
     totalSales: number
+    totalNetSales?: number
     totalOrders: number
     avgSales: number
     peakPeriod: { label: string; sales: number; orders: number } | null
@@ -28,9 +29,11 @@ export type SalesPerformanceResponse = {
     organizationSales?: { organizationId: number; organizationName: string; sales: number; orders: number }[]
     comparison?: {
         totalSales: number
+        totalNetSales?: number
         totalOrders: number
         totalItemsSold?: number
         fulfilledCount?: number
+        fulfilledNetSales?: number
         refundedCount?: number
         rejectedCount?: number
         approvedCount?: number

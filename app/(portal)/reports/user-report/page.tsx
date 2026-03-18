@@ -51,7 +51,7 @@ export default function UserReportPage() {
     const [hasMounted, setHasMounted] = useState(false)
 
     // URL States for filtering
-    const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "thisMonth"
+    const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "all"
     const startFromUrl = searchParams.get("startDate") || ""
     const endFromUrl = searchParams.get("endDate") || ""
     const compareFromUrl = searchParams.get("compare") === "true"
@@ -151,9 +151,9 @@ export default function UserReportPage() {
     const successTrend = getTrend(currentSuccess, prevSuccess)
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Name", "Email", "Branch", "Total Orders", "Fulfilled", "Refunded", "Total Spent"]
+        const headers = ["Employee ID", "Name", "Email", "Branch", "Total Orders", "Fulfilled", "Refunded", "Total Spent"]
         const rows = filteredUsers.map((u: any) => [
-            u.userName, u.userEmail, u.branchName || 'N/A', u.totalOrders, u.fulfilledOrders, u.refundedOrders,
+            u.employeeId || "-", u.userName, u.userEmail, u.branchName || 'N/A', u.totalOrders, u.fulfilledOrders, u.refundedOrders,
             (u.totalSpentCents / 100).toFixed(2)
         ])
 
@@ -239,7 +239,7 @@ export default function UserReportPage() {
                             </div>
                             <div className="flex flex-col items-end gap-1">
                                 <Badge variant="secondary" className="text-[10px] font-bold">Active Transactors</Badge>
-                                {usersTrend && (
+                                {usersTrend && usersTrend.value !== "0.0" && (
                                     <div className={cn(
                                         "text-[10px] font-black tracking-tighter",
                                         usersTrend.isUp ? "text-emerald-500" : usersTrend.isDown ? "text-rose-500" : "text-slate-400"
@@ -267,7 +267,7 @@ export default function UserReportPage() {
                             </div>
                             <div className="flex flex-col items-end gap-1">
                                 <Badge variant="secondary" className="text-[10px] font-bold">Volume</Badge>
-                                {ordersTrend && (
+                                {ordersTrend && ordersTrend.value !== "0.0" && (
                                     <div className={cn(
                                         "text-[10px] font-black tracking-tighter",
                                         ordersTrend.isUp ? "text-emerald-500" : ordersTrend.isDown ? "text-rose-500" : "text-slate-400"
@@ -295,7 +295,7 @@ export default function UserReportPage() {
                             </div>
                             <div className="flex flex-col items-end gap-1">
                                 <Badge variant="secondary" className="text-[10px] font-bold">Success Rate</Badge>
-                                {successTrend && (
+                                {successTrend && successTrend.value !== "0.0" && (
                                     <div className={cn(
                                         "text-[10px] font-black tracking-tighter",
                                         successTrend.isUp ? "text-emerald-500" : successTrend.isDown ? "text-rose-500" : "text-slate-400"
@@ -325,7 +325,7 @@ export default function UserReportPage() {
                             </div>
                             <div className="flex flex-col items-end gap-1">
                                 <Badge className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 text-[10px] font-bold">Yield</Badge>
-                                {spentTrend && (
+                                {spentTrend && spentTrend.value !== "0.0" && (
                                     <div className={cn(
                                         "text-[10px] font-black tracking-tighter",
                                         spentTrend.isUp ? "text-emerald-500" : spentTrend.isDown ? "text-rose-500" : "text-slate-400"

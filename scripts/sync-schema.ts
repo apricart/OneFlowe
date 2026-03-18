@@ -96,6 +96,33 @@ async function syncSchema() {
       CREATE INDEX IF NOT EXISTS "order_items_product_idx" ON "order_items" USING btree ("global_product_id")
     `).catch((e) => console.log("ℹ️ Order items product index:", e.message))
 
+    // Create scheduled_reports table
+    console.log("📝 Creating scheduled_reports table...")
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "scheduled_reports" (
+        "id" SERIAL PRIMARY KEY,
+        "organization_id" INTEGER REFERENCES "organizations"("id"),
+        "user_id" UUID NOT NULL REFERENCES "users"("id"),
+        "report_name" VARCHAR(255) NOT NULL,
+        "frequency" VARCHAR(32) NOT NULL,
+        "format" VARCHAR(16) NOT NULL,
+        "emails" JSONB NOT NULL DEFAULT '[]',
+        "enabled" BOOLEAN NOT NULL DEFAULT true,
+        "last_executed_at" TIMESTAMP WITH TIME ZONE,
+        "created_at" TIMESTAMP WITH TIME ZONE DEFAULT now(),
+        "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT now()
+      )
+    `).catch((e) => console.log("ℹ️ Scheduled reports table:", e.message))
+
+    // Create indexes for scheduled_reports
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "scheduled_reports_user_idx" ON "scheduled_reports" USING btree ("user_id")
+    `).catch((e) => console.log("ℹ️ Scheduled reports user index:", e.message))
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "scheduled_reports_org_idx" ON "scheduled_reports" USING btree ("organization_id")
+    `).catch((e) => console.log("ℹ️ Scheduled reports org index:", e.message))
+
     await client.end()
 
     console.log("✅ Schema synced successfully!")

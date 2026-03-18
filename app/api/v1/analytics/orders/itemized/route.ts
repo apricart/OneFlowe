@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, branches, users, globalProducts, categories, refundItems } from "@/db/schema"
-import { and, eq, gte, lte, inArray, desc } from "drizzle-orm"
+import { orders, orderItems, branches, users, globalProducts, categories, refundItems, groups } from "@/db/schema"
+import { and, eq, gte, lte, inArray, desc, leftJoin } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
     try {
@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
                 userName: users.fullName,
                 userEmail: users.email,
                 branchName: branches.name,
+                groupName: groups.name,
                 itemCode: orderItems.productCode,
                 itemName: orderItems.productName,
                 itemUnit: orderItems.unit,
@@ -66,6 +67,7 @@ export async function GET(req: NextRequest) {
             .innerJoin(orders, eq(orderItems.orderId, orders.id))
             .innerJoin(users, eq(orders.createdByUserId, users.id))
             .innerJoin(branches, eq(orders.branchId, branches.id))
+            .leftJoin(groups, eq(branches.groupId, groups.id))
             .innerJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
             .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
             .where(
@@ -139,7 +141,8 @@ export async function GET(req: NextRequest) {
                 empNumber: row.userId.split('-')[0],
                 userName: row.userName || row.userEmail?.split('@')[0],
                 userEmail: row.userEmail,
-                group: row.branchName,
+                group: row.groupName,
+                branchName: row.branchName,
                 itemCode: row.itemCode || 'Unknown',
                 itemCategory: row.categoryName || 'Uncategorized',
                 itemDetails: row.itemName,

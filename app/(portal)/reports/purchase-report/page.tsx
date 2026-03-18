@@ -53,7 +53,7 @@ export default function PurchaseReportPage() {
   const [compareRange, setCompareRange] = useState<{ startDate: Date, endDate: Date } | null>(null)
 
   // Filters
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("all")
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
   const [selectedGroupId, setSelectedGroupId] = useState<string>("all")
 
   const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
@@ -63,8 +63,8 @@ export default function PurchaseReportPage() {
     if (compRange !== undefined) setCompareRange(compRange)
   }, [])
 
-  const handleBranchChange = useCallback((id: string) => {
-    setSelectedBranchId(id)
+  const handleBranchChange = useCallback((ids: string[]) => {
+    setSelectedBranchIds(ids)
   }, [])
 
   const handleGroupChange = useCallback((id: string) => {
@@ -77,8 +77,9 @@ export default function PurchaseReportPage() {
     if (organizationId) params.set("organizationId", organizationId)
     
     // Use multi-branch if selected in context, or specific branch if selected in report filter
-    if (selectedBranchId !== "all") {
-      params.set("branchId", selectedBranchId)
+    // Use multi-branch if selected in report filter, then context, or specific branch
+    if (selectedBranchIds.length > 0) {
+      params.set("branchIds", selectedBranchIds.join(","))
     } else if (contextBranchIds.length > 0) {
       params.set("branchIds", contextBranchIds.join(","))
     } else if (contextBranchId) {
@@ -99,7 +100,7 @@ export default function PurchaseReportPage() {
     }
     
     return params.toString()
-  }, [organizationId, contextBranchId, contextBranchIds, selectedBranchId, selectedGroupId, dateRange, compare, compareRange])
+  }, [organizationId, contextBranchId, contextBranchIds, selectedBranchIds, selectedGroupId, dateRange, compare, compareRange])
 
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/sales-performance?${queryParams}`, fetcher)
 
@@ -172,10 +173,9 @@ export default function PurchaseReportPage() {
           organizationId={organizationId || undefined}
         />
         <BranchFilter 
-          value={selectedBranchId} 
+          selectedIds={selectedBranchIds} 
           onChange={handleBranchChange}
           organizationId={organizationId || undefined}
-          groupId={selectedGroupId !== "all" ? selectedGroupId : undefined}
         />
         <div className="flex-1" />
         <ScheduleReportModal reportName="Purchase Report" />

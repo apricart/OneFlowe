@@ -197,7 +197,7 @@ export function HeadOfficeDashboard() {
 
   const allBranchesSelected = !contextBranchId && selectedBranchIds.length === 0
 
-  const totalPurchases = perfData?.totalSales ?? 0
+  const totalPurchases = perfData?.totalNetSales ?? perfData?.totalSales ?? 0
   const totalOrders = perfData?.totalOrders ?? 0
   const fulfilledCount = fulfilledData?.totalOrders ?? 0
   const refundedCount = refundedData?.totalOrders ?? 0
@@ -250,7 +250,7 @@ export function HeadOfficeDashboard() {
           trendValue={purchaseTrend ? `${purchaseTrend.value}%` : undefined}
           gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
           onClick={() => handleKPIOpen("REVENUE")}
-          comparisonValue={compare && summary ? formatPKR(summary.totalSales) : undefined}
+          comparisonValue={compare && summary ? formatPKR(summary.totalNetSales ?? summary.totalSales) : undefined}
           comparisonLabel="Prev"
         />
         <BankingKPICard
@@ -365,6 +365,7 @@ export function HeadOfficeDashboard() {
         branchId={contextBranchId}
         branchIds={selectedBranchIds}
         defaultDateRange={dateRange}
+        activePreset={activePreset}
         title={drillDownType === "REVENUE" ? "Purchases Insights" : undefined}
       />
     </main>

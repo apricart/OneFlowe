@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import useSWR from "swr"
+import { format } from "date-fns"
 import { fetcher } from "@/lib/fetcher"
 import { useAppContext } from "@/components/context/app-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,6 +30,8 @@ import {
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { RotateCcw } from "lucide-react"
 
 import {
     ResponsiveContainer,
@@ -65,10 +68,6 @@ interface BudgetSummaryResponse {
         remaining: number;
         utilization: number;
     }>;
-    dailySpending: Array<{
-        date: string;
-        spentCents: number;
-    }>;
     branchBreakdown: Array<{
         branchId: number;
         branchName: string;
@@ -77,6 +76,11 @@ interface BudgetSummaryResponse {
         held: number;
         remaining: number;
         utilization: number;
+        baselineAmount: number;
+    }>;
+    chartData: Array<{
+        date: string;
+        spentCents: number;
     }>;
 }
 
@@ -103,6 +107,7 @@ export default function BudgetSummaryPage() {
     const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "thisMonth"
     const startFromUrl = searchParams.get("startDate") || ""
     const endFromUrl = searchParams.get("endDate") || ""
+    const activeTab = searchParams.get("tab") || "analytics"
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -141,25 +146,26 @@ export default function BudgetSummaryPage() {
         queryParams.set("branchId", contextBranchId)
     }
 
+    const diffMs = dateRange ? (dateRange.endDate.getTime() - dateRange.startDate.getTime()) : 0;
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    const granularity: "daily" | "monthly" | "yearly" = activePreset === "all" ? "monthly" : diffDays > 365 ? "yearly" : diffDays > 31 ? "monthly" : "daily";
+    queryParams.set("granularity", granularity);
+
     const { data, isLoading, mutate } = useSWR<BudgetSummaryResponse>(`/api/v1/analytics/budgets/summary?${queryParams.toString()}`, fetcher)
 
     useEffect(() => {
         setHasMounted(true)
         setGeneratedDate(new Date().toLocaleString())
 
-        // If no explicit preset/dates, force month filter
+        // If no explicit preset/dates, force "All Time" filter
         if (!startFromUrl && !endFromUrl && !searchParams.has("preset")) {
-            const today = new Date()
-            const start = new Date(today.getFullYear(), today.getMonth(), 1)
-            const end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999)
-            handleDateChange({ startDate: start, endDate: end }, "thisMonth")
+            handleDateChange(null, "all")
         }
     }, [startFromUrl, endFromUrl, searchParams, handleDateChange])
 
     const summary = data?.summary || { totalAllocated: 0, totalSpent: 0, totalHeld: 0, totalCredited: 0, totalRemaining: 0 }
     const insights = data?.insights || { spentGrowth: 0, allocationGrowth: 0 }
     const categories = data?.categories || []
-    const dailySpending = data?.dailySpending || []
     const branchBreakdown = data?.branchBreakdown || []
 
     const filteredCategories = categories.filter((c: any) =>
@@ -170,13 +176,51 @@ export default function BudgetSummaryPage() {
         (b.branchName || "").toLowerCase().includes(searchTerm.toLowerCase())
     )
 
-    const chartData = useMemo(() => {
-        if (!dailySpending.length) return []
-        return dailySpending.map((d: any) => ({
-            date: new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-            spent: (d.spentCents || 0) / 100
-        }))
-    }, [dailySpending])
+    const transformedChartData = useMemo(() => {
+        if (!data?.chartData?.length) return []
+        return data.chartData.map((d: any) => {
+            const item: any = {
+                date: format(new Date(d.date + "-01"), granularity === "yearly" ? "yyyy" : "MMM yyyy"),
+                totalSpent: 0,
+                totalBaseline: 0,
+                totalAddon: 0
+            };
+            if (d.branches) {
+                d.branches.forEach((b: any) => {
+                    const baseline = b.baseline / 100;
+                    const addon = b.addon / 100;
+                    const spent = (b.spent || 0) / 100;
+                    item[`${b.branchId}_baseline`] = baseline;
+                    item[`${b.branchId}_addon`] = addon;
+                    item[`${b.branchId}_spent`] = spent;
+                    item.totalSpent += spent;
+                    item.totalBaseline += baseline;
+                    item.totalAddon += addon;
+                });
+            }
+            return item;
+        })
+    }, [data?.chartData, granularity])
+
+    const uniqueBranches = useMemo(() => {
+        if (!data?.chartData?.length) return []
+        const branches: any[] = [];
+        data.chartData.forEach((d: any) => {
+            if (d.branches) {
+                d.branches.forEach((b: any) => {
+                    if (!branches.find(br => br.id === b.branchId)) {
+                        branches.push({ id: b.branchId, name: b.branchName });
+                    }
+                });
+            }
+        });
+        return branches;
+    }, [data?.chartData])
+
+    const getBranchColor = (idx: number, type: 'baseline' | 'addon') => {
+        const h = (idx * 137.5) % 360; // Golden angle for distribution
+        return type === 'baseline' ? `hsl(${h}, 60%, 45%)` : `hsl(${h}, 40%, 70%)`;
+    }
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
         const headers = ["Category Name", "Total Spent (PKR)"]
@@ -227,10 +271,10 @@ export default function BudgetSummaryPage() {
         return null;
     };
 
-    const renderSparkline = (dataKey: 'spent', color: string) => (
+    const renderSparkline = (dataKey: 'totalSpent' | 'totalBaseline' | 'totalAddon', color: string) => (
         <div className="h-10 w-full mt-2 opacity-80">
             <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chartData.slice(-14)}>
+                <ComposedChart data={transformedChartData.slice(-14)}>
                     <Area type="monotone" dataKey={dataKey} stroke={color} fill={color} fillOpacity={0.2} strokeWidth={2} isAnimationActive={false} />
                 </ComposedChart>
             </ResponsiveContainer>
@@ -295,251 +339,271 @@ export default function BudgetSummaryPage() {
                     <div className="absolute bottom-0 left-1/4 translate-y-1/2 w-64 h-64 bg-teal-400/20 rounded-full blur-3xl pointer-events-none" />
                 </div>
 
-                {/* ━━━ KPI BENTO GRID ━━━ */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Card className="relative overflow-hidden p-5 rounded-2xl border border-teal-200 dark:border-teal-800/50 shadow-sm dark:shadow-teal-900/20 bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl before:absolute before:inset-0 before:bg-gradient-to-br before:from-teal-500/5 before:to-emerald-500/5">
-                        <div className="relative z-10">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="p-2 rounded-xl bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400">
-                                    <Wallet className="h-4 w-4" />
-                                </div>
-                                <Badge variant="outline" className="border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50 text-[10px] uppercase font-bold tracking-wider">Allocated</Badge>
-                            </div>
-                            <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{formatPKR(summary.totalAllocated / 100)}</p>
-                            <div className={cn("flex items-center gap-1.5 text-xs font-semibold", insights.allocationGrowth >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-500 dark:text-rose-400")}>
-                                {insights.allocationGrowth >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                                <span>{insights.allocationGrowth > 0 ? "+" : ""}{insights.allocationGrowth.toFixed(1)}%</span>
-                                <span className="text-slate-400 dark:text-slate-500 ml-1 font-medium">vs prior period</span>
-                            </div>
-                            {/* Fake a sparkline baseline */}
-                            <div className="h-10 mt-2 w-full border-b-2 border-dashed border-teal-200 dark:border-teal-800/50" />
-                        </div>
-                    </Card>
+                <Tabs value={activeTab} onValueChange={(val) => {
+                    const params = new URLSearchParams(searchParams.toString())
+                    params.set("tab", val)
+                    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+                }} className="space-y-6">
+                    <TabsList className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-md border border-slate-200 dark:border-slate-800 p-1 rounded-xl">
+                        <TabsTrigger value="analytics" className="px-6 py-2 rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white transition-all font-bold text-xs uppercase tracking-widest">
+                            Budget Analytics
+                        </TabsTrigger>
+                        <TabsTrigger value="reports" className="px-6 py-2 rounded-lg data-[state=active]:bg-indigo-600 data-[state=active]:text-white transition-all font-bold text-xs uppercase tracking-widest">
+                            Budget Reports
+                        </TabsTrigger>
+                    </TabsList>
 
-                    <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
-                                <ReceiptText className="h-4 w-4" />
-                            </div>
-                            <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Actual Spent</Badge>
-                        </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{formatPKR(summary.totalSpent / 100)}</p>
-                        <div className={cn("flex items-center gap-1.5 text-xs font-semibold", insights.spentGrowth > 0 ? "text-amber-500" : "text-emerald-600 dark:text-emerald-400")}>
-                            {insights.spentGrowth >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                            <span>{insights.spentGrowth > 0 ? "+" : ""}{insights.spentGrowth.toFixed(1)}%</span>
-                            <span className="text-slate-400 dark:text-slate-500 ml-1 font-medium">vs prior period</span>
-                        </div>
-                        {renderSparkline("spent", "#3b82f6")}
-                    </Card>
-
-                    <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400">
-                                <ShieldCheck className="h-4 w-4" />
-                            </div>
-                            <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Held (Pending)</Badge>
-                        </div>
-                        <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{formatPKR(summary.totalHeld / 100)}</p>
-                        <p className="text-xs font-medium text-slate-500 mt-2 leading-relaxed">Funds engaged in unfulfilled, active orders.</p>
-                    </Card>
-
-                    <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-teal-50/50 via-white to-white dark:from-teal-900/20 dark:via-slate-900 dark:to-slate-900">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">
-                                <PiggyBank className="h-4 w-4" />
-                            </div>
-                            <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Variance (Remaining)</Badge>
-                        </div>
-                        <p className={cn(
-                            "text-3xl font-bold mb-1",
-                            summary.totalRemaining < 0 ? "text-rose-500 dark:text-rose-400" : "text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-emerald-500 dark:from-teal-400 dark:to-emerald-300"
-                        )}>
-                            {summary.totalRemaining < 0 ? "-" : "+"}{formatPKR(Math.abs(summary.totalRemaining) / 100)}
-                        </p>
-                        <p className="text-xs font-medium text-slate-500 mt-2 leading-relaxed">Available surplus after expenditure and holds.</p>
-                    </Card>
-                </div>
-
-                {/* ━━━ CENTERPIECE DASHBOARD ━━━ */}
-                <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-                    <Card className="xl:col-span-2 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-                        <CardHeader className="pb-4 border-b border-slate-100 dark:border-slate-800/50">
-                            <CardTitle className="text-sm font-semibold flex items-center gap-2 uppercase tracking-tight text-slate-800 dark:text-slate-200">
-                                Daily Budget Expenditure
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-6">
-                            <div className="h-[350px] w-full">
-                                {chartData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                                            <defs>
-                                                <linearGradient id="colorSpent" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#0d9488" stopOpacity={0.3} />
-                                                    <stop offset="95%" stopColor="#0d9488" stopOpacity={0} />
-                                                </linearGradient>
-                                            </defs>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
-                                            <XAxis
-                                                dataKey="date"
-                                                axisLine={false}
-                                                tickLine={false}
-                                                tick={{ fontSize: 11, fill: '#64748b' }}
-                                                dy={10}
-                                            />
-                                            <YAxis
-                                                axisLine={false}
-                                                tickLine={false}
-                                                tick={{ fontSize: 11, fill: '#64748b' }}
-                                                tickFormatter={(v) => `Rs ${v / 1000}k`}
-                                                dx={-10}
-                                            />
-                                            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(13, 148, 136, 0.05)' }} />
-                                            <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
-                                            <Area type="monotone" dataKey="spent" name="Spent" stroke="#0d9488" strokeWidth={3} fillOpacity={1} fill="url(#colorSpent)" />
-                                        </ComposedChart>
-                                    </ResponsiveContainer>
-                                ) : (
-                                    <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3">
-                                        <ReceiptText className="h-10 w-10 opacity-20" />
-                                        <p className="text-sm font-medium">Insufficient data for visualization</p>
+                    <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                        {/* ━━━ KPI BENTO GRID ━━━ */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <Card className="relative overflow-hidden p-5 rounded-2xl border border-teal-200 dark:border-teal-800/50 shadow-sm transition-all hover:shadow-md bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
+                                <div className="relative z-10">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="p-2 rounded-xl bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400">
+                                            <Wallet className="h-4 w-4" />
+                                        </div>
+                                        <Badge variant="outline" className="border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/50 text-[10px] uppercase font-bold tracking-wider">Allocated</Badge>
                                     </div>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
+                                    <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{formatPKR(summary.totalAllocated / 100)}</p>
+                                    <div className="h-4" /> {/* Spacer for removed growth indicator */}
+                                    <div className="h-10 mt-2 w-full border-b-2 border-dashed border-teal-200 dark:border-teal-800/50" />
+                                </div>
+                            </Card>
 
-                    {/* ━━━ BRANCH BREAKDOWN (New Requirement) ━━━ */}
-                    <Card className="xl:col-span-1 border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl flex flex-col">
-                        <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/50">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm font-semibold flex items-center gap-2 uppercase tracking-tight text-slate-800 dark:text-slate-200">
-                                    <Building2 className="h-4 w-4 text-teal-500" />
-                                    Branch Utilization
-                                </CardTitle>
-                                <Badge variant="secondary" className="text-[9px] font-bold tracking-widest bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border-none">BY REMAINING</Badge>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-0 flex-1 overflow-y-auto h-[350px]">
-                            {branchBreakdown.length > 0 ? (
-                                <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                                    {[...branchBreakdown].sort((a, b) => b.remaining - a.remaining).map((b: any, index: number) => (
-                                        <div key={b.branchId} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors flex items-center justify-between group">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-xs uppercase">
-                                                    {b.branchName?.substring(0, 2)}
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-teal-600 transition-colors">
-                                                        {b.branchName}
-                                                    </p>
-                                                    <div className="flex items-center gap-2 mt-0.5">
-                                                        <span className="text-[10px] font-medium text-slate-400">Spent: {formatPKR(b.spent / 100)}</span>
+                            <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
+                                        <ReceiptText className="h-4 w-4" />
+                                    </div>
+                                    <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Actual Spent</Badge>
+                                </div>
+                                <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{formatPKR(summary.totalSpent / 100)}</p>
+                                <div className="h-4" /> {/* Spacer for removed growth indicator */}
+                                {renderSparkline("totalSpent", "#3b82f6")}
+                            </Card>
+
+                            <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-50/50 via-white to-white dark:from-indigo-900/20 dark:via-slate-900 dark:to-slate-900">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="p-2 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400">
+                                        <PiggyBank className="h-4 w-4" />
+                                    </div>
+                                    <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Remaining</Badge>
+                                </div>
+                                <p className={cn(
+                                    "text-3xl font-bold mb-1",
+                                    summary.totalRemaining < 0 ? "text-rose-500 dark:text-rose-400" : "text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-indigo-500 dark:from-indigo-400 dark:to-indigo-300"
+                                )}>
+                                    {summary.totalRemaining < 0 ? "-" : "+"}{formatPKR(Math.abs(summary.totalRemaining) / 100)}
+                                </p>
+                                <p className="text-[10px] font-bold text-slate-400 mt-2 leading-relaxed uppercase tracking-tighter italic">Net Liquidity Asset Projection</p>
+                            </Card>
+                        </div>
+
+                        {/* ━━━ CENTERPIECE DASHBOARD ━━━ */}
+                        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                            <Card className="xl:col-span-2 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
+                                <CardHeader className="pb-4 border-b border-slate-100 dark:border-slate-800/50">
+                                    <CardTitle className="text-sm font-semibold flex items-center gap-2 uppercase tracking-tight text-slate-800 dark:text-slate-200">
+                                        Expenditure Graph (<span className="text-indigo-500 lowercase italic">{granularity}</span>)
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-4 pt-6">
+                                    <div className="h-[350px] w-full">
+                                        {transformedChartData.length > 0 ? (
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={transformedChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.1} />
+                                                    <XAxis
+                                                        dataKey="date"
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                        tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }}
+                                                        dy={10}
+                                                    />
+                                                    <YAxis
+                                                        axisLine={false}
+                                                        tickLine={false}
+                                                        tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }}
+                                                        tickFormatter={(v) => `Rs ${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`}
+                                                        dx={-10}
+                                                    />
+                                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
+                                                    <Legend 
+                                                        verticalAlign="top" 
+                                                        align="right" 
+                                                        iconType="circle" 
+                                                        wrapperStyle={{ fontSize: '10px', paddingBottom: '20px', fontWeight: 'bold' }} 
+                                                    />
+                                                    {uniqueBranches.map((b, idx) => (
+                                                        <React.Fragment key={b.id}>
+                                                            <Bar 
+                                                                dataKey={`${b.id}_baseline`} 
+                                                                stackId="a" 
+                                                                fill={getBranchColor(idx, 'baseline')} 
+                                                                name={`${b.name} (Base)`} 
+                                                                radius={[0, 0, 0, 0]}
+                                                            />
+                                                            <Bar 
+                                                                dataKey={`${b.id}_addon`} 
+                                                                stackId="a" 
+                                                                fill={getBranchColor(idx, 'addon')} 
+                                                                name={`${b.name} (Addon)`} 
+                                                                radius={[idx === uniqueBranches.length - 1 ? 4 : 0, idx === uniqueBranches.length - 1 ? 4 : 0, 0, 0]}
+                                                            />
+                                                        </React.Fragment>
+                                                    ))}
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        ) : (
+                                            <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3">
+                                                <ReceiptText className="h-10 w-10 opacity-20" />
+                                                <p className="text-sm font-medium italic">No spectral expenditure points detected</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="xl:col-span-1 border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl flex flex-col">
+                                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/50">
+                                    <div className="flex items-center justify-between">
+                                        <CardTitle className="text-sm font-semibold flex items-center gap-2 uppercase tracking-tight text-slate-800 dark:text-slate-200">
+                                            <Building2 className="h-4 w-4 text-indigo-500" />
+                                            Branch Deployment
+                                        </CardTitle>
+                                        <Badge variant="secondary" className="text-[9px] font-bold tracking-widest bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 border-none">BY REMAINING</Badge>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-0 flex-1 overflow-y-auto h-[350px]">
+                                    {branchBreakdown.length > 0 ? (
+                                        <div className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono">
+                                            {[...branchBreakdown].sort((a, b) => b.remaining - a.remaining).map((b: any) => (
+                                                <div key={b.branchId} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors flex items-center justify-between group">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 flex items-center justify-center text-indigo-500 font-black text-xs">
+                                                            {b.branchName?.substring(0, 2).toUpperCase()}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tighter">{b.branchName}</p>
+                                                              <div className="flex items-center gap-1 mt-0.5">
+                                                                <span className="text-[9px] font-bold text-slate-400">SPENT: {formatPKR(b.spent / 100)}</span>
+                                                              </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className={cn("text-xs font-black", b.remaining < 0 ? "text-rose-500" : "text-emerald-500")}>
+                                                            {b.remaining < 0 ? "-" : "+"}{formatPKR(Math.abs(b.remaining) / 100)}
+                                                        </p>
+                                                          <p className="text-[8px] font-black text-slate-400 tracking-widest uppercase">Remaining</p>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className={cn("text-xs font-bold font-mono", b.remaining < 0 ? "text-rose-500" : "text-emerald-600")}>
-                                                    {b.remaining < 0 ? "-" : "+"}{formatPKR(Math.abs(b.remaining) / 100)}
-                                                </p>
-                                                <p className="text-[9px] font-semibold text-slate-400">REMAINING</p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="h-full flex items-center justify-center p-8 text-center">
-                                    <p className="text-sm text-slate-500 font-medium">No branch data</p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <div className="grid grid-cols-1 xl:grid-cols-4 gap-5">
-                    {/* ━━━ CATEGORY BREAKDOWN ━━━ */}
-                    <Card className="xl:col-span-1 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl flex flex-col">
-                        <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/50">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm font-semibold flex items-center gap-2 uppercase tracking-tight text-slate-800 dark:text-slate-200">
-                                    <PieChartIcon className="h-4 w-4 text-indigo-500" />
-                                    Category Yield
-                                </CardTitle>
-                                <Badge variant="secondary" className="text-[9px] font-bold tracking-widest bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-400 border-none">BY SPEND</Badge>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-4 flex-1 h-[360px]">
-                            {categories.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={filteredCategories.slice(0, 10)} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#334155" opacity={0.1} />
-                                        <XAxis type="number" hide />
-                                        <YAxis dataKey="categoryName" type="category" width={110} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                                        <Tooltip cursor={{ fill: 'transparent' }} content={<CustomTooltip />} />
-                                        <Bar dataKey="spentCents" name="Spent" radius={[0, 4, 4, 0]} barSize={20}>
-                                            {filteredCategories.slice(0, 10).map((entry: any, index: number) => (
-                                                <Cell key={`cell-${entry.categoryId || index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            ) : (
-                                <div className="h-full flex items-center justify-center p-8 text-center text-slate-500 text-sm font-medium">No category data</div>
-                            )}
-                        </CardContent>
-                    </Card>
+                                        </div>
+                                    ) : (
+                                        <div className="h-full flex items-center justify-center p-8 text-center bg-slate-50/50 dark:bg-slate-900/20">
+                                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">No branch metrics</p>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </TabsContent>
 
-                    {/* ━━━ CATEGORY LEDGER TABLE ━━━ */}
-                    <Card className="xl:col-span-3 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-                        <div className="p-4 border-b border-slate-100 dark:border-slate-800/50 flex flex-wrap justify-between items-center gap-3 bg-white/50 dark:bg-slate-900/20">
-                            <h3 className="font-semibold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-teal-600" />
-                                Category Expense Ledger
-                            </h3>
-                            <div className="flex items-center gap-2">
-                                <div className="relative">
-                                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                    <Input
-                                        placeholder="Search..."
-                                        className="pl-8 h-8 w-40 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700 focus:ring-1 focus:ring-teal-500/50 rounded-md"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
+                    <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                        {!organizationId ? (
+                            <Card className="border-dashed border-2 p-20 flex flex-col items-center justify-center text-center space-y-4 bg-white/50 dark:bg-slate-900/20">
+                                <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-800">
+                                    <Building2 className="h-8 w-8 text-slate-400" />
                                 </div>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button size="sm" className="h-8 text-[11px] font-bold bg-teal-600 hover:bg-teal-700 text-white gap-1.5 px-3 rounded-md">
-                                            <Download className="h-3.5 w-3.5" /> EXPORT
+                                <div className="space-y-2">
+                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white uppercase tracking-tight font-mono">Organization Selection Required</h3>
+                                    <p className="text-sm text-slate-500 max-w-sm">Please select an organization from the top filter to generate the detailed budget deployment report.</p>
+                                </div>
+                            </Card>
+                        ) : (
+                            <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-lg bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
+                                <div className="p-6 border-b border-slate-100 dark:border-slate-800/50 flex flex-wrap justify-between items-center gap-4 bg-gradient-to-r from-slate-50 to-white dark:from-slate-900/40 dark:to-slate-900/10">
+                                    <div className="space-y-1">
+                                        <h3 className="font-black text-sm uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
+                                            <FileText className="h-4 w-4" />
+                                            Budget Deployment Report
+                                        </h3>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase">Transaction Audit Period: {startFromUrl ? format(new Date(startFromUrl), 'MMM dd, yyyy') : 'Origin'} — {endFromUrl ? format(new Date(endFromUrl), 'MMM dd, yyyy') : 'Current'}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="relative">
+                                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                            <Input
+                                                placeholder="Search branch..."
+                                                className="pl-10 h-10 w-64 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700 font-bold uppercase tracking-tighter"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                            />
+                                        </div>
+                                        <Button variant="outline" className="h-10 border-slate-200 font-black text-[10px] uppercase tracking-widest gap-2 bg-white dark:bg-slate-950 hover:bg-slate-50 transition-all dark:hover:bg-slate-900 rounded-lg pr-4">
+                                            <DownloadIcon className="h-4 w-4" /> Export Report
                                         </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                                        <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2 cursor-pointer font-medium"><FileText className="mr-2 h-4 w-4 text-slate-400" /> CSV</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2 cursor-pointer font-medium"><FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer font-medium"><FilePdf className="mr-2 h-4 w-4 text-rose-500" /> PDF</DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
-                        </div>
-                        <div className="overflow-x-auto max-h-[360px]">
-                            <Table>
-                                <TableHeader className="sticky top-0 z-10 bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-                                    <TableRow>
-                                        <TableHead className="pl-6 h-10 text-[10px] uppercase font-bold text-slate-500">Category</TableHead>
-                                        <TableHead className="h-10 text-[10px] uppercase font-bold text-slate-500 text-right pr-6">Spent</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {filteredCategories.map((cat: any, i: number) => (
-                                        <TableRow key={cat.categoryId || i} className="hover:bg-teal-50/40 dark:hover:bg-teal-900/10 border-b border-slate-100 dark:border-slate-800/50">
-                                            <TableCell className="font-medium text-xs pl-6 py-3">{cat.categoryName || 'Uncategorized'}</TableCell>
-                                            <TableCell className="text-right font-mono font-bold text-xs pr-6 py-3">{formatPKR(cat.spentCents / 100)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    </Card>
-                </div>
+                                    </div>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <Table>
+                                        <TableHeader className="bg-slate-50/50 dark:bg-slate-900/50">
+                                            <TableRow className="hover:bg-transparent border-b border-slate-200 dark:border-slate-800">
+                                                <TableHead className="pl-6 h-12 text-[10px] font-black uppercase tracking-widest text-slate-500">Branch Identity</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Monthly Base</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Add-On (Adj)</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Spent (Period)</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Remaining</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center pr-6">Utilization</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody className="font-mono">
+                                            {filteredBranches.map((b: any) => {
+                                                const addon = Math.max(0, b.allocated - (b.baselineAmount || 0));
+                                                const utilization = b.allocated > 0 ? (b.spent / b.allocated) * 100 : 0;
+                                                return (
+                                                    <TableRow key={b.branchId} className="hover:bg-slate-50/50 dark:hover:bg-indigo-950/10 border-b border-slate-100 dark:border-slate-800/50 transition-colors">
+                                                        <TableCell className="pl-6 py-4">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-black text-xs text-slate-900 dark:text-slate-100 uppercase tracking-tighter">{b.branchName}</span>
+                                                                <span className="text-[9px] text-indigo-500 font-bold uppercase tracking-widest mt-0.5">NET_BRANCH_ID: {b.branchId}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="text-right py-4 font-bold text-xs text-slate-700 dark:text-slate-300">
+                                                            {formatPKR(b.baselineAmount / 100)}
+                                                        </TableCell>
+                                                        <TableCell className="text-right py-4 font-bold text-xs text-indigo-600 dark:text-indigo-400">
+                                                            +{formatPKR(addon / 100)}
+                                                        </TableCell>
+                                                        <TableCell className="text-right py-4 font-bold text-xs text-slate-900 dark:text-white">
+                                                            {formatPKR(b.spent / 100)}
+                                                        </TableCell>
+                                                        <TableCell className="text-right py-4 font-bold text-xs">
+                                                            <span className={cn(b.remaining < 0 ? "text-rose-500" : "text-emerald-500")}>
+                                                                {b.remaining < 0 ? "-" : "+"}{formatPKR(Math.abs(b.remaining) / 100)}
+                                                            </span>
+                                                        </TableCell>
+                                                        <TableCell className="text-center pr-6 py-4">
+                                                            <div className="flex flex-col items-center gap-1.5 min-w-[100px]">
+                                                                <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200/50 dark:border-slate-700/50">
+                                                                    <div 
+                                                                        className={cn("h-full transition-all duration-500 rounded-full", utilization > 90 ? "bg-rose-500" : utilization > 70 ? "bg-amber-500" : "bg-emerald-500")}
+                                                                        style={{ width: `${Math.min(utilization, 100)}%` }}
+                                                                    />
+                                                                </div>
+                                                                <span className={cn("text-[10px] font-black", utilization > 90 ? "text-rose-500" : "text-slate-500")}>{utilization.toFixed(1)}%</span>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </Card>
+                        )}
+                    </TabsContent>
+                </Tabs>
             </div>
         </div>
     )

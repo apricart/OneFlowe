@@ -69,11 +69,11 @@ export async function GET(req: NextRequest) {
     const startDate = startDateParam ? new Date(startDateParam) : todayStart
     const endDate = endDateParam ? new Date(endDateParam) : todayEnd
 
-    // Determine granularity for series: hourly for 1 day, daily for ≤90 days, monthly for more up to 10 years
+    // Determine granularity for series: hourly for 1 day, daily for ≤32 days, monthly for ≤400 days, yearly for more
     const diffMs = endDate.getTime() - startDate.getTime()
     const diffDays = diffMs / (1000 * 60 * 60 * 24)
     const granularity: "hourly" | "daily" | "monthly" | "yearly" =
-        diffDays <= 1 ? "hourly" : diffDays <= 90 ? "daily" : diffDays <= 3650 ? "monthly" : "yearly"
+        diffDays <= 1 ? "hourly" : diffDays <= 32 ? "daily" : diffDays <= 400 ? "monthly" : "yearly"
 
     const cacheKey = generateCacheKey("sales-perf", {
         role, organizationId, branchId,
@@ -139,6 +139,7 @@ export async function GET(req: NextRequest) {
                 bucket: dateExpr,
                 label: labelExpr,
                 totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+                netSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
                 orderCount: sql<number>`COALESCE(COUNT(1), 0)`.mapWith(Number),
             })
             .from(orders)
@@ -150,11 +151,13 @@ export async function GET(req: NextRequest) {
         const seriesData = seriesRows.map(r => ({
             label: r.label,
             sales: (r.totalSales || 0) / 100,
+            netSales: (r.netSales || 0) / 100,
             orders: Number(r.orderCount || 0),
         }))
 
         // ── Aggregates ──
         const totalSales = seriesData.reduce((s, r) => s + r.sales, 0)
+        const totalNetSales = seriesData.reduce((s, r) => s + r.netSales, 0)
         const totalOrders = seriesData.reduce((s, r) => s + r.orders, 0)
         const activePeriods = seriesData.filter(r => r.sales > 0)
         const avgSales = activePeriods.length > 0 ? totalSales / activePeriods.length : 0
@@ -188,6 +191,7 @@ export async function GET(req: NextRequest) {
                 branchId: branches.id,
                 branchName: branches.name,
                 totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+                totalNetSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
                 orderCount: sql<number>`COALESCE(COUNT(${orders.id}), 0)`.mapWith(Number),
             })
             .from(branches)
@@ -206,6 +210,7 @@ export async function GET(req: NextRequest) {
             branchId: r.branchId,
             branchName: r.branchName || "Unnamed",
             sales: (r.totalSales || 0) / 100,
+            netSales: (r.totalNetSales || 0) / 100,
             orders: Number(r.orderCount || 0),
         }))
 
@@ -217,6 +222,7 @@ export async function GET(req: NextRequest) {
                     organizationId: organizations.id,
                     organizationName: organizations.name,
                     totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+                    totalNetSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
                     orderCount: sql<number>`COALESCE(COUNT(${orders.id}), 0)`.mapWith(Number),
                 })
                 .from(organizations)
@@ -229,6 +235,7 @@ export async function GET(req: NextRequest) {
                 organizationId: r.organizationId,
                 organizationName: r.organizationName || "Unnamed",
                 sales: (r.totalSales || 0) / 100,
+                netSales: (r.totalNetSales || 0) / 100,
                 orders: Number(r.orderCount || 0),
             }))
         }
@@ -281,6 +288,7 @@ export async function GET(req: NextRequest) {
                     bucket: dateExpr,
                     label: labelExpr,
                     totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+                    totalNetSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
                     orderCount: sql<number>`COALESCE(COUNT(1), 0)`.mapWith(Number),
                 })
                 .from(orders)
@@ -292,10 +300,12 @@ export async function GET(req: NextRequest) {
             const compSeriesData = compSeriesRows.map(r => ({
                 label: r.label,
                 sales: (r.totalSales || 0) / 100,
+                netSales: (r.totalNetSales || 0) / 100,
                 orders: Number(r.orderCount || 0),
             }))
 
             const compTotalSales = compSeriesData.reduce((s, r) => s + r.sales, 0)
+            const compTotalNetSales = compSeriesData.reduce((s, r) => s + r.netSales, 0)
             const compTotalOrders = compSeriesData.reduce((s, r) => s + r.orders, 0)
 
             // Aggregated counts for all statuses (for KPI comparison)
@@ -314,6 +324,7 @@ export async function GET(req: NextRequest) {
             const compAllWhere = and(...compAllStatusConditions)
             const compStatusCounts = await db.select({
                 fulfilledCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
+                fulfilledNetSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
                 refundedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END), 0)`.mapWith(Number),
                 rejectedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END), 0)`.mapWith(Number),
                 approvedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' THEN 1 END), 0)`.mapWith(Number),
@@ -324,8 +335,10 @@ export async function GET(req: NextRequest) {
 
             comparison = {
                 totalSales: compTotalSales,
+                totalNetSales: compTotalNetSales,
                 totalOrders: compTotalOrders,
                 fulfilledCount: compStatusCounts[0]?.fulfilledCount || 0,
+                fulfilledNetSales: (compStatusCounts[0]?.fulfilledNetSales || 0) / 100,
                 refundedCount: compStatusCounts[0]?.refundedCount || 0,
                 rejectedCount: compStatusCounts[0]?.rejectedCount || 0,
                 approvedCount: compStatusCounts[0]?.approvedCount || 0,
@@ -337,6 +350,7 @@ export async function GET(req: NextRequest) {
             granularity,
             seriesData,
             totalSales,
+            totalNetSales,
             totalOrders,
             avgSales,
             peakPeriod,
