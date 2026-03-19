@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import useSWR from "swr"
 import { useAppContext } from "@/components/context/app-context"
@@ -8,8 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, LineChart, Package, Tags, AlertOctagon, TrendingUp, History, Layers, Calculator
+    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, LineChart, Package, Tags, AlertOctagon, TrendingUp, History, Layers, Calculator, ChevronDown, Check
 } from "lucide-react"
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Line, ComposedChart
+} from "recharts"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -28,7 +31,7 @@ import {
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
-import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
+
 import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expandable-row-drawer"
 import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/reports/column-selector"
 
@@ -60,12 +63,15 @@ export default function ProductPerformancePage() {
     } = useAppContext()
 
     const [searchTerm, setSearchTerm] = useState("")
+    const [reportSearchTerm, setReportSearchTerm] = useState("")
     const [groupId, setGroupId] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
     const [selectedRow, setSelectedRow] = useState<any>(null)
     const [drawerOpen, setDrawerOpen] = useState(false)
     const [activeTab, setActiveTab] = useState<"analytics" | "reports">("analytics")
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
+    const [selectedChartProducts, setSelectedChartProducts] = useState<number[]>([])
+    const [chartProductDropdownOpen, setChartProductDropdownOpen] = useState(false)
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
@@ -145,12 +151,38 @@ export default function ProductPerformancePage() {
         setGeneratedDate(new Date().toLocaleString())
     }, [])
 
+    const MONTHS = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ]
+    const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
+
+    const handleMonthYearChange = (monthIdx: number, year: number) => {
+        const startDate = new Date(year, monthIdx, 1)
+        const endDate = new Date(year, monthIdx + 1, 0)
+        handleDateChange({ startDate, endDate }, "custom")
+    }
+
+    const currentYear = dateRange?.startDate.getFullYear() || new Date().getFullYear()
+    const currentMonthIdx = dateRange?.startDate.getMonth() || new Date().getMonth()
+
     const products = perfData?.data || []
     const transactionItems = summaryData?.items || []
 
+    const filteredTransactions = useMemo(() => {
+        if (!reportSearchTerm) return transactionItems
+        const term = reportSearchTerm.toLowerCase()
+        return transactionItems.filter((i: any) => 
+            (i.tid || "").toLowerCase().includes(term) ||
+            (i.productName || "").toLowerCase().includes(term) ||
+            (i.productCode || "").toLowerCase().includes(term)
+        )
+    }, [transactionItems, reportSearchTerm])
+
     const filteredProducts = products.filter((p: any) =>
         (p.productName || p.productCode || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.category || "").toLowerCase().includes(searchTerm.toLowerCase())
+        (p.category || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.subCategory || "").toLowerCase().includes(searchTerm.toLowerCase())
     )
 
     const totalRevenue = products.reduce((sum: number, p: any) => sum + (p.revenueGeneratedCents || 0), 0)
@@ -159,6 +191,20 @@ export default function ProductPerformancePage() {
     const totalRefundLoss = products.reduce((sum: number, p: any) => sum + (p.refundLossCents || 0), 0)
 
     const refundRate = (totalVolume + totalRefunds) > 0 ? (totalRefunds / (totalVolume + totalRefunds)) * 100 : 0
+
+    // Chart data: build per-product comparison data
+    const chartProducts = selectedChartProducts.length > 0
+        ? products.filter((p: any) => selectedChartProducts.includes(p.productId))
+        : products.slice(0, 5) // Default: top 5 products by revenue
+
+    const chartData = chartProducts.map((p: any) => ({
+        name: p.productName?.length > 18 ? p.productName.substring(0, 18) + '…' : p.productName,
+        fullName: p.productName,
+        ordered: p.qtyOrdered || 0,
+        fulfilled: p.qtyFulfilled || 0,
+        refunded: p.qtyRefunded || 0,
+        revenue: Math.round((p.revenueGeneratedCents || 0) / 100),
+    }))
 
     // Comparison Trends
     const comparison = perfData?.comparison
@@ -182,18 +228,30 @@ export default function ProductPerformancePage() {
     }
 
     const getDrawerFields = (item: any): DetailField[] => [
-        { key: "branch", label: "Branch", value: item.branchName },
-        { key: "productCode", label: "Product Code", value: item.productCode || "-", type: "mono" },
+        { key: "s1", label: "Order Information", value: "", type: "section" },
+        { key: "tid", label: "Transaction ID", value: item.tid || "-", type: "mono" },
         { key: "orderDate", label: "Date & Time", value: new Date(item.orderDate).toLocaleString(), type: "date" },
-        { key: "status", label: "Status", value: item.orderStatus, type: "badge" },
+        { key: "status", label: "Order Status", value: item.orderStatus, type: "badge" },
+        { key: "branch", label: "Branch", value: item.branchName || "-" },
+        { key: "org", label: "Organization", value: item.organizationName || "-" },
+        { key: "s2", label: "Product Details", value: "", type: "section" },
+        { key: "productCode", label: "Product Code", value: item.productCode || "-", type: "mono" },
+        { key: "productName", label: "Product Name", value: item.productName || "-" },
+        { key: "category", label: "Category", value: item.categoryName || "-" },
         { key: "price", label: "Unit Price", value: formatPKR(item.priceCents / 100), type: "currency" },
-        { key: "total", label: "Total", value: formatPKR((item.quantity * item.priceCents) / 100), type: "currency" },
+        { key: "s3", label: "Quantities & Revenue", value: "", type: "section" },
+        { key: "qtyOrdered", label: "Qty Ordered", value: String(item.quantity || 0) },
+        { key: "qtyFulfilled", label: "Qty Fulfilled", value: String(item.qtyFulfilled ?? item.quantity ?? 0) },
+        { key: "qtyRefunded", label: "Qty Refunded", value: String(item.qtyRefunded ?? 0) },
+        { key: "revenue", label: "Revenue Generated", value: formatPKR(((item.qtyFulfilled ?? item.quantity ?? 0) * item.priceCents) / 100), type: "currency" },
+        { key: "refundLoss", label: "Refund Loss", value: formatPKR(((item.qtyRefunded ?? 0) * item.priceCents) / 100), type: "currency" },
+        { key: "total", label: "Net Total", value: formatPKR((item.quantity * item.priceCents) / 100), type: "currency" },
     ]
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Product Code", "Product Name", "Category", "Orders", "Qty Fulfilled", "Qty Refunded", "Revenue Generated"]
+        const headers = ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Qty Fulfilled", "Qty Refunded", "Revenue Generated"]
         const rows = filteredProducts.map((p: any) => [
-            p.productCode, p.productName, p.category, p.totalOrders, p.qtyFulfilled, p.qtyRefunded,
+            p.productCode, p.productName, p.category, p.subCategory, p.status || 'active', p.qtyOrdered, p.qtyFulfilled, p.qtyRefunded,
             (p.revenueGeneratedCents / 100).toFixed(2)
         ])
 
@@ -233,6 +291,76 @@ export default function ProductPerformancePage() {
                     compare={compare}
                     compareRange={compareRange}
                 />
+                
+                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1 hidden md:block" />
+
+                <div className="flex items-center gap-2">
+                    {/* Time Span Presets */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-9 text-[11px] font-bold border-amber-100 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 gap-1.5 px-3 rounded-full bg-amber-50/20">
+                                <Calculator className="h-4 w-4" />
+                                {activePreset === "thisMonth" ? "This Month" : activePreset === "yearly" ? "This Year" : activePreset === "all" ? "All Time" : activePreset === "custom" ? "Custom Range" : "Presets"}
+                                <ChevronDown className="h-3 w-3 opacity-50" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                            <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">Quick Select</div>
+                            <DropdownMenuItem onClick={() => handleDateChange(null, "thisMonth")} className="text-xs py-2 cursor-pointer font-medium">This Month</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                                const end = new Date();
+                                const start = new Date();
+                                start.setMonth(start.getMonth() - 1);
+                                start.setDate(1);
+                                end.setDate(0);
+                                handleDateChange({ startDate: start, endDate: end }, "custom");
+                            }} className="text-xs py-2 cursor-pointer font-medium text-amber-600">Last Month</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                                const start = new Date();
+                                start.setMonth(start.getMonth() - 6);
+                                handleDateChange({ startDate: start, endDate: new Date() }, "custom");
+                            }} className="text-xs py-2 cursor-pointer font-medium font-bold text-amber-600">Last 6 Months</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDateChange(null, "yearly")} className="text-xs py-2 cursor-pointer font-medium">This Year</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDateChange(null, "all")} className="text-xs py-2 cursor-pointer font-medium text-slate-400 border-t border-slate-100 mt-1">All Time</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Month/Year Selector */}
+                    <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-full border border-slate-200 dark:border-slate-800 px-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-full uppercase text-slate-600 dark:text-slate-400">
+                                    {MONTHS[currentMonthIdx]}
+                                    <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="max-h-[300px] overflow-y-auto w-32 rounded-xl shadow-2xl">
+                                {MONTHS.map((m, i) => (
+                                    <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, currentYear)} className={cn("text-[11px] uppercase tracking-tighter", currentMonthIdx === i && "bg-amber-50 text-amber-600 font-bold")}>
+                                        {m}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-700" />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-full text-slate-600 dark:text-slate-400">
+                                    {currentYear}
+                                    <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="rounded-xl shadow-2xl w-24">
+                                {YEARS.map(y => (
+                                    <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(currentMonthIdx, y)} className={cn("text-[11px] font-mono", currentYear === y && "bg-amber-50 text-amber-600 font-bold")}>
+                                        {y}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                </div>
+
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <>
                         <BranchFilter
@@ -248,7 +376,7 @@ export default function ProductPerformancePage() {
                     </>
                 )}
                 <div className="flex-1" />
-                <ScheduleReportModal reportName="Product Intelligence" />
+                
                 <Button
                     variant="ghost"
                     size="sm"
@@ -398,28 +526,187 @@ export default function ProductPerformancePage() {
                                 <LineChart className="h-4 w-4 text-amber-600" />
                                 Product analytics
                             </h3>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                                {/* Time Span Presets */}
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold border-indigo-100 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400 gap-1.5 px-3 rounded-md bg-indigo-50/20">
+                                            <Calculator className="h-3.5 w-3.5" />
+                                            {activePreset === "thisMonth" ? "This Month" : activePreset === "yearly" ? "This Year" : activePreset === "all" ? "All Time" : activePreset === "custom" ? "Custom Range" : "Time Span"}
+                                            <ChevronDown className="h-3 w-3 opacity-50" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                                        <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">Select Time Span</div>
+                                        <DropdownMenuItem onClick={() => handleDateChange(null, "thisMonth")} className="text-xs py-2 cursor-pointer font-medium">This Month</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => {
+                                            const end = new Date();
+                                            const start = new Date();
+                                            start.setMonth(start.getMonth() - 1);
+                                            start.setDate(1);
+                                            end.setDate(0);
+                                            handleDateChange({ startDate: start, endDate: end }, "custom");
+                                        }} className="text-xs py-2 cursor-pointer font-medium">Last Month</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => {
+                                            const start = new Date();
+                                            start.setMonth(start.getMonth() - 3);
+                                            handleDateChange({ startDate: start, endDate: new Date() }, "custom");
+                                        }} className="text-xs py-2 cursor-pointer font-medium">Last 3 Months</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => {
+                                            const start = new Date();
+                                            start.setMonth(start.getMonth() - 6);
+                                            handleDateChange({ startDate: start, endDate: new Date() }, "custom");
+                                        }} className="text-xs py-2 cursor-pointer font-medium font-bold text-indigo-600">Last 6 Months</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDateChange(null, "yearly")} className="text-xs py-2 cursor-pointer font-medium">This Year</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleDateChange(null, "all")} className="text-xs py-2 cursor-pointer font-medium text-slate-400">All Time</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+
+                                <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
+
+                                {/* Month/Year Selector */}
+                                <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-lg">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md">
+                                                {MONTHS[currentMonthIdx]}
+                                                <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent className="max-h-[300px] overflow-y-auto">
+                                            {MONTHS.map((m, i) => (
+                                                <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, currentYear)} className="text-[11px]">
+                                                    {m}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md">
+                                                {currentYear}
+                                                <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent>
+                                            {YEARS.map(y => (
+                                                <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(currentMonthIdx, y)} className="text-[11px]">
+                                                    {y}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
+
+                                <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
+
+                                <DropdownMenu open={chartProductDropdownOpen} onOpenChange={setChartProductDropdownOpen}>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 gap-1.5 px-3 rounded-md">
+                                            <Layers className="h-3 w-3" />
+                                            {selectedChartProducts.length === 0 ? "Top 5 Products" : `${selectedChartProducts.length} Selected`}
+                                            <ChevronDown className="h-3 w-3 opacity-50" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-64 max-h-[400px] overflow-y-auto rounded-xl p-1 shadow-2xl">
+                                        <div className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] border-b border-slate-50 mb-1">Visualize Comparison</div>
+                                        <div className="grid grid-cols-1 gap-1">
+                                            {products.slice(0, 30).map((p: any) => (
+                                                <DropdownMenuItem 
+                                                    key={p.productId} 
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        setSelectedChartProducts(prev => 
+                                                            prev.includes(p.productId) 
+                                                                ? prev.filter(id => id !== p.productId) 
+                                                                : [...prev, p.productId]
+                                                        )
+                                                    }}
+                                                    className={cn(
+                                                        "text-[11px] py-2.5 px-3 cursor-pointer flex items-center justify-between rounded-lg transition-all",
+                                                        selectedChartProducts.includes(p.productId) ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                                                    )}
+                                                >
+                                                    <div className="flex flex-col truncate pr-2">
+                                                        <span className="font-bold truncate">{p.productName}</span>
+                                                        <span className="text-[9px] opacity-50 font-mono tracking-tighter">{p.productCode}</span>
+                                                    </div>
+                                                    {selectedChartProducts.includes(p.productId) && (
+                                                        <div className="shrink-0 h-5 w-5 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30">
+                                                            <Check className="h-3 w-3" strokeWidth={4} />
+                                                        </div>
+                                                    )}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </div>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
                                 <div className="relative">
                                     <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                                     <Input
-                                        placeholder="Search Products..."
-                                        className="pl-8 h-8 w-48 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700 focus:ring-1 focus:ring-amber-500/50 transition-all rounded-md"
+                                        placeholder="Filter List..."
+                                        className="pl-8 h-8 w-40 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700 focus:ring-1 focus:ring-amber-500/50 transition-all rounded-md"
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                     />
                                 </div>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <Button size="sm" className="h-8 text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white gap-1.5 px-3 rounded-md" disabled={isPerfLoading}>
+                                        <Button size="sm" className="h-8 text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white gap-1.5 px-3 rounded-md shadow-lg shadow-amber-600/20" disabled={isPerfLoading}>
                                             <Download className="h-3.5 w-3.5" /> EXPORT
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                                        <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2 cursor-pointer font-medium"><FileText className="mr-2 h-4 w-4 text-slate-400" /> CSV</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2 cursor-pointer font-medium"><FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer font-medium"><FilePdf className="mr-2 h-4 w-4 text-rose-500" /> PDF</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2 cursor-pointer font-medium font-bold"><FileText className="mr-2 h-4 w-4 text-slate-400" /> CSV</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2 cursor-pointer font-medium font-bold"><FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer font-medium font-bold"><FilePdf className="mr-2 h-4 w-4 text-rose-500" /> PDF</DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
+                            </div>
+                        </div>
+
+                        {/* Chart Section */}
+                        <div className="p-6 bg-slate-50/30 dark:bg-slate-900/10 border-b border-slate-100 dark:border-slate-800/50">
+                            <div className="h-[300px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
+                                        <XAxis 
+                                            dataKey="name" 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }}
+                                            interval={0}
+                                        />
+                                        <YAxis 
+                                            yAxisId="left"
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#64748b', fontSize: 10 }}
+                                            label={{ value: 'Quantity', angle: -90, position: 'insideLeft', style: { fill: '#64748b', fontSize: 10, fontWeight: 700 } }}
+                                        />
+                                        <YAxis 
+                                            yAxisId="right"
+                                            orientation="right"
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#059669', fontSize: 10 }}
+                                            label={{ value: 'Revenue (PKR)', angle: 90, position: 'insideRight', style: { fill: '#059669', fontSize: 10, fontWeight: 700 } }}
+                                        />
+                                        <Tooltip 
+                                            contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                            itemStyle={{ fontSize: '11px', fontWeight: 600 }}
+                                            labelStyle={{ fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}
+                                            formatter={(value: any, name: string) => [name === 'revenue' ? formatPKR(value) : value, name.charAt(0).toUpperCase() + name.slice(1)]}
+                                        />
+                                        <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', paddingTop: '10px' }} />
+                                        <Bar yAxisId="left" dataKey="ordered" name="ordered" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={20} />
+                                        <Bar yAxisId="left" dataKey="fulfilled" name="fulfilled" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
+                                        <Bar yAxisId="left" dataKey="refunded" name="refunded" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={20} />
+                                        <Line yAxisId="right" type="monotone" dataKey="revenue" name="revenue" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: '#f59e0b', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
                             </div>
                         </div>
                         <div className="overflow-x-auto">
@@ -429,7 +716,9 @@ export default function ProductPerformancePage() {
                                         <TableHead className="pl-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Code</TableHead>
                                         <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Product Name</TableHead>
                                         <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Category</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Orders</TableHead>
+                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Sub-category</TableHead>
+                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Status</TableHead>
+                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Qty Ordered</TableHead>
                                         <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-emerald-600">Fulfilled</TableHead>
                                         <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-rose-500">Refunded</TableHead>
                                         <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Revenue</TableHead>
@@ -437,9 +726,9 @@ export default function ProductPerformancePage() {
                                 </TableHeader>
                                 <TableBody>
                                     {isPerfLoading ? (
-                                        <TableRow><TableCell colSpan={7} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-500" /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={8} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-500" /></TableCell></TableRow>
                                     ) : filteredProducts.length === 0 ? (
-                                        <TableRow><TableCell colSpan={7} className="h-32 text-center text-slate-500 text-sm">No products found.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={8} className="h-32 text-center text-slate-500 text-sm">No products found.</TableCell></TableRow>
                                     ) : (
                                         filteredProducts.map((p: any) => (
                                             <TableRow key={p.productId} className="hover:bg-amber-50/40 dark:hover:bg-amber-900/10 border-b border-slate-100 dark:border-slate-800/50">
@@ -451,7 +740,13 @@ export default function ProductPerformancePage() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.category}</TableCell>
-                                                <TableCell className="text-center font-mono text-xs">{p.totalOrders}</TableCell>
+                                                <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.subCategory}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant={p.status === 'active' ? 'default' : 'secondary'} className="text-[9px] uppercase px-1.5 py-0">
+                                                        {p.status || 'ACTIVE'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center font-mono text-xs">{p.qtyOrdered}</TableCell>
                                                 <TableCell className="text-center font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">{p.qtyFulfilled}</TableCell>
                                                 <TableCell className="text-center font-mono font-bold text-xs text-rose-500">{p.qtyRefunded}</TableCell>
                                                 <TableCell className="text-right font-mono font-bold text-xs text-slate-900 dark:text-white">{formatPKR(p.revenueGeneratedCents / 100)}</TableCell>
@@ -472,6 +767,15 @@ export default function ProductPerformancePage() {
                                 </h3>
                             </div>
                             <div className="flex items-center gap-2">
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                    <Input
+                                        placeholder="Search by Trans ID, product..."
+                                        className="pl-8 h-8 w-56 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700 focus:ring-1 focus:ring-indigo-500/50 transition-all rounded-md"
+                                        value={reportSearchTerm}
+                                        onChange={(e) => setReportSearchTerm(e.target.value)}
+                                    />
+                                </div>
                                 <Badge variant="secondary" className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 border-none text-[10px] font-bold uppercase">Transaction Audit</Badge>
                             </div>
                         </div>
@@ -493,10 +797,10 @@ export default function ProductPerformancePage() {
                                 <TableBody>
                                     {isSummaryLoading ? (
                                         <TableRow><TableCell colSpan={8} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
-                                    ) : Object.keys(summaryData?.items ? summaryData.items.reduce((acc: any, curr: any) => { acc[curr.orderId] = true; return acc; }, {}) : {}).length === 0 ? (
+                                    ) : filteredTransactions.length === 0 ? (
                                         <TableRow><TableCell colSpan={8} className="h-32 text-center text-slate-500 text-xs text-black">No transactions recorded.</TableCell></TableRow>
                                     ) : (
-                                        Object.values(transactionItems.reduce((acc: any, curr: any) => {
+                                        Object.values(filteredTransactions.reduce((acc: any, curr: any) => {
                                             if (!acc[curr.orderId]) {
                                                 acc[curr.orderId] = {
                                                     id: curr.orderId,
@@ -509,15 +813,15 @@ export default function ProductPerformancePage() {
                                             }
                                             acc[curr.orderId].items.push(curr)
                                             return acc
-                                        }, {})).map((order: any, idx: number) => {
+                                        }, {} as any)).map((order: any) => {
                                             const isExpanded = expandedRow === `order-${order.id}`
                                             const totalQty = order.items.reduce((s: number, i: any) => s + i.quantity, 0)
                                             const totalRevenue = order.items.reduce((s: number, i: any) => s + (i.quantity * i.priceCents) / 100, 0)
                                             const avgUnitPrice = order.items.length === 1 ? order.items[0].priceCents / 100 : totalRevenue / totalQty
 
                                             return (
-                                                <>
-                                                    <TableRow key={order.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer transition-colors" onClick={() => handleRowClick(order.items[0])}>
+                                                <React.Fragment key={order.id}>
+                                                    <TableRow className={cn("hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors", order.items.length === 1 ? "cursor-pointer" : "")} onClick={() => { if (order.items.length === 1) handleRowClick(order.items[0]) }}>
                                                         <TableCell onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : `order-${order.id}`); }} className="w-8">
                                                             {order.items.length > 1 ? (
                                                                 <button className="flex items-center justify-center w-5 h-5 rounded-md bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
@@ -555,26 +859,35 @@ export default function ProductPerformancePage() {
                                                     {isExpanded && order.items.map((prod: any, pIdx: number) => {
                                                         const pTotal = (prod.quantity * prod.priceCents) / 100
                                                         return (
-                                                        <TableRow key={`${order.id}-${pIdx}`} className="bg-slate-50/50 dark:bg-slate-900/40 border-l-2 border-indigo-500" onClick={() => handleRowClick(prod)}>
-                                                            <TableCell></TableCell>
-                                                            <TableCell className="pl-2 py-2 text-[10px] text-slate-400 opacity-0">Sub</TableCell>
-                                                            <TableCell className="py-2 pl-4">
+                                                        <TableRow key={`${order.id}-${pIdx}`} className="bg-slate-50 dark:bg-slate-800/80 border-l-4 border-indigo-600 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shadow-inner" onClick={() => handleRowClick(prod)}>
+                                                            <TableCell className="w-8 pl-3">
+                                                                <div className="w-2 h-2 rounded-full bg-indigo-400" />
+                                                            </TableCell>
+                                                            <TableCell className="pl-2 py-3 text-[11px] font-mono text-slate-500">{new Date(prod.orderDate).toLocaleDateString()}</TableCell>
+                                                            <TableCell className="py-3 pl-4">
                                                                 <div className="flex flex-col">
-                                                                    <span className="font-semibold text-[10px] text-slate-600 dark:text-slate-300 uppercase">{prod.productName}</span>
-                                                                    <span className="text-[9px] text-slate-400 font-mono italic">{prod.productCode}</span>
+                                                                    <span className="font-bold text-[11px] text-indigo-700 dark:text-indigo-300 uppercase">{prod.productName}</span>
+                                                                    <span className="text-[10px] text-slate-500 font-mono">{prod.productCode}</span>
                                                                 </div>
                                                             </TableCell>
-                                                            <TableCell className="py-2 opacity-30 text-[10px]">{order.branch}</TableCell>
-                                                            <TableCell className="text-center font-mono text-[10px] text-slate-500">{prod.quantity}</TableCell>
-                                                            <TableCell className="text-center font-mono text-[10px] text-slate-400 font-medium">{formatPKR(prod.priceCents / 100)}</TableCell>
-                                                            <TableCell className="text-center font-mono text-[10px] text-indigo-400 font-bold">{formatPKR(pTotal)}</TableCell>
-                                                            <TableCell className="text-center font-mono text-[9px] text-slate-300">{prod.tid}</TableCell>
+                                                            <TableCell className="py-3 text-[11px] text-slate-500 font-medium">{order.branch}</TableCell>
+                                                            <TableCell className="text-center font-mono text-[11px] text-slate-700 dark:text-slate-300 font-bold">{prod.quantity}</TableCell>
+                                                            <TableCell className="text-center font-mono text-[11px] text-slate-600 dark:text-slate-400 font-medium">{formatPKR(prod.priceCents / 100)}</TableCell>
+                                                            <TableCell className="text-center font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">{formatPKR(pTotal)}</TableCell>
+                                                            <TableCell className="text-center font-mono text-[10px] text-slate-500">{prod.tid}</TableCell>
                                                             <TableCell className="text-right pr-6">
-                                                                <span className="text-[8px] font-bold text-slate-400 uppercase">{prod.orderStatus}</span>
+                                                                <Badge variant="outline" className={cn(
+                                                                    "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border-none",
+                                                                    prod.orderStatus === "REFUNDED" ? "bg-rose-100 text-rose-600" :
+                                                                    prod.orderStatus === "REJECTED" ? "bg-amber-100 text-amber-600" :
+                                                                    "bg-emerald-100 text-emerald-600"
+                                                                )}>
+                                                                    {prod.orderStatus}
+                                                                </Badge>
                                                             </TableCell>
                                                         </TableRow>
                                                     )})}
-                                                </>
+                                                </React.Fragment>
                                             )
                                         })
                                     )}

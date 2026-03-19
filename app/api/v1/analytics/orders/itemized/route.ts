@@ -38,10 +38,17 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "No branches resolved" }, { status: 400 })
         }
 
-        let startDate = startDateParam ? new Date(startDateParam) : new Date()
-        let endDate = endDateParam ? new Date(endDateParam) : new Date()
-        startDate.setHours(0, 0, 0, 0)
-        endDate.setHours(23, 59, 59, 999)
+        let startDate = startDateParam ? new Date(startDateParam) : undefined
+        let endDate = endDateParam ? new Date(endDateParam) : undefined
+        if (startDate) startDate.setHours(0, 0, 0, 0)
+        if (endDate) endDate.setHours(23, 59, 59, 999)
+
+        const baseConditions = [
+            inArray(orders.branchId, branchIds),
+            inArray(orders.status, ['FULFILLED', 'APPROVED', 'REFUNDED', 'PENDING', 'REJECTED', 'CANCELLED'])
+        ]
+        if (startDate) baseConditions.push(gte(orders.createdAt, startDate))
+        if (endDate) baseConditions.push(lte(orders.createdAt, endDate))
 
         // Find all order items matching filters
         const q = db
@@ -70,14 +77,7 @@ export async function GET(req: NextRequest) {
             .leftJoin(groups, eq(branches.groupId, groups.id))
             .innerJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
             .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
-            .where(
-                and(
-                    inArray(orders.branchId, branchIds),
-                    gte(orders.createdAt, startDate),
-                    lte(orders.createdAt, endDate),
-                    inArray(orders.status, ['FULFILLED', 'APPROVED', 'REFUNDED', 'PENDING', 'REJECTED', 'CANCELLED'])
-                )
-            )
+            .where(and(...baseConditions))
             .orderBy(desc(orders.createdAt))
 
         const results = await q

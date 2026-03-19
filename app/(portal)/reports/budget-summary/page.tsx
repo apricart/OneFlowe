@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, RefreshCw, ArrowUpRight, ArrowDownRight, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Wallet, PiggyBank, ReceiptText, ShieldCheck, Download, Building2, PieChart as PieChartIcon, LayoutDashboard, Database, FileText as FileSpreadsheetIcon, Download as DownloadIcon
+    Loader2, RefreshCw, ArrowUpRight, ArrowDownRight, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Wallet, PiggyBank, ReceiptText, ShieldCheck, Download, Building2, PieChart as PieChartIcon, LayoutDashboard, Database, FileText as FileSpreadsheetIcon, Download as DownloadIcon, Calculator, ChevronDown, CheckCircle, RotateCcw
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -29,9 +29,8 @@ import {
 
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
-import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { RotateCcw } from "lucide-react"
 
 import {
     ResponsiveContainer,
@@ -41,10 +40,11 @@ import {
     XAxis,
     YAxis,
     CartesianGrid,
-    Tooltip,
+    Tooltip as RechartsTooltip,
     Legend,
     BarChart,
-    Cell
+    Cell,
+    Line
 } from 'recharts'
 
 interface BudgetSummaryResponse {
@@ -163,6 +163,21 @@ export default function BudgetSummaryPage() {
         }
     }, [startFromUrl, endFromUrl, searchParams, handleDateChange])
 
+    const MONTHS = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ]
+    const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
+
+    const handleMonthYearChange = (monthIdx: number, year: number) => {
+        const startDate = new Date(year, monthIdx, 1)
+        const endDate = new Date(year, monthIdx + 1, 0)
+        handleDateChange({ startDate, endDate }, "custom")
+    }
+
+    const currentYear = dateRange?.startDate.getFullYear() || new Date().getFullYear()
+    const currentMonthIdx = dateRange?.startDate.getMonth() || new Date().getMonth()
+
     const summary = data?.summary || { totalAllocated: 0, totalSpent: 0, totalHeld: 0, totalCredited: 0, totalRemaining: 0 }
     const insights = data?.insights || { spentGrowth: 0, allocationGrowth: 0 }
     const categories = data?.categories || []
@@ -198,6 +213,7 @@ export default function BudgetSummaryPage() {
                     item.totalAddon += addon;
                 });
             }
+            item.totalLimit = item.totalBaseline + item.totalAddon;
             return item;
         })
     }, [data?.chartData, granularity])
@@ -310,7 +326,7 @@ export default function BudgetSummaryPage() {
                     />
                 )}
                 <div className="flex-1" />
-                <ScheduleReportModal reportName="Budget Intelligence" />
+                
                 <Button
                     variant="ghost"
                     size="sm"
@@ -402,62 +418,187 @@ export default function BudgetSummaryPage() {
                         {/* ━━━ CENTERPIECE DASHBOARD ━━━ */}
                         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
                             <Card className="xl:col-span-2 overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-                                <CardHeader className="pb-4 border-b border-slate-100 dark:border-slate-800/50">
+                                <CardHeader className="pb-4 border-b border-slate-100 dark:border-slate-800/50 flex flex-row items-center justify-between space-y-0">
                                     <CardTitle className="text-sm font-semibold flex items-center gap-2 uppercase tracking-tight text-slate-800 dark:text-slate-200">
                                         Expenditure Graph (<span className="text-indigo-500 lowercase italic">{granularity}</span>)
                                     </CardTitle>
+                                    <div className="flex items-center gap-2">
+                                        {/* Time Span Presets */}
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold border-indigo-100 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400 gap-1.5 px-3 rounded-md bg-indigo-50/20">
+                                                    <Calculator className="h-3.5 w-3.5" />
+                                                    {activePreset === "thisMonth" ? "This Month" : activePreset === "yearly" ? "This Year" : activePreset === "all" ? "All Time" : activePreset === "custom" ? "Custom" : "Time Span"}
+                                                    <ChevronDown className="h-3 w-3 opacity-50" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                                                <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">Select Time Span</div>
+                                                <DropdownMenuItem onClick={() => handleDateChange(null, "thisMonth")} className="text-xs py-2 cursor-pointer font-medium">This Month</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => {
+                                                    const end = new Date();
+                                                    const start = new Date();
+                                                    start.setMonth(start.getMonth() - 1);
+                                                    start.setDate(1);
+                                                    end.setDate(0);
+                                                    handleDateChange({ startDate: start, endDate: end }, "custom");
+                                                }} className="text-xs py-2 cursor-pointer font-medium">Last Month</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => {
+                                                    const start = new Date();
+                                                    start.setMonth(start.getMonth() - 6);
+                                                    handleDateChange({ startDate: start, endDate: new Date() }, "custom");
+                                                }} className="text-xs py-2 cursor-pointer font-medium font-bold text-teal-600">Last 6 Months</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleDateChange(null, "yearly")} className="text-xs py-2 cursor-pointer font-medium">This Year</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleDateChange(null, "all")} className="text-xs py-2 cursor-pointer font-medium text-slate-400">All Time</DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+
+                                        <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
+
+                                        {/* Month/Year Selector */}
+                                        <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-lg">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md uppercase">
+                                                        {MONTHS[currentMonthIdx]}
+                                                        <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent className="max-h-[300px] overflow-y-auto w-32 rounded-xl shadow-2xl">
+                                                    {MONTHS.map((m, i) => (
+                                                        <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, currentYear)} className={cn("text-[11px] uppercase tracking-tighter", currentMonthIdx === i && "bg-teal-50 text-teal-600 font-bold")}>
+                                                            {m}
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md">
+                                                        {currentYear}
+                                                        <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent className="rounded-xl shadow-2xl w-24">
+                                                    {YEARS.map(y => (
+                                                        <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(currentMonthIdx, y)} className={cn("text-[11px] font-mono", currentYear === y && "bg-teal-50 text-teal-600 font-bold")}>
+                                                            {y}
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </div>
                                 </CardHeader>
                                 <CardContent className="p-4 pt-6">
                                     <div className="h-[350px] w-full">
                                         {transformedChartData.length > 0 ? (
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart data={transformedChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.1} />
+                                                <ComposedChart data={transformedChartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                                                    <defs>
+                                                        <linearGradient id="colorBaseline" x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor="#0d9488" stopOpacity={0.1}/>
+                                                            <stop offset="95%" stopColor="#0d9488" stopOpacity={0.01}/>
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.3} />
                                                     <XAxis
                                                         dataKey="date"
                                                         axisLine={false}
                                                         tickLine={false}
-                                                        tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }}
+                                                        tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }}
                                                         dy={10}
+                                                        interval="preserveStartEnd"
+                                                        minTickGap={35}
                                                     />
                                                     <YAxis
                                                         axisLine={false}
                                                         tickLine={false}
-                                                        tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }}
+                                                        tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }}
                                                         tickFormatter={(v) => `Rs ${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`}
-                                                        dx={-10}
                                                     />
-                                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
+                                                    <RechartsTooltip 
+                                                        content={({ active, payload, label }) => {
+                                                            if (active && payload && payload.length) {
+                                                                const data = payload[0].payload;
+                                                                return (
+                                                                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-2xl min-w-[200px] ring-1 ring-slate-200/50">
+                                                                        <p className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2 border-b border-slate-100 dark:border-slate-800 pb-2">{label}</p>
+                                                                        <div className="space-y-1.5">
+                                                                            <div className="flex justify-between items-center bg-teal-50/30 p-1.5 rounded-lg border border-teal-100/50">
+                                                                                <span className="text-[10px] font-bold text-teal-600 uppercase">Allocated Budget</span>
+                                                                                <span className="text-[11px] font-black text-teal-700">{formatPKR(data.totalBaseline + data.totalAddon)}</span>
+                                                                            </div>
+                                                                            <div className="flex justify-between items-center bg-blue-50/30 p-1.5 rounded-lg border border-blue-100/50">
+                                                                                <span className="text-[10px] font-bold text-blue-600 uppercase">Actual Expenditure</span>
+                                                                                <span className="text-[11px] font-black text-blue-700">{formatPKR(data.totalSpent)}</span>
+                                                                            </div>
+                                                                            <div className="mt-2 pt-2 border-t border-slate-50 dark:border-slate-800">
+                                                                                <p className="text-[9px] font-black uppercase text-slate-400 mb-1">Branch Breakdown</p>
+                                                                                {uniqueBranches.slice(0, 3).map((b, idx) => (
+                                                                                    <div key={b.id} className="flex justify-between items-center py-0.5">
+                                                                                        <span className="text-[9px] text-slate-500 font-medium">{b.name}</span>
+                                                                                        <span className="text-[9px] font-bold text-slate-700 dark:text-slate-300">{formatPKR(data[`${b.id}_spent`] || 0)}</span>
+                                                                                    </div>
+                                                                                ))}
+                                                                                {uniqueBranches.length > 3 && <p className="text-[8px] text-center text-slate-400 mt-1 italic">+{uniqueBranches.length - 3} more branches</p>}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        }}
+                                                    />
                                                     <Legend 
                                                         verticalAlign="top" 
                                                         align="right" 
+                                                        height={40}
                                                         iconType="circle" 
-                                                        wrapperStyle={{ fontSize: '10px', paddingBottom: '20px', fontWeight: 'bold' }} 
+                                                        wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', paddingBottom: '20px' }} 
                                                     />
-                                                    {uniqueBranches.map((b, idx) => (
-                                                        <React.Fragment key={b.id}>
-                                                            <Bar 
-                                                                dataKey={`${b.id}_baseline`} 
-                                                                stackId="a" 
-                                                                fill={getBranchColor(idx, 'baseline')} 
-                                                                name={`${b.name} (Base)`} 
-                                                                radius={[0, 0, 0, 0]}
-                                                            />
-                                                            <Bar 
-                                                                dataKey={`${b.id}_addon`} 
-                                                                stackId="a" 
-                                                                fill={getBranchColor(idx, 'addon')} 
-                                                                name={`${b.name} (Addon)`} 
-                                                                radius={[idx === uniqueBranches.length - 1 ? 4 : 0, idx === uniqueBranches.length - 1 ? 4 : 0, 0, 0]}
-                                                            />
-                                                        </React.Fragment>
+                                                    
+                                                    {/* Background Area for Total Budget Limit */}
+                                                    <Area
+                                                        type="monotone"
+                                                        dataKey="totalLimit"
+                                                        name="Budget Limit"
+                                                        stroke="#0d9488"
+                                                        strokeWidth={2}
+                                                        fill="url(#colorBaseline)"
+                                                        fillOpacity={1}
+                                                        activeDot={false}
+                                                    />
+
+                                                    {/* Main Expenditure Line */}
+                                                    <Line 
+                                                        type="monotone" 
+                                                        dataKey="totalSpent" 
+                                                        name="Total Expenditure" 
+                                                        stroke="#ef4444" 
+                                                        strokeWidth={4} 
+                                                        dot={{ r: 4, fill: '#ef4444', strokeWidth: 2, stroke: '#fff' }} 
+                                                        activeDot={{ r: 6, strokeWidth: 0, fill: '#ef4444' }} 
+                                                    />
+
+                                                    {/* Individual Branch Bars - Only shown when few branches are selected to prevent mess */}
+                                                    {uniqueBranches.length <= 6 && uniqueBranches.map((b, idx) => (
+                                                        <Bar 
+                                                            key={`${b.id}_alloc`}
+                                                            dataKey={`${b.id}_spent`} 
+                                                            name={b.name}
+                                                            fill={getBranchColor(idx, 'baseline')} 
+                                                            barSize={12}
+                                                            radius={[4, 4, 0, 0]}
+                                                            opacity={0.8}
+                                                        />
                                                     ))}
-                                                </BarChart>
+                                                </ComposedChart>
                                             </ResponsiveContainer>
                                         ) : (
                                             <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3">
                                                 <ReceiptText className="h-10 w-10 opacity-20" />
-                                                <p className="text-sm font-medium italic">No spectral expenditure points detected</p>
+                                                <p className="text-sm font-medium italic">No multi-unit budget data detected for this period</p>
                                             </div>
                                         )}
                                     </div>
@@ -552,6 +693,7 @@ export default function BudgetSummaryPage() {
                                                 <TableHead className="pl-6 h-12 text-[10px] font-black uppercase tracking-widest text-slate-500">Branch Identity</TableHead>
                                                 <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Monthly Base</TableHead>
                                                 <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Add-On (Adj)</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Total Budget</TableHead>
                                                 <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Spent (Period)</TableHead>
                                                 <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Remaining</TableHead>
                                                 <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center pr-6">Utilization</TableHead>
@@ -559,21 +701,26 @@ export default function BudgetSummaryPage() {
                                         </TableHeader>
                                         <TableBody className="font-mono">
                                             {filteredBranches.map((b: any) => {
-                                                const addon = Math.max(0, b.allocated - (b.baselineAmount || 0));
-                                                const utilization = b.allocated > 0 ? (b.spent / b.allocated) * 100 : 0;
+                                                const baseline = b.baselineAmount || 0;
+                                                const addon = (b.allocated - baseline) + (b.credited || 0);
+                                                const totalLimit = b.allocated + (b.credited || 0);
+                                                const utilization = totalLimit > 0 ? (b.spent / totalLimit) * 100 : 0;
                                                 return (
                                                     <TableRow key={b.branchId} className="hover:bg-slate-50/50 dark:hover:bg-indigo-950/10 border-b border-slate-100 dark:border-slate-800/50 transition-colors">
                                                         <TableCell className="pl-6 py-4">
-                                                            <div className="flex flex-col">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)] flex-shrink-0" />
                                                                 <span className="font-black text-xs text-slate-900 dark:text-slate-100 uppercase tracking-tighter">{b.branchName}</span>
-                                                                <span className="text-[9px] text-indigo-500 font-bold uppercase tracking-widest mt-0.5">NET_BRANCH_ID: {b.branchId}</span>
                                                             </div>
                                                         </TableCell>
-                                                        <TableCell className="text-right py-4 font-bold text-xs text-slate-700 dark:text-slate-300">
-                                                            {formatPKR(b.baselineAmount / 100)}
+                                                        <TableCell className="text-right py-4 font-bold text-xs text-slate-500 dark:text-slate-400">
+                                                            {formatPKR(baseline / 100)}
                                                         </TableCell>
                                                         <TableCell className="text-right py-4 font-bold text-xs text-indigo-600 dark:text-indigo-400">
-                                                            +{formatPKR(addon / 100)}
+                                                            {addon > 0 ? `+${formatPKR(addon / 100)}` : "-"}
+                                                        </TableCell>
+                                                        <TableCell className="text-right py-4 font-black text-xs text-slate-900 dark:text-white">
+                                                            {formatPKR(totalLimit / 100)}
                                                         </TableCell>
                                                         <TableCell className="text-right py-4 font-bold text-xs text-slate-900 dark:text-white">
                                                             {formatPKR(b.spent / 100)}

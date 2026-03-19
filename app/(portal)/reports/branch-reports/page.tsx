@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, Building2, TrendingUp, Search, Download, FileText, FileSpreadsheet, FileIcon as FilePdf, RefreshCw, Trophy, Crown, BarChart3
+    Loader2, Building2, TrendingUp, Search, Download, FileText, FileSpreadsheet, FileIcon as FilePdf, RefreshCw, Trophy, Crown, BarChart3, Calculator, ChevronDown
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -27,7 +27,7 @@ import {
 
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
-import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
+
 import { KPICard } from "@/components/reports/kpi-card"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -90,6 +90,21 @@ export default function BranchReportsPage() {
         setGeneratedDate(new Date().toLocaleString())
     }, [])
 
+    const MONTHS = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ]
+    const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
+
+    const handleMonthYearChange = (monthIdx: number, year: number) => {
+        const startDate = new Date(year, monthIdx, 1)
+        const endDate = new Date(year, monthIdx + 1, 0)
+        handleDateChange({ startDate, endDate }, "custom")
+    }
+
+    const currentYear = dateRange?.startDate.getFullYear() || new Date().getFullYear()
+    const currentMonthIdx = dateRange?.startDate.getMonth() || new Date().getMonth()
+
     const topPerformers = data?.topPerformers || []
     const summary = data?.summary || { totalSales: 0, orderCount: 0 }
 
@@ -129,7 +144,6 @@ export default function BranchReportsPage() {
     return (
         <div className="space-y-5 pb-12 bg-slate-50 dark:bg-slate-950 min-h-screen">
 
-            {/* ━━━ GLOBAL STICKY HEADER ━━━ */}
             <div className="sticky top-0 z-30 flex flex-wrap items-center gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                 <GlobalDateFilter
                     value={dateRange}
@@ -137,6 +151,76 @@ export default function BranchReportsPage() {
                     activePreset={activePreset}
                     hidePresets={false}
                 />
+                
+                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1 hidden md:block" />
+
+                <div className="flex items-center gap-2">
+                    {/* Time Span Presets */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-9 text-[11px] font-bold border-indigo-100 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400 gap-1.5 px-3 rounded-full bg-indigo-50/20">
+                                <Calculator className="h-4 w-4" />
+                                {activePreset === "thisMonth" ? "This Month" : activePreset === "yearly" ? "This Year" : activePreset === "all" ? "All Time" : activePreset === "custom" ? "Custom Range" : "Presets"}
+                                <ChevronDown className="h-3 w-3 opacity-50" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                            <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">Quick Select</div>
+                            <DropdownMenuItem onClick={() => handleDateChange(null, "thisMonth")} className="text-xs py-2 cursor-pointer font-medium">This Month</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                                const end = new Date();
+                                const start = new Date();
+                                start.setMonth(start.getMonth() - 1);
+                                start.setDate(1);
+                                end.setDate(0);
+                                handleDateChange({ startDate: start, endDate: end }, "custom");
+                            }} className="text-xs py-2 cursor-pointer font-medium text-emerald-600">Last Month</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                                const start = new Date();
+                                start.setMonth(start.getMonth() - 6);
+                                handleDateChange({ startDate: start, endDate: new Date() }, "custom");
+                            }} className="text-xs py-2 cursor-pointer font-medium font-bold text-indigo-600">Last 6 Months</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDateChange(null, "yearly")} className="text-xs py-2 cursor-pointer font-medium">This Year</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDateChange(null, "all")} className="text-xs py-2 cursor-pointer font-medium text-slate-400 border-t border-slate-100 mt-1">All Time</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Month/Year Selector */}
+                    <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-full border border-slate-200 dark:border-slate-800 px-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-full uppercase text-slate-600 dark:text-slate-400">
+                                    {MONTHS[currentMonthIdx]}
+                                    <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="max-h-[300px] overflow-y-auto w-32 rounded-xl shadow-2xl">
+                                {MONTHS.map((m, i) => (
+                                    <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, currentYear)} className={cn("text-[11px] uppercase tracking-tighter", currentMonthIdx === i && "bg-emerald-50 text-emerald-600 font-bold")}>
+                                        {m}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-700" />
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-full text-slate-600 dark:text-slate-400">
+                                    {currentYear}
+                                    <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="rounded-xl shadow-2xl w-24">
+                                {YEARS.map(y => (
+                                    <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(currentMonthIdx, y)} className={cn("text-[11px] font-mono", currentYear === y && "bg-emerald-50 text-emerald-600 font-bold")}>
+                                        {y}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                </div>
+
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <GroupFilter
                         value={groupId}
@@ -145,13 +229,13 @@ export default function BranchReportsPage() {
                     />
                 )}
                 <div className="flex-1" />
-                <ScheduleReportModal reportName="Branch Performance" />
+                
                 <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => mutate()}
                     disabled={isLoading}
-                    className="h-9 text-[12px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-full px-4"
+                    className="h-9 text-[12px] font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-full px-4"
                 >
                     <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isLoading ? "animate-spin" : ""}`} />
                     REFRESH

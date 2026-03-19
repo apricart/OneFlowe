@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw, Trash2 } from "lucide-react"
+import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw, Trash2, Search } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
 
@@ -308,42 +308,50 @@ export default function BudgetsPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-          <label className="text-sm font-medium mb-2 block text-slate-900 dark:text-slate-100">Search Branches</label>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Total Org Budget</p>
+          <p className="text-xl font-black text-slate-900 dark:text-white">{formatAmount(totalAllocated)}</p>
+          <div className="h-1 w-8 bg-blue-500 mt-2" />
+        </Card>
+        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Spent This Period</p>
+          <p className="text-xl font-black text-rose-600 dark:text-rose-400">{formatAmount(totalSpent)}</p>
+          <div className="h-1 w-8 bg-rose-500 mt-2" />
+        </Card>
+        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Credits / Remaining</p>
+          <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">{formatAmount(totalRemaining)}</p>
+          <div className="h-1 w-8 bg-emerald-500 mt-2" />
+        </Card>
+        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm bg-indigo-50 dark:bg-indigo-950/30">
+          <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-1">Avg Utilization</p>
+          <p className="text-xl font-black text-indigo-600 dark:text-indigo-400">
+            {totalAllocated > 0 ? ((totalSpent / totalAllocated) * 100).toFixed(1) : "0.0"}%
+          </p>
+          <div className="h-1 w-8 bg-indigo-500 mt-2" />
+        </Card>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div className="relative w-full sm:w-96">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by name or ID..."
+            placeholder="Search branches..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
+            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-bold uppercase tracking-tight focus:ring-2 focus:ring-blue-500 outline-none transition-all"
           />
-        </Card>
-        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-          <label className="text-sm font-medium mb-2 block text-slate-900 dark:text-slate-100">Quick Actions</label>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setShowBulkDialog(true)}
-              className="flex-1 gap-2"
-              variant="outline"
-            >
-              <Zap className="h-4 w-4" />
-              Allocate All
-            </Button>
-            <Button
-              onClick={() => setShowEmptyAllDialog(true)}
-              className="flex-1 gap-2"
-              variant="destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-              Empty All
-            </Button>
-          </div>
-        </Card>
-        <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-          <p className="text-xs font-medium text-blue-900 dark:text-blue-100 mb-1">Total Branches</p>
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{scopedBudgets.length}</p>
-        </Card>
+        </div>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button onClick={() => setShowBulkDialog(true)} variant="outline" className="flex-1 font-bold uppercase text-[10px] tracking-widest border-slate-200 dark:border-slate-800 rounded-xl px-6">
+            <Zap className="h-3.5 w-3.5 mr-2 text-amber-500" /> Bulk Allocate
+          </Button>
+          <Button onClick={() => setShowEmptyAllDialog(true)} variant="outline" className="flex-1 font-bold uppercase text-[10px] tracking-widest border-slate-200 dark:border-slate-800 rounded-xl px-6 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 transition-colors">
+            <Trash2 className="h-3.5 w-3.5 mr-2" /> Empty All
+          </Button>
+        </div>
       </div>
 
       <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
@@ -351,10 +359,10 @@ export default function BudgetsPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
-                <TableHead className="font-semibold text-slate-900 dark:text-slate-200">Branch (ID / Org)</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Monthly Budget</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Baseline</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Add-on</TableHead>
+                <TableHead className="font-semibold text-slate-900 dark:text-slate-200">Branch Identity</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Monthly Base</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Add-on Credit</TableHead>
+                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Total Budget</TableHead>
                 <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Spent (Month)</TableHead>
                 <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Remaining (Month)</TableHead>
                 <TableHead className="text-center font-semibold text-slate-900 dark:text-slate-200">Usage</TableHead>
@@ -385,32 +393,36 @@ export default function BudgetsPage() {
 
                   return (
                     <TableRow key={budget.branchId} className={isUnderutilized ? "bg-gray-50 dark:bg-gray-900" : isNearLimit ? "bg-red-50 dark:bg-red-950/20" : isMedium ? "bg-yellow-50 dark:bg-yellow-950/20" : ""}>
-                      <TableCell className="font-semibold text-slate-900 dark:text-white">
-                        <div>{budget.branchName}</div>
-                        <div className="text-[10px] text-muted-foreground font-normal">ID: {budget.branchId} · Org: {budget.organizationId}</div>
+                      <TableCell className="font-bold text-slate-900 dark:text-white">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                          {budget.branchName}
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right font-bold text-lg">
-                        <span className="text-blue-600 dark:text-blue-400">{formatAmount(budget.amountAllocatedCents)}</span>
-                      </TableCell>
-                      <TableCell className="text-right font-medium text-slate-500">
+                      <TableCell className="text-right font-medium text-slate-500 dark:text-slate-400">
                         {formatAmount(budget.baselineBudgetCents)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {budget.amountAllocatedCents > budget.baselineBudgetCents ? (
-                          <Badge className="bg-amber-500 text-white font-bold h-7 px-2">
-                            +{formatAmount(budget.amountAllocatedCents - budget.baselineBudgetCents)}
+                        {(budget.amountAllocatedCents > budget.baselineBudgetCents || budget.amountCreditedCents > 0) ? (
+                          <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 font-bold">
+                            +{formatAmount((budget.amountAllocatedCents - budget.baselineBudgetCents) + budget.amountCreditedCents)}
                           </Badge>
                         ) : (
-                          <span className="text-slate-400 text-xs">-</span>
+                          <span className="text-slate-300 dark:text-slate-700">-</span>
                         )}
                       </TableCell>
+                      <TableCell className="text-right font-black">
+                        <span className="text-slate-900 dark:text-white text-base">
+                          {formatAmount(budget.amountAllocatedCents + budget.amountCreditedCents)}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-right">
-                        <span className="text-orange-600" title={`Actual Spent: ${formatAmount(budget.amountSpentCents)}, Pending: ${formatAmount(budget.amountHeldCents)}`}>
+                        <span className="text-rose-600 font-semibold" title={`Actual Spent: ${formatAmount(budget.amountSpentCents)}, Pending: ${formatAmount(budget.amountHeldCents)}`}>
                           {formatAmount(budget.amountSpentCents + budget.amountHeldCents)}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
-                        <span className={budget.remainingCents < 0 ? "text-red-600" : "text-green-600"}>{formatAmount(budget.remainingCents)}</span>
+                      <TableCell className="text-right font-black tracking-tight">
+                        <span className={budget.remainingCents < 0 ? "text-red-600" : "text-emerald-600"}>{formatAmount(budget.remainingCents)}</span>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1 w-24">

@@ -2,8 +2,9 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, users, branches, roles } from "@/db/schema"
+import { orders, users, branches, roles, organizations } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, sql } from "drizzle-orm"
+import { metricExpressions } from "@/lib/metric-utils"
 
 export async function GET(req: NextRequest) {
     try {
@@ -37,10 +38,14 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "No branches resolved" }, { status: 400 })
         }
 
-        let startDate = startDateParam ? new Date(startDateParam) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-        let endDate = endDateParam ? new Date(endDateParam) : new Date()
-        startDate.setHours(0, 0, 0, 0)
-        endDate.setHours(23, 59, 59, 999)
+        let startDate = startDateParam ? new Date(startDateParam) : undefined
+        let endDate = endDateParam ? new Date(endDateParam) : undefined
+        if (startDate) startDate.setHours(0, 0, 0, 0)
+        if (endDate) endDate.setHours(23, 59, 59, 999)
+
+        const baseConditions = [inArray(orders.branchId, branchIds)]
+        if (startDate) baseConditions.push(gte(orders.createdAt, startDate))
+        if (endDate) baseConditions.push(lte(orders.createdAt, endDate))
 
         // Aggregate User Metrics
         const q = db
@@ -50,23 +55,20 @@ export async function GET(req: NextRequest) {
                 userEmail: users.email,
                 employeeId: sql<string>`COALESCE(${users.employeeId}, SPLIT_PART(${users.id}::text, '-', 1))`,
                 branchName: branches.name,
+                organizationName: organizations.name,
+                tids: sql<string>`STRING_AGG(${orders.tid}, ',')`,
                 totalOrders: sql<number>`count(${orders.id})`,
-                fulfilledOrders: sql<number>`count(CASE WHEN ${orders.status} IN ('FULFILLED', 'APPROVED') THEN 1 END)`,
-                refundedOrders: sql<number>`count(CASE WHEN ${orders.status} = 'REFUNDED' THEN 1 END)`,
-                totalSpentCents: sql<number>`sum(CASE WHEN ${orders.status} IN ('FULFILLED', 'APPROVED') THEN ${orders.totalCents} ELSE 0 END)`,
+                fulfilledOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END)`,
+                refundedOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END)`,
+                totalSpentCents: metricExpressions.revenue,
             })
             .from(users)
             .innerJoin(orders, eq(orders.createdByUserId, users.id))
             .leftJoin(branches, eq(users.branchId, branches.id))
-            .where(
-                and(
-                    inArray(orders.branchId, branchIds),
-                    gte(orders.createdAt, startDate),
-                    lte(orders.createdAt, endDate)
-                )
-            )
-            .groupBy(users.id, branches.name)
-            .orderBy(desc(sql`sum(CASE WHEN ${orders.status} IN ('FULFILLED', 'APPROVED') THEN ${orders.totalCents} ELSE 0 END)`))
+            .leftJoin(organizations, eq(orders.organizationId, organizations.id))
+            .where(and(...baseConditions))
+            .groupBy(users.id, branches.name, organizations.name)
+            .orderBy(desc(metricExpressions.revenue))
 
         const results = await q
 
@@ -89,12 +91,12 @@ export async function GET(req: NextRequest) {
                 prevEnd = new Date(start.getTime() - 1)
             }
 
-            const compResults = await db
+            const [compStats] = await db
                 .select({
-                    orderId: orders.id,
-                    status: orders.status,
-                    totalSpentCents: orders.totalCents,
-                    userId: orders.createdByUserId
+                    compOrders: metricExpressions.totalOrderCount,
+                    compFulfilled: metricExpressions.fulfilledCount,
+                    compSpent: metricExpressions.revenue,
+                    compUsers: sql<number>`count(distinct ${orders.createdByUserId})`.mapWith(Number)
                 })
                 .from(orders)
                 .where(
@@ -105,16 +107,11 @@ export async function GET(req: NextRequest) {
                     )
                 )
 
-            let compOrders = compResults.length
-            let compFulfilled = compResults.filter(r => ['FULFILLED', 'APPROVED'].includes(r.status || "")).length
-            let compSpent = compResults.reduce((sum, r) => sum + (['FULFILLED', 'APPROVED'].includes(r.status || "") ? (r.totalSpentCents || 0) : 0), 0)
-            let compUsers = new Set(compResults.map(r => r.userId)).size
-
             comparisonSummary = {
-                totalOrders: compOrders,
-                totalFulfilled: compFulfilled,
-                totalSpentCents: compSpent,
-                totalUsers: compUsers
+                totalOrders: compStats?.compOrders || 0,
+                totalFulfilled: compStats?.compFulfilled || 0,
+                totalSpentCents: compStats?.compSpent || 0,
+                totalUsers: compStats?.compUsers || 0
             }
         }
 

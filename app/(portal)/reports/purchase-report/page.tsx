@@ -10,7 +10,7 @@ import {
   Loader2, TrendingUp, ShoppingBag, 
   BarChart3, RefreshCw, Search, FileText, 
   FileSpreadsheet, FileIcon as FilePdf, Download,
-  Building2, Package, Calculator
+  Building2, Package, Calculator, ChevronDown
 } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
 import * as XLSX from "xlsx"
@@ -27,7 +27,7 @@ import {
 import { GlobalDateFilter, type FilterPreset, getPresetRange } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
-import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
+
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -62,6 +62,18 @@ export default function PurchaseReportPage() {
     if (compareMode !== undefined) setCompare(compareMode)
     if (compRange !== undefined) setCompareRange(compRange)
   }, [])
+
+  const handleMonthYearChange = (monthIdx: number, year: number) => {
+    const startDate = new Date(year, monthIdx, 1)
+    const endDate = new Date(year, monthIdx + 1, 0)
+    handleDateChange({ startDate, endDate }, "custom")
+  }
+
+  const MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ]
+  const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
   const handleBranchChange = useCallback((ids: string[]) => {
     setSelectedBranchIds(ids)
@@ -167,6 +179,50 @@ export default function PurchaseReportPage() {
           compare={compare}
           compareRange={compareRange}
         />
+
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold gap-1 hover:bg-white dark:hover:bg-slate-800 transition-all uppercase tracking-tighter">
+                <Calculator className="h-3 w-3 text-indigo-500" />
+                {dateRange ? MONTHS[dateRange.startDate.getMonth()] : 'Month'}
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40 max-h-[300px] overflow-y-auto">
+              {MONTHS.map((m, i) => (
+                <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, dateRange?.startDate.getFullYear() || new Date().getFullYear())} className="text-xs font-medium">
+                  {m}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold gap-1 hover:bg-white dark:hover:bg-slate-800 transition-all uppercase tracking-tighter border-l border-slate-200 dark:border-slate-700 rounded-none pl-2">
+                {dateRange ? dateRange.startDate.getFullYear() : 'Year'}
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-24">
+              {YEARS.map(y => (
+                <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(dateRange?.startDate.getMonth() || 0, y)} className="text-xs font-medium">
+                  {y}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleDateChange(null, "thisMonth")}
+            className="h-7 text-[9px] font-black bg-indigo-500 text-white hover:bg-indigo-600 ml-1 px-2 rounded-md"
+          >
+            TIME SPAN
+          </Button>
+        </div>
         <GroupFilter 
           value={selectedGroupId} 
           onChange={handleGroupChange} 
@@ -178,7 +234,7 @@ export default function PurchaseReportPage() {
           organizationId={organizationId || undefined}
         />
         <div className="flex-1" />
-        <ScheduleReportModal reportName="Purchase Report" />
+        
         <Button
           variant="ghost"
           size="sm"

@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
                     inArray(orders.branchId, branchIds),
                     gte(orders.createdAt, startDate),
                     lte(orders.createdAt, endDate),
-                    inArray(orders.status, ['FULFILLED', 'APPROVED']) // APPROVED = held, FULFILLED = spent
+                    inArray(orders.status, ['FULFILLED']) // Only FULFILLED = actually spent, APPROVED = held
                 )
             )
             .groupBy(globalProducts.categoryId, categories.name)
@@ -208,10 +208,11 @@ export async function GET(req: NextRequest) {
                 const record = budgetLookup[branch.id]?.[period]
                 const baselineSetting = branch.baselineBudgetCents || 0
                 const allocated = record ? (record.amountAllocatedCents || 0) : baselineSetting
+                const credited = record ? (record.amountCreditedCents || 0) : 0
                 
-                // For the chart, we split into baseline vs addon
-                const baseline = Math.min(allocated, baselineSetting)
-                const addon = Math.max(0, allocated - baselineSetting)
+                // For the chart, we split into baseline vs addon explicitly based on DB fields
+                const baseline = allocated
+                const addon = credited
                 
                 if (!chartDataMap[period].branches[branch.id]) {
                     chartDataMap[period].branches[branch.id] = { branchName: branch.name, baseline: 0, addon: 0, spent: 0 }
@@ -234,7 +235,7 @@ export async function GET(req: NextRequest) {
                     inArray(orders.branchId, branchIds),
                     gte(orders.createdAt, startDate),
                     lte(orders.createdAt, endDate),
-                    inArray(sql`UPPER(${orders.status})`, ['FULFILLED', 'APPROVED'])
+                    inArray(sql`UPPER(${orders.status})`, ['FULFILLED'])
                 )
             )
             .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`, orders.branchId)

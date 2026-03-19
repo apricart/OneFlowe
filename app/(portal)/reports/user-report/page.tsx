@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import useSWR from "swr"
 import { useAppContext } from "@/components/context/app-context"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, Users, Package, CheckCircle, TrendingUp, Filter, UserCircle
+    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, Users, Package, CheckCircle, TrendingUp, Filter, UserCircle, Calculator, ChevronDown, UserPlus
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -24,10 +24,21 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+    ResponsiveContainer,
+    ComposedChart,
+    CartesianGrid,
+    XAxis,
+    YAxis,
+    Tooltip as RechartsTooltip,
+    Legend,
+    Bar,
+    Line,
+} from "recharts"
 
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
-import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
+
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -45,6 +56,8 @@ export default function UserReportPage() {
 
     const [searchTerm, setSearchTerm] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
+    const [selectedChartUsers, setSelectedChartUsers] = useState<number[]>([])
+    const [chartUserDropdownOpen, setChartUserDropdownOpen] = useState(false)
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
@@ -117,18 +130,49 @@ export default function UserReportPage() {
         setGeneratedDate(new Date().toLocaleString())
     }, [])
 
+    const MONTHS = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    ]
+    const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
+
+    const handleMonthYearChange = (monthIdx: number, year: number) => {
+        const startDate = new Date(year, monthIdx, 1)
+        const endDate = new Date(year, monthIdx + 1, 0)
+        handleDateChange({ startDate, endDate }, "custom")
+    }
+
+    const currentYear = dateRange?.startDate.getFullYear() || new Date().getFullYear()
+    const currentMonthIdx = dateRange?.startDate.getMonth() || new Date().getMonth()
+
     const usersData = data?.data || []
 
     const filteredUsers = usersData.filter((u: any) =>
         (u.userName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (u.userEmail || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (u.branchName || "").toLowerCase().includes(searchTerm.toLowerCase())
+        (u.branchName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.employeeId || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.tids || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.organizationName || "").toLowerCase().includes(searchTerm.toLowerCase())
     )
 
     const totalUsers = usersData.length
     const totalOrders = usersData.reduce((sum: number, u: any) => sum + (Number(u.totalOrders) || 0), 0)
     const totalFulfilled = usersData.reduce((sum: number, u: any) => sum + (Number(u.fulfilledOrders) || 0), 0)
     const totalSpent = usersData.reduce((sum: number, u: any) => sum + (Number(u.totalSpentCents) || 0), 0)
+
+    // Chart data: build per-user comparison data
+    const chartUsers = selectedChartUsers.length > 0
+        ? usersData.filter((u: any) => selectedChartUsers.includes(u.userId))
+        : usersData.slice(0, 5) // Default: top 5 users by spend
+
+    const chartData = chartUsers.map((u: any) => ({
+        name: u.userName?.split(' ')[0] || "User",
+        fullName: u.userName,
+        orders: u.totalOrders || 0,
+        fulfilled: u.fulfilledOrders || 0,
+        spent: Math.round((u.totalSpentCents || 0) / 100),
+    }))
 
     // Comparison Trends
     const comparison = data?.comparison
@@ -151,9 +195,9 @@ export default function UserReportPage() {
     const successTrend = getTrend(currentSuccess, prevSuccess)
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Employee ID", "Name", "Email", "Branch", "Total Orders", "Fulfilled", "Refunded", "Total Spent"]
+        const headers = ["Employee ID", "Name", "Email", "Organization", "Branch", "Total Orders", "Fulfilled", "Refunded", "Total Spent"]
         const rows = filteredUsers.map((u: any) => [
-            u.employeeId || "-", u.userName, u.userEmail, u.branchName || 'N/A', u.totalOrders, u.fulfilledOrders, u.refundedOrders,
+            u.employeeId || "-", u.userName, u.userEmail, u.organizationName || 'N/A', u.branchName || 'N/A', u.totalOrders, u.fulfilledOrders, u.refundedOrders,
             (u.totalSpentCents / 100).toFixed(2)
         ])
 
@@ -203,7 +247,6 @@ export default function UserReportPage() {
                     />
                 )}
                 <div className="flex-1" />
-                <ScheduleReportModal reportName="User Report" />
                 <Button
                     variant="ghost"
                     size="sm"
@@ -347,6 +390,202 @@ export default function UserReportPage() {
                     </Card>
                 </div>
 
+                {/* ━━━ USER ANALYTICS CHART ━━━ */}
+                <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900/50 backdrop-blur-xl rounded-3xl">
+                    <div className="p-6 border-b border-slate-100 dark:border-slate-800/50 flex flex-wrap justify-between items-center gap-4 bg-slate-50/50 dark:bg-slate-900/20">
+                        <div className="flex flex-col">
+                            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-indigo-600 dark:text-indigo-400">User Comparison</h3>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase">Volume & Spend Analysis</p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            {/* Time Span Presets */}
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold border-indigo-100 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400 gap-1.5 px-3 rounded-md bg-indigo-50/20">
+                                        <Calculator className="h-3.5 w-3.5" />
+                                        {activePreset === "thisMonth" ? "This Month" : activePreset === "yearly" ? "This Year" : activePreset === "all" ? "All Time" : activePreset === "custom" ? "Custom" : "Time Span"}
+                                        <ChevronDown className="h-3 w-3 opacity-50" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                                    <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">Select Time Span</div>
+                                    <DropdownMenuItem onClick={() => handleDateChange(null, "thisMonth")} className="text-xs py-2 cursor-pointer font-medium">This Month</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {
+                                        const end = new Date();
+                                        const start = new Date();
+                                        start.setMonth(start.getMonth() - 1);
+                                        start.setDate(1);
+                                        end.setDate(0);
+                                        handleDateChange({ startDate: start, endDate: end }, "custom");
+                                    }} className="text-xs py-2 cursor-pointer font-medium">Last Month</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => {
+                                        const start = new Date();
+                                        start.setMonth(start.getMonth() - 6);
+                                        handleDateChange({ startDate: start, endDate: new Date() }, "custom");
+                                    }} className="text-xs py-2 cursor-pointer font-medium font-bold text-indigo-600">Last 6 Months</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDateChange(null, "yearly")} className="text-xs py-2 cursor-pointer font-medium">This Year</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDateChange(null, "all")} className="text-xs py-2 cursor-pointer font-medium text-slate-400">All Time</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+
+                            <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
+
+                            {/* Month/Year Selector */}
+                            <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-lg">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md uppercase">
+                                            {MONTHS[currentMonthIdx]}
+                                            <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="max-h-[300px] overflow-y-auto w-32 rounded-xl shadow-2xl">
+                                        {MONTHS.map((m, i) => (
+                                            <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, currentYear)} className={cn("text-[11px] uppercase tracking-tighter", currentMonthIdx === i && "bg-indigo-50 text-indigo-600 font-bold")}>
+                                                {m}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md">
+                                            {currentYear}
+                                            <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="rounded-xl shadow-2xl w-24">
+                                        {YEARS.map(y => (
+                                            <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(currentMonthIdx, y)} className={cn("text-[11px] font-mono", currentYear === y && "bg-indigo-50 text-indigo-600 font-bold")}>
+                                                {y}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
+
+                            <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
+
+                            <DropdownMenu open={chartUserDropdownOpen} onOpenChange={setChartUserDropdownOpen}>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 gap-1.5 px-3 rounded-md bg-emerald-50/20">
+                                        <UserPlus className="h-3.5 w-3.5" />
+                                        {selectedChartUsers.length > 0 ? `${selectedChartUsers.length} Selected` : "Select Users"}
+                                        <ChevronDown className="h-3 w-3 opacity-50" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-64 max-h-[400px] overflow-y-auto rounded-xl p-2 shadow-2xl">
+                                    <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1 flex justify-between items-center">
+                                        <span>Compare Users</span>
+                                        {selectedChartUsers.length > 0 && (
+                                            <button onClick={(e) => { e.stopPropagation(); setSelectedChartUsers([]); }} className="text-indigo-500 hover:text-indigo-600 transition-colors lowercase font-bold">reset</button>
+                                        )}
+                                    </div>
+                                    {usersData.length === 0 ? (
+                                        <div className="p-4 text-center text-[10px] text-slate-400 font-bold uppercase italic">No data available</div>
+                                    ) : (
+                                        usersData.slice(0, 15).map((u: any) => (
+                                            <DropdownMenuItem 
+                                                key={u.userId} 
+                                                onSelect={(e) => {
+                                                    e.preventDefault()
+                                                    setSelectedChartUsers(prev => 
+                                                        prev.includes(u.userId) 
+                                                            ? prev.filter(id => id !== u.userId)
+                                                            : [...prev, u.userId]
+                                                    )
+                                                }}
+                                                className="text-[11px] py-2 cursor-pointer flex items-center justify-between rounded-lg px-3 transition-all hover:bg-slate-50"
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-slate-700 dark:text-slate-300 capitalize">{u.userName}</span>
+                                                    <span className="text-[9px] text-slate-400 lowercase">{formatPKR(u.totalSpentCents / 100)} spent</span>
+                                                </div>
+                                                <div className={cn(
+                                                    "w-4 h-4 rounded-md border flex items-center justify-center transition-all",
+                                                    selectedChartUsers.includes(u.userId) ? "bg-emerald-500 border-emerald-600 text-white" : "border-slate-200 dark:border-slate-700"
+                                                )}>
+                                                    {selectedChartUsers.includes(u.userId) && <CheckCircle className="h-3 w-3" />}
+                                                </div>
+                                            </DropdownMenuItem>
+                                        ))
+                                    )}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                    </div>
+                    <CardContent className="p-6">
+                        <div className="h-[350px] w-full mt-4">
+                            {chartData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" opacity={0.5} />
+                                        <XAxis 
+                                            dataKey="name" 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }}
+                                            dy={10}
+                                        />
+                                        <YAxis 
+                                            yAxisId="left"
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }}
+                                            tickFormatter={(value) => value.toLocaleString()}
+                                        />
+                                        <YAxis 
+                                            yAxisId="right"
+                                            orientation="right"
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }}
+                                            tickFormatter={(value) => `Rs ${value >= 1000 ? (value / 1000).toFixed(0) + 'k' : value}`}
+                                        />
+                                        <RechartsTooltip 
+                                            content={({ active, payload, label }) => {
+                                                if (active && payload && payload.length) {
+                                                    const u = chartUsers.find((cu: any) => cu.userName.split(' ')[0] === label) || chartUsers[0];
+                                                    return (
+                                                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-2xl min-w-[200px] ring-1 ring-slate-200/50">
+                                                            <p className="text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2 border-b border-slate-100 pb-2">{u.userName}</p>
+                                                            <div className="space-y-1.5">
+                                                                <div className="flex justify-between items-center bg-blue-50/30 p-1.5 rounded-lg">
+                                                                    <span className="text-[10px] font-bold text-blue-600 uppercase">Total Orders</span>
+                                                                    <span className="text-[11px] font-black text-blue-700">{payload[0].value}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center bg-emerald-50/30 p-1.5 rounded-lg">
+                                                                    <span className="text-[10px] font-bold text-emerald-600 uppercase">Fulfilled</span>
+                                                                    <span className="text-[11px] font-black text-emerald-700">{payload[1].value}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center bg-indigo-50/30 p-1.5 rounded-lg mt-1 border border-indigo-100/50">
+                                                                    <span className="text-[10px] font-bold text-indigo-600 uppercase">Total Spent</span>
+                                                                    <span className="text-[11px] font-black text-indigo-700">{formatPKR(Number(payload[2].value))}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            }}
+                                        />
+                                        <Legend verticalAlign="top" align="right" height={36} iconType="circle" />
+                                        <Bar yAxisId="left" dataKey="orders" name="Orders Initiated" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={24} />
+                                        <Bar yAxisId="left" dataKey="fulfilled" name="Fulfilled Orders" fill="#10b981" radius={[6, 6, 0, 0]} barSize={24} />
+                                        <Line yAxisId="right" type="monotone" dataKey="spent" name="Total Expenditure" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3">
+                                    <Users className="h-10 w-10 opacity-20" />
+                                    <p className="text-sm font-medium italic">Insufficient transactional data for visualization</p>
+                                </div>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+
                 {/* ━━━ USER LIST TABLE ━━━ */}
                 <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/50">
                     <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-4">
@@ -390,7 +629,7 @@ export default function UserReportPage() {
                                 <TableRow className="bg-slate-50/50 dark:bg-slate-800/30">
                                     <TableHead className="pl-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Employee</TableHead>
                                     <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Emp ID</TableHead>
-                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Orders</TableHead>
+                                    <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500 text-left">Organization</TableHead>
                                     <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500">Branch Assignment</TableHead>
                                     <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500 text-center">Total Orders</TableHead>
                                     <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500 text-center">Fulfilled</TableHead>
@@ -417,7 +656,9 @@ export default function UserReportPage() {
                                                     {u.employeeId || "-"}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell className="text-right font-mono text-xs font-medium text-slate-500">{u.totalOrders.toLocaleString()}</TableCell>
+                                            <TableCell className="text-left font-semibold text-[11px] text-slate-700 dark:text-slate-300">
+                                                {u.organizationName || "N/A"}
+                                            </TableCell>
                                             <TableCell>
                                                 <Badge variant="outline" className="text-[10px] font-medium border-slate-200 dark:border-slate-800">{u.branchName || "Unassigned"}</Badge>
                                             </TableCell>

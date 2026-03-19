@@ -5,10 +5,12 @@
  * This eliminates data drift between Dashboard, Reports, and Drill-downs.
  * 
  * BUSINESS RULES:
- * - Revenue = SUM of totalCents WHERE status = 'FULFILLED' ONLY
- * - Order Count (for revenue context) = COUNT WHERE status = 'FULFILLED'
- * - REJECTED and REFUNDED orders are EXCLUDED from Revenue & Order Count
- * - Refund Amount = SUM of refundAmountCents WHERE status = 'REFUNDED'
+ * - Revenue = SUM of (totalCents - refundAmountCents) WHERE status IN ('FULFILLED', 'REFUNDED', 'APPROVED')
+ *   This captures fully fulfilled orders, the net value of partially fulfilled orders, AND approved orders.
+ *   REJECTED, CANCELLED, and PENDING orders generate ZERO revenue.
+ * - Total Orders = COUNT of ALL orders (every status)
+ * - Order Volume = COUNT of revenue-generating orders:
+ *     FULFILLED orders + REFUNDED orders where refundAmountCents < totalCents (partial refunds)
  */
 
 import { sql } from "drizzle-orm"
@@ -19,11 +21,19 @@ import { orders } from "@/db/schema"
  * Import these into every analytics route to guarantee parity.
  */
 export const metricExpressions = {
-    /** Revenue: FULFILLED orders only, no deductions */
+    /** Revenue: order-level net revenue for FULFILLED + REFUNDED + APPROVED orders */
     revenue: sql<number>`COALESCE(SUM(
-    CASE WHEN UPPER(${orders.status}) = 'FULFILLED'
-         THEN ${orders.totalCents}
-         ELSE 0
+    CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED', 'APPROVED') THEN
+      ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)
+    ELSE 0 END
+  ), 0)`.mapWith(Number),
+
+    /** Order Volume: count of revenue-generating orders (FULFILLED + partial refunds) */
+    orderVolume: sql<number>`COALESCE(COUNT(
+    CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED') THEN 1
+         WHEN UPPER(${orders.status}) = 'REFUNDED'
+              AND COALESCE(${orders.refundAmountCents}, 0) < ${orders.totalCents}
+         THEN 1
     END
   ), 0)`.mapWith(Number),
 
@@ -47,15 +57,15 @@ export const metricExpressions = {
     CASE WHEN UPPER(${orders.status}) = 'APPROVED' THEN 1 END
   ), 0)`.mapWith(Number),
 
-    /** Total refund amount (from REFUNDED orders) */
+    /** Total refund amount (from all orders that have refunds) */
     totalRefundAmount: sql<number>`COALESCE(SUM(
-    CASE WHEN UPPER(${orders.status}) = 'REFUNDED'
+    CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')
          THEN COALESCE(${orders.refundAmountCents}, 0)
          ELSE 0
     END
   ), 0)`.mapWith(Number),
 
-    /** Total order count across ALL statuses (for "Orders" KPI on dashboard) */
+    /** Total order count across ALL statuses */
     totalOrderCount: sql<number>`COALESCE(COUNT(${orders.id}), 0)`.mapWith(Number),
 }
 
@@ -63,9 +73,10 @@ export const metricExpressions = {
  * Status filter for queries that should only include revenue-eligible orders.
  * Use this in WHERE clauses when the query is specifically for revenue/financial data.
  */
-export const FULFILLED_ONLY_FILTER = sql`UPPER(${orders.status}) = 'FULFILLED'`
+export const REVENUE_ELIGIBLE_FILTER = sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED', 'APPROVED')`
 
-/**
- * Status filter that includes both FULFILLED and REFUNDED (for backward compat views).
- */
-export const FULFILLED_AND_REFUNDED_FILTER = sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`
+/** @deprecated Use REVENUE_ELIGIBLE_FILTER instead */
+export const FULFILLED_ONLY_FILTER = REVENUE_ELIGIBLE_FILTER
+
+/** @deprecated Use REVENUE_ELIGIBLE_FILTER instead */
+export const FULFILLED_AND_REFUNDED_FILTER = REVENUE_ELIGIBLE_FILTER

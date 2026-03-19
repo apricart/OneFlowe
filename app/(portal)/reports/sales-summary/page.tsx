@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Loader2, ShoppingBag, TrendingUp, Calculator, Upload,
   Crown, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf,
-  Package, BarChart3, ListOrdered, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database
+  Package, BarChart3, ListOrdered, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, ChevronDown
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -30,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/reports/column-selector"
 import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expandable-row-drawer"
-import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
+
 import { GlobalDateFilter, type FilterPreset, getPresetRange } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
@@ -149,6 +149,18 @@ export default function SalesSummaryPage() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }, [searchParams, pathname, router])
 
+  const handleMonthYearChange = (monthIdx: number, year: number) => {
+    const startDate = new Date(year, monthIdx, 1)
+    const endDate = new Date(year, monthIdx + 1, 0)
+    handleDateChange({ startDate, endDate }, "custom")
+  }
+
+  const MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ]
+  const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
+
   // Column selectors
   const { visibleKeys: orderVisibleKeys, isVisible: isOrderVisible, setVisibleKeys: setOrderVisibleKeys } = useColumnSelector(ORDER_COLUMNS, "sales-summary-orders-v2")
 
@@ -183,7 +195,7 @@ export default function SalesSummaryPage() {
   useEffect(() => {
     setHasMounted(true)
     setGeneratedDate(new Date().toLocaleString())
-    
+
     // If no explicit preset/dates, force "All Time" filter
     if (!startFromUrl && !endFromUrl && !searchParams.has("preset")) {
       handleDateChange(null, "all")
@@ -279,44 +291,47 @@ export default function SalesSummaryPage() {
     const fields: DetailField[] = [
       { type: "section", label: "Order Overview", value: null },
       { key: "tid", label: "Transaction ID", value: order.tid, type: "mono" },
-      { key: "date", label: "Date & Time", value: new Date(order.createdAt).toLocaleString(), type: "date" },
-      { key: "branch", label: "Branch", value: order.branchName || `ID: ${order.branchId}` },
+      { label: "Organization", value: order.organizationName || 'N/A' },
+      { label: "Branch", value: order.branchName || `ID: ${order.branchId}` },
+      { label: "Created At", value: new Date(order.createdAt).toLocaleString(), type: "date" },
       { key: "status", label: "Status", value: isPartial ? "PARTIAL FULFILLED" : order.status, type: "badge" },
+      { label: "Fulfilled At", value: order.fulfilledAt ? new Date(order.fulfilledAt).toLocaleString() : "-", type: "date" },
+      { label: "Refunded At", value: order.refundedAt ? new Date(order.refundedAt).toLocaleString() : "-", type: "date" },
 
       {
         type: "section", label: "Financial Summary", value: (
           <div className="grid grid-cols-1 gap-4">
-             <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Gross Revenue</p>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white font-mono">{formatPKR(grossRevenue)}</p>
-                </div>
-                <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100/50 dark:border-rose-900/30">
-                  <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-1">Refunded</p>
-                  <p className="text-sm font-bold text-rose-600 dark:text-rose-400 font-mono">-{formatPKR(refundedAmount)}</p>
-                </div>
-             </div>
-             <div className="p-5 rounded-2xl bg-indigo-600 shadow-xl shadow-indigo-500/20 text-white">
-                <p className="text-[10px] font-bold text-indigo-100 uppercase tracking-widest mb-1">Net Revenue (Net Total)</p>
-                <div className="flex items-center justify-between">
-                   <h4 className="text-2xl font-black font-mono leading-none">{formatPKR(netRevenue)}</h4>
-                   <TrendingUp className="h-5 w-5 text-indigo-200" />
-                </div>
-             </div>
-             <div className="grid grid-cols-3 gap-3">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Subtotal</p>
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 font-mono">{formatPKR((order.subtotalCents || 0) / 100)}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Tax</p>
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 font-mono">{formatPKR((order.taxCents || 0) / 100)}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Discount</p>
-                  <p className="text-xs font-bold text-rose-500 font-mono">-{formatPKR((order.discountCents || 0) / 100)}</p>
-                </div>
-             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Gross Revenue</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white font-mono">{formatPKR(grossRevenue)}</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100/50 dark:border-rose-900/30">
+                <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-1">Refunded</p>
+                <p className="text-sm font-bold text-rose-600 dark:text-rose-400 font-mono">-{formatPKR(refundedAmount)}</p>
+              </div>
+            </div>
+            <div className="p-5 rounded-2xl bg-indigo-600 shadow-xl shadow-indigo-500/20 text-white">
+              <p className="text-[10px] font-bold text-indigo-100 uppercase tracking-widest mb-1">Net Revenue (Net Total)</p>
+              <div className="flex items-center justify-between">
+                <h4 className="text-2xl font-black font-mono leading-none">{formatPKR(netRevenue)}</h4>
+                <TrendingUp className="h-5 w-5 text-indigo-200" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Subtotal</p>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300 font-mono">{formatPKR((order.subtotalCents || 0) / 100)}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Tax</p>
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300 font-mono">{formatPKR((order.taxCents || 0) / 100)}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Discount</p>
+                <p className="text-xs font-bold text-rose-500 font-mono">-{formatPKR((order.discountCents || 0) / 100)}</p>
+              </div>
+            </div>
           </div>
         )
       },
@@ -342,14 +357,14 @@ export default function SalesSummaryPage() {
                           <span className="text-[10px] font-bold font-mono text-indigo-500 uppercase">ID: {item.globalProductId}</span>
                           <span className="text-[10px] font-bold text-slate-400 font-mono">{item.productCode || 'N/A'}</span>
                           <div className="flex items-center gap-2 ml-auto lg:ml-0">
-                             <Badge variant="outline" className="text-[8px] h-4 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                               Fulfilled: {item.quantity - (item.quantityRefunded || 0)}
-                             </Badge>
-                             {(item.quantityRefunded || 0) > 0 && (
-                               <Badge variant="outline" className="text-[8px] h-4 border-rose-200 bg-rose-50 text-rose-600">
-                                 Refunded: {item.quantityRefunded}
-                               </Badge>
-                             )}
+                            <Badge variant="outline" className="text-[8px] h-4 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                              Fulfilled: {item.quantity - (item.quantityRefunded || 0)}
+                            </Badge>
+                            {(item.quantityRefunded || 0) > 0 && (
+                              <Badge variant="outline" className="text-[8px] h-4 border-rose-200 bg-rose-50 text-rose-600">
+                                Refunded: {item.quantityRefunded}
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -473,6 +488,50 @@ export default function SalesSummaryPage() {
             compareRange={compareRange}
           />
 
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold gap-1 hover:bg-white dark:hover:bg-slate-800 transition-all uppercase tracking-tighter">
+                  <Calculator className="h-3 w-3 text-indigo-500" />
+                  {dateRange ? MONTHS[dateRange.startDate.getMonth()] : 'Month'}
+                  <ChevronDown className="h-3 w-3 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-40 max-h-[300px] overflow-y-auto">
+                {MONTHS.map((m, i) => (
+                  <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, dateRange?.startDate.getFullYear() || new Date().getFullYear())} className="text-xs font-medium">
+                    {m}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold gap-1 hover:bg-white dark:hover:bg-slate-800 transition-all uppercase tracking-tighter border-l border-slate-200 dark:border-slate-700 rounded-none pl-2">
+                  {dateRange ? dateRange.startDate.getFullYear() : 'Year'}
+                  <ChevronDown className="h-3 w-3 opacity-50" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-24">
+                {YEARS.map(y => (
+                  <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(dateRange?.startDate.getMonth() || 0, y)} className="text-xs font-medium">
+                    {y}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDateChange(null, "thisMonth")}
+              className="h-7 text-[9px] font-black bg-indigo-500 text-white hover:bg-indigo-600 ml-1 px-2 rounded-md"
+            >
+              TIME SPAN
+            </Button>
+          </div>
+
           {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
             <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
               <BranchFilter selectedIds={contextBranchIds} onChange={handleBranchChange} organizationId={organizationId || undefined} />
@@ -484,7 +543,7 @@ export default function SalesSummaryPage() {
         <div className="flex-1" />
 
         <div className="flex items-center gap-4">
-          <ScheduleReportModal reportName="Sales Summary" />
+          
         </div>
       </div>
 
@@ -654,11 +713,11 @@ export default function SalesSummaryPage() {
                           </ResponsiveContainer>
                           {/* Center overlay icon */}
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                             <div className="flex flex-col items-center gap-1">
-                                <ShoppingBag className="h-10 w-10 text-slate-200 dark:text-slate-800" />
-                                <span className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tighter">{orderCount.toLocaleString()}</span>
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</span>
-                             </div>
+                            <div className="flex flex-col items-center gap-1">
+                              <ShoppingBag className="h-10 w-10 text-slate-200 dark:text-slate-800" />
+                              <span className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tighter">{orderCount.toLocaleString()}</span>
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</span>
+                            </div>
                           </div>
                         </div>
                         {/* Legend */}
@@ -746,176 +805,176 @@ export default function SalesSummaryPage() {
             </TabsContent>
 
             <TabsContent value="reports" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-               {!organizationId ? (
-                  <Card className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/30 p-20 text-center">
-                    <div className="flex flex-col items-center gap-6 max-w-sm mx-auto">
-                      <div className="w-20 h-20 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
-                        <Database className="h-10 w-10 text-indigo-500" />
+              {(!organizationId && role !== "SUPER_ADMIN") ? (
+                <Card className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/30 p-20 text-center">
+                  <div className="flex flex-col items-center gap-6 max-w-sm mx-auto">
+                    <div className="w-20 h-20 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
+                      <Database className="h-10 w-10 text-indigo-500" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Organization Required</h3>
+                      <p className="text-sm font-medium text-slate-500">Please select an organization from the menu above to generate the order reports.</p>
+                    </div>
+                  </div>
+                </Card>
+              ) : (
+                <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+                  {/* Tab header */}
+                  <div className="px-5 pt-4 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+                      <div className="flex items-center gap-2">
+                        <ListOrdered className="h-4 w-4 text-indigo-500" />
+                        <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 uppercase tracking-tight">Order Reports</h3>
+                        {!isLoading && <Badge variant="secondary" className="ml-1 h-4 text-[10px] px-1.5 font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-none">{filteredOrders.length}</Badge>}
                       </div>
-                      <div className="space-y-2">
-                         <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Organization Required</h3>
-                         <p className="text-sm font-medium text-slate-500">Please select an organization from the menu above to generate the order reports.</p>
+
+                      {/* Search + Controls */}
+                      <div className="flex items-center gap-2">
+                        <div className="relative">
+                          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                          <Input
+                            placeholder="Search by ID, branch…"
+                            className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg"
+                            value={orderSearch}
+                            onChange={(e) => setOrderSearch(e.target.value)}
+                          />
+                        </div>
+                        <ColumnSelector columns={ORDER_COLUMNS} storageKey="sales-summary-orders-v2" visibleKeys={orderVisibleKeys} onChange={setOrderVisibleKeys} />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg" disabled={isLoading}>
+                              <Upload className="h-3.5 w-3.5" />
+                              EXPORT
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-[148px] rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl">
+                            <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs font-medium cursor-pointer py-2">
+                              <FileText className="mr-2. h-3.5 w-3.5 text-slate-400" /> CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs font-medium cursor-pointer py-2">
+                              <FileSpreadsheet className="mr-2 h-3.5 w-3.5 text-emerald-500" /> Excel
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs font-medium cursor-pointer py-2">
+                              <FilePdf className="mr-2 h-3.5 w-3.5 text-rose-500" /> PDF
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
-                  </Card>
-               ) : (
-                  <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-                    {/* Tab header */}
-                    <div className="px-5 pt-4 border-b border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-                        <div className="flex items-center gap-2">
-                          <ListOrdered className="h-4 w-4 text-indigo-500" />
-                          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 uppercase tracking-tight">Order Reports</h3>
-                          {!isLoading && <Badge variant="secondary" className="ml-1 h-4 text-[10px] px-1.5 font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-none">{filteredOrders.length}</Badge>}
-                        </div>
+                  </div>
 
-                        {/* Search + Controls */}
-                        <div className="flex items-center gap-2">
-                          <div className="relative">
-                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                            <Input
-                              placeholder="Search by ID, branch…"
-                              className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg"
-                              value={orderSearch}
-                              onChange={(e) => setOrderSearch(e.target.value)}
-                            />
-                          </div>
-                          <ColumnSelector columns={ORDER_COLUMNS} storageKey="sales-summary-orders-v2" visibleKeys={orderVisibleKeys} onChange={setOrderVisibleKeys} />
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg" disabled={isLoading}>
-                                <Upload className="h-3.5 w-3.5" />
-                                EXPORT
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="min-w-[148px] rounded-xl border border-slate-200 dark:border-slate-800 shadow-xl">
-                              <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs font-medium cursor-pointer py-2">
-                                <FileText className="mr-2. h-3.5 w-3.5 text-slate-400" /> CSV
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs font-medium cursor-pointer py-2">
-                                <FileSpreadsheet className="mr-2 h-3.5 w-3.5 text-emerald-500" /> Excel
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs font-medium cursor-pointer py-2">
-                                <FilePdf className="mr-2 h-3.5 w-3.5 text-rose-500" /> PDF
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ── Orders Table ── */}
-                    <div className="overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-slate-50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                            {isOrderVisible("date") && <TableHead className="pl-5 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Date</TableHead>}
-                            {isOrderVisible("tid") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Transaction ID</TableHead>}
-                            {isOrderVisible("organization") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Org</TableHead>}
-                            {isOrderVisible("group") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Group</TableHead>}
-                            {isOrderVisible("branch") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Branch</TableHead>}
-                            {isOrderVisible("status") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Status</TableHead>}
-                            {isOrderVisible("subtotal") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Subtotal</TableHead>}
-                            {isOrderVisible("tax") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Tax</TableHead>}
-                            {isOrderVisible("discount") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Discount</TableHead>}
-                            {isOrderVisible("total") && <TableHead className="text-right pr-5 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Total</TableHead>}
+                  {/* ── Orders Table ── */}
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                          {isOrderVisible("date") && <TableHead className="pl-5 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Date</TableHead>}
+                          {isOrderVisible("tid") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Transaction ID</TableHead>}
+                          {isOrderVisible("organization") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Org</TableHead>}
+                          {isOrderVisible("group") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Group</TableHead>}
+                          {isOrderVisible("branch") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Branch</TableHead>}
+                          {isOrderVisible("status") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Status</TableHead>}
+                          {isOrderVisible("subtotal") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Subtotal</TableHead>}
+                          {isOrderVisible("tax") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Tax</TableHead>}
+                          {isOrderVisible("discount") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Discount</TableHead>}
+                          {isOrderVisible("total") && <TableHead className="text-right pr-5 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Total</TableHead>}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {isLoading ? (
+                          <TableRow>
+                            <TableCell colSpan={orderVisibleKeys.length} className="h-32 text-center">
+                              <Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-400" />
+                            </TableCell>
                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {isLoading ? (
-                            <TableRow>
-                              <TableCell colSpan={orderVisibleKeys.length} className="h-32 text-center">
-                                <Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-400" />
-                              </TableCell>
+                        ) : filteredOrders.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={orderVisibleKeys.length} className="h-32 text-center">
+                              <div className="flex flex-col items-center justify-center text-slate-400 gap-2">
+                                <Search className="h-8 w-8 opacity-20" />
+                                <p className="text-sm text-slate-500">No orders found for the selected filters.</p>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredOrders.map((order: any) => (
+                            <TableRow
+                              key={order.id}
+                              className="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 transition-colors"
+                              onClick={() => handleRowClick(order)}
+                            >
+                              {isOrderVisible("date") && (
+                                <TableCell className="pl-5 py-3 font-mono text-xs text-slate-500 whitespace-nowrap" suppressHydrationWarning>
+                                  {new Date(order.createdAt).toLocaleDateString()}
+                                </TableCell>
+                              )}
+                              {isOrderVisible("tid") && (
+                                <TableCell className="py-3 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                                  {order.tid}
+                                </TableCell>
+                              )}
+                              {isOrderVisible("organization") && (
+                                <TableCell className="py-3 text-xs text-slate-500">{order.organizationName || '-'}</TableCell>
+                              )}
+                              {isOrderVisible("group") && (
+                                <TableCell className="py-3 text-xs text-slate-500">{order.groupName || '-'}</TableCell>
+                              )}
+                              {isOrderVisible("branch") && (
+                                <TableCell className="py-3 text-xs font-medium text-slate-700 dark:text-slate-300">
+                                  {order.branchName || `ID: ${order.branchId}`}
+                                </TableCell>
+                              )}
+                              {isOrderVisible("status") && (
+                                <TableCell className="py-3">
+                                  <Badge variant="outline" className={cn(
+                                    "text-[9px] uppercase font-bold tracking-widest border-none px-2 py-0.5",
+                                    order.status === 'FULFILLED' ? (order.refundAmountCents > 0 ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400') :
+                                      order.status === 'PENDING' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400' :
+                                        order.status === 'REFUNDED' ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-400' :
+                                          'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400'
+                                  )}>
+                                    {order.status === "FULFILLED" && order.refundAmountCents > 0 ? "PARTIAL FULFILLED" : order.status}
+                                  </Badge>
+                                </TableCell>
+                              )}
+                              {isOrderVisible("subtotal") && (
+                                <TableCell className="py-3 text-right font-mono text-xs text-slate-500">
+                                  {formatPKR((order.subtotalCents || 0) / 100)}
+                                </TableCell>
+                              )}
+                              {isOrderVisible("tax") && (
+                                <TableCell className="py-3 text-right font-mono text-xs text-slate-400">
+                                  {formatPKR((order.taxCents || 0) / 100)}
+                                </TableCell>
+                              )}
+                              {isOrderVisible("discount") && (
+                                <TableCell className="py-3 text-right font-mono text-xs text-rose-500 dark:text-rose-400">
+                                  -{formatPKR((order.discountCents || 0) / 100)}
+                                </TableCell>
+                              )}
+                              {isOrderVisible("total") && (
+                                <TableCell className="py-3 text-right pr-5 font-mono font-bold text-xs text-slate-900 dark:text-white">
+                                  {formatPKR((order.totalCents || 0) / 100)}
+                                </TableCell>
+                              )}
                             </TableRow>
-                          ) : filteredOrders.length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={orderVisibleKeys.length} className="h-32 text-center">
-                                <div className="flex flex-col items-center justify-center text-slate-400 gap-2">
-                                  <Search className="h-8 w-8 opacity-20" />
-                                  <p className="text-sm text-slate-500">No orders found for the selected filters.</p>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            filteredOrders.map((order: any) => (
-                              <TableRow
-                                key={order.id}
-                                className="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 cursor-pointer border-b border-slate-100 dark:border-slate-800/60 transition-colors"
-                                onClick={() => handleRowClick(order)}
-                              >
-                                {isOrderVisible("date") && (
-                                  <TableCell className="pl-5 py-3 font-mono text-xs text-slate-500 whitespace-nowrap" suppressHydrationWarning>
-                                    {new Date(order.createdAt).toLocaleDateString()}
-                                  </TableCell>
-                                )}
-                                {isOrderVisible("tid") && (
-                                  <TableCell className="py-3 font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
-                                    {order.tid}
-                                  </TableCell>
-                                )}
-                                {isOrderVisible("organization") && (
-                                  <TableCell className="py-3 text-xs text-slate-500">{order.organizationName || '-'}</TableCell>
-                                )}
-                                {isOrderVisible("group") && (
-                                  <TableCell className="py-3 text-xs text-slate-500">{order.groupName || '-'}</TableCell>
-                                )}
-                                {isOrderVisible("branch") && (
-                                  <TableCell className="py-3 text-xs font-medium text-slate-700 dark:text-slate-300">
-                                    {order.branchName || `ID: ${order.branchId}`}
-                                  </TableCell>
-                                )}
-                                {isOrderVisible("status") && (
-                                  <TableCell className="py-3">
-                                    <Badge variant="outline" className={cn(
-                                      "text-[9px] uppercase font-bold tracking-widest border-none px-2 py-0.5",
-                                      order.status === 'FULFILLED' ? (order.refundAmountCents > 0 ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400') :
-                                        order.status === 'PENDING' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400' :
-                                          order.status === 'REFUNDED' ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-400' :
-                                            'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400'
-                                    )}>
-                                      {order.status === "FULFILLED" && order.refundAmountCents > 0 ? "PARTIAL FULFILLED" : order.status}
-                                    </Badge>
-                                  </TableCell>
-                                )}
-                                {isOrderVisible("subtotal") && (
-                                  <TableCell className="py-3 text-right font-mono text-xs text-slate-500">
-                                    {formatPKR((order.subtotalCents || 0) / 100)}
-                                  </TableCell>
-                                )}
-                                {isOrderVisible("tax") && (
-                                  <TableCell className="py-3 text-right font-mono text-xs text-slate-400">
-                                    {formatPKR((order.taxCents || 0) / 100)}
-                                  </TableCell>
-                                )}
-                                {isOrderVisible("discount") && (
-                                  <TableCell className="py-3 text-right font-mono text-xs text-rose-500 dark:text-rose-400">
-                                    -{formatPKR((order.discountCents || 0) / 100)}
-                                  </TableCell>
-                                )}
-                                {isOrderVisible("total") && (
-                                  <TableCell className="py-3 text-right pr-5 font-mono font-bold text-xs text-slate-900 dark:text-white">
-                                    {formatPKR((order.totalCents || 0) / 100)}
-                                  </TableCell>
-                                )}
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
 
-                    {/* Footer */}
-                    <div className="px-5 py-3 bg-slate-50/70 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-                        {filteredOrders.length} order{filteredOrders.length !== 1 ? "s" : ""} shown
-                      </p>
-                      <p className="text-[10px] text-slate-300 dark:text-slate-600" suppressHydrationWarning>
-                        Generated {generatedDate}
-                      </p>
-                    </div>
-                  </Card>
-               )}
+                  {/* Footer */}
+                  <div className="px-5 py-3 bg-slate-50/70 dark:bg-slate-900/40 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                      {filteredOrders.length} order{filteredOrders.length !== 1 ? "s" : ""} shown
+                    </p>
+                    <p className="text-[10px] text-slate-300 dark:text-slate-600" suppressHydrationWarning>
+                      Generated {generatedDate}
+                    </p>
+                  </div>
+                </Card>
+              )}
             </TabsContent>
           </Tabs>
         </div>
@@ -924,7 +983,7 @@ export default function SalesSummaryPage() {
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           title={selectedRow?.tid || "Transaction Details"}
-          subtitle={`${selectedRow?.branchName || ""} · ${selectedRow ? new Date(selectedRow.createdAt).toLocaleDateString() : ""}`}
+          subtitle={`${selectedRow?.organizationName || "All Organizations"} · ${selectedRow?.branchName || ""} · ${selectedRow ? new Date(selectedRow.createdAt).toLocaleString() : ""}`}
           fields={selectedRow ? getOrderDrawerFields(selectedRow).filter(f => !f.key || isOrderVisible(f.key)) : []}
         />
       </div>

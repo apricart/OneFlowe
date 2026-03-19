@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { groups, branches, orders, organizations } from "@/db/schema"
-import { and, eq, sql, isNull, gte, lte } from "drizzle-orm"
+import { and, eq, sql, isNull, gte, lte, desc } from "drizzle-orm"
+import { metricExpressions, REVENUE_ELIGIBLE_FILTER } from "@/lib/metric-utils"
 
 export async function GET(req: NextRequest) {
     try {
@@ -33,8 +34,8 @@ export async function GET(req: NextRequest) {
         // Build order conditions for date filtering
         const orderConditions = []
 
-        // Align revenue reporting logic
-        orderConditions.push(sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`)
+        // Revenue: include FULFILLED + REFUNDED, deduct refunds for net value
+        orderConditions.push(REVENUE_ELIGIBLE_FILTER)
 
         if (startDate) {
             const start = new Date(startDate)
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest) {
                 organizationId: groups.organizationId,
                 organizationName: organizations.name,
                 totalOrders: sql<number>`count(${orders.id})::int`,
-                totalAmountCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int`,
+                totalAmountCents: metricExpressions.revenue,
                 totalRefundCents: sql<number>`coalesce(sum(${orders.refundAmountCents}), 0)::int`,
                 rejectedOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)::int`,
                 branchCount: sql<number>`count(distinct ${branches.id})::int`,
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
             ))
             .where(and(...groupConditions))
             .groupBy(groups.id, organizations.id)
-            .orderBy(sql`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int desc`)
+            .orderBy(desc(metricExpressions.revenue))
 
         // 2. Fetch specific branch-level revenue/order counts separately but in ONE query per group type if needed, 
         // or refine the aggregation above. The current approach above gets branch names but not their individual stats.
@@ -111,7 +112,7 @@ export async function GET(req: NextRequest) {
                     name: branches.name,
                     groupId: branches.groupId,
                     orders: sql<number>`count(${orders.id})::int`,
-                    revenue: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int`,
+                    revenue: metricExpressions.revenue,
                     refunds: sql<number>`coalesce(sum(${orders.refundAmountCents}), 0)::int`,
                     rejected: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)::int`,
                 })
@@ -122,7 +123,7 @@ export async function GET(req: NextRequest) {
                 ))
                 .where(sql`${branches.groupId} IN ${groupIds}`)
                 .groupBy(branches.id)
-                .orderBy(sql`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int desc`)
+                .orderBy(desc(metricExpressions.revenue))
 
             allBranchStats.forEach(bs => {
                 if (bs.groupId) {
@@ -158,7 +159,7 @@ export async function GET(req: NextRequest) {
                 organizationId: branches.organizationId,
                 organizationName: organizations.name,
                 totalOrders: sql<number>`count(${orders.id})::int`,
-                totalAmountCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int`,
+                totalAmountCents: metricExpressions.revenue,
             })
             .from(branches)
             .leftJoin(organizations, eq(branches.organizationId, organizations.id))
@@ -168,7 +169,7 @@ export async function GET(req: NextRequest) {
             ))
             .where(and(...ungroupedConditions))
             .groupBy(branches.id, organizations.id)
-            .orderBy(sql`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int desc`)
+            .orderBy(desc(metricExpressions.revenue))
 
         // COMPARISON logic for summary statistics
         let comparisonSummary = null
@@ -192,13 +193,13 @@ export async function GET(req: NextRequest) {
             const compStats = await db
                 .select({
                     totalOrders: sql<number>`count(${orders.id})::int`,
-                    totalAmountCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)::int`,
+                    totalAmountCents: metricExpressions.revenue,
                 })
                 .from(orders)
                 .innerJoin(branches, eq(orders.branchId, branches.id))
                 .innerJoin(groups, eq(branches.groupId, groups.id))
                 .where(and(
-                    sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`,
+                    REVENUE_ELIGIBLE_FILTER,
                     gte(orders.createdAt, prevStart),
                     lte(orders.createdAt, prevEnd),
                     orgId ? eq(groups.organizationId, orgId) : undefined

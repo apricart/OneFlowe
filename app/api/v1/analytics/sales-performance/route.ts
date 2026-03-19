@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server"
-import { and, eq, gte, lte, sql, or, inArray } from "drizzle-orm"
+import { and, eq, gte, lte, sql, or, inArray, desc } from "drizzle-orm"
 import { requireApiRole, ok } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders, branches, organizations } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 import { getCached, generateCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { metricExpressions } from "@/lib/metric-utils"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 type Role = typeof allowedRoles[number]
@@ -138,8 +139,8 @@ export async function GET(req: NextRequest) {
             .select({
                 bucket: dateExpr,
                 label: labelExpr,
-                totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
-                netSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
+                totalSales: metricExpressions.revenue,
+                netSales: metricExpressions.revenue,
                 orderCount: sql<number>`COALESCE(COUNT(1), 0)`.mapWith(Number),
             })
             .from(orders)
@@ -190,8 +191,8 @@ export async function GET(req: NextRequest) {
             .select({
                 branchId: branches.id,
                 branchName: branches.name,
-                totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
-                totalNetSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
+                totalSales: metricExpressions.revenue,
+                totalNetSales: metricExpressions.revenue,
                 orderCount: sql<number>`COALESCE(COUNT(${orders.id}), 0)`.mapWith(Number),
             })
             .from(branches)
@@ -203,7 +204,7 @@ export async function GET(req: NextRequest) {
 
         const branchRows = await branchQuery
             .groupBy(branches.id, branches.name)
-            .orderBy(sql`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0) desc`)
+            .orderBy(desc(metricExpressions.revenue))
             .limit(20)
 
         const branchSales = branchRows.map(r => ({
@@ -221,14 +222,14 @@ export async function GET(req: NextRequest) {
                 .select({
                     organizationId: organizations.id,
                     organizationName: organizations.name,
-                    totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
-                    totalNetSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
+                    totalSales: metricExpressions.revenue,
+                    totalNetSales: metricExpressions.revenue,
                     orderCount: sql<number>`COALESCE(COUNT(${orders.id}), 0)`.mapWith(Number),
                 })
                 .from(organizations)
                 .leftJoin(orders, and(eq(orders.organizationId, organizations.id), whereClause))
                 .groupBy(organizations.id, organizations.name)
-                .orderBy(sql`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0) desc`)
+                .orderBy(desc(metricExpressions.revenue))
                 .limit(20)
 
             organizationSales = orgRows.map(r => ({
@@ -287,8 +288,8 @@ export async function GET(req: NextRequest) {
                 .select({
                     bucket: dateExpr,
                     label: labelExpr,
-                    totalSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
-                    totalNetSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
+                    totalSales: metricExpressions.revenue,
+                    totalNetSales: metricExpressions.revenue,
                     orderCount: sql<number>`COALESCE(COUNT(1), 0)`.mapWith(Number),
                 })
                 .from(orders)
@@ -324,7 +325,7 @@ export async function GET(req: NextRequest) {
             const compAllWhere = and(...compAllStatusConditions)
             const compStatusCounts = await db.select({
                 fulfilledCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
-                fulfilledNetSales: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
+                fulfilledNetSales: metricExpressions.revenue,
                 refundedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END), 0)`.mapWith(Number),
                 rejectedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END), 0)`.mapWith(Number),
                 approvedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' THEN 1 END), 0)`.mapWith(Number),

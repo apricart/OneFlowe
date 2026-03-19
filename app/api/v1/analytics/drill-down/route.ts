@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
 
     // Apply type-specific filters
     if (type === "REVENUE" || type === "FULFILLED") {
-        conditions.push(sql`UPPER(${orders.status}) = 'FULFILLED'`)
+        conditions.push(sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`)
     } else if (type === "REJECTED") {
         conditions.push(sql`UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED')`)
     } else if (type === "ORDERS") {
@@ -195,9 +195,11 @@ export async function GET(req: NextRequest) {
             const status = (order.status || "").toUpperCase()
             const disc = (order.receiptData?.discount || 0)
 
-            // For summary cards, we use the values from the filtered set
-            grossTotal += total
-            refundTotal += refund
+            // For summary cards, compute net revenue
+            if (status === 'FULFILLED' || status === 'REFUNDED') {
+                grossTotal += total
+                refundTotal += refund
+            }
             if (status === "REJECTED" || status === "CANCELLED") {
                 rejectedTotal += total
             }
@@ -324,7 +326,7 @@ export async function GET(req: NextRequest) {
 
             // Re-apply type-specific filters
             if (type === "REVENUE" || type === "FULFILLED") {
-                compConditions.push(sql`UPPER(${orders.status}) = 'FULFILLED'`)
+                compConditions.push(sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`)
             } else if (type === "REJECTED") {
                 compConditions.push(sql`UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED')`)
             } else if (type === "ORDERS") {
@@ -368,7 +370,7 @@ export async function GET(req: NextRequest) {
                 const g = (o.totalCents || 0) / 100
                 const r = (o.refundAmountCents || 0) / 100
                 const s = (o.status || "").toUpperCase()
-                if (s === "FULFILLED" || s === "REFUNDED") { compGross += g; if (s === "REFUNDED") compRefund += r }
+                if (s === 'FULFILLED' || s === 'REFUNDED') { compGross += g; compRefund += r }
                 else if (s === "REJECTED" || s === "CANCELLED") compRejected += g
                 compDisc += (o.receiptData?.discount || 0)
             })

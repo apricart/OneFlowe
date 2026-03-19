@@ -2,8 +2,9 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, branches, globalProducts, categories, refundItems } from "@/db/schema"
-import { and, eq, gte, lte, inArray, desc } from "drizzle-orm"
+import { orders, orderItems, branches, globalProducts, categories, refundItems, refunds } from "@/db/schema"
+import { and, eq, gte, lte, inArray, desc, isNull, sql } from "drizzle-orm"
+import { aliasedTable } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
     try {
@@ -37,10 +38,17 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "No branches resolved" }, { status: 400 })
         }
 
-        let startDate = startDateParam ? new Date(startDateParam) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-        let endDate = endDateParam ? new Date(endDateParam) : new Date()
-        startDate.setHours(0, 0, 0, 0)
-        endDate.setHours(23, 59, 59, 999)
+        let startDate = startDateParam ? new Date(startDateParam) : undefined
+        let endDate = endDateParam ? new Date(endDateParam) : undefined
+        if (startDate) startDate.setHours(0, 0, 0, 0)
+        if (endDate) endDate.setHours(23, 59, 59, 999)
+
+        const baseConditions = [
+            inArray(orders.branchId, branchIds),
+            inArray(orders.status, ['FULFILLED', 'REFUNDED', 'APPROVED'])
+        ]
+        if (startDate) baseConditions.push(gte(orders.createdAt, startDate))
+        if (endDate) baseConditions.push(lte(orders.createdAt, endDate))
 
         // Find all order items matching filters
         const q = db
@@ -60,14 +68,7 @@ export async function GET(req: NextRequest) {
             .innerJoin(orders, eq(orderItems.orderId, orders.id))
             .innerJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
             .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
-            .where(
-                and(
-                    inArray(orders.branchId, branchIds),
-                    gte(orders.createdAt, startDate),
-                    lte(orders.createdAt, endDate),
-                    inArray(orders.status, ['FULFILLED', 'APPROVED', 'REFUNDED'])
-                )
-            )
+            .where(and(...baseConditions))
 
         const results = await q
 
@@ -82,7 +83,11 @@ export async function GET(req: NextRequest) {
                     qty: refundItems.quantity,
                 })
                 .from(refundItems)
-                .where(inArray(refundItems.orderItemId, validOrderItemIds))
+                .innerJoin(refunds, eq(refundItems.refundId, refunds.id))
+                .where(and(
+                    inArray(refundItems.orderItemId, validOrderItemIds),
+                    inArray(sql`UPPER(${refunds.status})`, ['APPROVED', 'COMPLETED'])
+                ))
 
             refundQuantities = refundsObj.reduce((acc, curr) => {
                 if (curr.orderItemId) {
@@ -92,51 +97,77 @@ export async function GET(req: NextRequest) {
             }, {} as Record<number, number>)
         }
 
-        // Aggregate by Global Product ID
+        // 1. Fetch ALL active/inactive global products to serve as the baseline map
+        const parentCategories = aliasedTable(categories, 'parentCategories')
+        
+        const allProducts = await db
+            .select({
+                id: globalProducts.id,
+                productCode: globalProducts.productCode,
+                name: globalProducts.name,
+                unit: globalProducts.unit,
+                status: globalProducts.status,
+                categoryName: sql<string>`COALESCE(${parentCategories.name}, ${categories.name})`,
+                subCategoryName: sql<string>`CASE WHEN ${parentCategories.id} IS NOT NULL THEN ${categories.name} ELSE NULL END`
+            })
+            .from(globalProducts)
+            .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+            .leftJoin(parentCategories, eq(categories.parentId, parentCategories.id))
+            .where(isNull(globalProducts.deletedAt)) // Exclude deleted products
+            
+        // 2. Initialize the product map with ALL products
         const productMap: Record<number, any> = {}
-
-        results.forEach(row => {
-            if (!productMap[row.globalProductId]) {
-                productMap[row.globalProductId] = {
-                    productId: row.globalProductId,
-                    productCode: row.itemCode || 'Unknown',
-                    productName: row.itemName,
-                    unit: row.itemUnit,
-                    category: row.categoryName || 'Uncategorized',
-                    totalOrders: new Set(),
-                    qtyOrdered: 0,
-                    qtyFulfilled: 0,
-                    qtyRefunded: 0,
-                    revenueGeneratedCents: 0,
-                    refundLossCents: 0
-                }
-            }
-
-            const pInfo = productMap[row.globalProductId]
-            pInfo.totalOrders.add(row.orderId)
-            pInfo.qtyOrdered += row.qtyOrdered
-
-            // Determine Fulfilled vs Refunded
-            if (row.status === 'FULFILLED' || row.status === 'APPROVED') {
-                pInfo.qtyFulfilled += row.qtyOrdered
-                pInfo.revenueGeneratedCents += (row.qtyOrdered * row.priceCents)
-            } else if (row.status === 'REFUNDED') {
-                const refundedCount = refundQuantities[row.orderItemId] || 0
-                const fulfilledCount = Math.max(0, row.qtyOrdered - refundedCount)
-
-                pInfo.qtyRefunded += refundedCount
-                pInfo.qtyFulfilled += fulfilledCount
-
-                pInfo.revenueGeneratedCents += (fulfilledCount * row.priceCents)
-                pInfo.refundLossCents += (refundedCount * row.priceCents)
+        allProducts.forEach(p => {
+            productMap[p.id] = {
+                productId: p.id,
+                productCode: p.productCode || 'Unknown',
+                productName: p.name,
+                unit: p.unit,
+                category: p.categoryName || 'Uncategorized',
+                subCategory: p.subCategoryName || '-',
+                status: p.status, // Add exact status exactly for matching Global Products
+                totalOrders: new Set(),
+                qtyOrdered: 0,
+                qtyFulfilled: 0,
+                qtyRefunded: 0,
+                revenueGeneratedCents: 0,
+                refundLossCents: 0
             }
         })
 
-        // Format mapping back to array
+        // 3. Aggregate order data onto the product map
+        results.forEach(row => {
+            if (productMap[row.globalProductId]) {
+                const pInfo = productMap[row.globalProductId]
+                pInfo.totalOrders.add(row.orderId)
+                pInfo.qtyOrdered += row.qtyOrdered
+
+                // Determine Fulfilled vs Refunded universally for recognized statuses
+                if (row.status === 'FULFILLED' || row.status === 'REFUNDED' || row.status === 'APPROVED') {
+                    const refundedCount = refundQuantities[row.orderItemId] || 0
+                    const fulfilledCount = Math.max(0, row.qtyOrdered - refundedCount)
+
+                    pInfo.qtyRefunded += refundedCount
+                    pInfo.qtyFulfilled += fulfilledCount
+
+                    pInfo.revenueGeneratedCents += (fulfilledCount * row.priceCents)
+                    pInfo.refundLossCents += (refundedCount * row.priceCents)
+                }
+            }
+        })
+
+        // Format mapping back to array and sort
         const aggregated = Object.values(productMap).map(p => ({
             ...p,
             totalOrders: p.totalOrders.size // convert set -> size
-        })).sort((a, b) => b.revenueGeneratedCents - a.revenueGeneratedCents) // sort by revenue desc
+        }))
+        // Sort by revenue DESC, then by product name ASC
+        aggregated.sort((a, b) => {
+            if (b.revenueGeneratedCents === a.revenueGeneratedCents) {
+                return (a.productName || "").localeCompare(b.productName || "")
+            }
+            return b.revenueGeneratedCents - a.revenueGeneratedCents
+        })
 
         // COMPARISON logic for overall KPIs
         let comparisonSummary = null
@@ -171,7 +202,7 @@ export async function GET(req: NextRequest) {
                         inArray(orders.branchId, branchIds),
                         gte(orders.createdAt, prevStart),
                         lte(orders.createdAt, prevEnd),
-                        inArray(orders.status, ['FULFILLED', 'APPROVED', 'REFUNDED'])
+                        inArray(orders.status, ['FULFILLED', 'REFUNDED', 'APPROVED'])
                     )
                 )
 

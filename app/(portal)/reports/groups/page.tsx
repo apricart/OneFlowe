@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
-import { ScheduleReportModal } from "@/components/reports/schedule-report-modal"
+
 import { KPICard } from "@/components/reports/kpi-card"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -193,7 +193,7 @@ export default function GroupsReportPage() {
                     compareRange={compareRange}
                 />
                 <div className="flex-1" />
-                <ScheduleReportModal reportName="Groups Performance" />
+                
                 <Button
                     variant="ghost"
                     size="sm"

@@ -5,7 +5,7 @@ import { db } from "@/lib/db"
 import { orders, branches } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 import { getCached, generateCacheKey } from "@/lib/cache-utils"
-import { FULFILLED_ONLY_FILTER } from "@/lib/metric-utils"
+import { REVENUE_ELIGIBLE_FILTER, metricExpressions } from "@/lib/metric-utils"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 
@@ -18,8 +18,8 @@ function getOrderConditions(role: Role | undefined, organizationId: number | nul
 
   const conditions = [gte(orders.createdAt, fromDate)]
 
-  // Revenue rule: FULFILLED-only
-  conditions.push(FULFILLED_ONLY_FILTER)
+  // Revenue rule: FULFILLED + REFUNDED (net of refunds)
+  conditions.push(REVENUE_ELIGIBLE_FILTER)
 
   if (role !== "SUPER_ADMIN" && organizationId) {
     conditions.push(eq(orders.organizationId, organizationId))
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
     const gmvRows = await db
       .select({
         day: dayExpr,
-        totalCents: sql<number>`COALESCE(SUM(${orders.totalCents}), 0)`.mapWith(Number),
+        totalCents: metricExpressions.revenue,
       })
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
     const branchSelect = db.select({
       id: branches.id,
       name: branches.name,
-      orderCount: sql<number>`coalesce(count(CASE WHEN COALESCE(${orders.refundAmountCents}, 0) < ${orders.totalCents} THEN ${orders.id} END), 0)`.mapWith(Number),
+      orderCount: sql<number>`coalesce(count(${orders.id}), 0)`.mapWith(Number),
     }).from(branches)
 
     const branchSelectWithFilters = branchFilters.length
@@ -165,7 +165,7 @@ export async function GET(req: NextRequest) {
     const monthConditions: any[] = [
       gte(orders.createdAt, startOfMonth),
       lt(orders.createdAt, startOfNextMonth),
-      FULFILLED_ONLY_FILTER,
+      REVENUE_ELIGIBLE_FILTER,
     ]
     if (role !== "SUPER_ADMIN" && organizationId) {
       monthConditions.push(eq(orders.organizationId, organizationId))

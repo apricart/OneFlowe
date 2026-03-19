@@ -16,17 +16,17 @@ import {
   Building2,
   FolderTree,
   CreditCard,
-  ShoppingBag
+  ShoppingBag,
+  Loader2
 } from "lucide-react"
 
 import { useState, useEffect } from "react"
-import { Loader2 } from "lucide-react"
 
 const reportCards = [
   {
-    title: "Sales Summary",
+    title: "Sales Report",
     description: "View complete sales analytics and revenue trends across branches",
-    href: "/reports/sales-summary",
+    href: "/reports/sales-Report",
     icon: TrendingUp,
     gradient: "from-indigo-500 to-purple-500",
   },
@@ -38,9 +38,9 @@ const reportCards = [
     gradient: "from-rose-500 to-pink-500",
   },
   {
-    title: "Product Summary",
+    title: "Product Report",
     description: "Analyze product performance and category-wise breakdown",
-    href: "/reports/product-summary",
+    href: "/reports/product-Report",
     icon: Package,
     gradient: "from-blue-500 to-cyan-500",
   },
@@ -67,9 +67,9 @@ const reportCards = [
     gradient: "from-amber-500 to-orange-500",
   },
   {
-    title: "Stock Store Summary",
+    title: "Stock Store Report",
     description: "Store-wise inventory overview and distribution",
-    href: "/reports/stock-store-summary",
+    href: "/reports/stock-store-Report",
     icon: Warehouse,
     gradient: "from-violet-500 to-purple-500",
   },

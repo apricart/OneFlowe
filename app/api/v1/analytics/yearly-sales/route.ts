@@ -4,6 +4,7 @@ import { requireApiRole, ok } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders, branches } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
+import { metricExpressions } from "@/lib/metric-utils"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 
@@ -107,7 +108,7 @@ export async function GET(req: NextRequest) {
     .select({
       monthNum: sql<number>`EXTRACT(MONTH FROM (${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')::int`,
       month: sql<string>`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'Mon')`,
-      totalCents: sql<number>`coalesce(sum(${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)), 0)`,
+      totalCents: metricExpressions.revenue,
       orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
     })
     .from(orders)
