@@ -64,7 +64,6 @@ export default function ProductPerformancePage() {
 
     const [searchTerm, setSearchTerm] = useState("")
     const [reportSearchTerm, setReportSearchTerm] = useState("")
-    const [groupId, setGroupId] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
     const [selectedRow, setSelectedRow] = useState<any>(null)
     const [drawerOpen, setDrawerOpen] = useState(false)
@@ -85,6 +84,20 @@ export default function ProductPerformancePage() {
 
     const [compare, setCompare] = useState(compareFromUrl)
     const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
+    
+    // Multi-select month/year states
+    const [selectedMonths, setSelectedMonths] = useState<number[]>(
+        searchParams.get("months")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
+    const [selectedYears, setSelectedYears] = useState<number[]>(
+        searchParams.get("years")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
+    const [compareMonths, setCompareMonths] = useState<number[]>(
+        searchParams.get("compareMonths")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
+    const [compareYears, setCompareYears] = useState<number[]>(
+        searchParams.get("compareYears")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -94,7 +107,16 @@ export default function ProductPerformancePage() {
         return null
     }, [startFromUrl, endFromUrl])
 
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
+    const handleDateChange = useCallback((
+        range: { startDate: Date; endDate: Date } | null, 
+        preset: FilterPreset, 
+        compareMode?: boolean, 
+        compRange?: { startDate: Date; endDate: Date } | null,
+        months: number[] = [],
+        years: number[] = [],
+        cMonths: number[] = [],
+        cYears: number[] = []
+    ) => {
         const params = new URLSearchParams(searchParams.toString())
         params.set("preset", preset)
         if (compareMode !== undefined) {
@@ -104,6 +126,24 @@ export default function ProductPerformancePage() {
         if (compRange !== undefined) {
             setCompareRange(compRange)
         }
+        
+        setSelectedMonths(months)
+        setSelectedYears(years)
+        setCompareMonths(cMonths)
+        setCompareYears(cYears)
+
+        if (months.length > 0) params.set("months", months.join(","))
+        else params.delete("months")
+        
+        if (years.length > 0) params.set("years", years.join(","))
+        else params.delete("years")
+        
+        if (cMonths.length > 0) params.set("compareMonths", cMonths.join(","))
+        else params.delete("compareMonths")
+        
+        if (cYears.length > 0) params.set("compareYears", cYears.join(","))
+        else params.delete("compareYears")
+
         if (range) {
             params.set("startDate", range.startDate.toISOString())
             params.set("endDate", range.endDate.toISOString())
@@ -123,13 +163,18 @@ export default function ProductPerformancePage() {
     if (organizationId) queryParams.set("organizationId", organizationId.toString())
     if (startFromUrl) queryParams.set("startDate", startFromUrl)
     if (endFromUrl) queryParams.set("endDate", endFromUrl)
-    if (groupId) queryParams.set("groupId", groupId)
 
     if (contextBranchIds.length > 0) {
         queryParams.set("branchIds", contextBranchIds.join(","))
     } else if (contextBranchId) {
         queryParams.set("branchId", contextBranchId)
     }
+
+    if (selectedMonths.length > 0) queryParams.set("months", selectedMonths.join(","))
+    if (selectedYears.length > 0) queryParams.set("years", selectedYears.join(","))
+    if (compareMonths.length > 0) queryParams.set("compareMonths", compareMonths.join(","))
+    if (compareYears.length > 0) queryParams.set("compareYears", compareYears.join(","))
+
     if (compare) {
         queryParams.set("compare", "true")
         if (compareRange) {
@@ -149,6 +194,10 @@ export default function ProductPerformancePage() {
     useEffect(() => {
         setHasMounted(true)
         setGeneratedDate(new Date().toLocaleString())
+
+        if (!startFromUrl && !endFromUrl && selectedMonths.length === 0 && selectedYears.length === 0) {
+            handleDateChange(null, "all")
+        }
     }, [])
 
     const MONTHS = [
@@ -166,8 +215,17 @@ export default function ProductPerformancePage() {
     const currentYear = dateRange?.startDate.getFullYear() || new Date().getFullYear()
     const currentMonthIdx = dateRange?.startDate.getMonth() || new Date().getMonth()
 
-    const products = perfData?.data || []
-    const transactionItems = summaryData?.items || []
+    const products = useMemo(() => {
+        const p = perfData?.data || []
+        // Sort by revenue descending by default
+        return [...p].sort((a: any, b: any) => (b.revenueGeneratedCents || 0) - (a.revenueGeneratedCents || 0))
+    }, [perfData])
+
+    const transactionItems = useMemo(() => {
+        const items = summaryData?.items || []
+        // Sort by date descending
+        return [...items].sort((a: any, b: any) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())
+    }, [summaryData])
 
     const filteredTransactions = useMemo(() => {
         if (!reportSearchTerm) return transactionItems
@@ -204,6 +262,8 @@ export default function ProductPerformancePage() {
         fulfilled: p.qtyFulfilled || 0,
         refunded: p.qtyRefunded || 0,
         revenue: Math.round((p.revenueGeneratedCents || 0) / 100),
+        compFulfilled: p.compareQty || 0,
+        compRevenue: Math.round((p.compareRevenue || 0) / 100)
     }))
 
     // Comparison Trends
@@ -290,90 +350,20 @@ export default function ProductPerformancePage() {
                     hidePresets={false}
                     compare={compare}
                     compareRange={compareRange}
+                    months={selectedMonths}
+                    years={selectedYears}
+                    compareMonths={compareMonths}
+                    compareYears={compareYears}
                 />
                 
-                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1 hidden md:block" />
 
-                <div className="flex items-center gap-2">
-                    {/* Time Span Presets */}
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-9 text-[11px] font-bold border-amber-100 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 gap-1.5 px-3 rounded-full bg-amber-50/20">
-                                <Calculator className="h-4 w-4" />
-                                {activePreset === "thisMonth" ? "This Month" : activePreset === "yearly" ? "This Year" : activePreset === "all" ? "All Time" : activePreset === "custom" ? "Custom Range" : "Presets"}
-                                <ChevronDown className="h-3 w-3 opacity-50" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 rounded-xl">
-                            <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">Quick Select</div>
-                            <DropdownMenuItem onClick={() => handleDateChange(null, "thisMonth")} className="text-xs py-2 cursor-pointer font-medium">This Month</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                                const end = new Date();
-                                const start = new Date();
-                                start.setMonth(start.getMonth() - 1);
-                                start.setDate(1);
-                                end.setDate(0);
-                                handleDateChange({ startDate: start, endDate: end }, "custom");
-                            }} className="text-xs py-2 cursor-pointer font-medium text-amber-600">Last Month</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                                const start = new Date();
-                                start.setMonth(start.getMonth() - 6);
-                                handleDateChange({ startDate: start, endDate: new Date() }, "custom");
-                            }} className="text-xs py-2 cursor-pointer font-medium font-bold text-amber-600">Last 6 Months</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDateChange(null, "yearly")} className="text-xs py-2 cursor-pointer font-medium">This Year</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDateChange(null, "all")} className="text-xs py-2 cursor-pointer font-medium text-slate-400 border-t border-slate-100 mt-1">All Time</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    {/* Month/Year Selector */}
-                    <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-full border border-slate-200 dark:border-slate-800 px-2">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-full uppercase text-slate-600 dark:text-slate-400">
-                                    {MONTHS[currentMonthIdx]}
-                                    <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="max-h-[300px] overflow-y-auto w-32 rounded-xl shadow-2xl">
-                                {MONTHS.map((m, i) => (
-                                    <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, currentYear)} className={cn("text-[11px] uppercase tracking-tighter", currentMonthIdx === i && "bg-amber-50 text-amber-600 font-bold")}>
-                                        {m}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-700" />
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-full text-slate-600 dark:text-slate-400">
-                                    {currentYear}
-                                    <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="rounded-xl shadow-2xl w-24">
-                                {YEARS.map(y => (
-                                    <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(currentMonthIdx, y)} className={cn("text-[11px] font-mono", currentYear === y && "bg-amber-50 text-amber-600 font-bold")}>
-                                        {y}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                </div>
 
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-                    <>
-                        <BranchFilter
-                            selectedIds={contextBranchIds}
-                            onChange={handleBranchChange}
-                            organizationId={organizationId || undefined}
-                        />
-                        <GroupFilter
-                            value={groupId}
-                            onChange={setGroupId}
-                            organizationId={organizationId || undefined}
-                        />
-                    </>
+                    <BranchFilter
+                        selectedIds={contextBranchIds}
+                        onChange={handleBranchChange}
+                        organizationId={organizationId || undefined}
+                    />
                 )}
                 <div className="flex-1" />
                 
@@ -526,80 +516,8 @@ export default function ProductPerformancePage() {
                                 <LineChart className="h-4 w-4 text-amber-600" />
                                 Product analytics
                             </h3>
+
                             <div className="flex flex-wrap items-center gap-2">
-                                {/* Time Span Presets */}
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold border-indigo-100 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400 gap-1.5 px-3 rounded-md bg-indigo-50/20">
-                                            <Calculator className="h-3.5 w-3.5" />
-                                            {activePreset === "thisMonth" ? "This Month" : activePreset === "yearly" ? "This Year" : activePreset === "all" ? "All Time" : activePreset === "custom" ? "Custom Range" : "Time Span"}
-                                            <ChevronDown className="h-3 w-3 opacity-50" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-48 rounded-xl">
-                                        <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">Select Time Span</div>
-                                        <DropdownMenuItem onClick={() => handleDateChange(null, "thisMonth")} className="text-xs py-2 cursor-pointer font-medium">This Month</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => {
-                                            const end = new Date();
-                                            const start = new Date();
-                                            start.setMonth(start.getMonth() - 1);
-                                            start.setDate(1);
-                                            end.setDate(0);
-                                            handleDateChange({ startDate: start, endDate: end }, "custom");
-                                        }} className="text-xs py-2 cursor-pointer font-medium">Last Month</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => {
-                                            const start = new Date();
-                                            start.setMonth(start.getMonth() - 3);
-                                            handleDateChange({ startDate: start, endDate: new Date() }, "custom");
-                                        }} className="text-xs py-2 cursor-pointer font-medium">Last 3 Months</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => {
-                                            const start = new Date();
-                                            start.setMonth(start.getMonth() - 6);
-                                            handleDateChange({ startDate: start, endDate: new Date() }, "custom");
-                                        }} className="text-xs py-2 cursor-pointer font-medium font-bold text-indigo-600">Last 6 Months</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleDateChange(null, "yearly")} className="text-xs py-2 cursor-pointer font-medium">This Year</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleDateChange(null, "all")} className="text-xs py-2 cursor-pointer font-medium text-slate-400">All Time</DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-
-                                <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
-
-                                {/* Month/Year Selector */}
-                                <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-lg">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md">
-                                                {MONTHS[currentMonthIdx]}
-                                                <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent className="max-h-[300px] overflow-y-auto">
-                                            {MONTHS.map((m, i) => (
-                                                <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, currentYear)} className="text-[11px]">
-                                                    {m}
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md">
-                                                {currentYear}
-                                                <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent>
-                                            {YEARS.map(y => (
-                                                <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(currentMonthIdx, y)} className="text-[11px]">
-                                                    {y}
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </div>
-
-                                <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
-
                                 <DropdownMenu open={chartProductDropdownOpen} onOpenChange={setChartProductDropdownOpen}>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 gap-1.5 px-3 rounded-md">
@@ -701,10 +619,13 @@ export default function ProductPerformancePage() {
                                             formatter={(value: any, name: string) => [name === 'revenue' ? formatPKR(value) : value, name.charAt(0).toUpperCase() + name.slice(1)]}
                                         />
                                         <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', paddingTop: '10px' }} />
-                                        <Bar yAxisId="left" dataKey="ordered" name="ordered" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={20} />
-                                        <Bar yAxisId="left" dataKey="fulfilled" name="fulfilled" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
-                                        <Bar yAxisId="left" dataKey="refunded" name="refunded" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={20} />
+                                        <Bar yAxisId="left" dataKey="ordered" name="ordered" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={compare ? 10 : 20} />
+                                        <Bar yAxisId="left" dataKey="fulfilled" name="fulfilled" fill="#10b981" radius={[4, 4, 0, 0]} barSize={compare ? 10 : 20} />
+                                        <Bar yAxisId="left" dataKey="refunded" name="refunded" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={compare ? 10 : 20} />
+                                        {compare && <Bar yAxisId="left" dataKey="compFulfilled" name="prev fulfilled" fill="#fcd34d" radius={[4, 4, 0, 0]} barSize={10} />}
+                                        
                                         <Line yAxisId="right" type="monotone" dataKey="revenue" name="revenue" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: '#f59e0b', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                                        {compare && <Line yAxisId="right" type="monotone" dataKey="compRevenue" name="prev revenue" stroke="#fcd34d" strokeWidth={3} strokeDasharray="4 4" dot={{ r: 4, fill: '#fcd34d', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />}
                                     </ComposedChart>
                                 </ResponsiveContainer>
                             </div>
@@ -718,10 +639,10 @@ export default function ProductPerformancePage() {
                                         <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Category</TableHead>
                                         <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Sub-category</TableHead>
                                         <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Status</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Qty Ordered</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-emerald-600">Fulfilled</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-rose-500">Refunded</TableHead>
-                                        <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">Revenue</TableHead>
+                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">{compare ? "Qty Ord (A/B)" : "Qty Ordered"}</TableHead>
+                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-emerald-600">{compare ? "Fulfilled (A/B)" : "Fulfilled"}</TableHead>
+                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-rose-500">{compare ? "Refunded (A/B)" : "Refunded"}</TableHead>
+                                        <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">{compare ? "Revenue (A/B)" : "Revenue"}</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -742,14 +663,37 @@ export default function ProductPerformancePage() {
                                                 <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.category}</TableCell>
                                                 <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.subCategory}</TableCell>
                                                 <TableCell className="text-center">
-                                                    <Badge variant={p.status === 'active' ? 'default' : 'secondary'} className="text-[9px] uppercase px-1.5 py-0">
-                                                        {p.status || 'ACTIVE'}
+                                                    <Badge 
+                                                        variant={p.qtyRefunded > 0 ? "destructive" : (p.status === 'active' ? 'default' : 'secondary')} 
+                                                        className="text-[9px] uppercase px-1.5 py-0"
+                                                    >
+                                                        {p.qtyRefunded > 0 ? 'REFUNDED' : (p.status || 'ACTIVE')}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell className="text-center font-mono text-xs">{p.qtyOrdered}</TableCell>
-                                                <TableCell className="text-center font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">{p.qtyFulfilled}</TableCell>
-                                                <TableCell className="text-center font-mono font-bold text-xs text-rose-500">{p.qtyRefunded}</TableCell>
-                                                <TableCell className="text-right font-mono font-bold text-xs text-slate-900 dark:text-white">{formatPKR(p.revenueGeneratedCents / 100)}</TableCell>
+                                                <TableCell className="text-center font-mono text-xs">
+                                                    <div className="flex flex-col items-center">
+                                                        <span>{p.qtyOrdered}</span>
+                                                        {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5">{p.compareQtyOrdered || 0}</span>}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-center font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                                                    <div className="flex flex-col items-center">
+                                                        <span>{p.qtyFulfilled}</span>
+                                                        {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{p.compareQty || 0}</span>}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-center font-mono font-bold text-xs text-rose-500">
+                                                    <div className="flex flex-col items-center">
+                                                        <span>{p.qtyRefunded}</span>
+                                                        {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{p.compareQtyRefunded || 0}</span>}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono font-bold text-xs text-slate-900 dark:text-white">
+                                                    <div className="flex flex-col items-end">
+                                                        <span>{formatPKR(p.revenueGeneratedCents / 100)}</span>
+                                                        {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{formatPKR((p.compareRevenue || 0) / 100)}</span>}
+                                                    </div>
+                                                </TableCell>
                                             </TableRow>
                                         ))
                                     )}

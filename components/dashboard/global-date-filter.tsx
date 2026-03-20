@@ -10,12 +10,25 @@ export type FilterPreset = "today" | "3d" | "7d" | "monthly" | "thisMonth" | "ye
 
 interface GlobalDateFilterProps {
     value: DateRange | null
-    onChange: (range: DateRange | null, preset: FilterPreset, compare?: boolean, compareRange?: DateRange | null) => void
+    onChange: (
+        range: DateRange | null, 
+        preset: FilterPreset, 
+        compare?: boolean, 
+        compareRange?: DateRange | null,
+        months?: number[],
+        years?: number[],
+        compareMonths?: number[],
+        compareYears?: number[]
+    ) => void
     activePreset: FilterPreset
     className?: string
     hidePresets?: boolean
     compare?: boolean
     compareRange?: DateRange | null
+    months?: number[]
+    years?: number[]
+    compareMonths?: number[]
+    compareYears?: number[]
 }
 
 export const presets: { id: FilterPreset; label: string }[] = [
@@ -41,6 +54,8 @@ export const monthPresets: { id: MonthPreset; label: string }[] = [
     { id: "nov", label: "November" },
     { id: "dec", label: "December" },
 ]
+
+export const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
 export function getPresetLabel(preset: FilterPreset, range?: DateRange | null): string {
     if (preset === "custom" && range) {
@@ -89,14 +104,19 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
     DropdownMenuSeparator,
+    DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Switch } from "@/components/ui/switch"
-import { Check, ChevronDown, Calendar as CalendarIcon, ArrowRightLeft } from "lucide-react"
+import { Check, ChevronDown, Calendar as CalendarIcon, ArrowRightLeft, Calculator } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-export function GlobalDateFilter({ value, onChange, activePreset, className, hidePresets, compare, compareRange }: GlobalDateFilterProps) {
+export function GlobalDateFilter({ 
+    value, onChange, activePreset, className, hidePresets, 
+    compare, compareRange, months = [], years = [], 
+    compareMonths = [], compareYears = [] 
+}: GlobalDateFilterProps) {
     const [calendarOpen, setCalendarOpen] = useState(false)
     const [compareCalendarOpen, setCompareCalendarOpen] = useState(false)
     const [earliestDate, setEarliestDate] = useState<Date | null>(null)
@@ -125,14 +145,40 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
         if (preset === "all" && earliestDate) {
             range = { startDate: startOfDay(earliestDate), endDate: endOfDay(new Date()) }
         }
-        onChange(range, preset, compare, compareRange)
+        
+        // When picking a classic preset, clear the array selections to avoid conflicts
+        onChange(range, preset, compare, compareRange, [], [], compareMonths, compareYears)
     }
 
     const toggleCompare = (checked: boolean) => {
-        onChange(value, activePreset, checked, compareRange)
+        onChange(value, activePreset, checked, compareRange, months, years, compareMonths, compareYears)
     }
 
-    const selectedLabel = getPresetLabel(activePreset, value)
+    const toggleArraySelection = (type: 'months' | 'years' | 'compareMonths' | 'compareYears', val: number) => {
+        const isSelected = type === 'months' ? months.includes(val) :
+                           type === 'years' ? years.includes(val) :
+                           type === 'compareMonths' ? compareMonths.includes(val) :
+                           compareYears.includes(val);
+                           
+        const newArr = isSelected 
+            ? (type === 'months' ? months : type === 'years' ? years : type === 'compareMonths' ? compareMonths : compareYears).filter(v => v !== val)
+            : [...(type === 'months' ? months : type === 'years' ? years : type === 'compareMonths' ? compareMonths : compareYears), val];
+
+        onChange(
+            null, // Clear DateRange
+            "custom", // Force custom mode 
+            compare, 
+            compareRange,
+            type === 'months' ? newArr : months,
+            type === 'years' ? newArr : years,
+            type === 'compareMonths' ? newArr : compareMonths,
+            type === 'compareYears' ? newArr : compareYears
+        )
+    }
+
+    const selectedLabel = (months.length > 0 || years.length > 0) 
+        ? "Custom Arrays" 
+        : getPresetLabel(activePreset, value)
 
     return (
         <div className={cn("flex items-center gap-2", className)}>
@@ -174,23 +220,40 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
                     ))}
 
                     <div className="px-2 py-2 mt-2 border-t border-slate-100 dark:border-slate-800 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Select Month
+                        Select Arbitrary Period A
                     </div>
-                    <div className="grid grid-cols-3 gap-1 px-1">
-                        {monthPresets.map((m) => (
-                            <div
-                                key={m.id}
-                                onClick={() => handleSelectPreset(m.id)}
-                                className={cn(
-                                    "px-2 py-1.5 rounded-lg text-[10px] font-bold text-center cursor-pointer transition-all uppercase tracking-tighter",
-                                    activePreset === m.id
-                                        ? "bg-indigo-600 text-white"
-                                        : "bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 hover:text-indigo-600"
-                                )}
-                            >
-                                {m.id}
-                            </div>
-                        ))}
+                    
+                    {/* Advanced Multi-Select Arrays */}
+                    <div className="grid grid-cols-2 gap-2 px-1 mb-2">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className={cn("text-[10px] w-full gap-1 h-7 border-slate-200 dark:border-slate-800", months.length > 0 && "bg-indigo-50 border-indigo-200 text-indigo-700")}>
+                                    <CalendarIcon className="w-3 h-3 opacity-60" /> {months.length > 0 ? `${months.length} Months` : 'Months'}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-40 max-h-60 overflow-y-auto" align="start">
+                                {monthPresets.map((m, i) => (
+                                    <DropdownMenuCheckboxItem key={m.id} checked={months.includes(i)} onCheckedChange={() => toggleArraySelection('months', i)} className="text-xs">
+                                        {m.label}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className={cn("text-[10px] w-full gap-1 h-7 border-slate-200 dark:border-slate-800", years.length > 0 && "bg-indigo-50 border-indigo-200 text-indigo-700")}>
+                                    <Calculator className="w-3 h-3 opacity-60" /> {years.length > 0 ? `${years.length} Years` : 'Years'}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-32" align="start">
+                                {YEARS.map((y) => (
+                                    <DropdownMenuCheckboxItem key={y} checked={years.includes(y)} onCheckedChange={() => toggleArraySelection('years', y)} className="text-xs">
+                                        {y}
+                                    </DropdownMenuCheckboxItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
                     <DropdownMenuSeparator className="my-1.5 bg-slate-100 dark:bg-slate-800" />
@@ -216,7 +279,7 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
                                     <PopoverTrigger asChild>
                                         <Button variant="outline" size="sm" className="w-full h-8 text-[11px] justify-start px-2.5 font-semibold text-slate-600 dark:text-slate-400 border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/50 hover:bg-indigo-100/50 hover:text-indigo-600">
                                             <CalendarIcon className="mr-2 h-3.5 w-3.5 opacity-60" />
-                                            {compareRange ? `${format(compareRange.startDate, "dd MMM yyyy")} – ${format(compareRange.endDate, "dd MMM yyyy")}` : "Previous Period (Auto)"}
+                                            {compareRange ? `${format(compareRange.startDate, "dd MMM yyyy")} – ${format(compareRange.endDate, "dd MMM yyyy")}` : (compareMonths.length > 0 || compareYears.length > 0) ? "Complex Comparison Array" : "Previous Period (Auto)"}
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent
@@ -229,8 +292,41 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
                                     >
                                         <div onClick={(e) => e.stopPropagation()}>
                                             <div className="px-4 pt-3 pb-1 border-b border-slate-100 dark:border-slate-800">
-                                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Select Comparison Range</p>
+                                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Compare Period B Range</p>
                                             </div>
+                                            
+                                            <div className="p-3 bg-slate-50/50 dark:bg-slate-900 grid grid-cols-2 gap-2 border-b border-slate-100 dark:border-slate-800">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="outline" size="sm" className={cn("text-[10px] w-full gap-1 h-7 border-slate-200 dark:border-slate-800", compareMonths.length > 0 && "bg-rose-50 border-rose-200 text-rose-700")}>
+                                                            <CalendarIcon className="w-3 h-3 opacity-60" /> {compareMonths.length > 0 ? `${compareMonths.length} Months` : 'Months'}
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent className="w-40 max-h-60 overflow-y-auto" align="start">
+                                                        {monthPresets.map((m, i) => (
+                                                            <DropdownMenuCheckboxItem key={m.id} checked={compareMonths.includes(i)} onCheckedChange={() => toggleArraySelection('compareMonths', i)} className="text-xs">
+                                                                {m.label}
+                                                            </DropdownMenuCheckboxItem>
+                                                        ))}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="outline" size="sm" className={cn("text-[10px] w-full gap-1 h-7 border-slate-200 dark:border-slate-800", compareYears.length > 0 && "bg-rose-50 border-rose-200 text-rose-700")}>
+                                                            <Calculator className="w-3 h-3 opacity-60" /> {compareYears.length > 0 ? `${compareYears.length} Years` : 'Years'}
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent className="w-32" align="start">
+                                                        {YEARS.map((y) => (
+                                                            <DropdownMenuCheckboxItem key={y} checked={compareYears.includes(y)} onCheckedChange={() => toggleArraySelection('compareYears', y)} className="text-xs">
+                                                                {y}
+                                                            </DropdownMenuCheckboxItem>
+                                                        ))}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+
                                             <Calendar
                                                 initialFocus
                                                 mode="range"
@@ -242,7 +338,7 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
                                                 onSelect={(range: any) => {
                                                     if (range?.from && range?.to) {
                                                         const newCompareRange = { startDate: range.from, endDate: range.to }
-                                                        onChange(value, activePreset, compare, newCompareRange)
+                                                        onChange(value, activePreset, compare, newCompareRange, months, years, [], []) // Clear advanced when standard clicked
                                                         setCompareCalendarOpen(false)
                                                     }
                                                 }}
@@ -256,7 +352,7 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
                                                         size="sm" 
                                                         className="h-8 text-[11px] text-rose-500 hover:text-rose-600 hover:bg-rose-50 w-full"
                                                         onClick={() => {
-                                                            onChange(value, activePreset, compare, undefined);
+                                                            onChange(value, activePreset, compare, undefined, months, years, compareMonths, compareYears);
                                                             setCompareCalendarOpen(false);
                                                         }}
                                                     >
@@ -310,7 +406,8 @@ export function GlobalDateFilter({ value, onChange, activePreset, className, hid
                                     }}
                                     onSelect={(range: any) => {
                                         if (range?.from && range?.to) {
-                                            onChange({ startDate: range.from, endDate: range.to }, "custom", compare, compareRange)
+                                            // Normal range selection clears the arrays
+                                            onChange({ startDate: range.from, endDate: range.to }, "custom", compare, compareRange, [], [], compareMonths, compareYears)
                                             setCalendarOpen(false)
                                         }
                                     }}

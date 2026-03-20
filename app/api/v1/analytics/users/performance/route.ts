@@ -23,6 +23,16 @@ export async function GET(req: NextRequest) {
         const compareStartDateParam = url.searchParams.get("compareStartDate")
         const compareEndDateParam = url.searchParams.get("compareEndDate")
 
+        const monthsRaw = url.searchParams.get("months")
+        const yearsRaw = url.searchParams.get("years")
+        const compareMonthsRaw = url.searchParams.get("compareMonths")
+        const compareYearsRaw = url.searchParams.get("compareYears")
+
+        const parsedMonths = monthsRaw ? monthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
+        const parsedYears = yearsRaw ? yearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
+        const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
+        const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
+
         // RBAC Context Parsing
         let branchIds: number[] = []
         if (branchIdsParam) {
@@ -43,9 +53,19 @@ export async function GET(req: NextRequest) {
         if (startDate) startDate.setHours(0, 0, 0, 0)
         if (endDate) endDate.setHours(23, 59, 59, 999)
 
-        const baseConditions = [inArray(orders.branchId, branchIds)]
-        if (startDate) baseConditions.push(gte(orders.createdAt, startDate))
-        if (endDate) baseConditions.push(lte(orders.createdAt, endDate))
+        const baseConditions: any[] = [inArray(orders.branchId, branchIds)]
+        
+        if (parsedMonths.length > 0) {
+            baseConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
+        }
+        if (parsedYears.length > 0) {
+            baseConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
+        }
+
+        if (parsedMonths.length === 0 && parsedYears.length === 0) {
+            if (startDate) baseConditions.push(gte(orders.createdAt, startDate))
+            if (endDate) baseConditions.push(lte(orders.createdAt, endDate))
+        }
 
         // Aggregate User Metrics
         const q = db
@@ -102,8 +122,17 @@ export async function GET(req: NextRequest) {
                 .where(
                     and(
                         inArray(orders.branchId, branchIds),
-                        gte(orders.createdAt, prevStart),
-                        lte(orders.createdAt, prevEnd)
+                        (() => {
+                            const compCond: any[] = []
+                            if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {
+                                if (parsedCompMonths.length > 0) compCond.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
+                                if (parsedCompYears.length > 0) compCond.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
+                            } else {
+                                if (prevStart) compCond.push(gte(orders.createdAt, prevStart))
+                                if (prevEnd) compCond.push(lte(orders.createdAt, prevEnd))
+                            }
+                            return and(...compCond)
+                        })()
                     )
                 )
 

@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Loader2, ShoppingBag, TrendingUp, Calculator, Upload,
   Crown, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf,
-  Package, BarChart3, ListOrdered, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, ChevronDown
+  Package, BarChart3, ListOrdered, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, ChevronDown, CheckSquare
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -25,6 +25,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -112,10 +113,21 @@ export default function SalesSummaryPage() {
   const [hasMounted, setHasMounted] = useState(false)
 
   // URL States
-  const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "today"
+  const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "all"
   const startFromUrl = searchParams.get("startDate") || ""
   const endFromUrl = searchParams.get("endDate") || ""
   const activePreset = presetFromUrl
+
+  const monthsFromUrl = searchParams.get("months")?.split(',').map(Number) || []
+  const yearsFromUrl = searchParams.get("years")?.split(',').map(Number) || []
+  const compareMonthsFromUrl = searchParams.get("compareMonths")?.split(',').map(Number) || []
+  const compareYearsFromUrl = searchParams.get("compareYears")?.split(',').map(Number) || []
+
+  // Advanced State Arrays
+  const [selectedMonths, setSelectedMonths] = useState<number[]>(monthsFromUrl)
+  const [selectedYears, setSelectedYears] = useState<number[]>(yearsFromUrl)
+  const [compareMonths, setCompareMonths] = useState<number[]>(compareMonthsFromUrl)
+  const [compareYears, setCompareYears] = useState<number[]>(compareYearsFromUrl)
 
   const dateRange = useMemo(() => {
     if (startFromUrl && endFromUrl) {
@@ -124,7 +136,16 @@ export default function SalesSummaryPage() {
     return null
   }, [startFromUrl, endFromUrl])
 
-  const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
+  const handleDateChange = useCallback((
+      range: { startDate: Date; endDate: Date } | null, 
+      preset: FilterPreset, 
+      compareMode?: boolean, 
+      compRange?: { startDate: Date; endDate: Date } | null,
+      newMonths?: number[],
+      newYears?: number[],
+      newCompMonths?: number[],
+      newCompYears?: number[]
+  ) => {
     const params = new URLSearchParams(searchParams.toString())
     params.set("preset", preset)
     if (compareMode !== undefined) {
@@ -135,31 +156,24 @@ export default function SalesSummaryPage() {
       setCompareRange(compRange)
     }
 
+    // Arrays Support
+    if (newMonths !== undefined) { setSelectedMonths(newMonths); if(newMonths.length > 0) params.set("months", newMonths.join(",")); else params.delete("months"); }
+    if (newYears !== undefined) { setSelectedYears(newYears); if(newYears.length > 0) params.set("years", newYears.join(",")); else params.delete("years"); }
+    if (newCompMonths !== undefined) { setCompareMonths(newCompMonths); if(newCompMonths.length > 0) params.set("compareMonths", newCompMonths.join(",")); else params.delete("compareMonths"); }
+    if (newCompYears !== undefined) { setCompareYears(newCompYears); if(newCompYears.length > 0) params.set("compareYears", newCompYears.join(",")); else params.delete("compareYears"); }
+
     // Calculate range for presets if not provided
-    const finalRange = range || (preset !== "custom" ? getPresetRange(preset) : null)
+    const finalRange = range || (preset !== "custom" && preset !== "all" ? getPresetRange(preset) : null)
 
     if (finalRange) {
       params.set("startDate", finalRange.startDate.toISOString())
       params.set("endDate", finalRange.endDate.toISOString())
     } else if (preset !== "custom") {
-      // Fallback for custom with no range should not delete, but presets should always have range
       params.delete("startDate")
       params.delete("endDate")
     }
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }, [searchParams, pathname, router])
-
-  const handleMonthYearChange = (monthIdx: number, year: number) => {
-    const startDate = new Date(year, monthIdx, 1)
-    const endDate = new Date(year, monthIdx + 1, 0)
-    handleDateChange({ startDate, endDate }, "custom")
-  }
-
-  const MONTHS = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ]
-  const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
   // Column selectors
   const { visibleKeys: orderVisibleKeys, isVisible: isOrderVisible, setVisibleKeys: setOrderVisibleKeys } = useColumnSelector(ORDER_COLUMNS, "sales-summary-orders-v2")
@@ -171,14 +185,32 @@ export default function SalesSummaryPage() {
   // Build query strings
   const queryParams = new URLSearchParams()
   if (organizationId) queryParams.set("organizationId", organizationId.toString())
-  if (startFromUrl) queryParams.set("startDate", startFromUrl)
-  if (endFromUrl) queryParams.set("endDate", endFromUrl)
+  
+  // Advanced DB Arrays (Postgres logic in route.ts converts 0-indexed JS month arrays to 1-indexed)
+  if (selectedMonths.length > 0) {
+    queryParams.set("months", selectedMonths.map(m => m + 1).join(",")) 
+  }
+  if (selectedYears.length > 0) {
+    queryParams.set("years", selectedYears.join(","))
+  }
+  if (compareMonths.length > 0) {
+    queryParams.set("compareMonths", compareMonths.map(m => m + 1).join(","))
+  }
+  if (compareYears.length > 0) {
+    queryParams.set("compareYears", compareYears.join(","))
+  }
+  
+  // Date ranges
+  if (startFromUrl && selectedMonths.length === 0 && selectedYears.length === 0) queryParams.set("startDate", startFromUrl)
+  if (endFromUrl && selectedMonths.length === 0 && selectedYears.length === 0) queryParams.set("endDate", endFromUrl)
+  
   if (groupId) queryParams.set("groupId", groupId)
   if (contextBranchIds.length > 0) {
     queryParams.set("branchIds", contextBranchIds.join(","))
   } else if (contextBranchId) {
     queryParams.set("branchId", contextBranchId)
   }
+  
   if (compare) {
     queryParams.set("compare", "true")
     if (compareRange) {
@@ -196,11 +228,11 @@ export default function SalesSummaryPage() {
     setHasMounted(true)
     setGeneratedDate(new Date().toLocaleString())
 
-    // If no explicit preset/dates, force "All Time" filter
-    if (!startFromUrl && !endFromUrl && !searchParams.has("preset")) {
+    // If no explicit preset/dates AND no multi-select arrays, force "All Time" filter
+    if (!startFromUrl && !endFromUrl && !searchParams.has("preset") && selectedMonths.length === 0 && selectedYears.length === 0) {
       handleDateChange(null, "all")
     }
-  }, [startFromUrl, endFromUrl, searchParams, handleDateChange])
+  }, [startFromUrl, endFromUrl, searchParams, handleDateChange, selectedMonths.length, selectedYears.length])
 
   const summary = data?.summary || { totalSales: 0, totalTax: 0, totalSubtotal: 0, orderCount: 0, totalItemsSold: 0 }
   const orders = data?.orders || []
@@ -486,51 +518,11 @@ export default function SalesSummaryPage() {
             hidePresets={false}
             compare={compare}
             compareRange={compareRange}
+            months={selectedMonths}
+            years={selectedYears}
+            compareMonths={compareMonths}
+            compareYears={compareYears}
           />
-
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold gap-1 hover:bg-white dark:hover:bg-slate-800 transition-all uppercase tracking-tighter">
-                  <Calculator className="h-3 w-3 text-indigo-500" />
-                  {dateRange ? MONTHS[dateRange.startDate.getMonth()] : 'Month'}
-                  <ChevronDown className="h-3 w-3 opacity-50" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-40 max-h-[300px] overflow-y-auto">
-                {MONTHS.map((m, i) => (
-                  <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, dateRange?.startDate.getFullYear() || new Date().getFullYear())} className="text-xs font-medium">
-                    {m}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold gap-1 hover:bg-white dark:hover:bg-slate-800 transition-all uppercase tracking-tighter border-l border-slate-200 dark:border-slate-700 rounded-none pl-2">
-                  {dateRange ? dateRange.startDate.getFullYear() : 'Year'}
-                  <ChevronDown className="h-3 w-3 opacity-50" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-24">
-                {YEARS.map(y => (
-                  <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(dateRange?.startDate.getMonth() || 0, y)} className="text-xs font-medium">
-                    {y}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDateChange(null, "thisMonth")}
-              className="h-7 text-[9px] font-black bg-indigo-500 text-white hover:bg-indigo-600 ml-1 px-2 rounded-md"
-            >
-              TIME SPAN
-            </Button>
-          </div>
 
           {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
             <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">

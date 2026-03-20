@@ -56,7 +56,11 @@ export function useSalesPerformance(
     dateRange?: DateRange | null,
     status?: DashboardStatus,
     compare?: boolean,
-    compareRange?: DateRange | null
+    compareRange?: DateRange | null,
+    months?: number[],
+    years?: number[],
+    compareMonths?: number[],
+    compareYears?: number[]
 ) {
     const url = useMemo(() => {
         const params = new URLSearchParams()
@@ -75,11 +79,11 @@ export function useSalesPerformance(
             params.set("groupId", groupId)
         }
 
-        if (dateRange) {
+        if (dateRange && (!months || months.length === 0) && (!years || years.length === 0)) {
             params.set("startDate", dateRange.startDate.toISOString())
             params.set("endDate", dateRange.endDate.toISOString())
-        } else {
-            // Default: today
+        } else if ((!months || months.length === 0) && (!years || years.length === 0)) {
+            // Default: today (only if no custom array is utilized)
             const today = new Date()
             const start = new Date(today)
             start.setHours(0, 0, 0, 0)
@@ -87,6 +91,14 @@ export function useSalesPerformance(
             end.setHours(23, 59, 59, 999)
             params.set("startDate", start.toISOString())
             params.set("endDate", end.toISOString())
+        }
+
+        if (months && months.length > 0) {
+            params.set("months", months.map(m => m + 1).join(",")) // Javascript 0-11 mapping to PostgreSQL 1-12
+        }
+
+        if (years && years.length > 0) {
+            params.set("years", years.join(","))
         }
 
         if (status && status !== "all") {
@@ -99,10 +111,16 @@ export function useSalesPerformance(
                 params.set("compareStartDate", compareRange.startDate.toISOString())
                 params.set("compareEndDate", compareRange.endDate.toISOString())
             }
+            if (compareMonths && compareMonths.length > 0) {
+                params.set("compareMonths", compareMonths.map(m => m + 1).join(","))
+            }
+            if (compareYears && compareYears.length > 0) {
+                params.set("compareYears", compareYears.join(","))
+            }
         }
 
         return `/api/v1/analytics/sales-performance?${params.toString()}`
-    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange])
+    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears])
 
     return useSWR<SalesPerformanceResponse>(url, fetcher, {
         revalidateOnFocus: false,
@@ -120,7 +138,11 @@ export function useDashboardKPIs(
     dateRange?: DateRange | null,
     status?: DashboardStatus,
     compare?: boolean,
-    compareRange?: DateRange | null
+    compareRange?: DateRange | null,
+    months?: number[],
+    years?: number[],
+    compareMonths?: number[],
+    compareYears?: number[]
 ) {
-    return useSalesPerformance(organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange)
+    return useSalesPerformance(organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears)
 }

@@ -71,6 +71,20 @@ export default function UserReportPage() {
 
     const [compare, setCompare] = useState(compareFromUrl)
     const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
+    
+    // Multi-select month/year states
+    const [selectedMonths, setSelectedMonths] = useState<number[]>(
+        searchParams.get("months")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
+    const [selectedYears, setSelectedYears] = useState<number[]>(
+        searchParams.get("years")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
+    const [compareMonths, setCompareMonths] = useState<number[]>(
+        searchParams.get("compareMonths")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
+    const [compareYears, setCompareYears] = useState<number[]>(
+        searchParams.get("compareYears")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -80,7 +94,16 @@ export default function UserReportPage() {
         return null
     }, [startFromUrl, endFromUrl])
 
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
+    const handleDateChange = useCallback((
+        range: { startDate: Date; endDate: Date } | null, 
+        preset: FilterPreset, 
+        compareMode?: boolean, 
+        compRange?: { startDate: Date; endDate: Date } | null,
+        months: number[] = [],
+        years: number[] = [],
+        cMonths: number[] = [],
+        cYears: number[] = []
+    ) => {
         const params = new URLSearchParams(searchParams.toString())
         params.set("preset", preset)
         if (compareMode !== undefined) {
@@ -90,6 +113,24 @@ export default function UserReportPage() {
         if (compRange !== undefined) {
             setCompareRange(compRange)
         }
+        
+        setSelectedMonths(months)
+        setSelectedYears(years)
+        setCompareMonths(cMonths)
+        setCompareYears(cYears)
+
+        if (months.length > 0) params.set("months", months.join(","))
+        else params.delete("months")
+        
+        if (years.length > 0) params.set("years", years.join(","))
+        else params.delete("years")
+        
+        if (cMonths.length > 0) params.set("compareMonths", cMonths.join(","))
+        else params.delete("compareMonths")
+        
+        if (cYears.length > 0) params.set("compareYears", cYears.join(","))
+        else params.delete("compareYears")
+
         if (range) {
             params.set("startDate", range.startDate.toISOString())
             params.set("endDate", range.endDate.toISOString())
@@ -115,6 +156,12 @@ export default function UserReportPage() {
     } else if (contextBranchId) {
         queryParams.set("branchId", contextBranchId)
     }
+
+    if (selectedMonths.length > 0) queryParams.set("months", selectedMonths.join(","))
+    if (selectedYears.length > 0) queryParams.set("years", selectedYears.join(","))
+    if (compareMonths.length > 0) queryParams.set("compareMonths", compareMonths.join(","))
+    if (compareYears.length > 0) queryParams.set("compareYears", compareYears.join(","))
+
     if (compare) {
         queryParams.set("compare", "true")
         if (compareRange) {
@@ -172,6 +219,8 @@ export default function UserReportPage() {
         orders: u.totalOrders || 0,
         fulfilled: u.fulfilledOrders || 0,
         spent: Math.round((u.totalSpentCents || 0) / 100),
+        compOrders: u.compareTotalOrders || 0,
+        compSpent: Math.round((u.compareTotalSpentCents || 0) / 100)
     }))
 
     // Comparison Trends
@@ -238,6 +287,10 @@ export default function UserReportPage() {
                     hidePresets={false}
                     compare={compare}
                     compareRange={compareRange}
+                    months={selectedMonths}
+                    years={selectedYears}
+                    compareMonths={compareMonths}
+                    compareYears={compareYears}
                 />
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <BranchFilter
@@ -399,73 +452,7 @@ export default function UserReportPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                            {/* Time Span Presets */}
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold border-indigo-100 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400 gap-1.5 px-3 rounded-md bg-indigo-50/20">
-                                        <Calculator className="h-3.5 w-3.5" />
-                                        {activePreset === "thisMonth" ? "This Month" : activePreset === "yearly" ? "This Year" : activePreset === "all" ? "All Time" : activePreset === "custom" ? "Custom" : "Time Span"}
-                                        <ChevronDown className="h-3 w-3 opacity-50" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-48 rounded-xl">
-                                    <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">Select Time Span</div>
-                                    <DropdownMenuItem onClick={() => handleDateChange(null, "thisMonth")} className="text-xs py-2 cursor-pointer font-medium">This Month</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => {
-                                        const end = new Date();
-                                        const start = new Date();
-                                        start.setMonth(start.getMonth() - 1);
-                                        start.setDate(1);
-                                        end.setDate(0);
-                                        handleDateChange({ startDate: start, endDate: end }, "custom");
-                                    }} className="text-xs py-2 cursor-pointer font-medium">Last Month</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => {
-                                        const start = new Date();
-                                        start.setMonth(start.getMonth() - 6);
-                                        handleDateChange({ startDate: start, endDate: new Date() }, "custom");
-                                    }} className="text-xs py-2 cursor-pointer font-medium font-bold text-indigo-600">Last 6 Months</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleDateChange(null, "yearly")} className="text-xs py-2 cursor-pointer font-medium">This Year</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleDateChange(null, "all")} className="text-xs py-2 cursor-pointer font-medium text-slate-400">All Time</DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-
-                            <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
-
-                            {/* Month/Year Selector */}
-                            <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-lg">
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md uppercase">
-                                            {MONTHS[currentMonthIdx]}
-                                            <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="max-h-[300px] overflow-y-auto w-32 rounded-xl shadow-2xl">
-                                        {MONTHS.map((m, i) => (
-                                            <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, currentYear)} className={cn("text-[11px] uppercase tracking-tighter", currentMonthIdx === i && "bg-indigo-50 text-indigo-600 font-bold")}>
-                                                {m}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md">
-                                            {currentYear}
-                                            <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="rounded-xl shadow-2xl w-24">
-                                        {YEARS.map(y => (
-                                            <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(currentMonthIdx, y)} className={cn("text-[11px] font-mono", currentYear === y && "bg-indigo-50 text-indigo-600 font-bold")}>
-                                                {y}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
-
-                            <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
+                                <div className="flex-1" />
 
                             <DropdownMenu open={chartUserDropdownOpen} onOpenChange={setChartUserDropdownOpen}>
                                 <DropdownMenuTrigger asChild>
@@ -552,16 +539,12 @@ export default function UserReportPage() {
                                                             <p className="text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2 border-b border-slate-100 pb-2">{u.userName}</p>
                                                             <div className="space-y-1.5">
                                                                 <div className="flex justify-between items-center bg-blue-50/30 p-1.5 rounded-lg">
-                                                                    <span className="text-[10px] font-bold text-blue-600 uppercase">Total Orders</span>
-                                                                    <span className="text-[11px] font-black text-blue-700">{payload[0].value}</span>
-                                                                </div>
-                                                                <div className="flex justify-between items-center bg-emerald-50/30 p-1.5 rounded-lg">
-                                                                    <span className="text-[10px] font-bold text-emerald-600 uppercase">Fulfilled</span>
-                                                                    <span className="text-[11px] font-black text-emerald-700">{payload[1].value}</span>
+                                                                    <span className="text-[10px] font-bold text-blue-600 uppercase">Orders (A/B)</span>
+                                                                    <span className="text-[11px] font-black text-blue-700">{payload[0].value} / {payload[1].value}</span>
                                                                 </div>
                                                                 <div className="flex justify-between items-center bg-indigo-50/30 p-1.5 rounded-lg mt-1 border border-indigo-100/50">
-                                                                    <span className="text-[10px] font-bold text-indigo-600 uppercase">Total Spent</span>
-                                                                    <span className="text-[11px] font-black text-indigo-700">{formatPKR(Number(payload[2].value))}</span>
+                                                                    <span className="text-[10px] font-bold text-indigo-600 uppercase">Spent (A/B)</span>
+                                                                    <span className="text-[11px] font-black text-indigo-700">{formatPKR(Number(payload[2].value))} / {formatPKR(Number(payload[3].value))}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -571,9 +554,10 @@ export default function UserReportPage() {
                                             }}
                                         />
                                         <Legend verticalAlign="top" align="right" height={36} iconType="circle" />
-                                        <Bar yAxisId="left" dataKey="orders" name="Orders Initiated" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={24} />
-                                        <Bar yAxisId="left" dataKey="fulfilled" name="Fulfilled Orders" fill="#10b981" radius={[6, 6, 0, 0]} barSize={24} />
-                                        <Line yAxisId="right" type="monotone" dataKey="spent" name="Total Expenditure" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                                        <Bar yAxisId="left" dataKey="orders" name="Orders (A)" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={compare ? 12 : 24} />
+                                        {compare && <Bar yAxisId="left" dataKey="compOrders" name="Orders (B)" fill="#94a3b8" radius={[6, 6, 0, 0]} barSize={12} />}
+                                        <Line yAxisId="right" type="monotone" dataKey="spent" name="Spent (A)" stroke="#6366f1" strokeWidth={3} dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                                        {compare && <Line yAxisId="right" type="monotone" dataKey="compSpent" name="Spent (B)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3 }} />}
                                     </ComposedChart>
                                 </ResponsiveContainer>
                             ) : (
@@ -631,10 +615,10 @@ export default function UserReportPage() {
                                     <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Emp ID</TableHead>
                                     <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500 text-left">Organization</TableHead>
                                     <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500">Branch Assignment</TableHead>
-                                    <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500 text-center">Total Orders</TableHead>
+                                    <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500 text-center">{compare ? "Orders (A/B)" : "Total Orders"}</TableHead>
                                     <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500 text-center">Fulfilled</TableHead>
                                     <TableHead className="h-12 text-[11px] font-bold uppercase text-slate-500 text-center">Refunded</TableHead>
-                                    <TableHead className="text-right pr-6 h-12 text-[11px] font-bold uppercase text-slate-500">Total Spent</TableHead>
+                                    <TableHead className="text-right pr-6 h-12 text-[11px] font-bold uppercase text-slate-500">{compare ? "Spent (A/B)" : "Total Spent"}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -662,11 +646,19 @@ export default function UserReportPage() {
                                             <TableCell>
                                                 <Badge variant="outline" className="text-[10px] font-medium border-slate-200 dark:border-slate-800">{u.branchName || "Unassigned"}</Badge>
                                             </TableCell>
-                                            <TableCell className="text-center font-mono text-xs font-semibold">{u.totalOrders}</TableCell>
+                                            <TableCell className="text-center font-mono text-xs font-semibold">
+                                                <div className="flex flex-col items-center">
+                                                    <span>{u.totalOrders}</span>
+                                                    {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5">{u.compareTotalOrders || 0}</span>}
+                                                </div>
+                                            </TableCell>
                                             <TableCell className="text-center font-mono text-xs text-emerald-600 dark:text-emerald-400 font-bold">{u.fulfilledOrders}</TableCell>
                                             <TableCell className="text-center font-mono text-xs text-rose-500">{u.refundedOrders}</TableCell>
                                             <TableCell className="text-right pr-6 font-mono font-bold text-xs text-slate-900 dark:text-white">
-                                                {formatPKR(u.totalSpentCents / 100)}
+                                                <div className="flex flex-col items-end">
+                                                    <span>{formatPKR(u.totalSpentCents / 100)}</span>
+                                                    {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{formatPKR((u.compareTotalSpentCents || 0) / 100)}</span>}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))

@@ -28,6 +28,16 @@ export async function GET(req: NextRequest) {
     const compareStartDateParam = searchParams.get("compareStartDate")
     const compareEndDateParam = searchParams.get("compareEndDate")
 
+    const monthsRaw = searchParams.get("months")
+    const yearsRaw = searchParams.get("years")
+    const compareMonthsRaw = searchParams.get("compareMonths")
+    const compareYearsRaw = searchParams.get("compareYears")
+
+    const parsedMonths = monthsRaw ? monthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
+    const parsedYears = yearsRaw ? yearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
+    const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
+    const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
+
     let organizationId: number | null = null
     let branchId: number | null = null
     let groupId: number | null = null
@@ -89,10 +99,21 @@ export async function GET(req: NextRequest) {
 
     const fetchData = async () => {
         // Build base conditions
-        const conditions: any[] = [
-            gte(orders.createdAt, startDate),
-            lte(orders.createdAt, endDate),
-        ]
+        const conditions: any[] = []
+
+        // Primary Date filter logic (Fallback to bounds only if exact disjoint sets not sent)
+        if (!monthsRaw && !yearsRaw) {
+            conditions.push(gte(orders.createdAt, startDate))
+            conditions.push(lte(orders.createdAt, endDate))
+        }
+
+        // Advanced Multi-Select Date Filtering (Months / Years arrays)
+        if (parsedMonths.length > 0) {
+            conditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
+        }
+        if (parsedYears.length > 0) {
+            conditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
+        }
 
         // Status filter: normalize to uppercase for comparison
         const upperStatus = statusParam?.toUpperCase()
@@ -168,10 +189,8 @@ export async function GET(req: NextRequest) {
             : null
 
         // ── Branch breakdown ──
-        const branchConditions: any[] = [
-            gte(orders.createdAt, startDate),
-            lte(orders.createdAt, endDate),
-        ]
+        const branchConditions: any[] = [...conditions] // Apply primary date matrices 
+        
         if (statusParam && statusParam !== "all") {
             branchConditions.push(sql`UPPER(${orders.status}) = ${statusParam.toUpperCase()}`)
         } else {
@@ -243,27 +262,45 @@ export async function GET(req: NextRequest) {
 
         // ── Comparison Logic ──
         let comparison: any = null
-        if (searchParams.get("compare") === "true") {
-            let prevStart: Date
-            let prevEnd: Date
-            
-            if (compareStartDateParam && compareEndDateParam) {
-                prevStart = new Date(compareStartDateParam)
-                prevEnd = new Date(compareEndDateParam)
-                prevStart.setHours(0, 0, 0, 0)
-                prevEnd.setHours(23, 59, 59, 999)
-            } else {
-                const start = new Date(startDate)
-                const end = new Date(endDate)
-                const duration = end.getTime() - start.getTime()
-                prevStart = new Date(start.getTime() - duration - 1)
-                prevEnd = new Date(start.getTime() - 1)
+        const hasCompareArrays = parsedCompMonths.length > 0 || parsedCompYears.length > 0
+        const hasPrimaryDates = startDate && endDate
+
+        if (searchParams.get("compare") === "true" && (hasPrimaryDates || compareStartDateParam || hasCompareArrays)) {
+            const compConditions: any[] = []
+
+            if (parsedCompMonths.length > 0) {
+                compConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
+            }
+            if (parsedCompYears.length > 0) {
+                compConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
             }
 
-            const compConditions: any[] = [
-                gte(orders.createdAt, prevStart),
-                lte(orders.createdAt, prevEnd),
-            ]
+            if (!hasCompareArrays) {
+                let prevStart: Date
+                let prevEnd: Date
+                if (compareStartDateParam && compareEndDateParam) {
+                    prevStart = new Date(compareStartDateParam)
+                    prevEnd = new Date(compareEndDateParam)
+                    prevStart.setHours(0, 0, 0, 0)
+                    prevEnd.setHours(23, 59, 59, 999)
+                } else if (startDate && endDate && parsedMonths.length === 0 && parsedYears.length === 0) {
+                    const start = new Date(startDate)
+                    const end = new Date(endDate)
+                    const duration = end.getTime() - start.getTime()
+                    prevStart = new Date(start.getTime() - duration - 1)
+                    prevEnd = new Date(start.getTime() - 1)
+                } else {
+                    prevStart = new Date(0)
+                    prevEnd = new Date(0)
+                }
+
+                if (prevStart.getTime() !== 0) {
+                    compConditions.push(gte(orders.createdAt, prevStart))
+                    compConditions.push(lte(orders.createdAt, prevEnd))
+                }
+            }
+
+            const compAllStatusConditions: any[] = [...compConditions]
 
             if (upperStatus && upperStatus !== "ALL") {
                 if (upperStatus === "REJECTED") {
@@ -273,15 +310,23 @@ export async function GET(req: NextRequest) {
                 }
             }
 
-            if (organizationId) compConditions.push(eq(orders.organizationId, organizationId))
+            if (organizationId) {
+                compConditions.push(eq(orders.organizationId, organizationId))
+                compAllStatusConditions.push(eq(orders.organizationId, organizationId))
+            }
             if (branchIds.length > 0) {
                 compConditions.push(inArray(orders.branchId, branchIds))
+                compAllStatusConditions.push(inArray(orders.branchId, branchIds))
             } else if (branchId) {
                 compConditions.push(eq(orders.branchId, branchId))
+                compAllStatusConditions.push(eq(orders.branchId, branchId))
             }
-            if (groupId) compConditions.push(eq(branches.groupId, groupId))
+            if (groupId) {
+                compConditions.push(eq(branches.groupId, groupId))
+                compAllStatusConditions.push(eq(branches.groupId, groupId))
+            }
 
-            const compWhere = and(...compConditions)
+            const compWhere = compConditions.length > 0 ? and(...compConditions) : undefined
 
             // Series for comparison
             const compSeriesRows = await db
@@ -310,19 +355,7 @@ export async function GET(req: NextRequest) {
             const compTotalOrders = compSeriesData.reduce((s, r) => s + r.orders, 0)
 
             // Aggregated counts for all statuses (for KPI comparison)
-            const compAllStatusConditions: any[] = [
-                gte(orders.createdAt, prevStart),
-                lte(orders.createdAt, prevEnd),
-            ]
-            if (organizationId) compAllStatusConditions.push(eq(orders.organizationId, organizationId))
-            if (branchIds.length > 0) {
-                compAllStatusConditions.push(inArray(orders.branchId, branchIds))
-            } else if (branchId) {
-                compAllStatusConditions.push(eq(orders.branchId, branchId))
-            }
-            if (groupId) compAllStatusConditions.push(eq(branches.groupId, groupId))
-
-            const compAllWhere = and(...compAllStatusConditions)
+            const compAllWhere = compAllStatusConditions.length > 0 ? and(...compAllStatusConditions) : undefined
             const compStatusCounts = await db.select({
                 fulfilledCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
                 fulfilledNetSales: metricExpressions.revenue,

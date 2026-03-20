@@ -29,6 +29,8 @@ import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/glob
 import { GroupFilter } from "@/components/reports/group-filter"
 
 import { KPICard } from "@/components/reports/kpi-card"
+import { SalesPerformanceLineChart } from "@/components/dashboard/charts"
+import { useSalesPerformance } from "@/lib/hooks/use-sales-performance"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -45,6 +47,13 @@ export default function BranchReportsPage() {
     const [searchTerm, setSearchTerm] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
     const [groupId, setGroupId] = useState("")
+    const [selectedMonths, setSelectedMonths] = useState<number[]>([new Date().getMonth()])
+    const [selectedYears, setSelectedYears] = useState<number[]>([new Date().getFullYear()])
+    const [compareMonths, setCompareMonths] = useState<number[]>([])
+    const [compareYears, setCompareYears] = useState<number[]>([])
+
+    const [compare, setCompare] = useState(false)
+    const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
@@ -63,9 +72,25 @@ export default function BranchReportsPage() {
         return null
     }, [startFromUrl, endFromUrl])
 
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset) => {
+    const handleDateChange = useCallback((
+        range: { startDate: Date; endDate: Date } | null, 
+        preset: FilterPreset, 
+        compareMode?: boolean, 
+        compRange?: { startDate: Date; endDate: Date } | null,
+        months?: number[],
+        years?: number[],
+        cMonths?: number[],
+        cYears?: number[]
+    ) => {
         const params = new URLSearchParams(searchParams.toString())
         params.set("preset", preset)
+        if (compareMode !== undefined) setCompare(compareMode)
+        if (compRange !== undefined) setCompareRange(compRange)
+        if (months) setSelectedMonths(months)
+        if (years) setSelectedYears(years)
+        if (cMonths) setCompareMonths(cMonths)
+        if (cYears) setCompareYears(cYears)
+        
         if (range) {
             params.set("startDate", range.startDate.toISOString())
             params.set("endDate", range.endDate.toISOString())
@@ -80,30 +105,44 @@ export default function BranchReportsPage() {
     if (organizationId) queryParams.set("organizationId", organizationId.toString())
     if (startFromUrl) queryParams.set("startDate", startFromUrl)
     if (endFromUrl) queryParams.set("endDate", endFromUrl)
+    if (selectedMonths.length > 0) queryParams.set("months", selectedMonths.join(","))
+    if (selectedYears.length > 0) queryParams.set("years", selectedYears.join(","))
+
+    if (compare) {
+        queryParams.set("compare", "true")
+        if (compareRange) {
+            queryParams.set("compareStartDate", compareRange.startDate.toISOString())
+            queryParams.set("compareEndDate", compareRange.endDate.toISOString())
+        }
+        if (compareMonths.length > 0) queryParams.set("compareMonths", compareMonths.join(","))
+        if (compareYears.length > 0) queryParams.set("compareYears", compareYears.join(","))
+    }
+
     if (groupId) queryParams.set("groupId", groupId)
     queryParams.set("limit", "10000")
 
     const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${queryParams.toString()}`, fetcher)
+
+    // Sales performance chart data
+    const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
+        organizationId || undefined,
+        undefined,
+        undefined,
+        groupId || undefined,
+        dateRange,
+        "all",
+        compare,
+        compareRange
+    )
 
     useEffect(() => {
         setHasMounted(true)
         setGeneratedDate(new Date().toLocaleString())
     }, [])
 
-    const MONTHS = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-    ]
-    const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
-
-    const handleMonthYearChange = (monthIdx: number, year: number) => {
-        const startDate = new Date(year, monthIdx, 1)
-        const endDate = new Date(year, monthIdx + 1, 0)
-        handleDateChange({ startDate, endDate }, "custom")
+    const handleGroupChange = (id: string) => {
+        setGroupId(id)
     }
-
-    const currentYear = dateRange?.startDate.getFullYear() || new Date().getFullYear()
-    const currentMonthIdx = dateRange?.startDate.getMonth() || new Date().getMonth()
 
     const topPerformers = data?.topPerformers || []
     const summary = data?.summary || { totalSales: 0, orderCount: 0 }
@@ -150,81 +189,18 @@ export default function BranchReportsPage() {
                     onChange={handleDateChange}
                     activePreset={activePreset}
                     hidePresets={false}
+                    compare={compare}
+                    compareRange={compareRange}
+                    months={selectedMonths}
+                    years={selectedYears}
+                    compareMonths={compareMonths}
+                    compareYears={compareYears}
                 />
-                
-                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1 hidden md:block" />
-
-                <div className="flex items-center gap-2">
-                    {/* Time Span Presets */}
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-9 text-[11px] font-bold border-indigo-100 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400 gap-1.5 px-3 rounded-full bg-indigo-50/20">
-                                <Calculator className="h-4 w-4" />
-                                {activePreset === "thisMonth" ? "This Month" : activePreset === "yearly" ? "This Year" : activePreset === "all" ? "All Time" : activePreset === "custom" ? "Custom Range" : "Presets"}
-                                <ChevronDown className="h-3 w-3 opacity-50" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 rounded-xl">
-                            <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">Quick Select</div>
-                            <DropdownMenuItem onClick={() => handleDateChange(null, "thisMonth")} className="text-xs py-2 cursor-pointer font-medium">This Month</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                                const end = new Date();
-                                const start = new Date();
-                                start.setMonth(start.getMonth() - 1);
-                                start.setDate(1);
-                                end.setDate(0);
-                                handleDateChange({ startDate: start, endDate: end }, "custom");
-                            }} className="text-xs py-2 cursor-pointer font-medium text-emerald-600">Last Month</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                                const start = new Date();
-                                start.setMonth(start.getMonth() - 6);
-                                handleDateChange({ startDate: start, endDate: new Date() }, "custom");
-                            }} className="text-xs py-2 cursor-pointer font-medium font-bold text-indigo-600">Last 6 Months</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDateChange(null, "yearly")} className="text-xs py-2 cursor-pointer font-medium">This Year</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDateChange(null, "all")} className="text-xs py-2 cursor-pointer font-medium text-slate-400 border-t border-slate-100 mt-1">All Time</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    {/* Month/Year Selector */}
-                    <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-full border border-slate-200 dark:border-slate-800 px-2">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-full uppercase text-slate-600 dark:text-slate-400">
-                                    {MONTHS[currentMonthIdx]}
-                                    <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="max-h-[300px] overflow-y-auto w-32 rounded-xl shadow-2xl">
-                                {MONTHS.map((m, i) => (
-                                    <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, currentYear)} className={cn("text-[11px] uppercase tracking-tighter", currentMonthIdx === i && "bg-emerald-50 text-emerald-600 font-bold")}>
-                                        {m}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        <div className="w-[1px] h-3 bg-slate-300 dark:bg-slate-700" />
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-full text-slate-600 dark:text-slate-400">
-                                    {currentYear}
-                                    <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="rounded-xl shadow-2xl w-24">
-                                {YEARS.map(y => (
-                                    <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(currentMonthIdx, y)} className={cn("text-[11px] font-mono", currentYear === y && "bg-emerald-50 text-emerald-600 font-bold")}>
-                                        {y}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                </div>
 
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <GroupFilter
                         value={groupId}
-                        onChange={setGroupId}
+                        onChange={handleGroupChange}
                         organizationId={organizationId || undefined}
                     />
                 )}
@@ -285,6 +261,34 @@ export default function BranchReportsPage() {
                     />
                 </div>
 
+                {/* ━━━ PERFORMANCE ANALYTICS CHART ━━━ */}
+                <Card className="rounded-[24px] border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
+                    <CardHeader className="px-8 py-6 border-b border-slate-100 dark:border-slate-800">
+                        <CardTitle className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                            <TrendingUp className="w-5 h-5 text-emerald-500" />
+                            Performance Analytics
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-8">
+                        {isLoadingPerf ? (
+                            <div className="h-[300px] flex items-center justify-center">
+                                <RefreshCw className="w-8 h-8 animate-spin text-slate-200" />
+                            </div>
+                        ) : (
+                            <SalesPerformanceLineChart
+                                seriesData={perfData?.seriesData ?? []}
+                                comparisonSeries={perfData?.comparison?.seriesData}
+                                totalSales={perfData?.totalSales ?? 0}
+                                avgSales={perfData?.avgSales ?? 0}
+                                totalOrders={perfData?.totalOrders ?? 0}
+                                peakPeriod={perfData?.peakPeriod ?? null}
+                                granularity={perfData?.granularity ?? "daily"}
+                                dateRange={dateRange}
+                            />
+                        )}
+                    </CardContent>
+                </Card>
+
                 {/* ━━━ REFINED TABLE ━━━ */}
                 <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/50 backdrop-blur-xl">
                     <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-4">
@@ -327,11 +331,11 @@ export default function BranchReportsPage() {
                             <TableHeader>
                                 <TableRow className="bg-slate-50/50 dark:bg-slate-800/30">
                                     <TableHead className="pl-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Unit Name</TableHead>
-                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Orders</TableHead>
-                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Fulfilled</TableHead>
-                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Rejected</TableHead>
-                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Refunded</TableHead>
-                                    <TableHead className="text-right pr-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Net Revenue</TableHead>
+                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Orders (A/B)" : "Orders"}</TableHead>
+                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Fulfilled (A/B)" : "Fulfilled"}</TableHead>
+                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Rejected (A/B)" : "Rejected"}</TableHead>
+                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Refunded (A/B)" : "Refunded"}</TableHead>
+                                    <TableHead className="text-right pr-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">{compare ? "Net Rev (A/B)" : "Net Revenue"}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -361,25 +365,42 @@ export default function BranchReportsPage() {
                                                         </div>
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-right font-mono text-xs font-medium text-slate-500">{p.orderCount.toLocaleString()}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[10px] font-bold h-5">
-                                                        {p.fulfilledCount || 0}
-                                                    </Badge>
+                                                <TableCell className="text-right font-mono text-xs font-medium text-slate-500 py-4">
+                                                    <div className="flex flex-col items-end">
+                                                        <span>{p.orderCount.toLocaleString()}</span>
+                                                        {compare && <span className="text-[10px] text-slate-400 mt-0.5">{p.compareOrderCount || 0}</span>}
+                                                    </div>
                                                 </TableCell>
-                                                <TableCell className="text-right">
-                                                    <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-100 text-[10px] font-bold h-5">
-                                                        {p.rejectedCount || 0}
-                                                    </Badge>
+                                                <TableCell className="text-right py-4">
+                                                    <div className="flex flex-col items-end">
+                                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[10px] font-bold h-5">
+                                                            {p.fulfilledCount || 0}
+                                                        </Badge>
+                                                        {compare && <span className="text-[9px] text-slate-400 mt-0.5">{p.compareFulfilledCount || 0}</span>}
+                                                    </div>
                                                 </TableCell>
-                                                <TableCell className="text-right">
-                                                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-100 text-[10px] font-bold h-5">
-                                                        {p.refundedCount || 0}
-                                                    </Badge>
+                                                <TableCell className="text-right py-4">
+                                                    <div className="flex flex-col items-end">
+                                                        <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-100 text-[10px] font-bold h-5">
+                                                            {p.rejectedCount || 0}
+                                                        </Badge>
+                                                        {compare && <span className="text-[9px] text-slate-400 mt-0.5">{p.compareRejectedCount || 0}</span>}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-right py-4">
+                                                    <div className="flex flex-col items-end">
+                                                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-100 text-[10px] font-bold h-5">
+                                                            {p.refundedCount || 0}
+                                                        </Badge>
+                                                        {compare && <span className="text-[9px] text-slate-400 mt-0.5">{p.compareRefundedCount || 0}</span>}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="text-right pr-6 font-mono font-bold text-xs text-slate-900 dark:text-white py-4">
                                                     <div className="flex flex-col items-end">
-                                                        <span>{formatPKR(p.sales / 100)}</span>
+                                                        <div className="flex flex-col items-end">
+                                                            <span>{formatPKR(p.sales / 100)}</span>
+                                                            {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 pt-0.5">{formatPKR(p.compareSales / 100)}</span>}
+                                                        </div>
                                                         <div className="flex items-center gap-1.5 mt-1">
                                                             <div className="w-12 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                                                                 <div className="h-full bg-emerald-500" style={{ width: `${marketShare}%` }} />

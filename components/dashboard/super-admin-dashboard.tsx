@@ -259,7 +259,8 @@ export function SuperAdminDashboard() {
             </div>
           ) : (
             <SalesPerformanceLineChart
-              seriesData={perfData?.seriesData ?? []} totalSales={perfData?.totalSales ?? 0}
+              seriesData={perfData?.seriesData ?? []}
+              totalSales={perfData?.totalSales ?? 0}
               avgSales={perfData?.avgSales ?? 0} totalOrders={perfData?.totalOrders ?? 0}
               peakPeriod={perfData?.peakPeriod ?? null} granularity={perfData?.granularity ?? "daily"}
               label="Sales" dateRange={dateRange}

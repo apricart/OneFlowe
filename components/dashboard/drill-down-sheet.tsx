@@ -59,8 +59,8 @@ const TYPE_CONFIG = {
         columns: [
             { key: "tid", label: "Transaction ID" },
             { key: "customerName", label: "Customer" },
-            { key: "taxAmount", label: "Tax", isCurrency: true },
-            { key: "netValue", label: "Net Profit", isCurrency: true },
+            { key: "grossValue", label: "Gross", isCurrency: true },
+            { key: "netValue", label: "Net Revenue", isCurrency: true },
         ]
     },
     REJECTED: {
@@ -518,36 +518,43 @@ export function DrillDownSheet({
                                                         {/* ━━━ ITEMIZED COMPOSITION ━━━ */}
                                                         <div className="space-y-2">
                                                             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Itemized Composition</h4>
-                                                            <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
-                                                                <table className="w-full text-left text-[11px]">
-                                                                    <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
-                                                                        <tr>
-                                                                            <th className="px-3 py-2 font-bold text-slate-500 uppercase tracking-widest">Product</th>
-                                                                            <th className="px-3 py-2 font-bold text-slate-500 uppercase tracking-widest text-center">Qty</th>
-                                                                            <th className="px-3 py-2 font-bold text-slate-500 uppercase tracking-widest text-right">Price</th>
-                                                                            <th className="px-3 py-2 font-bold text-slate-500 uppercase tracking-widest text-right">Total</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950">
-                                                                        {item.items?.map((prod: any) => (
-                                                                            <tr key={prod.id} className="group/row hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors">
-                                                                                <td className="px-3 py-2">
-                                                                                    <div className="font-bold text-slate-900 dark:text-slate-100">{prod.name}</div>
-                                                                                    {prod.refundQuantity > 0 && (
-                                                                                        <div className="text-[9px] text-rose-500 font-black uppercase mt-0.5 flex items-center gap-1">
-                                                                                            <RotateCcw className="w-2.5 h-2.5" /> Refunded {prod.refundQuantity} Units
-                                                                                        </div>
-                                                                                    )}
-                                                                                </td>
-                                                                                <td className="px-3 py-2 text-center font-medium">x{prod.quantity}</td>
-                                                                                <td className="px-3 py-2 text-right text-slate-500 tabular-nums">{formatPKR(prod.price)}</td>
-                                                                                <td className="px-3 py-2 text-right font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                                                                                    {formatPKR(prod.price * prod.quantity)}
-                                                                                </td>
-                                                                            </tr>
-                                                                        ))}
-                                                                    </tbody>
-                                                                </table>
+                                                            <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                                                                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                                                                    {item.items?.map((prod: any, pIdx: number) => (
+                                                                        <div key={pIdx} className="p-3 flex justify-between items-start gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors group/item">
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="font-black text-slate-900 dark:text-white leading-tight truncate text-[12px]">{prod.name}</p>
+                                                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                                                                                    <span className="text-[10px] font-bold text-slate-400 font-mono italic">{prod.productCode || 'N/A'}</span>
+                                                                                    <div className="flex items-center gap-1.5">
+                                                                                        <Badge variant="outline" className="text-[8px] h-4 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-1.5 py-0">
+                                                                                            Fulfilled: {prod.quantity - (prod.refundQuantity || 0)}
+                                                                                        </Badge>
+                                                                                        {(prod.refundQuantity || 0) > 0 && (
+                                                                                            <Badge variant="outline" className="text-[8px] h-4 border-rose-200 bg-rose-50 text-rose-600 px-1.5 py-0">
+                                                                                                Refunded: {prod.refundQuantity}
+                                                                                            </Badge>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-right shrink-0">
+                                                                                <p className="text-[11px] font-black font-mono text-slate-900 dark:text-white">
+                                                                                    {formatPKR((prod.price * (prod.quantity - (prod.refundQuantity || 0))))}
+                                                                                </p>
+                                                                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">@ {formatPKR(prod.price)}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="bg-slate-50/50 dark:bg-slate-800/30 p-2.5 border-t border-slate-100 dark:border-slate-800 mt-auto">
+                                                                    <div className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-slate-400">
+                                                                        <span>Composition Summary</span>
+                                                                        <span className="text-slate-700 dark:text-slate-300">
+                                                                            {item.items?.length || 0} Products · {item.items?.reduce((acc: number, cur: any) => acc + cur.quantity, 0) || 0} Units
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         </div>
 

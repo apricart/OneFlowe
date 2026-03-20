@@ -108,6 +108,24 @@ export default function BudgetSummaryPage() {
     const startFromUrl = searchParams.get("startDate") || ""
     const endFromUrl = searchParams.get("endDate") || ""
     const activeTab = searchParams.get("tab") || "analytics"
+    const compareFromUrl = searchParams.get("compare") === "true"
+
+    const [compare, setCompare] = useState(compareFromUrl)
+    const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
+
+    // Multi-select month/year states
+    const [selectedMonths, setSelectedMonths] = useState<number[]>(
+        searchParams.get("months")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
+    const [selectedYears, setSelectedYears] = useState<number[]>(
+        searchParams.get("years")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
+    const [compareMonths, setCompareMonths] = useState<number[]>(
+        searchParams.get("compareMonths")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
+    const [compareYears, setCompareYears] = useState<number[]>(
+        searchParams.get("compareYears")?.split(",").map(Number).filter(n => !isNaN(n)) || []
+    )
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -117,9 +135,44 @@ export default function BudgetSummaryPage() {
         return null
     }, [startFromUrl, endFromUrl])
 
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset) => {
+    const handleDateChange = useCallback((
+        range: { startDate: Date; endDate: Date } | null, 
+        preset: FilterPreset,
+        compareMode?: boolean,
+        compRange?: { startDate: Date; endDate: Date } | null,
+        months: number[] = [],
+        years: number[] = [],
+        cMonths: number[] = [],
+        cYears: number[] = []
+    ) => {
         const params = new URLSearchParams(searchParams.toString())
         if (preset) params.set("preset", preset)
+        
+        if (compareMode !== undefined) {
+            params.set("compare", String(compareMode))
+            setCompare(compareMode)
+        }
+        if (compRange !== undefined) {
+            setCompareRange(compRange)
+        }
+
+        setSelectedMonths(months)
+        setSelectedYears(years)
+        setCompareMonths(cMonths)
+        setCompareYears(cYears)
+
+        if (months.length > 0) params.set("months", months.join(","))
+        else params.delete("months")
+        
+        if (years.length > 0) params.set("years", years.join(","))
+        else params.delete("years")
+        
+        if (cMonths.length > 0) params.set("compareMonths", cMonths.join(","))
+        else params.delete("compareMonths")
+        
+        if (cYears.length > 0) params.set("compareYears", cYears.join(","))
+        else params.delete("compareYears")
+
         if (range) {
             params.set("startDate", range.startDate.toISOString())
             params.set("endDate", range.endDate.toISOString())
@@ -144,6 +197,19 @@ export default function BudgetSummaryPage() {
         queryParams.set("branchIds", contextBranchIds.join(","))
     } else if (contextBranchId) {
         queryParams.set("branchId", contextBranchId)
+    }
+
+    if (selectedMonths.length > 0) queryParams.set("months", selectedMonths.join(","))
+    if (selectedYears.length > 0) queryParams.set("years", selectedYears.join(","))
+    if (compareMonths.length > 0) queryParams.set("compareMonths", compareMonths.join(","))
+    if (compareYears.length > 0) queryParams.set("compareYears", compareYears.join(","))
+
+    if (compare) {
+        queryParams.set("compare", "true")
+        if (compareRange) {
+            queryParams.set("compareStartDate", compareRange.startDate.toISOString())
+            queryParams.set("compareEndDate", compareRange.endDate.toISOString())
+        }
     }
 
     const diffMs = dateRange ? (dateRange.endDate.getTime() - dateRange.startDate.getTime()) : 0;
@@ -317,6 +383,12 @@ export default function BudgetSummaryPage() {
                     onChange={handleDateChange}
                     activePreset={activePreset}
                     hidePresets={false}
+                    compare={compare}
+                    compareRange={compareRange}
+                    months={selectedMonths}
+                    years={selectedYears}
+                    compareMonths={compareMonths}
+                    compareYears={compareYears}
                 />
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <BranchFilter
@@ -423,71 +495,7 @@ export default function BudgetSummaryPage() {
                                         Expenditure Graph (<span className="text-indigo-500 lowercase italic">{granularity}</span>)
                                     </CardTitle>
                                     <div className="flex items-center gap-2">
-                                        {/* Time Span Presets */}
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold border-indigo-100 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400 gap-1.5 px-3 rounded-md bg-indigo-50/20">
-                                                    <Calculator className="h-3.5 w-3.5" />
-                                                    {activePreset === "thisMonth" ? "This Month" : activePreset === "yearly" ? "This Year" : activePreset === "all" ? "All Time" : activePreset === "custom" ? "Custom" : "Time Span"}
-                                                    <ChevronDown className="h-3 w-3 opacity-50" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-48 rounded-xl">
-                                                <div className="p-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 mb-1">Select Time Span</div>
-                                                <DropdownMenuItem onClick={() => handleDateChange(null, "thisMonth")} className="text-xs py-2 cursor-pointer font-medium">This Month</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => {
-                                                    const end = new Date();
-                                                    const start = new Date();
-                                                    start.setMonth(start.getMonth() - 1);
-                                                    start.setDate(1);
-                                                    end.setDate(0);
-                                                    handleDateChange({ startDate: start, endDate: end }, "custom");
-                                                }} className="text-xs py-2 cursor-pointer font-medium">Last Month</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => {
-                                                    const start = new Date();
-                                                    start.setMonth(start.getMonth() - 6);
-                                                    handleDateChange({ startDate: start, endDate: new Date() }, "custom");
-                                                }} className="text-xs py-2 cursor-pointer font-medium font-bold text-teal-600">Last 6 Months</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleDateChange(null, "yearly")} className="text-xs py-2 cursor-pointer font-medium">This Year</DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleDateChange(null, "all")} className="text-xs py-2 cursor-pointer font-medium text-slate-400">All Time</DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-
-                                        <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
-
-                                        {/* Month/Year Selector */}
-                                        <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-lg">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md uppercase">
-                                                        {MONTHS[currentMonthIdx]}
-                                                        <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent className="max-h-[300px] overflow-y-auto w-32 rounded-xl shadow-2xl">
-                                                    {MONTHS.map((m, i) => (
-                                                        <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, currentYear)} className={cn("text-[11px] uppercase tracking-tighter", currentMonthIdx === i && "bg-teal-50 text-teal-600 font-bold")}>
-                                                            {m}
-                                                        </DropdownMenuItem>
-                                                    ))}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] font-bold px-2 hover:bg-white dark:hover:bg-slate-700 rounded-md">
-                                                        {currentYear}
-                                                        <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-50" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent className="rounded-xl shadow-2xl w-24">
-                                                    {YEARS.map(y => (
-                                                        <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(currentMonthIdx, y)} className={cn("text-[11px] font-mono", currentYear === y && "bg-teal-50 text-teal-600 font-bold")}>
-                                                            {y}
-                                                        </DropdownMenuItem>
-                                                    ))}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </div>
+                                    <div className="flex-1" />
                                     </div>
                                 </CardHeader>
                                 <CardContent className="p-4 pt-6">
@@ -530,8 +538,8 @@ export default function BudgetSummaryPage() {
                                                                                 <span className="text-[11px] font-black text-teal-700">{formatPKR(data.totalBaseline + data.totalAddon)}</span>
                                                                             </div>
                                                                             <div className="flex justify-between items-center bg-blue-50/30 p-1.5 rounded-lg border border-blue-100/50">
-                                                                                <span className="text-[10px] font-bold text-blue-600 uppercase">Actual Expenditure</span>
-                                                                                <span className="text-[11px] font-black text-blue-700">{formatPKR(data.totalSpent)}</span>
+                                                                                <span className="text-[10px] font-bold text-blue-600 uppercase">Spent (A/B)</span>
+                                                                                <span className="text-[11px] font-black text-blue-700">{formatPKR(data.totalSpent)} / {formatPKR(data.prevSpent || 0)}</span>
                                                                             </div>
                                                                             <div className="mt-2 pt-2 border-t border-slate-50 dark:border-slate-800">
                                                                                 <p className="text-[9px] font-black uppercase text-slate-400 mb-1">Branch Breakdown</p>
@@ -691,11 +699,11 @@ export default function BudgetSummaryPage() {
                                         <TableHeader className="bg-slate-50/50 dark:bg-slate-900/50">
                                             <TableRow className="hover:bg-transparent border-b border-slate-200 dark:border-slate-800">
                                                 <TableHead className="pl-6 h-12 text-[10px] font-black uppercase tracking-widest text-slate-500">Branch Identity</TableHead>
-                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Monthly Base</TableHead>
-                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Add-On (Adj)</TableHead>
-                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Total Budget</TableHead>
-                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Spent (Period)</TableHead>
-                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Remaining</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-emerald-600 font-bold">{compare ? "Base (A/B)" : "Monthly Base"}</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-indigo-600 font-bold">{compare ? "Add-On (A/B)" : "Add-On (Adj)"}</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">{compare ? "Total (A/B)" : "Total Budget"}</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">{compare ? "Spent (A/B)" : "Spent (Period)"}</TableHead>
+                                                <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">{compare ? "Rem (A/B)" : "Remaining"}</TableHead>
                                                 <TableHead className="h-12 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center pr-6">Utilization</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -714,21 +722,40 @@ export default function BudgetSummaryPage() {
                                                             </div>
                                                         </TableCell>
                                                         <TableCell className="text-right py-4 font-bold text-xs text-slate-500 dark:text-slate-400">
-                                                            {formatPKR(baseline / 100)}
+                                                            <div className="flex flex-col items-end">
+                                                                <span>{formatPKR(baseline / 100)}</span>
+                                                                {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{formatPKR((b.compareBaselineAmount || 0) / 100)}</span>}
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell className="text-right py-4 font-bold text-xs text-indigo-600 dark:text-indigo-400">
-                                                            {addon > 0 ? `+${formatPKR(addon / 100)}` : "-"}
+                                                            <div className="flex flex-col items-end">
+                                                                <span>{addon > 0 ? `+${formatPKR(addon / 100)}` : "-"}</span>
+                                                                {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{b.compareAllocated ? `+${formatPKR((b.compareAllocated - (b.compareBaselineAmount || 0)) / 100)}` : "-"}</span>}
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell className="text-right py-4 font-black text-xs text-slate-900 dark:text-white">
-                                                            {formatPKR(totalLimit / 100)}
+                                                            <div className="flex flex-col items-end">
+                                                                <span>{formatPKR(totalLimit / 100)}</span>
+                                                                {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{formatPKR((b.compareAllocated || 0) / 100)}</span>}
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell className="text-right py-4 font-bold text-xs text-slate-900 dark:text-white">
-                                                            {formatPKR(b.spent / 100)}
+                                                            <div className="flex flex-col items-end">
+                                                                <span>{formatPKR(b.spent / 100)}</span>
+                                                                {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{formatPKR((b.compareSpent || 0) / 100)}</span>}
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell className="text-right py-4 font-bold text-xs">
-                                                            <span className={cn(b.remaining < 0 ? "text-rose-500" : "text-emerald-500")}>
-                                                                {b.remaining < 0 ? "-" : "+"}{formatPKR(Math.abs(b.remaining) / 100)}
-                                                            </span>
+                                                            <div className="flex flex-col items-end">
+                                                               <span className={cn(b.remaining < 0 ? "text-rose-500" : "text-emerald-500")}>
+                                                                   {b.remaining < 0 ? "-" : "+"}{formatPKR(Math.abs(b.remaining) / 100)}
+                                                               </span>
+                                                               {compare && (
+                                                                   <span className={cn("text-[10px] border-t border-slate-100 mt-0.5 font-normal", (b.compareRemaining || 0) < 0 ? "text-rose-400" : "text-emerald-400")}>
+                                                                       {(b.compareRemaining || 0) < 0 ? "-" : "+"}{formatPKR(Math.abs(b.compareRemaining || 0) / 100)}
+                                                                   </span>
+                                                               )}
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell className="text-center pr-6 py-4">
                                                             <div className="flex flex-col items-center gap-1.5 min-w-[100px]">

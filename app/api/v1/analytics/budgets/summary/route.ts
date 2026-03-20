@@ -208,7 +208,10 @@ export async function GET(req: NextRequest) {
                 const record = budgetLookup[branch.id]?.[period]
                 const baselineSetting = branch.baselineBudgetCents || 0
                 const allocated = record ? (record.amountAllocatedCents || 0) : baselineSetting
-                const credited = record ? (record.amountCreditedCents || 0) : 0
+                
+                // User requirement: Add-on (credited) is one-time for current month only
+                const currentMonthPeriod = new Date().toISOString().slice(0, 7)
+                const credited = (record && period === currentMonthPeriod) ? (record.amountCreditedCents || 0) : 0
                 
                 // For the chart, we split into baseline vs addon explicitly based on DB fields
                 const baseline = allocated
@@ -288,10 +291,11 @@ export async function GET(req: NextRequest) {
 
             periodList.forEach(period => {
                 const record = budgetLookup[branch.id]?.[period]
+                const currentMonthPeriod = new Date().toISOString().slice(0, 7)
                 allocated += record ? (record.amountAllocatedCents || 0) : (branch.baselineBudgetCents || 0)
                 spent += record ? (record.amountSpentCents || 0) : 0
                 held += record ? (record.amountHeldCents || 0) : 0
-                credited += record ? (record.amountCreditedCents || 0) : 0
+                credited += (record && period === currentMonthPeriod) ? (record.amountCreditedCents || 0) : 0
             })
 
             return {

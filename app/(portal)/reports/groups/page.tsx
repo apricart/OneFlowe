@@ -28,6 +28,8 @@ import {
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 
 import { KPICard } from "@/components/reports/kpi-card"
+import { SalesPerformanceLineChart } from "@/components/dashboard/charts"
+import { useSalesPerformance } from "@/lib/hooks/use-sales-performance"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -117,6 +119,18 @@ export default function GroupsReportPage() {
     }
 
     const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/groups?${queryParams.toString()}`, fetcher)
+
+    // Sales performance chart data
+    const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
+        organizationId || undefined,
+        undefined,
+        undefined,
+        undefined,
+        dateRange,
+        "all",
+        compare,
+        compareRange
+    )
 
     useEffect(() => {
         setHasMounted(true)
@@ -250,6 +264,34 @@ export default function GroupsReportPage() {
                         comparisonLabel="Prev"
                     />
                 </div>
+
+                {/* ━━━ PERFORMANCE ANALYTICS CHART ━━━ */}
+                <Card className="rounded-[24px] border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
+                    <CardHeader className="px-8 py-6 border-b border-slate-100 dark:border-slate-800">
+                        <CardTitle className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                            <TrendingUp className="w-5 h-5 text-indigo-500" />
+                            Group Performance Analytics
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-8">
+                        {isLoadingPerf ? (
+                            <div className="h-[300px] flex items-center justify-center">
+                                <RefreshCw className="w-8 h-8 animate-spin text-slate-200" />
+                            </div>
+                        ) : (
+                            <SalesPerformanceLineChart
+                                seriesData={perfData?.seriesData ?? []}
+                                comparisonSeries={perfData?.comparison?.seriesData}
+                                totalSales={perfData?.totalSales ?? 0}
+                                avgSales={perfData?.avgSales ?? 0}
+                                totalOrders={perfData?.totalOrders ?? 0}
+                                peakPeriod={perfData?.peakPeriod ?? null}
+                                granularity={perfData?.granularity ?? "daily"}
+                                dateRange={dateRange}
+                            />
+                        )}
+                    </CardContent>
+                </Card>
 
                 {/* ━━━ REFINED HIERARCHICAL TABLE ━━━ */}
                 <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/50 backdrop-blur-xl pt-1">

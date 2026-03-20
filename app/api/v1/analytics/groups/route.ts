@@ -22,6 +22,16 @@ export async function GET(req: NextRequest) {
         const compareStartDateParam = searchParams.get("compareStartDate")
         const compareEndDateParam = searchParams.get("compareEndDate")
 
+        const monthsRaw = searchParams.get("months")
+        const yearsRaw = searchParams.get("years")
+        const compareMonthsRaw = searchParams.get("compareMonths")
+        const compareYearsRaw = searchParams.get("compareYears")
+
+        const parsedMonths = monthsRaw ? monthsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n >= 1 && n <= 12) : []
+        const parsedYears = yearsRaw ? yearsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n > 2000) : []
+        const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n >= 1 && n <= 12) : []
+        const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n > 2000) : []
+
         if (orgIdParam && role === "SUPER_ADMIN") {
             const parsedOrgId = parseInt(orgIdParam)
             if (Number.isFinite(parsedOrgId)) orgId = parsedOrgId
@@ -32,23 +42,29 @@ export async function GET(req: NextRequest) {
         }
 
         // Build order conditions for date filtering
-        const orderConditions = []
-
-        // Revenue: include FULFILLED + REFUNDED, deduct refunds for net value
-        orderConditions.push(REVENUE_ELIGIBLE_FILTER)
-
-        if (startDate) {
-            const start = new Date(startDate)
-            start.setHours(0, 0, 0, 0)
-            orderConditions.push(gte(orders.createdAt, start))
+        const orderConditions: any[] = [REVENUE_ELIGIBLE_FILTER]
+        
+        if (parsedMonths.length > 0) {
+            orderConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
         }
-        if (endDate) {
-            const end = new Date(endDate)
-            end.setHours(23, 59, 59, 999)
-            orderConditions.push(lte(orders.createdAt, end))
+        if (parsedYears.length > 0) {
+            orderConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
         }
 
-        const orderWhere = orderConditions.length > 0 ? and(...orderConditions) : undefined
+        if (parsedMonths.length === 0 && parsedYears.length === 0) {
+            if (startDate) {
+                const start = new Date(startDate)
+                start.setHours(0, 0, 0, 0)
+                orderConditions.push(gte(orders.createdAt, start))
+            }
+            if (endDate) {
+                const end = new Date(endDate)
+                end.setHours(23, 59, 59, 999)
+                orderConditions.push(lte(orders.createdAt, end))
+            }
+        }
+
+        const orderWhere = and(...orderConditions)
 
         // Build group conditions
         const groupConditions = []
@@ -200,9 +216,18 @@ export async function GET(req: NextRequest) {
                 .innerJoin(groups, eq(branches.groupId, groups.id))
                 .where(and(
                     REVENUE_ELIGIBLE_FILTER,
-                    gte(orders.createdAt, prevStart),
-                    lte(orders.createdAt, prevEnd),
-                    orgId ? eq(groups.organizationId, orgId) : undefined
+                    orgId ? eq(groups.organizationId, orgId) : undefined,
+                    (() => {
+                        const compCond: any[] = []
+                        if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {
+                            if (parsedCompMonths.length > 0) compCond.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
+                            if (parsedCompYears.length > 0) compCond.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
+                        } else if (prevStart && prevEnd) {
+                            compCond.push(gte(orders.createdAt, prevStart))
+                            compCond.push(lte(orders.createdAt, prevEnd))
+                        }
+                        return and(...compCond)
+                    })()
                 ))
 
             const compSummary = compStats[0]

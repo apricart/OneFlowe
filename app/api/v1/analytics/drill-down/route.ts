@@ -24,6 +24,16 @@ export async function GET(req: NextRequest) {
     const endDateParam = searchParams.get("endDate")
     const compareStartDateParam = searchParams.get("compareStartDate")
     const compareEndDateParam = searchParams.get("compareEndDate")
+
+    const monthsRaw = searchParams.get("months")
+    const yearsRaw = searchParams.get("years")
+    const compareMonthsRaw = searchParams.get("compareMonths")
+    const compareYearsRaw = searchParams.get("compareYears")
+
+    const parsedMonths = monthsRaw ? monthsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n >= 1 && n <= 12) : []
+    const parsedYears = yearsRaw ? yearsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n > 2000) : []
+    const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n >= 1 && n <= 12) : []
+    const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n > 2000) : []
     const refundType = searchParams.get("refundType")?.toLowerCase() // all, full, partial
     const sortBy = searchParams.get("sortBy")?.toLowerCase() === "value" ? "value" : "date"
     if (!type || !["REVENUE", "REJECTED", "FULFILLED", "ORDERS", "REFUNDED"].includes(type)) {
@@ -52,7 +62,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (branchIdsParam) {
-        branchIds = branchIdsParam.split(",").map(Number).filter(n => !isNaN(n) && n > 0)
+        branchIds = branchIdsParam.split(",").map((n: any) => Number(n)).filter((n: any) => !isNaN(n) && n > 0)
     }
 
     const conditions: any[] = []
@@ -64,15 +74,24 @@ export async function GET(req: NextRequest) {
         conditions.push(eq(orders.branchId, branchId))
     }
 
-    if (startDateParam) {
-        const start = new Date(startDateParam)
-        start.setHours(0, 0, 0, 0)
-        conditions.push(gte(orders.createdAt, start))
+    if (parsedMonths.length > 0) {
+        conditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
     }
-    if (endDateParam) {
-        const end = new Date(endDateParam)
-        end.setHours(23, 59, 59, 999)
-        conditions.push(lte(orders.createdAt, end))
+    if (parsedYears.length > 0) {
+        conditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
+    }
+
+    if (parsedMonths.length === 0 && parsedYears.length === 0) {
+        if (startDateParam) {
+            const start = new Date(startDateParam)
+            start.setHours(0, 0, 0, 0)
+            conditions.push(gte(orders.createdAt, start))
+        }
+        if (endDateParam) {
+            const end = new Date(endDateParam)
+            end.setHours(23, 59, 59, 999)
+            conditions.push(lte(orders.createdAt, end))
+        }
     }
 
     // Apply type-specific filters
@@ -321,8 +340,17 @@ export async function GET(req: NextRequest) {
                 compConditions.push(eq(orders.branchId, branchId))
             }
 
-            compConditions.push(gte(orders.createdAt, prevStart))
-            compConditions.push(lte(orders.createdAt, prevEnd))
+            (() => {
+                const compCond: any[] = []
+                if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {
+                    if (parsedCompMonths.length > 0) compCond.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
+                    if (parsedCompYears.length > 0) compCond.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
+                } else if (prevStart && prevEnd) {
+                    compCond.push(gte(orders.createdAt, prevStart))
+                    compCond.push(lte(orders.createdAt, prevEnd))
+                }
+                if (compCond.length > 0) compConditions.push(and(...compCond))
+            })()
 
             // Re-apply type-specific filters
             if (type === "REVENUE" || type === "FULFILLED") {

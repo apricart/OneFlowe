@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from "react"
 import useSWR from "swr"
 import { useAppContext } from "@/components/context/app-context"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -27,6 +27,8 @@ import {
 import { GlobalDateFilter, type FilterPreset, getPresetRange } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
+import { SalesPerformanceLineChart } from "@/components/dashboard/charts"
+import { useSalesPerformance } from "@/lib/hooks/use-sales-performance"
 
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -52,28 +54,33 @@ export default function PurchaseReportPage() {
   const [compare, setCompare] = useState(false)
   const [compareRange, setCompareRange] = useState<{ startDate: Date, endDate: Date } | null>(null)
 
-  // Filters
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([new Date().getMonth()])
+  const [selectedYears, setSelectedYears] = useState<number[]>([new Date().getFullYear()])
+  const [compareMonths, setCompareMonths] = useState<number[]>([])
+  const [compareYears, setCompareYears] = useState<number[]>([])
+
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
   const [selectedGroupId, setSelectedGroupId] = useState<string>("all")
 
-  const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
+  const handleDateChange = useCallback((
+    range: { startDate: Date; endDate: Date } | null, 
+    preset: FilterPreset, 
+    compareMode?: boolean, 
+    compRange?: { startDate: Date; endDate: Date } | null,
+    months?: number[],
+    years?: number[],
+    cMonths?: number[],
+    cYears?: number[]
+  ) => {
     if (range) setDateRange(range)
     setActivePreset(preset)
     if (compareMode !== undefined) setCompare(compareMode)
     if (compRange !== undefined) setCompareRange(compRange)
+    if (months) setSelectedMonths(months)
+    if (years) setSelectedYears(years)
+    if (cMonths) setCompareMonths(cMonths)
+    if (cYears) setCompareYears(cYears)
   }, [])
-
-  const handleMonthYearChange = (monthIdx: number, year: number) => {
-    const startDate = new Date(year, monthIdx, 1)
-    const endDate = new Date(year, monthIdx + 1, 0)
-    handleDateChange({ startDate, endDate }, "custom")
-  }
-
-  const MONTHS = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ]
-  const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
   const handleBranchChange = useCallback((ids: string[]) => {
     setSelectedBranchIds(ids)
@@ -102,6 +109,8 @@ export default function PurchaseReportPage() {
     
     params.set("startDate", dateRange.startDate.toISOString())
     params.set("endDate", dateRange.endDate.toISOString())
+    if (selectedMonths.length > 0) params.set("months", selectedMonths.join(","))
+    if (selectedYears.length > 0) params.set("years", selectedYears.join(","))
     
     if (compare) {
       params.set("compare", "true")
@@ -109,6 +118,8 @@ export default function PurchaseReportPage() {
         params.set("compareStartDate", compareRange.startDate.toISOString())
         params.set("compareEndDate", compareRange.endDate.toISOString())
       }
+      if (compareMonths.length > 0) params.set("compareMonths", compareMonths.join(","))
+      if (compareYears.length > 0) params.set("compareYears", compareYears.join(","))
     }
     
     return params.toString()
@@ -122,6 +133,18 @@ export default function PurchaseReportPage() {
   const avgOrderValue = totalOrders > 0 ? summary / totalOrders : 0
   
   const comparison = data?.comparison
+
+  // Sales performance chart data
+  const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
+      organizationId || undefined,
+      undefined,
+      selectedBranchIds.length > 0 ? selectedBranchIds : (contextBranchIds.length > 0 ? contextBranchIds : undefined),
+      selectedGroupId !== "all" ? selectedGroupId : undefined,
+      dateRange,
+      "all",
+      compare,
+      compareRange
+  )
 
   const filteredBranches = useMemo(() => {
     return purchaseData.filter((b: any) => 
@@ -178,51 +201,11 @@ export default function PurchaseReportPage() {
           activePreset={activePreset}
           compare={compare}
           compareRange={compareRange}
+          months={selectedMonths}
+          years={selectedYears}
+          compareMonths={compareMonths}
+          compareYears={compareYears}
         />
-
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/50 p-1 rounded-lg">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold gap-1 hover:bg-white dark:hover:bg-slate-800 transition-all uppercase tracking-tighter">
-                <Calculator className="h-3 w-3 text-indigo-500" />
-                {dateRange ? MONTHS[dateRange.startDate.getMonth()] : 'Month'}
-                <ChevronDown className="h-3 w-3 opacity-50" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-40 max-h-[300px] overflow-y-auto">
-              {MONTHS.map((m, i) => (
-                <DropdownMenuItem key={m} onClick={() => handleMonthYearChange(i, dateRange?.startDate.getFullYear() || new Date().getFullYear())} className="text-xs font-medium">
-                  {m}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold gap-1 hover:bg-white dark:hover:bg-slate-800 transition-all uppercase tracking-tighter border-l border-slate-200 dark:border-slate-700 rounded-none pl-2">
-                {dateRange ? dateRange.startDate.getFullYear() : 'Year'}
-                <ChevronDown className="h-3 w-3 opacity-50" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-24">
-              {YEARS.map(y => (
-                <DropdownMenuItem key={y} onClick={() => handleMonthYearChange(dateRange?.startDate.getMonth() || 0, y)} className="text-xs font-medium">
-                  {y}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDateChange(null, "thisMonth")}
-            className="h-7 text-[9px] font-black bg-indigo-500 text-white hover:bg-indigo-600 ml-1 px-2 rounded-md"
-          >
-            TIME SPAN
-          </Button>
-        </div>
         <GroupFilter 
           value={selectedGroupId} 
           onChange={handleGroupChange} 
@@ -275,16 +258,19 @@ export default function PurchaseReportPage() {
               <ShoppingBag className="h-12 w-12" />
             </div>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Total Purchases</p>
-            <div className="flex items-baseline gap-2">
-              <h2 className="text-3xl font-black text-slate-900 dark:text-white">{formatPKR(summary)}</h2>
-              {purchaseTrend && (
-                <span className={cn(
-                  "text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1",
-                  purchaseTrend.isUp ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
-                )}>
-                  {purchaseTrend.isUp ? "↑" : "↓"} {purchaseTrend.value}%
-                </span>
-              )}
+            <div className="flex flex-col">
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white">{formatPKR(summary)}</h2>
+                {purchaseTrend && (
+                  <span className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1",
+                    purchaseTrend.isUp ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                  )}>
+                    {purchaseTrend.isUp ? "↑" : "↓"} {purchaseTrend.value}%
+                  </span>
+                )}
+              </div>
+              {compare && <p className="text-[10px] text-slate-400 font-bold border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">PREV: {formatPKR(comparison?.totalSales || 0)}</p>}
             </div>
             <p className="text-xs text-slate-400 mt-2">Gross expenditure across all branches.</p>
           </Card>
@@ -294,7 +280,10 @@ export default function PurchaseReportPage() {
               <Package className="h-12 w-12" />
             </div>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Order Volume</p>
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white">{totalOrders.toLocaleString()}</h2>
+            <div className="flex flex-col">
+              <h2 className="text-3xl font-black text-slate-900 dark:text-white">{totalOrders.toLocaleString()}</h2>
+              {compare && <p className="text-[10px] text-slate-400 font-bold border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">PREV: {(comparison?.totalOrders || 0).toLocaleString()}</p>}
+            </div>
             <p className="text-xs text-slate-400 mt-2">Total procurement tickets processed.</p>
           </Card>
 
@@ -303,10 +292,42 @@ export default function PurchaseReportPage() {
               <Calculator className="h-12 w-12" />
             </div>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Average Ticket</p>
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white">{formatPKR(avgOrderValue)}</h2>
+            <div className="flex flex-col">
+              <h2 className="text-3xl font-black text-slate-900 dark:text-white">{formatPKR(avgOrderValue)}</h2>
+              {compare && <p className="text-[10px] text-slate-400 font-bold border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">PREV: {formatPKR(comparison?.totalOrders > 0 ? comparison.totalSales / comparison.totalOrders : 0)}</p>}
+            </div>
             <p className="text-xs text-slate-400 mt-2">Mean value per purchase order.</p>
           </Card>
         </div>
+
+        {/* ━━━ PERFORMANCE ANALYTICS CHART ━━━ */}
+        <Card className="rounded-[24px] border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
+            <CardHeader className="px-8 py-6 border-b border-slate-100 dark:border-slate-800">
+                <CardTitle className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                    <TrendingUp className="w-5 h-5 text-indigo-500" />
+                    Purchase Analytics
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="p-8">
+                {isLoadingPerf ? (
+                    <div className="h-[300px] flex items-center justify-center">
+                        <RefreshCw className="w-8 h-8 animate-spin text-slate-200" />
+                    </div>
+                ) : (
+                    <SalesPerformanceLineChart
+                        seriesData={perfData?.seriesData ?? []}
+                        comparisonSeries={perfData?.comparison?.seriesData}
+                        totalSales={perfData?.totalSales ?? 0}
+                        avgSales={perfData?.avgSales ?? 0}
+                        totalOrders={perfData?.totalOrders ?? 0}
+                        peakPeriod={perfData?.peakPeriod ?? null}
+                        granularity={perfData?.granularity ?? "daily"}
+                        dateRange={dateRange}
+                        label="Purchase"
+                    />
+                )}
+            </CardContent>
+        </Card>
 
         {/* ━━━ DETAILED DATA TABLE ━━━ */}
         <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900">
@@ -346,9 +367,9 @@ export default function PurchaseReportPage() {
               <TableHeader>
                 <TableRow className="bg-slate-50/50 dark:bg-slate-800/30">
                   <TableHead className="pl-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Branch Name</TableHead>
-                  <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">Orders</TableHead>
-                  <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">Avg Ticket</TableHead>
-                  <TableHead className="pr-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Total Purchases</TableHead>
+                  <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">{compare ? "Orders (A/B)" : "Orders"}</TableHead>
+                  <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">{compare ? "Avg Ticket (A/B)" : "Avg Ticket"}</TableHead>
+                  <TableHead className="pr-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Purchases (A/B)" : "Total Purchases"}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -365,16 +386,25 @@ export default function PurchaseReportPage() {
                           <span className="text-[10px] text-slate-400 font-medium">ID: {b.branchId}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="outline" className="font-mono text-[10px] font-bold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-                          {b.orders}
-                        </Badge>
+                      <TableCell className="text-center py-4">
+                        <div className="flex flex-col items-center">
+                          <Badge variant="outline" className="font-mono text-[10px] font-bold bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                            {b.orders}
+                          </Badge>
+                          {compare && <span className="text-[9px] text-slate-400 mt-0.5">{b.compareOrders || 0}</span>}
+                        </div>
                       </TableCell>
-                      <TableCell className="text-center font-mono text-xs text-slate-500">
-                        {formatPKR(b.orders > 0 ? b.sales / b.orders : 0)}
+                      <TableCell className="text-center font-mono text-xs text-slate-500 py-4">
+                        <div className="flex flex-col items-center">
+                          <span>{formatPKR(b.orders > 0 ? b.sales / b.orders : 0)}</span>
+                          {compare && <span className="text-[9px] text-slate-400 mt-0.5">{formatPKR(b.compareOrders > 0 ? b.compareSales / b.compareOrders : 0)}</span>}
+                        </div>
                       </TableCell>
-                      <TableCell className="pr-6 text-right font-black text-xs text-slate-900 dark:text-white">
-                        {formatPKR(b.sales)}
+                      <TableCell className="pr-6 text-right font-black text-xs text-slate-900 dark:text-white py-4">
+                        <div className="flex flex-col items-end">
+                          <span>{formatPKR(b.sales)}</span>
+                          {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 pt-0.5">{formatPKR(b.compareSales || 0)}</span>}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

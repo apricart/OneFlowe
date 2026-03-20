@@ -58,6 +58,16 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(url.searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
 
+    const monthsRaw = url.searchParams.get("months")
+    const yearsRaw = url.searchParams.get("years")
+    const compareMonthsRaw = url.searchParams.get("compareMonths")
+    const compareYearsRaw = url.searchParams.get("compareYears")
+
+    const parsedMonths = monthsRaw ? monthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
+    const parsedYears = yearsRaw ? yearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
+    const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
+    const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
+
     const conditions = []
 
     // Status filter
@@ -108,47 +118,74 @@ export async function GET(req: NextRequest) {
     }
 
     // Date Filtering - Inclusive
-    if (startDate) {
+    if (startDate && !monthsRaw && !yearsRaw) {
         const start = new Date(startDate)
         start.setHours(0, 0, 0, 0)
         conditions.push(gte(orders.createdAt, start))
     }
-    if (endDate) {
+    if (endDate && !monthsRaw && !yearsRaw) {
         const end = new Date(endDate)
         end.setHours(23, 59, 59, 999)
         conditions.push(lte(orders.createdAt, end))
+    }
+
+    // Advanced Multi-Select Date Filtering (Months / Years arrays)
+    if (parsedMonths.length > 0) {
+        conditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
+    }
+    if (parsedYears.length > 0) {
+        conditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
     // COMPARISON LOGIC
     let comparisonSummary = null
-    if (compare && startDate && endDate) {
-        let prevStart: Date
-        let prevEnd: Date
-            
-        if (compareStartDateParam && compareEndDateParam) {
-            prevStart = new Date(compareStartDateParam)
-            prevEnd = new Date(compareEndDateParam)
-            prevStart.setHours(0, 0, 0, 0)
-            prevEnd.setHours(23, 59, 59, 999)
-        } else {
-            const start = new Date(startDate)
-            const end = new Date(endDate)
-            const duration = end.getTime() - start.getTime()
-            prevStart = new Date(start.getTime() - duration - 1)
-            prevEnd = new Date(start.getTime() - 1)
-        }
-
+    const hasCompareArrays = parsedCompMonths.length > 0 || parsedCompYears.length > 0
+    const hasPrimaryDates = startDate && endDate
+    
+    if (compare && (hasPrimaryDates || compareStartDateParam || hasCompareArrays)) {
         // Correctly filter out createdAt conditions to avoid overlapping periods
         const compConditions = conditions.filter(c => {
             const str = String(c);
-            return !str.includes("createdAt") && !str.includes("created_at");
+            return !str.includes("createdAt") && !str.includes("created_at") && !str.includes("EXTRACT(MONTH") && !str.includes("EXTRACT(YEAR");
         })
-        compConditions.push(gte(orders.createdAt, prevStart))
-        compConditions.push(lte(orders.createdAt, prevEnd))
 
-        const compWhere = and(...compConditions)
+        if (parsedCompMonths.length > 0) {
+            compConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
+        }
+        if (parsedCompYears.length > 0) {
+            compConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
+        }
+
+        // Apply fallback standard dates if NO custom arrays were provided for Period B
+        if (!hasCompareArrays) {
+            let prevStart: Date
+            let prevEnd: Date
+            if (compareStartDateParam && compareEndDateParam) {
+                prevStart = new Date(compareStartDateParam)
+                prevEnd = new Date(compareEndDateParam)
+                prevStart.setHours(0, 0, 0, 0)
+                prevEnd.setHours(23, 59, 59, 999)
+            } else if (startDate && endDate && parsedMonths.length === 0 && parsedYears.length === 0) {
+                const start = new Date(startDate)
+                const end = new Date(endDate)
+                const duration = end.getTime() - start.getTime()
+                prevStart = new Date(start.getTime() - duration - 1)
+                prevEnd = new Date(start.getTime() - 1)
+            } else {
+                // If it's a primary array query without fallback dates, we don't apply any date boundaries implicitly
+                prevStart = new Date(0)
+                prevEnd = new Date(0)
+            }
+
+            if (prevStart.getTime() !== 0) {
+                compConditions.push(gte(orders.createdAt, prevStart))
+                compConditions.push(lte(orders.createdAt, prevEnd))
+            }
+        }
+
+        const compWhere = compConditions.length > 0 ? and(...compConditions) : undefined
 
         const compSummaryResult = await db.select({
             totalSales: metricExpressions.revenue,
@@ -227,12 +264,14 @@ export async function GET(req: NextRequest) {
         organizationName: organizations.name,
         createdAt: orders.createdAt,
         fulfilledAt: orders.fulfilledAt,
-        refundedAt: orders.refundedAt
+        refundedAt: orders.refundedAt,
+        userName: users.fullName
     })
         .from(orders)
         .leftJoin(branches, eq(orders.branchId, branches.id))
         .leftJoin(organizations, eq(orders.organizationId, organizations.id))
         .leftJoin(groups, eq(branches.groupId, groups.id))
+        .leftJoin(users, eq(orders.createdByUserId, users.id))
         .where(whereClause)
         .orderBy(desc(orders.createdAt))
         .limit(limit)
