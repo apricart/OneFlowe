@@ -41,6 +41,10 @@ export function HeadOfficeDashboard() {
   const [activePreset, setActivePreset] = useState<FilterPreset>("today")
   const [compare, setCompare] = useState(false)
   const [compareRange, setCompareRange] = useState<DateRange | null>(null)
+  const [months, setMonths] = useState<number[]>([])
+  const [years, setYears] = useState<number[]>([])
+  const [compareMonths, setCompareMonths] = useState<number[]>([])
+  const [compareYears, setCompareYears] = useState<number[]>([])
 
   const [drillDownType, setDrillDownType] = useState<DrillDownType | null>(null)
   const [isDrillDownOpen, setIsDrillDownOpen] = useState(false)
@@ -67,7 +71,12 @@ export function HeadOfficeDashboard() {
     dateRange,
     "all",
     compare,
-    compareRange
+    compareRange,
+    months,
+    years,
+    compareMonths,
+    compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
   // Comparative data for trends
@@ -136,7 +145,12 @@ export function HeadOfficeDashboard() {
     dateRange,
     "FULFILLED",
     compare,
-    compareRange
+    compareRange,
+    months,
+    years,
+    compareMonths,
+    compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
   const { data: refundedData } = useSalesPerformance(
@@ -147,7 +161,12 @@ export function HeadOfficeDashboard() {
     dateRange,
     "REFUNDED",
     compare,
-    compareRange
+    compareRange,
+    months,
+    years,
+    compareMonths,
+    compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
   const { data: rejectedData } = useSalesPerformance(
@@ -158,7 +177,12 @@ export function HeadOfficeDashboard() {
     dateRange,
     "REJECTED",
     compare,
-    compareRange
+    compareRange,
+    months,
+    years,
+    compareMonths,
+    compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
   const { data: approvedData } = useSalesPerformance(
@@ -169,7 +193,12 @@ export function HeadOfficeDashboard() {
     dateRange,
     "APPROVED",
     compare,
-    compareRange
+    compareRange,
+    months,
+    years,
+    compareMonths,
+    compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
   const perfData = perfDataFull
@@ -188,11 +217,24 @@ export function HeadOfficeDashboard() {
   const purchaseTrend = getTrend(perfData?.totalSales || 0, summary?.totalSales || 0)
   const orderTrend = getTrend(perfData?.totalOrders || 0, summary?.totalOrders || 0)
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean, compRange?: DateRange | null) => {
+  const handleDateChange = useCallback((
+    range: DateRange | null, 
+    preset: FilterPreset, 
+    compareMode?: boolean, 
+    compRange?: DateRange | null,
+    m?: number[],
+    y?: number[],
+    cm?: number[],
+    cy?: number[]
+  ) => {
     setDateRange(range)
     setActivePreset(preset)
     if (compareMode !== undefined) setCompare(compareMode)
     if (compRange !== undefined) setCompareRange(compRange)
+    setMonths(m || [])
+    setYears(y || [])
+    setCompareMonths(cm || [])
+    setCompareYears(cy || [])
   }, [])
 
   const allBranchesSelected = !contextBranchId && selectedBranchIds.length === 0
@@ -227,6 +269,10 @@ export function HeadOfficeDashboard() {
           activePreset={activePreset}
           compare={compare}
           compareRange={compareRange}
+          months={months}
+          years={years}
+          compareMonths={compareMonths}
+          compareYears={compareYears}
         />
         {organizationId && (
           <>
@@ -367,6 +413,12 @@ export function HeadOfficeDashboard() {
         branchIds={selectedBranchIds}
         defaultDateRange={dateRange}
         activePreset={activePreset}
+        compare={compare}
+        compareRange={compareRange}
+        months={months}
+        years={years}
+        compareMonths={compareMonths}
+        compareYears={compareYears}
         title={drillDownType === "REVENUE" ? "Purchases Insights" : undefined}
       />
     </main>

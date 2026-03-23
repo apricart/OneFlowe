@@ -43,17 +43,16 @@ import { BranchFilter } from "@/components/reports/branch-filter"
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 const ALL_COLUMNS: ColumnDef[] = [
-    { key: "tid", label: "TID", defaultVisible: true },
-    { key: "orderDate", label: "Order Date", defaultVisible: true },
-    { key: "userName", label: "User", defaultVisible: true },
-    { key: "branch", label: "Branch", defaultVisible: true },
-    { key: "qtyOrdered", label: "Qty Ordered", defaultVisible: true },
-    { key: "fulfQty", label: "Fulf Qty", defaultVisible: true },
-    { key: "fulfValue", label: "Fulf Value", defaultVisible: true },
-    { key: "refQty", label: "Ref Qty", defaultVisible: true },
-    { key: "refValue", label: "Ref Value", defaultVisible: true },
-    { key: "totalCents", label: "Net Revenue", defaultVisible: true },
+    { key: "orderDate", label: "Date", defaultVisible: true },
+    { key: "userName", label: "User name", defaultVisible: true },
+    { key: "tid", label: "Transaction ID", defaultVisible: true },
+    { key: "organizationName", label: "Org", defaultVisible: true },
+    { key: "group", label: "Group", defaultVisible: true },
+    { key: "branchName", label: "Branch", defaultVisible: true },
     { key: "status", label: "Status", defaultVisible: true },
+    { key: "subtotalValue", label: "Subtotal", defaultVisible: true },
+    { key: "refundValue", label: "Refund", defaultVisible: true },
+    { key: "netTotalValue", label: "Net Total", defaultVisible: true },
 ] as const;
 type StatusFilter = "all" | "approved" | "fulfilled" | "refunded" | "rejected"
 
@@ -250,43 +249,55 @@ export default function OrderReportPage() {
         }))
     }, [orders, comparison])
 
-    // Monthly trend data for analytics
-    const monthlyTrendData = useMemo(() => {
+    // Dynamic trend data for analytics
+    const chartTrendData = useMemo(() => {
         if (!orders.length) return []
-        const monthly: Record<string, { revenue: number; orders: number; prevRevenue: number; prevOrders: number }> = {}
+        const grouping: Record<string, { revenue: number; orders: number; prevRevenue: number; prevOrders: number }> = {}
         
+        const isAllTime = activePreset === "all"
+
         orders.forEach((o: any) => {
             const d = new Date(o.createdAt || o.orderDate)
-            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-            if (!monthly[key]) monthly[key] = { revenue: 0, orders: 0, prevRevenue: 0, prevOrders: 0 }
-            monthly[key].revenue += (o.totalCents || o.netTotalCents || 0) / 100
-            monthly[key].orders += 1
+            const key = isAllTime 
+                ? `${d.getFullYear()}` 
+                : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+            
+            if (!grouping[key]) grouping[key] = { revenue: 0, orders: 0, prevRevenue: 0, prevOrders: 0 }
+            grouping[key].revenue += (o.totalCents || o.netTotalCents || 0) / 100
+            grouping[key].orders += 1
         })
 
         if (comparison?.orders) {
             comparison.orders.forEach((o: any) => {
                 const d = new Date(o.createdAt || o.orderDate)
-                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                if (!monthly[key]) monthly[key] = { revenue: 0, orders: 0, prevRevenue: 0, prevOrders: 0 }
-                monthly[key].prevRevenue += (o.totalCents || o.netTotalCents || 0) / 100
-                monthly[key].prevOrders += 1
+                const key = isAllTime 
+                    ? `${d.getFullYear()}` 
+                    : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                
+                if (!grouping[key]) grouping[key] = { revenue: 0, orders: 0, prevRevenue: 0, prevOrders: 0 }
+                grouping[key].prevRevenue += (o.totalCents || o.netTotalCents || 0) / 100
+                grouping[key].prevOrders += 1
             })
         }
 
-        return Object.entries(monthly)
+        return Object.entries(grouping)
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([key, d]) => {
-                const [year, month] = key.split('-')
-                const date = new Date(Number(year), Number(month) - 1)
+                let label = key
+                if (!isAllTime) {
+                    const [year, month] = key.split('-')
+                    const date = new Date(Number(year), Number(month) - 1)
+                    label = date.toLocaleString('default', { month: 'short', year: '2-digit' })
+                }
                 return {
-                    label: date.toLocaleString('default', { month: 'short', year: '2-digit' }),
+                    label,
                     revenue: Math.round(d.revenue),
                     orders: d.orders,
                     prevRevenue: Math.round(d.prevRevenue),
                     prevOrders: d.prevOrders
                 }
             })
-    }, [orders, comparison])
+    }, [orders, comparison, activePreset])
 
     const statusTabs: { key: StatusFilter; label: string }[] = [
         { key: "all", label: "All Items" },
@@ -301,17 +312,16 @@ export default function OrderReportPage() {
 
         const rows = filteredOrders.map((order: any) => {
             const row: any[] = []
-            if (isVisible("tid")) row.push(order.tid)
-            if (isVisible("orderDate")) row.push(new Date(order.createdAt).toLocaleDateString())
+            if (isVisible("orderDate")) row.push(new Date(order.orderCreatedAt).toLocaleDateString())
             if (isVisible("userName")) row.push(order.userName || "-")
-            if (isVisible("branch")) row.push(order.branchName || "-")
-            if (isVisible("qtyOrdered")) row.push(order.qtyOrdered)
-            if (isVisible("fulfQty")) row.push(order.qtyDelivered)
-            if (isVisible("fulfValue")) row.push(((order.valueDeliveredCents || 0) / 100).toFixed(2))
-            if (isVisible("refQty")) row.push(Math.max(0, order.qtyOrdered - order.qtyDelivered))
-            if (isVisible("refValue")) row.push(((order.refundAmountCents || 0) / 100).toFixed(2))
-            if (isVisible("totalCents")) row.push((((order.totalCents || 0) - (order.refundAmountCents || 0)) / 100).toFixed(2))
+            if (isVisible("tid")) row.push(order.tid)
+            if (isVisible("organizationName")) row.push(order.organizationName || "N/A")
+            if (isVisible("group")) row.push(order.group || "-")
+            if (isVisible("branchName")) row.push(order.branchName || "-")
             if (isVisible("status")) row.push(order.status)
+            if (isVisible("subtotalValue")) row.push(((order.subtotalCents || 0) / 100).toFixed(2))
+            if (isVisible("refundValue")) row.push(((order.refundAmountCents || 0) / 100).toFixed(2))
+            if (isVisible("netTotalValue")) row.push(((order.netTotalCents || 0) / 100).toFixed(2))
             return row
         })
 
@@ -579,21 +589,22 @@ export default function OrderReportPage() {
                             </Card>
                         </div>
 
-                        {/* Monthly Trend */}
-                        {monthlyTrendData.length > 1 && (
+                        {/* Dynamic Trend Chart */}
+                        {chartTrendData.length > 1 && (
                             <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/50">
                                 <CardHeader className="px-6 py-5 border-b border-slate-100 dark:border-slate-800">
                                     <CardTitle className="text-sm font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                                        <TrendingUp className="h-4 w-4 text-blue-500" /> Monthly Revenue vs Refunds
+                                        <TrendingUp className="h-4 w-4 text-blue-500" /> {activePreset === "all" ? "Annual" : "Monthly"} Revenue vs Orders
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="p-6">
                                     <div className="h-[300px]">
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={monthlyTrendData} margin={{ top: 10, right: 10, bottom: 10, left: -10 }}>
+                                            <BarChart data={chartTrendData} margin={{ top: 10, right: 10, bottom: 10, left: -10 }}>
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                                                 <XAxis dataKey="label" tick={{ fontSize: 10, fontWeight: 700 }} tickLine={false} axisLine={false} />
-                                                <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `₨${v / 1000}k`} />
+                                                <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `₨${v / 1000}k`} />
+                                                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                                                 <Tooltip
                                                     content={({ payload, label }: any) => {
                                                         if (!payload?.length) return null
@@ -602,8 +613,10 @@ export default function OrderReportPage() {
                                                                 <p className="font-black text-xs text-slate-700 dark:text-slate-300 mb-2 border-b pb-1">{label}</p>
                                                                 {payload.map((p: any) => (
                                                                     <p key={p.dataKey} className="text-xs text-slate-500 flex justify-between gap-4">
-                                                                        <span>{p.dataKey === 'revenue' ? 'Revenue' : 'Refunds'}</span>
-                                                                        <span className="font-bold text-slate-900 dark:text-white">{formatPKR(p.value)}</span>
+                                                                        <span>{p.name}</span>
+                                                                        <span className="font-bold text-slate-900 dark:text-white">
+                                                                            {p.dataKey.includes('revenue') ? formatPKR(p.value) : p.value}
+                                                                        </span>
                                                                     </p>
                                                                 ))}
                                                             </div>
@@ -611,8 +624,9 @@ export default function OrderReportPage() {
                                                     }}
                                                 />
                                                 <Legend iconType="circle" iconSize={8} formatter={(v: string) => <span className="text-[10px] font-bold uppercase">{v}</span>} />
-                                                <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} name="Revenue" />
-                                                <Bar dataKey="refunds" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={20} name="Refunds" />
+                                                <Bar yAxisId="left" dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} name="Revenue" />
+                                                <Bar yAxisId="right" dataKey="orders" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} name="Orders" />
+                                                {compare && <Bar yAxisId="left" dataKey="prevRevenue" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={20} name="Prev Revenue" />}
                                             </BarChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -688,17 +702,16 @@ export default function OrderReportPage() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50/50">
-                                            {isVisible("orderDate") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 whitespace-nowrap hidden lg:table-cell">Date</TableHead>}
-                                            {isVisible("tid") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">TID</TableHead>}
-                                            {isVisible("userName") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">User</TableHead>}
-                                            {isVisible("branch") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Branch</TableHead>}
-                                            {isVisible("qtyOrdered") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Qty Ord</TableHead>}
-                                            {isVisible("fulfQty") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Fulf Qty (A/B)" : "Fulf Qty"}</TableHead>}
-                                            {isVisible("fulfValue") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Fulf Val (A/B)" : "Fulf Val"}</TableHead>}
-                                            {isVisible("refQty") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Ref Qty (A/B)" : "Ref Qty"}</TableHead>}
-                                            {isVisible("refValue") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Ref Val (A/B)" : "Ref Val"}</TableHead>}
-                                            {isVisible("totalCents") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Net Rev (A/B)" : "Net Revenue"}</TableHead>}
+                                            {isVisible("orderDate") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Date</TableHead>}
+                                            {isVisible("userName") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">User name</TableHead>}
+                                            {isVisible("tid") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Transaction ID</TableHead>}
+                                            {isVisible("organizationName") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Org</TableHead>}
+                                            {isVisible("group") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Group</TableHead>}
+                                            {isVisible("branchName") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500">Branch</TableHead>}
                                             {isVisible("status") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-center">Status</TableHead>}
+                                            {isVisible("subtotalValue") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Subtotal</TableHead>}
+                                            {isVisible("refundValue") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Refund</TableHead>}
+                                            {isVisible("netTotalValue") && <TableHead className="py-4 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">Net Total</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -710,73 +723,29 @@ export default function OrderReportPage() {
                                             filteredOrders.map((order: any) => {
                                                 const refQty = Math.max(0, order.qtyOrdered - order.qtyDelivered)
                                                 return (
-                                                    <TableRow key={order.id} className="hover:bg-indigo-50/40 dark:hover:bg-indigo-900/10 cursor-default transition-colors border-b border-slate-100 dark:border-slate-800/50">
-                                                        {isVisible("tid") && <TableCell className="pl-5 whitespace-nowrap font-mono text-[11px] text-slate-700 dark:text-slate-300 font-semibold">{order.tid}</TableCell>}
-                                                        {isVisible("orderDate") && <TableCell className="whitespace-nowrap text-xs text-slate-500 font-medium" suppressHydrationWarning>{new Date(order.orderCreatedAt).toLocaleDateString()}</TableCell>}
-                                                        {isVisible("userName") && <TableCell className="whitespace-nowrap text-xs font-medium text-slate-800 dark:text-slate-200">{order.userName}</TableCell>}
-                                                        {isVisible("branch") && (
-                                                            <TableCell className="max-w-[140px]">
-                                                                <div className="text-[11px] font-bold text-slate-900 dark:text-slate-200 truncate" title={order.branchName}>
-                                                                    {order.branchName}
-                                                                </div>
-                                                            </TableCell>
-                                                        )}
-                                                        {isVisible("qtyOrdered") && <TableCell className="whitespace-nowrap text-right font-mono text-xs text-slate-700 dark:text-slate-300">{order.qtyOrdered}</TableCell>}
-                                                        {isVisible("fulfQty") && (
-                                                            <TableCell className="whitespace-nowrap text-right font-mono text-xs">
-                                                                <div className="flex flex-col items-end">
-                                                                    <span className="font-bold text-emerald-600">{order.qtyDelivered}</span>
-                                                                    {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5">{order.compareFulfilledQty || 0}</span>}
-                                                                </div>
-                                                            </TableCell>
-                                                        )}
-                                                        {isVisible("fulfValue") && (
-                                                            <TableCell className="whitespace-nowrap text-right font-mono text-xs">
-                                                                <div className="flex flex-col items-end">
-                                                                    <span className="font-bold text-emerald-600">{formatPKR((order.valueDeliveredCents || 0) / 100)}</span>
-                                                                    {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5">{formatPKR((order.compareFulfilledValueCents || 0) / 100)}</span>}
-                                                                </div>
-                                                            </TableCell>
-                                                        )}
-                                                        {isVisible("refQty") && (
-                                                            <TableCell className="whitespace-nowrap text-right font-mono text-xs">
-                                                                <div className="flex flex-col items-end">
-                                                                    <span className="font-bold text-rose-500">{refQty}</span>
-                                                                    {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5">{order.compareRefundQty || 0}</span>}
-                                                                </div>
-                                                            </TableCell>
-                                                        )}
-                                                        {isVisible("refValue") && (
-                                                            <TableCell className="whitespace-nowrap text-right font-mono text-xs">
-                                                                <div className="flex flex-col items-end">
-                                                                    <span className="font-bold text-rose-500">{formatPKR((order.valueRefundedCents || 0) / 100)}</span>
-                                                                    {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5">{formatPKR((order.compareRefundValueCents || 0) / 100)}</span>}
-                                                                </div>
-                                                            </TableCell>
-                                                        )}
-                                                        {isVisible("totalCents") && (
-                                                            <TableCell className="whitespace-nowrap text-right font-mono pr-5">
-                                                                <div className="flex flex-col items-end">
-                                                                    <span className="font-black text-slate-900 dark:text-white">
-                                                                        {formatPKR(((order.totalCents || 0) - (order.refundAmountCents || 0)) / 100)}
-                                                                    </span>
-                                                                    {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{formatPKR((order.compareNetRevenueCents || 0) / 100)}</span>}
-                                                                </div>
-                                                            </TableCell>
-                                                        )}
+                                                    <TableRow key={order.id} className="hover:bg-indigo-50/40 dark:hover:bg-indigo-900/10 cursor-default transition-colors border-b border-slate-100 dark:border-slate-800/50 text-[11px] font-medium">
+                                                        {isVisible("orderDate") && <TableCell className="whitespace-nowrap py-3 font-mono text-[10px]" suppressHydrationWarning>{new Date(order.orderCreatedAt).toLocaleDateString()}</TableCell>}
+                                                        {isVisible("userName") && <TableCell className="whitespace-nowrap py-3 font-semibold text-slate-800 dark:text-slate-200 capitalize">{order.userName}</TableCell>}
+                                                        {isVisible("tid") && <TableCell className="whitespace-nowrap py-3 font-mono font-bold text-slate-700 dark:text-slate-300">{order.tid}</TableCell>}
+                                                        {isVisible("organizationName") && <TableCell className="whitespace-nowrap py-3">{order.organizationName}</TableCell>}
+                                                        {isVisible("group") && <TableCell className="whitespace-nowrap py-3">{order.group || '-'}</TableCell>}
+                                                        {isVisible("branchName") && <TableCell className="whitespace-nowrap py-3 font-bold">{order.branchName}</TableCell>}
                                                         {isVisible("status") && (
-                                                            <TableCell className="whitespace-nowrap">
+                                                            <TableCell className="text-center py-3">
                                                                 <Badge variant="outline" className={cn(
-                                                                    "text-[9px] uppercase font-bold tracking-widest border-none px-2 py-0.5",
-                                                                    order.status === 'FULFILLED' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400' :
-                                                                    order.status === 'APPROVED' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400' :
-                                                                    order.status === 'REFUNDED' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400' :
-                                                                    'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-400'
+                                                                    "text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border-none",
+                                                                    order.status === "REFUNDED" ? "bg-amber-100 text-amber-600" : 
+                                                                    order.status === "REJECTED" ? "bg-rose-100 text-rose-600" : 
+                                                                    "bg-emerald-100 text-emerald-600"
                                                                 )}>
                                                                     {order.status}
                                                                 </Badge>
                                                             </TableCell>
                                                         )}
+                                                        {isVisible("subtotalValue") && <TableCell className="text-right py-3 font-mono font-bold">{formatPKR(order.subtotalCents / 100)}</TableCell>}
+                                                        {isVisible("refundValue") && <TableCell className="text-right py-3 font-mono font-bold text-rose-600">{formatPKR(order.refundAmountCents / 100)}</TableCell>}
+                                                        {isVisible("netTotalValue") && <TableCell className="text-right py-3 font-mono font-black text-slate-900 dark:text-white">{formatPKR(order.netTotalCents / 100)}</TableCell>}
+
                                                     </TableRow>
                                                 )
                                             })

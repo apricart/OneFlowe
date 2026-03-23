@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
             .select({
                 userId: users.id,
                 userName: users.fullName,
-                userEmail: users.email,
+                userEmail: sql<string>`REGEXP_REPLACE(${users.email}, '^deleted_[0-9]+_', '')`,
                 employeeId: sql<string>`COALESCE(${users.employeeId}, SPLIT_PART(${users.id}::text, '-', 1))`,
                 branchName: branches.name,
                 organizationName: organizations.name,

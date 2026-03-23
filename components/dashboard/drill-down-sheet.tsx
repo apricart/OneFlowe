@@ -49,6 +49,10 @@ interface DrillDownSheetProps {
     compare?: boolean
     compareRange?: DateRange | null
     activePreset?: FilterPreset
+    months?: number[]
+    years?: number[]
+    compareMonths?: number[]
+    compareYears?: number[]
 }
 
 const TYPE_CONFIG = {
@@ -146,12 +150,20 @@ export function DrillDownSheet({
     title,
     compare,
     compareRange,
-    activePreset: parentActivePreset
+    activePreset: parentActivePreset,
+    months: parentMonths,
+    years: parentYears,
+    compareMonths: parentCompareMonths,
+    compareYears: parentCompareYears
 }: DrillDownSheetProps): React.ReactElement | null {
     // Internal localized date range state for the drill down
     const [localDateRange, setLocalDateRange] = useState<DateRange | null>(null)
     const [localCompareRange, setLocalCompareRange] = useState<DateRange | null>(null)
     const [activePreset, setActivePreset] = useState<FilterPreset>("today")
+    const [months, setMonths] = useState<number[]>([])
+    const [years, setYears] = useState<number[]>([])
+    const [compareMonths, setCompareMonths] = useState<number[]>([])
+    const [compareYears, setCompareYears] = useState<number[]>([])
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
     const [refundType, setRefundType] = useState<"all" | "full" | "partial">("all")
     const [sortBy, setSortBy] = useState<"date" | "value">("date")
@@ -161,10 +173,14 @@ export function DrillDownSheet({
             setLocalDateRange(defaultDateRange || null)
             setLocalCompareRange(compareRange || null)
             setActivePreset(parentActivePreset || (defaultDateRange ? "custom" : "today"))
+            setMonths(parentMonths || [])
+            setYears(parentYears || [])
+            setCompareMonths(parentCompareMonths || [])
+            setCompareYears(parentCompareYears || [])
             setExpandedRow(null)
             setSortBy("date")
         }
-    }, [isOpen, defaultDateRange, compareRange, parentActivePreset])
+    }, [isOpen, defaultDateRange, compareRange, parentActivePreset, parentMonths, parentYears, parentCompareMonths, parentCompareYears])
 
     const url = useMemo(() => {
         if (!isOpen || !type) return null
@@ -176,6 +192,9 @@ export function DrillDownSheet({
             params.set("startDate", localDateRange.startDate.toISOString())
             params.set("endDate", localDateRange.endDate.toISOString())
         }
+        if (months.length > 0) params.set("months", months.join(","))
+        if (years.length > 0) params.set("years", years.join(","))
+        
         params.set("sortBy", sortBy)
         if (compare) {
             params.set("compare", "true")
@@ -183,6 +202,8 @@ export function DrillDownSheet({
                 params.set("compareStartDate", localCompareRange.startDate.toISOString())
                 params.set("compareEndDate", localCompareRange.endDate.toISOString())
             }
+            if (compareMonths.length > 0) params.set("compareMonths", compareMonths.join(","))
+            if (compareYears.length > 0) params.set("compareYears", compareYears.join(","))
         }
         if (type === "REFUNDED") {
             params.set("refundType", refundType)
@@ -199,7 +220,7 @@ export function DrillDownSheet({
         }
 
         return `/api/v1/analytics/drill-down?${params.toString()}`
-    }, [isOpen, type, organizationId, branchId, branchIds, localDateRange, refundType, sortBy])
+    }, [isOpen, type, organizationId, branchId, branchIds, localDateRange, refundType, sortBy, months, years, compareMonths, compareYears, compare, localCompareRange])
 
     const { data, isLoading } = useSWR<{ items: any[], summary: any, comparison: any, total: number }>(url, fetcher, {
         revalidateOnFocus: false
@@ -218,10 +239,23 @@ export function DrillDownSheet({
         return `${isUp ? '+' : ''}${percentage.toFixed(1)}%`
     }, [])
 
-    const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean, compRange?: DateRange | null) => {
+    const handleDateChange = useCallback((
+        range: DateRange | null, 
+        preset: FilterPreset, 
+        compareMode?: boolean, 
+        compRange?: DateRange | null,
+        m?: number[],
+        y?: number[],
+        cm?: number[],
+        cy?: number[]
+    ) => {
         setLocalDateRange(range)
         setActivePreset(preset)
         if (compRange !== undefined) setLocalCompareRange(compRange)
+        setMonths(m || [])
+        setYears(y || [])
+        setCompareMonths(cm || [])
+        setCompareYears(cy || [])
     }, [])
 
     if (!config) return null
@@ -278,6 +312,10 @@ export function DrillDownSheet({
                                 activePreset={activePreset}
                                 compare={compare}
                                 compareRange={localCompareRange}
+                                months={months}
+                                years={years}
+                                compareMonths={compareMonths}
+                                compareYears={compareYears}
                                 className="scale-90"
                             />
                         </div>

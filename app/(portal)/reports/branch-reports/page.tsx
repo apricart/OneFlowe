@@ -130,7 +130,7 @@ export default function BranchReportsPage() {
         undefined,
         groupId || undefined,
         dateRange,
-        "all",
+        activePreset === "all" ? "yearly" : "all",
         compare,
         compareRange
     )

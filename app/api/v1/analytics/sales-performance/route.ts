@@ -83,8 +83,22 @@ export async function GET(req: NextRequest) {
     // Determine granularity for series: hourly for 1 day, daily for ≤32 days, monthly for ≤400 days, yearly for more
     const diffMs = endDate.getTime() - startDate.getTime()
     const diffDays = diffMs / (1000 * 60 * 60 * 24)
-    const granularity: "hourly" | "daily" | "monthly" | "yearly" =
-        diffDays <= 1 ? "hourly" : diffDays <= 32 ? "daily" : diffDays <= 400 ? "monthly" : "yearly"
+    
+    const forcedGranularity = searchParams.get("granularity") as "hourly" | "daily" | "monthly" | "yearly" | null
+    const isValidGranularity = ["hourly", "daily", "monthly", "yearly"].includes(forcedGranularity || "")
+
+    let granularity: "hourly" | "daily" | "monthly" | "yearly"
+    if (isValidGranularity) {
+        granularity = forcedGranularity!
+    } else if (parsedMonths.length > 0) {
+        // Multi-select months: if multiple months or years, use monthly, otherwise daily for that specific month
+        granularity = (parsedMonths.length > 1 || parsedYears.length > 1) ? "monthly" : "daily"
+    } else if (parsedYears.length > 0) {
+        // Multi-select years: if multiple years, use yearly, otherwise monthly for that specific year
+        granularity = parsedYears.length > 1 ? "yearly" : "monthly"
+    } else {
+        granularity = diffDays <= 1 ? "hourly" : diffDays <= 32 ? "daily" : diffDays <= 400 ? "monthly" : "yearly"
+    }
 
     const cacheKey = generateCacheKey("sales-perf", {
         role, organizationId, branchId,

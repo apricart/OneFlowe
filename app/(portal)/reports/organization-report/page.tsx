@@ -73,6 +73,10 @@ export default function OrganizationReportPage() {
         if (compareMonths.length > 0) params.set("compareMonths", compareMonths.join(","))
         if (compareYears.length > 0) params.set("compareYears", compareYears.join(","))
 
+        if (activePreset === "all") {
+            params.set("granularity", "yearly")
+        }
+
         if (compare) {
             params.set("compare", "true")
             if (compareRange) {
@@ -81,7 +85,7 @@ export default function OrganizationReportPage() {
             }
         }
         return `/api/v1/analytics/organization-stats?${params.toString()}`
-    }, [dateRange, selectedOrgIds, selectedBranchIds, statusFilter, compare, compareRange, selectedMonths, selectedYears, compareMonths, compareYears])
+    }, [dateRange, selectedOrgIds, selectedBranchIds, statusFilter, compare, compareRange, selectedMonths, selectedYears, compareMonths, compareYears, activePreset])
 
 
     const { data, isLoading } = useSWR<any>(apiUrl, fetcher)

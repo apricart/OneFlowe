@@ -176,15 +176,37 @@ export async function GET(req: NextRequest) {
 
     const results = Object.values(orgMap)
 
+    const forcedGranularity = url.searchParams.get("granularity") as "daily" | "monthly" | "yearly" | null
+    const isValidGranularity = ["daily", "monthly", "yearly"].includes(forcedGranularity || "")
+
     // 4. Fetch Trend Data for Charts (Keep grouped by date)
     const fetchTrend = async (start: string | null, end: string | null, mArray: number[] = [], yArray: number[] = []) => {
         if (branchIdsInScope.length === 0) return []
         const conditions: any[] = [inArray(orders.branchId, branchIdsInScope)]
         
-        // Determine grouping based on whether "All Time" (no dates) or a specific range is used
-        let grouping = sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`
-        if (mArray.length === 0 && yArray.length === 0 && !start && !end) {
-            grouping = sql`TO_CHAR(${orders.createdAt}, 'YYYY')`
+        let grouping = sql`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM')`
+        
+        if (isValidGranularity) {
+            if (forcedGranularity === "yearly") {
+                grouping = sql`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY')`
+            } else if (forcedGranularity === "daily") {
+                grouping = sql`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM-DD')`
+            }
+        } else if (mArray.length > 0) {
+            // Month filter active
+            const isMonthly = mArray.length > 1 || yArray.length > 1
+            grouping = isMonthly 
+                ? sql`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM')`
+                : sql`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM-DD')`
+        } else if (yArray.length > 0) {
+            // Year filter active
+            const isYearly = yArray.length > 1
+            grouping = isYearly 
+                ? sql`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY')`
+                : sql`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM')`
+        } else if (!start && !end) {
+            // "All Time" default
+            grouping = sql`TO_CHAR((${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY')`
         }
 
         if (mArray.length > 0) conditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(mArray, sql`, `)})`)

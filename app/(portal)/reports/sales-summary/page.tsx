@@ -59,9 +59,8 @@ const ORDER_COLUMNS: ColumnDef[] = [
   { key: "branch", label: "Branch", defaultVisible: true },
   { key: "status", label: "Status", defaultVisible: true },
   { key: "subtotal", label: "Subtotal", defaultVisible: true },
-  { key: "tax", label: "Tax", defaultVisible: true },
-  { key: "discount", label: "Discount", defaultVisible: false },
-  { key: "total", label: "Total", defaultVisible: true },
+  { key: "refund", label: "Refund", defaultVisible: true },
+  { key: "netTotal", label: "Net Total", defaultVisible: true },
   { key: "organization", label: "Organization", defaultVisible: false },
   { key: "group", label: "Group", defaultVisible: false },
 ]
@@ -268,22 +267,49 @@ export default function SalesSummaryPage() {
   const orderTrend = getTrend(orderCount, comparison?.orderCount || 0)
 
   // Daily revenue chart data
-  const dailyChartData = useMemo(() => {
+  const chartData = useMemo(() => {
     if (!filteredOrders.length) return []
-    const daily: Record<string, { revenue: number; orders: number }> = {}
+    const groups: Record<string, { revenue: number; orders: number }> = {}
+    
+    // Determine local granularity (match backend logic roughly)
+    let localGranularity: "daily" | "monthly" | "yearly" = "daily"
+    if (activePreset === "all") {
+      localGranularity = "yearly"
+    } else if (dateRange) {
+      const diffDays = (dateRange.endDate.getTime() - dateRange.startDate.getTime()) / (1000 * 60 * 60 * 24)
+      if (diffDays > 400) localGranularity = "yearly"
+      else if (diffDays > 32) localGranularity = "monthly"
+    }
+
     const sorted = [...filteredOrders].sort((a: any, b: any) =>
       new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
     )
+
     sorted.forEach((o: any) => {
       if ((o.status || "").toUpperCase() === "FULFILLED") {
-        const day = new Date(o.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-        if (!daily[day]) daily[day] = { revenue: 0, orders: 0 }
-        daily[day].revenue += (o.totalCents || 0) / 100
-        daily[day].orders += 1
+        let label = ""
+        const d = new Date(o.createdAt)
+        if (localGranularity === "yearly") {
+          label = d.getFullYear().toString()
+        } else if (localGranularity === "monthly") {
+          label = d.toLocaleDateString("en-US", { month: "short", year: "numeric" })
+        } else {
+          label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        }
+        
+        if (!groups[label]) groups[label] = { revenue: 0, orders: 0 }
+        groups[label].revenue += (o.totalCents || 0) / 100
+        groups[label].orders += 1
       }
     })
-    return Object.entries(daily).map(([date, d]) => ({ date, revenue: d.revenue, orders: d.orders }))
-  }, [filteredOrders])
+    
+    // Convert to array and ensure it's still sorted by date (the object keys might not be in order)
+    return Object.entries(groups).map(([date, d]) => ({ date, revenue: d.revenue, orders: d.orders }))
+  }, [filteredOrders, activePreset, dateRange])
+
+  // Keep old name for JSX compatibility if needed, or update JSX. 
+  // Checking JSX below... let's use 'chartData' and update JSX call if it was dailyChartData.
+  const dailyChartData = chartData;
 
   // Status breakdown for donut chart
   const statusChartData = useMemo(() => {
@@ -429,7 +455,7 @@ export default function SalesSummaryPage() {
   }
 
   const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-    const headers = ["Date", "Transaction ID", "Organization", "Group", "Branch", "Status", "Subtotal (PKR)", "Tax (PKR)", "Total (PKR)"]
+    const headers = ["Date", "Transaction ID", "Organization", "Group", "Branch", "Status", "Subtotal (PKR)", "Refund (PKR)", "Net Total (PKR)"]
     const rows = filteredOrders.map((order: any) => [
       new Date(order.createdAt).toLocaleDateString(),
       order.tid,
@@ -437,9 +463,9 @@ export default function SalesSummaryPage() {
       order.groupName || '-',
       order.branchName || `ID: ${order.branchId}`,
       order.status?.toUpperCase(),
-      ((order.subtotalCents || 0) / 100).toFixed(2),
-      ((order.taxCents || 0) / 100).toFixed(2),
       ((order.totalCents || 0) / 100).toFixed(2),
+      ((order.refundAmountCents || 0) / 100).toFixed(2),
+      (((order.totalCents || 0) - (order.refundAmountCents || 0)) / 100).toFixed(2),
     ])
     if (format === 'pdf') {
       const doc = new jsPDF()
@@ -867,9 +893,8 @@ export default function SalesSummaryPage() {
                           {isOrderVisible("branch") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Branch</TableHead>}
                           {isOrderVisible("status") && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Status</TableHead>}
                           {isOrderVisible("subtotal") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Subtotal</TableHead>}
-                          {isOrderVisible("tax") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Tax</TableHead>}
-                          {isOrderVisible("discount") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Discount</TableHead>}
-                          {isOrderVisible("total") && <TableHead className="text-right pr-5 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Total</TableHead>}
+                          {isOrderVisible("refund") && <TableHead className="text-right h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Refund</TableHead>}
+                          {isOrderVisible("netTotal") && <TableHead className="text-right pr-5 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">Net Total</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -931,22 +956,17 @@ export default function SalesSummaryPage() {
                               )}
                               {isOrderVisible("subtotal") && (
                                 <TableCell className="py-3 text-right font-mono text-xs text-slate-500">
-                                  {formatPKR((order.subtotalCents || 0) / 100)}
-                                </TableCell>
-                              )}
-                              {isOrderVisible("tax") && (
-                                <TableCell className="py-3 text-right font-mono text-xs text-slate-400">
-                                  {formatPKR((order.taxCents || 0) / 100)}
-                                </TableCell>
-                              )}
-                              {isOrderVisible("discount") && (
-                                <TableCell className="py-3 text-right font-mono text-xs text-rose-500 dark:text-rose-400">
-                                  -{formatPKR((order.discountCents || 0) / 100)}
-                                </TableCell>
-                              )}
-                              {isOrderVisible("total") && (
-                                <TableCell className="py-3 text-right pr-5 font-mono font-bold text-xs text-slate-900 dark:text-white">
                                   {formatPKR((order.totalCents || 0) / 100)}
+                                </TableCell>
+                              )}
+                              {isOrderVisible("refund") && (
+                                <TableCell className="py-3 text-right font-mono text-xs text-rose-500">
+                                  -{formatPKR((order.refundAmountCents || 0) / 100)}
+                                </TableCell>
+                              )}
+                              {isOrderVisible("netTotal") && (
+                                <TableCell className="py-3 text-right pr-5 font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                  {formatPKR(((order.totalCents || 0) - (order.refundAmountCents || 0)) / 100)}
                                 </TableCell>
                               )}
                             </TableRow>

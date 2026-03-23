@@ -32,6 +32,10 @@ export function SuperAdminDashboard() {
   const [activePreset, setActivePreset] = useState<FilterPreset>("today")
   const [compare, setCompare] = useState(false)
   const [compareRange, setCompareRange] = useState<DateRange | null>(null)
+  const [months, setMonths] = useState<number[]>([])
+  const [years, setYears] = useState<number[]>([])
+  const [compareMonths, setCompareMonths] = useState<number[]>([])
+  const [compareYears, setCompareYears] = useState<number[]>([])
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
 
   const [drillDownType, setDrillDownType] = useState<DrillDownType | null>(null)
@@ -59,39 +63,62 @@ export function SuperAdminDashboard() {
   const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "all", compare, compareRange
+    undefined, dateRange, "all", compare, compareRange,
+    months, years, compareMonths, compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
   const { data: fulfilledData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "FULFILLED", compare, compareRange
+    undefined, dateRange, "FULFILLED", compare, compareRange,
+    months, years, compareMonths, compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
   const { data: refundedData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "REFUNDED", compare, compareRange
+    undefined, dateRange, "REFUNDED", compare, compareRange,
+    months, years, compareMonths, compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
   const { data: rejectedData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "REJECTED", compare, compareRange
+    undefined, dateRange, "REJECTED", compare, compareRange,
+    months, years, compareMonths, compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
   const { data: approvedData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "APPROVED", compare, compareRange
+    undefined, dateRange, "APPROVED", compare, compareRange,
+    months, years, compareMonths, compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean, compRange?: DateRange | null) => {
+  const handleDateChange = useCallback((
+    range: DateRange | null, 
+    preset: FilterPreset, 
+    compareMode?: boolean, 
+    compRange?: DateRange | null,
+    m?: number[],
+    y?: number[],
+    cm?: number[],
+    cy?: number[]
+  ) => {
     setDateRange(range)
     setActivePreset(preset)
     if (compareMode !== undefined) setCompare(compareMode)
     if (compRange !== undefined) setCompareRange(compRange)
+    setMonths(m || [])
+    setYears(y || [])
+    setCompareMonths(cm || [])
+    setCompareYears(cy || [])
     setSelectedBranchIds([])
   }, [])
 
@@ -155,7 +182,17 @@ export function SuperAdminDashboard() {
       {/* ━━━ Compact Filter Bar ━━━ */}
       <div className="relative z-30 flex items-center gap-2 flex-wrap bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800/60 rounded-xl px-3 py-2 shadow-sm">
         <Filter className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-        <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} compare={compare} compareRange={compareRange} />
+        <GlobalDateFilter 
+          value={dateRange} 
+          onChange={handleDateChange} 
+          activePreset={activePreset} 
+          compare={compare} 
+          compareRange={compareRange}
+          months={months}
+          years={years}
+          compareMonths={compareMonths}
+          compareYears={compareYears}
+        />
         {organizationId && (
           <>
             <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
@@ -307,6 +344,10 @@ export function SuperAdminDashboard() {
         activePreset={activePreset}
         compare={compare}
         compareRange={compareRange}
+        months={months}
+        years={years}
+        compareMonths={compareMonths}
+        compareYears={compareYears}
       />
     </main>
   )

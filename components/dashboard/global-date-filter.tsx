@@ -136,6 +136,11 @@ export function GlobalDateFilter({
         fetchEarliest()
     }, [])
 
+    const [monthsOpen, setMonthsOpen] = useState(false)
+    const [yearsOpen, setYearsOpen] = useState(false)
+    const [compareMonthsOpen, setCompareMonthsOpen] = useState(false)
+    const [compareYearsOpen, setCompareYearsOpen] = useState(false)
+
     const handleSelectPreset = (preset: FilterPreset) => {
         if (preset === "custom") {
             setCalendarOpen(true)
@@ -174,6 +179,56 @@ export function GlobalDateFilter({
             type === 'compareMonths' ? newArr : compareMonths,
             type === 'compareYears' ? newArr : compareYears
         )
+    }
+
+    const [tempMonths, setTempMonths] = useState<number[]>(months)
+    const [tempYears, setTempYears] = useState<number[]>(years)
+    const [tempCompareMonths, setTempCompareMonths] = useState<number[]>(compareMonths)
+    const [tempCompareYears, setTempCompareYears] = useState<number[]>(compareYears)
+
+    useEffect(() => {
+        setTempMonths(months)
+    }, [months])
+
+    useEffect(() => {
+        setTempYears(years)
+    }, [years])
+
+    useEffect(() => {
+        setTempCompareMonths(compareMonths)
+    }, [compareMonths])
+
+    useEffect(() => {
+        setTempCompareYears(compareYears)
+    }, [compareYears])
+
+    const applyArraySelection = (type: 'months' | 'years' | 'compareMonths' | 'compareYears') => {
+        onChange(
+            null, 
+            "custom", 
+            compare, 
+            compareRange,
+            type === 'months' ? tempMonths : months,
+            type === 'years' ? tempYears : years,
+            type === 'compareMonths' ? tempCompareMonths : compareMonths,
+            type === 'compareYears' ? tempCompareYears : compareYears
+        )
+        setMonthsOpen(false)
+        setYearsOpen(false)
+        setCompareMonthsOpen(false)
+        setCompareYearsOpen(false)
+    }
+
+    const toggleTempSelection = (type: 'months' | 'years' | 'compareMonths' | 'compareYears', val: number) => {
+        if (type === 'months') {
+            setTempMonths(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+        } else if (type === 'years') {
+            setTempYears(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+        } else if (type === 'compareMonths') {
+            setTempCompareMonths(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+        } else if (type === 'compareYears') {
+            setTempCompareYears(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+        }
     }
 
     const selectedLabel = (months.length > 0 || years.length > 0) 
@@ -225,35 +280,73 @@ export function GlobalDateFilter({
                     
                     {/* Advanced Multi-Select Arrays */}
                     <div className="grid grid-cols-2 gap-2 px-1 mb-2">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                        <Popover open={monthsOpen} onOpenChange={setMonthsOpen}>
+                            <PopoverTrigger asChild>
                                 <Button variant="outline" size="sm" className={cn("text-[10px] w-full gap-1 h-7 border-slate-200 dark:border-slate-800", months.length > 0 && "bg-indigo-50 border-indigo-200 text-indigo-700")}>
                                     <CalendarIcon className="w-3 h-3 opacity-60" /> {months.length > 0 ? `${months.length} Months` : 'Months'}
                                 </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-40 max-h-60 overflow-y-auto" align="start">
-                                {monthPresets.map((m, i) => (
-                                    <DropdownMenuCheckboxItem key={m.id} checked={months.includes(i)} onCheckedChange={() => toggleArraySelection('months', i)} className="text-xs">
-                                        {m.label}
-                                    </DropdownMenuCheckboxItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-48 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" align="start">
+                                <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
+                                    {monthPresets.map((m, i) => (
+                                        <div 
+                                            key={m.id} 
+                                            className={cn(
+                                                "flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-colors",
+                                                tempMonths.includes(i) ? "bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                            )}
+                                            onClick={() => toggleTempSelection('months', i)}
+                                        >
+                                            {m.label}
+                                            {tempMonths.includes(i) && <Check className="h-3.5 w-3.5" />}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                    <Button 
+                                        size="sm" 
+                                        onClick={() => applyArraySelection('months')}
+                                        className="w-full h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl"
+                                    >
+                                        OK
+                                    </Button>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                        <Popover open={yearsOpen} onOpenChange={setYearsOpen}>
+                            <PopoverTrigger asChild>
                                 <Button variant="outline" size="sm" className={cn("text-[10px] w-full gap-1 h-7 border-slate-200 dark:border-slate-800", years.length > 0 && "bg-indigo-50 border-indigo-200 text-indigo-700")}>
                                     <Calculator className="w-3 h-3 opacity-60" /> {years.length > 0 ? `${years.length} Years` : 'Years'}
                                 </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-32" align="start">
-                                {YEARS.map((y) => (
-                                    <DropdownMenuCheckboxItem key={y} checked={years.includes(y)} onCheckedChange={() => toggleArraySelection('years', y)} className="text-xs">
-                                        {y}
-                                    </DropdownMenuCheckboxItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-32 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" align="start">
+                                <div className="space-y-1">
+                                    {YEARS.map((y) => (
+                                        <div 
+                                            key={y} 
+                                            className={cn(
+                                                "flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-colors",
+                                                tempYears.includes(y) ? "bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                            )}
+                                            onClick={() => toggleTempSelection('years', y)}
+                                        >
+                                            {y}
+                                            {tempYears.includes(y) && <Check className="h-3.5 w-3.5" />}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                    <Button 
+                                        size="sm" 
+                                        onClick={() => applyArraySelection('years')}
+                                        className="w-full h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl"
+                                    >
+                                        OK
+                                    </Button>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
                     </div>
 
                     <DropdownMenuSeparator className="my-1.5 bg-slate-100 dark:bg-slate-800" />
@@ -296,35 +389,73 @@ export function GlobalDateFilter({
                                             </div>
                                             
                                             <div className="p-3 bg-slate-50/50 dark:bg-slate-900 grid grid-cols-2 gap-2 border-b border-slate-100 dark:border-slate-800">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
+                                                <Popover open={compareMonthsOpen} onOpenChange={setCompareMonthsOpen}>
+                                                    <PopoverTrigger asChild>
                                                         <Button variant="outline" size="sm" className={cn("text-[10px] w-full gap-1 h-7 border-slate-200 dark:border-slate-800", compareMonths.length > 0 && "bg-rose-50 border-rose-200 text-rose-700")}>
                                                             <CalendarIcon className="w-3 h-3 opacity-60" /> {compareMonths.length > 0 ? `${compareMonths.length} Months` : 'Months'}
                                                         </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent className="w-40 max-h-60 overflow-y-auto" align="start">
-                                                        {monthPresets.map((m, i) => (
-                                                            <DropdownMenuCheckboxItem key={m.id} checked={compareMonths.includes(i)} onCheckedChange={() => toggleArraySelection('compareMonths', i)} className="text-xs">
-                                                                {m.label}
-                                                            </DropdownMenuCheckboxItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-48 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" align="start">
+                                                        <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
+                                                            {monthPresets.map((m, i) => (
+                                                                <div 
+                                                                    key={m.id} 
+                                                                    className={cn(
+                                                                        "flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-colors",
+                                                                        tempCompareMonths.includes(i) ? "bg-rose-50 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                                                    )}
+                                                                    onClick={() => toggleTempSelection('compareMonths', i)}
+                                                                >
+                                                                    {m.label}
+                                                                    {tempCompareMonths.includes(i) && <Check className="h-3.5 w-3.5" />}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                                            <Button 
+                                                                size="sm" 
+                                                                onClick={() => applyArraySelection('compareMonths')}
+                                                                className="w-full h-8 text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl"
+                                                            >
+                                                                OK
+                                                            </Button>
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
 
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
+                                                <Popover open={compareYearsOpen} onOpenChange={setCompareYearsOpen}>
+                                                    <PopoverTrigger asChild>
                                                         <Button variant="outline" size="sm" className={cn("text-[10px] w-full gap-1 h-7 border-slate-200 dark:border-slate-800", compareYears.length > 0 && "bg-rose-50 border-rose-200 text-rose-700")}>
                                                             <Calculator className="w-3 h-3 opacity-60" /> {compareYears.length > 0 ? `${compareYears.length} Years` : 'Years'}
                                                         </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent className="w-32" align="start">
-                                                        {YEARS.map((y) => (
-                                                            <DropdownMenuCheckboxItem key={y} checked={compareYears.includes(y)} onCheckedChange={() => toggleArraySelection('compareYears', y)} className="text-xs">
-                                                                {y}
-                                                            </DropdownMenuCheckboxItem>
-                                                        ))}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-32 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" align="start">
+                                                        <div className="space-y-1">
+                                                            {YEARS.map((y) => (
+                                                                <div 
+                                                                    key={y} 
+                                                                    className={cn(
+                                                                        "flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-colors",
+                                                                        tempCompareYears.includes(y) ? "bg-rose-50 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                                                    )}
+                                                                    onClick={() => toggleTempSelection('compareYears', y)}
+                                                                >
+                                                                    {y}
+                                                                    {tempCompareYears.includes(y) && <Check className="h-3.5 w-3.5" />}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                                            <Button 
+                                                                size="sm" 
+                                                                onClick={() => applyArraySelection('compareYears')}
+                                                                className="w-full h-8 text-[11px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl"
+                                                            >
+                                                                OK
+                                                            </Button>
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
                                             </div>
 
                                             <Calendar

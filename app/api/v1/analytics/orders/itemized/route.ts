@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, branches, users, globalProducts, categories, refundItems, groups } from "@/db/schema"
+import { orders, orderItems, branches, users, globalProducts, categories, refundItems, groups, organizations } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, sql } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
                 userName: users.fullName,
                 userEmail: users.email,
                 branchName: branches.name,
+                organizationName: organizations.name,
                 groupName: groups.name,
                 itemCode: orderItems.productCode,
                 itemName: orderItems.productName,
@@ -94,6 +95,7 @@ export async function GET(req: NextRequest) {
             .innerJoin(orders, eq(orderItems.orderId, orders.id))
             .innerJoin(users, eq(orders.createdByUserId, users.id))
             .innerJoin(branches, eq(orders.branchId, branches.id))
+            .leftJoin(organizations, eq(orders.organizationId, organizations.id))
             .leftJoin(groups, eq(branches.groupId, groups.id))
             .innerJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
             .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
@@ -161,6 +163,7 @@ export async function GET(req: NextRequest) {
                 empNumber: row.userId.split('-')[0],
                 userName: row.userName || row.userEmail?.split('@')[0],
                 userEmail: row.userEmail,
+                organizationName: row.organizationName || 'N/A',
                 group: row.groupName,
                 branchName: row.branchName,
                 itemCode: row.itemCode || 'Unknown',

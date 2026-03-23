@@ -534,17 +534,28 @@ export default function UserReportPage() {
                                             content={({ active, payload, label }) => {
                                                 if (active && payload && payload.length) {
                                                     const u = chartUsers.find((cu: any) => cu.userName.split(' ')[0] === label) || chartUsers[0];
+                                                    const getData = (key: string) => payload.find(p => p.dataKey === key)?.value || 0;
+
+                                                    const orders = getData('orders');
+                                                    const compOrders = getData('compOrders');
+                                                    const spent = getData('spent');
+                                                    const compSpent = getData('compSpent');
+
                                                     return (
                                                         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 rounded-2xl shadow-2xl min-w-[200px] ring-1 ring-slate-200/50">
-                                                            <p className="text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2 border-b border-slate-100 pb-2">{u.userName}</p>
+                                                            <p className="text-[12px] font-black uppercase tracking-widest text-slate-900 dark:text-white mb-2 border-b border-slate-100 pb-2">{u?.userName || label}</p>
                                                             <div className="space-y-1.5">
                                                                 <div className="flex justify-between items-center bg-blue-50/30 p-1.5 rounded-lg">
-                                                                    <span className="text-[10px] font-bold text-blue-600 uppercase">Orders (A/B)</span>
-                                                                    <span className="text-[11px] font-black text-blue-700">{payload[0].value} / {payload[1].value}</span>
+                                                                    <span className="text-[10px] font-bold text-blue-600 uppercase">Orders {compare ? '(A/B)' : ''}</span>
+                                                                    <span className="text-[11px] font-black text-blue-700">
+                                                                        {orders.toLocaleString()} {compare ? `/ ${compOrders.toLocaleString()}` : ''}
+                                                                    </span>
                                                                 </div>
                                                                 <div className="flex justify-between items-center bg-indigo-50/30 p-1.5 rounded-lg mt-1 border border-indigo-100/50">
-                                                                    <span className="text-[10px] font-bold text-indigo-600 uppercase">Spent (A/B)</span>
-                                                                    <span className="text-[11px] font-black text-indigo-700">{formatPKR(Number(payload[2].value))} / {formatPKR(Number(payload[3].value))}</span>
+                                                                    <span className="text-[10px] font-bold text-indigo-600 uppercase">Spent {compare ? '(A/B)' : ''}</span>
+                                                                    <span className="text-[11px] font-black text-indigo-700">
+                                                                        {formatPKR(Number(spent))} {compare ? `/ ${formatPKR(Number(compSpent))}` : ''}
+                                                                    </span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -628,7 +639,7 @@ export default function UserReportPage() {
                                     <TableRow><TableCell colSpan={8} className="h-40 text-center text-slate-500 italic">No user activity recorded in this period.</TableCell></TableRow>
                                 ) : (
                                     filteredUsers.map((u: any) => (
-                                        <TableRow key={u.userId} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                                        <TableRow key={`${u.userId}-${u.userEmail}-${u.branchName || 'all'}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
                                             <TableCell className="pl-6 py-4">
                                                 <div className="flex flex-col gap-1">
                                                     <span className="font-semibold text-xs text-slate-900 dark:text-white capitalize">{u.userName || "Anonymous"}</span>

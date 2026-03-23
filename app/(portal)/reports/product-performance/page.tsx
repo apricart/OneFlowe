@@ -664,10 +664,14 @@ export default function ProductPerformancePage() {
                                                 <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.subCategory}</TableCell>
                                                 <TableCell className="text-center">
                                                     <Badge 
-                                                        variant={p.qtyRefunded > 0 ? "destructive" : (p.status === 'active' ? 'default' : 'secondary')} 
-                                                        className="text-[9px] uppercase px-1.5 py-0"
+                                                        className={cn(
+                                                            "text-[9px] uppercase px-2 py-0.5 rounded-full border-none font-bold tracking-wider",
+                                                            (p.status === 'active' || !p.status) 
+                                                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" 
+                                                                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                                                        )}
                                                     >
-                                                        {p.qtyRefunded > 0 ? 'REFUNDED' : (p.status || 'ACTIVE')}
+                                                        {p.status || 'ACTIVE'}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="text-center font-mono text-xs">
@@ -757,7 +761,9 @@ export default function ProductPerformancePage() {
                                             }
                                             acc[curr.orderId].items.push(curr)
                                             return acc
-                                        }, {} as any)).map((order: any) => {
+                                        }, {} as any))
+                                        .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                        .map((order: any) => {
                                             const isExpanded = expandedRow === `order-${order.id}`
                                             const totalQty = order.items.reduce((s: number, i: any) => s + i.quantity, 0)
                                             const totalRevenue = order.items.reduce((s: number, i: any) => s + (i.quantity * i.priceCents) / 100, 0)

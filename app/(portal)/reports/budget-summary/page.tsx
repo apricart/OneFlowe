@@ -214,7 +214,7 @@ export default function BudgetSummaryPage() {
 
     const diffMs = dateRange ? (dateRange.endDate.getTime() - dateRange.startDate.getTime()) : 0;
     const diffDays = diffMs / (1000 * 60 * 60 * 24);
-    const granularity: "daily" | "monthly" | "yearly" = activePreset === "all" ? "monthly" : diffDays > 365 ? "yearly" : diffDays > 31 ? "monthly" : "daily";
+    const granularity: "daily" | "monthly" | "yearly" = activePreset === "all" ? "yearly" : diffDays > 365 ? "yearly" : diffDays > 31 ? "monthly" : "daily";
     queryParams.set("granularity", granularity);
 
     const { data, isLoading, mutate } = useSWR<BudgetSummaryResponse>(`/api/v1/analytics/budgets/summary?${queryParams.toString()}`, fetcher)

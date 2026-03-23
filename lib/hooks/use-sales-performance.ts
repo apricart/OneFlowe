@@ -60,10 +60,15 @@ export function useSalesPerformance(
     months?: number[],
     years?: number[],
     compareMonths?: number[],
-    compareYears?: number[]
+    compareYears?: number[],
+    granularity?: "hourly" | "daily" | "monthly" | "yearly"
 ) {
     const url = useMemo(() => {
         const params = new URLSearchParams()
+        
+        if (granularity) {
+            params.set("granularity", granularity)
+        }
 
         if (organizationId && organizationId !== "null" && organizationId !== "0") {
             params.set("organizationId", organizationId)
@@ -120,7 +125,7 @@ export function useSalesPerformance(
         }
 
         return `/api/v1/analytics/sales-performance?${params.toString()}`
-    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears])
+    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears, granularity])
 
     return useSWR<SalesPerformanceResponse>(url, fetcher, {
         revalidateOnFocus: false,
@@ -142,7 +147,8 @@ export function useDashboardKPIs(
     months?: number[],
     years?: number[],
     compareMonths?: number[],
-    compareYears?: number[]
+    compareYears?: number[],
+    granularity?: "hourly" | "daily" | "monthly" | "yearly"
 ) {
-    return useSalesPerformance(organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears)
+    return useSalesPerformance(organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears, granularity)
 }
