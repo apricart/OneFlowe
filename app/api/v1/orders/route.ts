@@ -171,11 +171,22 @@ export async function GET(req: NextRequest) {
 
     const currentUserId = (session.user as any).id
 
-    // Sanitize items: Only show approvalToken to the user who approved it
-    const sanitizedItems = items.map(item => ({
-      ...item,
-      approvalToken: item.approvedByUserId === currentUserId ? item.approvalToken : null
-    }))
+    // Sanitize items: Only show approvalToken to authorized roles
+    const sanitizedItems = items.map(item => {
+      // Show token if:
+      // 1. User is the one who approved it
+      // 2. User is a Super Admin (needs it for fulfillment)
+      // 3. User is a Branch Admin (needs it to hand off to Super Admin)
+      const canSeeToken =
+        item.approvedByUserId === currentUserId ||
+        role === "SUPER_ADMIN" ||
+        role === "BRANCH_ADMIN";
+
+      return {
+        ...item,
+        approvalToken: canSeeToken ? item.approvalToken : null
+      }
+    })
 
     const filtered = q ? sanitizedItems.filter((o) => o.tid.includes(q)) : sanitizedItems
 
@@ -413,17 +424,12 @@ export async function POST(req: NextRequest) {
       const plainToken = generateApprovalToken(10)
       const tokenHash = await hashApprovalToken(plainToken)
 
-      // 3. Create Order
+      // 3. Create Order in PENDING state
       const [ord] = await tx.insert(orders).values({
         tid,
         organizationId: Number(organizationId),
         branchId: Number(branchId),
-        status: 'approved',
-        approvedAt: new Date(),
-        approvedByUserId: userId,
-        approvalToken: plainToken,
-        approvalTokenHash: tokenHash,
-        approvalTokenCreatedAt: new Date(),
+        status: 'pending',
         subtotalCents: subtotal,
         taxCents: tax,
         totalCents: total,
@@ -562,18 +568,22 @@ export async function PUT(req: NextRequest) {
     const [ord] = await db.select().from(orders).where(eq(orders.id, id)).limit(1)
     if (!ord) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
-    // Fetch budget for the current month period
-    const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
+    // Fetch budget for the ORDER's creation month (not today's month!)
+    // This ensures fulfilling/cancelling an order from a previous month
+    // updates the correct month's budget record.
+    const orderMonth = ord.createdAt
+      ? new Date(ord.createdAt).toISOString().slice(0, 7)
+      : new Date().toISOString().slice(0, 7) // fallback to current month
     const [budget] = await db.select().from(budgets).where(
       and(
         eq(budgets.branchId, ord.branchId),
-        eq(budgets.period, currentMonth)
+        eq(budgets.period, orderMonth)
       )
     ).limit(1)
 
     if (!budget) {
       return NextResponse.json({
-        error: `Budget not configured for current month (${currentMonth})`
+        error: `Budget not configured for order month (${orderMonth})`
       }, { status: 400 })
     }
 

@@ -92,13 +92,18 @@ export function getAutoApprovalCountdown(order: OrderLike | null): string | null
 /**
  * Build status timeline for order
  */
-export function buildStatusTimeline(status: string, statusAtRefund?: string | null, isPartialRefund?: boolean) {
+export function buildStatusTimeline(
+  status: string,
+  statusAtRefund?: string | null,
+  isPartialRefund?: boolean,
+  approvalToken?: string | null
+) {
   try {
     // Validate input
     if (!status || typeof status !== 'string') {
       console.error('[OrderUtils] Invalid status:', status)
       // Return default empty timeline
-      return STATUS_FLOW.map(step => ({ ...step, state: "upcoming" }))
+      return STATUS_FLOW.map(step => ({ ...step, state: "upcoming", approvalToken: null }))
     }
 
     const normalized = status.toLowerCase().trim()
@@ -110,13 +115,15 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
           key: "pending",
           label: "Pending review",
           description: "Awaited decision.",
-          state: "complete"
+          state: "complete",
+          approvalToken: null
         },
         {
           key: "cancelled",
           label: "Cancelled",
           description: "Order was cancelled by head office.",
-          state: "current"
+          state: "current",
+          approvalToken: null
         },
       ]
     }
@@ -130,7 +137,8 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
       // Return all as upcoming
       return STATUS_FLOW.map((step, index) => ({
         ...step,
-        state: index === 0 ? "current" : "upcoming"
+        state: index === 0 ? "current" : "upcoming",
+        approvalToken: null
       }))
     }
 
@@ -140,6 +148,7 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
     return STATUS_FLOW.map((step, index) => {
       let state = "upcoming"
       let label: string = step.label
+      let tokenToLink: string | null = null
 
       // Dynamic label for partial refund
       if (step.key === "refunded" && isPartialRefund) {
@@ -152,7 +161,7 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
         const wasFulfilled = refundOrigin === "fulfilled"
 
         if (!wasFulfilled) {
-          return { ...step, label, state: "skipped" }
+          return { ...step, label, state: "skipped", approvalToken: null }
         }
       }
 
@@ -165,6 +174,11 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
         } else {
           state = "current"
         }
+      }
+
+      // Attach token to "Approved" step if present and order reached that stage
+      if (step.key === "approved" && (state === "complete" || state === "current") && approvalToken) {
+        tokenToLink = approvalToken
       }
 
       // Highlight Partially Refunded even if order is not fully "refunded"
@@ -180,7 +194,7 @@ export function buildStatusTimeline(status: string, statusAtRefund?: string | nu
         }
       }
 
-      return { ...step, label, state }
+      return { ...step, label, state, approvalToken: tokenToLink }
     })
   } catch (error) {
     console.error('[OrderUtils] Error in buildStatusTimeline:', error)

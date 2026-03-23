@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { eq, and, gte, lte, desc, sql, inArray } from "drizzle-orm"
+import { eq, and, gte, lte, desc, sql, inArray, gt, or } from "drizzle-orm"
 import { requireApiRole, ok, error } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders, users, orderItems, branches, organizations, refundItems } from "@/db/schema"
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n > 2000) : []
     const refundType = searchParams.get("refundType")?.toLowerCase() // all, full, partial
     const sortBy = searchParams.get("sortBy")?.toLowerCase() === "value" ? "value" : "date"
-    if (!type || !["REVENUE", "REJECTED", "FULFILLED", "ORDERS", "REFUNDED"].includes(type)) {
+    if (!type || !["REVENUE", "REJECTED", "FULFILLED", "ORDERS", "REFUNDED", "PENDING", "APPROVED", "PARTIAL"].includes(type)) {
         return error("Invalid or missing drill-down type")
     }
 
@@ -98,17 +98,24 @@ export async function GET(req: NextRequest) {
     if (type === "REVENUE" || type === "FULFILLED") {
         conditions.push(sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`)
     } else if (type === "REJECTED") {
-        conditions.push(sql`UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED')`)
+        conditions.push(or(eq(sql`UPPER(${orders.status})`, "REJECTED"), eq(sql`UPPER(${orders.status})`, "CANCELLED")))
     } else if (type === "ORDERS") {
         conditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED', 'REFUNDED', 'REJECTED', 'CANCELLED')`)
     } else if (type === "REFUNDED") {
-        if (refundType === "full") {
-            conditions.push(sql`(${orders.refundAmountCents} >= ${orders.totalCents} AND ${orders.refundAmountCents} > 0)`)
-        } else if (refundType === "partial") {
-            conditions.push(sql`(${orders.refundAmountCents} < ${orders.totalCents} AND ${orders.refundAmountCents} > 0)`)
-        } else {
-            conditions.push(sql`(UPPER(${orders.status}) = 'REFUNDED' OR ${orders.refundAmountCents} > 0)`)
-        }
+        // REFUNDED Drill-down now only shows orders with 'REFUNDED' status (Fully Refunded)
+        conditions.push(eq(sql`UPPER(${orders.status})`, "REFUNDED"))
+    } else if (type === "PARTIAL") {
+        // PARTIAL Drill-down shows FULFILLED orders with refunds OR orders with PARTIAL status
+        conditions.push(
+            or(
+                and(eq(sql`UPPER(${orders.status})`, "FULFILLED"), gt(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0)),
+                inArray(sql`UPPER(${orders.status})`, ["PARTIAL", "PARTIALLY_FULFILLED"])
+            )
+        )
+    } else if (type === "PENDING") {
+        conditions.push(eq(sql`UPPER(${orders.status})`, "PENDING"))
+    } else if (type === "APPROVED") {
+        conditions.push(eq(sql`UPPER(${orders.status})`, "APPROVED"))
     }
 
     try {

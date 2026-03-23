@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { useAppContext } from "@/components/context/app-context"
 import { formatPKR } from "@/lib/utils"
 import { Search, Package, Building2, ShieldCheck, Sparkles } from "lucide-react"
+import { useDebounce } from "@/hooks/use-debounce"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -32,33 +33,94 @@ type OrganizationInventoryItem = {
 export default function HeadOfficeInventoryView() {
     const { organizationId } = useAppContext()
     const [searchQuery, setSearchQuery] = useState("")
+    const debouncedSearch = useDebounce(searchQuery, 300)
     const [categoryFilter, setCategoryFilter] = useState("all")
     const [subCategoryFilter, setSubCategoryFilter] = useState("all")
     const [statusFilter, setStatusFilter] = useState("all")
     const [page, setPage] = useState(1)
     const PAGE_SIZE = 20
 
-    const encodedSearch = encodeURIComponent(searchQuery)
-    const query = `/api/v1/head-office/organization-inventory?search=${encodedSearch}${categoryFilter !== 'all' ? `&category=${categoryFilter}` : ''}${subCategoryFilter !== 'all' ? `&subCategory=${subCategoryFilter}` : ''}${organizationId ? `&organizationId=${organizationId}` : ""}`
+    // Fetch ALL org inventory data once — no filter params in URL
+    const query = `/api/v1/head-office/organization-inventory?limit=5000${organizationId ? `&organizationId=${organizationId}` : ""}`
 
     const { data, isLoading } = useSWR<{ items: OrganizationInventoryItem[]; total: number }>(query, fetcher, {
         fallbackData: { items: [], total: 0 },
         revalidateOnFocus: false,
+        dedupingInterval: 30000,
     })
 
-    const assignedProducts = data?.items ?? []
-    const totalAssigned = data?.total ?? 0
-    const activeCount = useMemo(() => assignedProducts.filter((item) => item.isActive).length, [assignedProducts])
-    const customPriceCount = useMemo(
-        () => assignedProducts.filter((item) => item.customPrice !== undefined && item.customPrice !== null).length,
-        [assignedProducts]
+    const allProducts = data?.items ?? []
+    const totalAssigned = allProducts.length
+
+    // Fetch categories and subcategories for filter dropdowns
+    const { data: catData } = useSWR<{ items: { id: number, name: string }[] }>('/api/v1/categories?limit=100', fetcher, {
+        fallbackData: { items: [] }, revalidateOnFocus: false, dedupingInterval: 60000
+    })
+    const { data: subCatData } = useSWR<{ items: { id: number, name: string }[] }>(
+        categoryFilter !== 'all'
+            ? `/api/v1/subcategories?categoryId=${categoryFilter}&limit=100`
+            : '/api/v1/subcategories?limit=100',
+        fetcher,
+        { fallbackData: { items: [] }, revalidateOnFocus: false, dedupingInterval: 60000 }
     )
 
-    const totalPages = Math.max(1, Math.ceil(assignedProducts.length / PAGE_SIZE))
+    // Client-side filtering — instant, no API calls
+    const filteredProducts = useMemo(() => {
+        let filtered = allProducts
 
+        // Status filter
+        if (statusFilter === "active") {
+            filtered = filtered.filter((item) => item.isActive)
+        } else if (statusFilter === "inactive") {
+            filtered = filtered.filter((item) => !item.isActive)
+        }
+
+        // Category filter (parent category)
+        if (categoryFilter !== 'all') {
+            const subCatIds = (subCatData?.items ?? []).map(sc => sc.id)
+            if (subCatIds.length > 0) {
+                filtered = filtered.filter((item) => {
+                    const catName = item.parentCategoryName
+                    const matchingCat = catData?.items?.find(c => c.id.toString() === categoryFilter)
+                    return catName === matchingCat?.name
+                })
+            }
+        }
+
+        // Subcategory filter
+        if (subCategoryFilter !== 'all') {
+            const matchingSub = subCatData?.items?.find(sc => sc.id.toString() === subCategoryFilter)
+            if (matchingSub) {
+                filtered = filtered.filter((item) => item.categoryName === matchingSub.name)
+            }
+        }
+
+        // Debounced search filter
+        if (debouncedSearch) {
+            const q = debouncedSearch.toLowerCase()
+            filtered = filtered.filter(
+                (item) =>
+                    item.productName.toLowerCase().includes(q) ||
+                    item.productCode.toLowerCase().includes(q) ||
+                    (item.customName?.toLowerCase().includes(q))
+            )
+        }
+
+        return filtered
+    }, [allProducts, statusFilter, categoryFilter, subCategoryFilter, debouncedSearch, catData?.items, subCatData?.items])
+
+    const activeCount = useMemo(() => allProducts.filter((item) => item.isActive).length, [allProducts])
+    const customPriceCount = useMemo(
+        () => allProducts.filter((item) => item.customPrice !== undefined && item.customPrice !== null).length,
+        [allProducts]
+    )
+
+    const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE))
+
+    // Reset page when filters change
     useEffect(() => {
         setPage(1)
-    }, [assignedProducts.length])
+    }, [debouncedSearch, categoryFilter, subCategoryFilter, statusFilter])
 
     useEffect(() => {
         if (page > totalPages) {
@@ -68,8 +130,8 @@ export default function HeadOfficeInventoryView() {
 
     const paginatedProducts = useMemo(() => {
         const start = (page - 1) * PAGE_SIZE
-        return assignedProducts.slice(start, start + PAGE_SIZE)
-    }, [assignedProducts, page])
+        return filteredProducts.slice(start, start + PAGE_SIZE)
+    }, [filteredProducts, page])
 
     return (
         <div className="space-y-8 p-6">
@@ -136,8 +198,30 @@ export default function HeadOfficeInventoryView() {
                                 onChange={(event) => setSearchQuery(event.target.value)}
                             />
                         </div>
-                        <CategoryFilter value={categoryFilter} onChange={(val) => { setCategoryFilter(val); setSubCategoryFilter('all'); }} />
-                        <SubcategoryFilter categoryId={categoryFilter} value={subCategoryFilter} onChange={setSubCategoryFilter} />
+                        <select
+                            value={categoryFilter}
+                            onChange={(e) => { setCategoryFilter(e.target.value); setSubCategoryFilter('all'); }}
+                            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
+                        >
+                            <option value="all">All Categories</option>
+                            {catData?.items?.map((cat) => (
+                                <option key={cat.id} value={cat.id.toString()}>
+                                    {cat.name}
+                                </option>
+                            ))}
+                        </select>
+                        <select
+                            value={subCategoryFilter}
+                            onChange={(e) => setSubCategoryFilter(e.target.value)}
+                            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
+                        >
+                            <option value="all">All Subcategories</option>
+                            {subCatData?.items?.map((sub) => (
+                                <option key={sub.id} value={sub.id.toString()}>
+                                    {sub.name}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -221,11 +305,11 @@ export default function HeadOfficeInventoryView() {
                         <span>
                             Showing{" "}
                             <span className="font-medium text-foreground">
-                                {assignedProducts.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
+                                {filteredProducts.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
                                 –
-                                {Math.min(assignedProducts.length, page * PAGE_SIZE)}
+                                {Math.min(filteredProducts.length, page * PAGE_SIZE)}
                             </span>{" "}
-                            of <span className="font-medium text-foreground">{assignedProducts.length}</span> products
+                            of <span className="font-medium text-foreground">{filteredProducts.length}</span> products
                         </span>
                         <div className="inline-flex items-center gap-2">
                             <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>
@@ -237,7 +321,7 @@ export default function HeadOfficeInventoryView() {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                disabled={page === totalPages || assignedProducts.length === 0}
+                                disabled={page === totalPages || filteredProducts.length === 0}
                                 onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
                             >
                                 Next
@@ -250,45 +334,7 @@ export default function HeadOfficeInventoryView() {
     )
 }
 
-const CategoryFilter = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
-    const { data } = useSWR<{ items: { id: number, name: string }[] }>('/api/v1/categories?limit=100', fetcher)
-    return (
-        <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
-        >
-            <option value="all">All Categories</option>
-            {data?.items?.map((cat) => (
-                <option key={cat.id} value={cat.id.toString()}>
-                    {cat.name}
-                </option>
-            ))}
-        </select>
-    )
-}
 
-const SubcategoryFilter = ({ categoryId, value, onChange }: { categoryId: string, value: string, onChange: (val: string) => void }) => {
-    const query = categoryId !== 'all'
-        ? `/api/v1/subcategories?categoryId=${categoryId}&limit=100`
-        : '/api/v1/subcategories?limit=100'
-    const { data } = useSWR<{ items: { id: number, name: string }[] }>(query, fetcher)
-
-    return (
-        <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-[180px]"
-        >
-            <option value="all">All Subcategories</option>
-            {data?.items?.map((cat) => (
-                <option key={cat.id} value={cat.id.toString()}>
-                    {cat.name}
-                </option>
-            ))}
-        </select>
-    )
-}
 
 function SummaryCard({
     label,

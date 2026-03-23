@@ -65,6 +65,17 @@ export function BranchAdminDashboard() {
     activePreset === "all" ? "yearly" : undefined
   )
 
+  const { data: pendingData } = useSalesPerformance(
+    organizationId ?? undefined,
+    branchId ?? undefined,
+    undefined,
+    undefined,
+    dateRange,
+    "PENDING",
+    compare,
+    compareRange
+  )
+
   const { data: fulfilledData } = useSalesPerformance(
     organizationId, branchId, undefined, undefined, dateRange, "FULFILLED", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined
   )
@@ -105,13 +116,52 @@ export function BranchAdminDashboard() {
     setCompareYears(cy || [])
   }, [])
 
+  const totalOrders = perfData?.totalOrders ?? 0
+  const pendingCount = pendingData?.totalOrders ?? 0
   const fulfilledCount = fulfilledData?.totalOrders ?? 0
+  const partialCount = partialData?.totalOrders ?? 0
   const refundedCount = refundedData?.totalOrders ?? 0
   const rejectedCount = rejectedData?.totalOrders ?? 0
   const approvedCount = approvedData?.totalOrders ?? 0
 
   const periodPurchases = perfData?.totalNetSales ?? perfData?.totalSales ?? 0
   const periodOrders = perfData?.totalOrders ?? 0
+
+  const pendingTrend = pendingData?.comparison ? {
+    type: (pendingData.totalOrders ?? 0) > (pendingData.comparison.totalOrders ?? 0) ? "up" : "down",
+    value: Math.abs((pendingData.totalOrders ?? 0) - (pendingData.comparison.totalOrders ?? 0)),
+    label: pendingData.comparison.totalOrders.toLocaleString()
+  } : undefined
+
+  const approvedTrend = approvedData?.comparison ? {
+    type: (approvedData.totalOrders ?? 0) > (approvedData.comparison.totalOrders ?? 0) ? "up" : "down",
+    value: Math.abs((approvedData.totalOrders ?? 0) - (approvedData.comparison.totalOrders ?? 0)),
+    label: approvedData.comparison.totalOrders.toLocaleString()
+  } : undefined
+
+  const fulfilledTrend = fulfilledData?.comparison ? {
+    type: (fulfilledData.totalOrders ?? 0) > (fulfilledData.comparison.totalOrders ?? 0) ? "up" : "down",
+    value: Math.abs((fulfilledData.totalOrders ?? 0) - (fulfilledData.comparison.totalOrders ?? 0)),
+    label: fulfilledData.comparison.totalOrders.toLocaleString()
+  } : undefined
+
+  const partialTrend = partialData?.comparison ? {
+    type: (partialData.totalOrders ?? 0) > (partialData.comparison.totalOrders ?? 0) ? "up" : "down",
+    value: Math.abs((partialData.totalOrders ?? 0) - (partialData.comparison.totalOrders ?? 0)),
+    label: partialData.comparison.totalOrders.toLocaleString()
+  } : undefined
+
+  const refundedTrend = refundedData?.comparison ? {
+    type: (refundedData.totalOrders ?? 0) > (refundedData.comparison.totalOrders ?? 0) ? "up" : "down",
+    value: Math.abs((refundedData.totalOrders ?? 0) - (refundedData.comparison.totalOrders ?? 0)),
+    label: refundedData.comparison.totalOrders.toLocaleString()
+  } : undefined
+
+  const rejectedTrend = rejectedData?.comparison ? {
+    type: (rejectedData.totalOrders ?? 0) > (rejectedData.comparison.totalOrders ?? 0) ? "up" : "down",
+    value: Math.abs((rejectedData.totalOrders ?? 0) - (rejectedData.comparison.totalOrders ?? 0)),
+    label: rejectedData.comparison.totalOrders.toLocaleString()
+  } : undefined
 
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-4">
@@ -141,7 +191,7 @@ export function BranchAdminDashboard() {
       </div>
 
       {/* ━━━ KPI Cards ━━━ */}
-      <div className="relative z-10 grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+      <div className="relative z-10 grid gap-3 grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
         <BankingKPICard
           icon={TrendingUp} title="Purchases"
           value={formatPKR(periodPurchases, { maximumFractionDigits: 0 })}
@@ -161,21 +211,48 @@ export function BranchAdminDashboard() {
           comparisonLabel="Prev"
         />
         <BankingKPICard
+          icon={Activity} title="Pending"
+          value={pendingCount.toLocaleString()}
+          subtitle={getPresetLabel(activePreset, dateRange)}
+          gradient="from-amber-400 to-orange-500" iconBg="text-amber-600 bg-amber-600" delay={75}
+          onClick={() => handleKPIOpen("PENDING" as any)}
+          trend={pendingTrend?.type as "up" | "down" | undefined}
+          trendValue={pendingTrend?.value?.toString()}
+          comparisonValue={pendingTrend?.label}
+          comparisonLabel="Period Comparison"
+        />
+        <BankingKPICard
           icon={CheckCircle2} title="Approved"
           value={approvedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
-          gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={190}
-          comparisonValue={compare && perfData?.comparison?.approvedCount != null ? perfData.comparison.approvedCount.toLocaleString() : undefined}
-          comparisonLabel="Prev"
+          gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={100}
+          onClick={() => handleKPIOpen("APPROVED" as any)}
+          trend={approvedTrend?.type as "up" | "down" | undefined}
+          trendValue={approvedTrend?.value?.toString()}
+          comparisonValue={approvedTrend?.label}
+          comparisonLabel="Period Comparison"
         />
         <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
           value={fulfilledCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
-          gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={150}
+          gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={125}
           onClick={() => handleKPIOpen("FULFILLED")}
-          comparisonValue={compare && perfData?.comparison?.fulfilledCount != null ? perfData.comparison.fulfilledCount.toLocaleString() : undefined}
-          comparisonLabel="Prev"
+          trend={fulfilledTrend?.type as "up" | "down" | undefined}
+          trendValue={fulfilledTrend?.value?.toString()}
+          comparisonValue={fulfilledTrend?.label}
+          comparisonLabel="Period Comparison"
+        />
+        <BankingKPICard
+          icon={Package} title="Partial Fulfilled"
+          value={partialCount.toLocaleString()}
+          subtitle={getPresetLabel(activePreset, dateRange)}
+          gradient="from-indigo-500 to-purple-600" iconBg="text-indigo-600 bg-indigo-600" delay={135}
+          onClick={() => handleKPIOpen("PARTIAL" as any)}
+          trend={partialTrend?.type as "up" | "down" | undefined}
+          trendValue={partialTrend?.value?.toString()}
+          comparisonValue={partialTrend?.label}
+          comparisonLabel="Period Comparison"
         />
         <BankingKPICard
           icon={RotateCcw} title="Refunded"
@@ -183,8 +260,9 @@ export function BranchAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-red-500 to-rose-600" iconBg="text-red-600 bg-red-600" delay={200}
           onClick={() => handleKPIOpen("REFUNDED")}
-          comparisonValue={compare && perfData?.comparison?.refundedCount != null ? perfData.comparison.refundedCount.toLocaleString() : undefined}
-          comparisonLabel="Prev"
+          trend={refundedTrend?.type as "up" | "down" | undefined}
+          trendValue={refundedTrend?.value?.toString()}
+          comparisonValue={refundedTrend?.label}
         />
         <BankingKPICard
           icon={XCircle} title="Rejected"
@@ -192,8 +270,9 @@ export function BranchAdminDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-slate-500 to-slate-700" iconBg="text-slate-600 bg-slate-600" delay={225}
           onClick={() => handleKPIOpen("REJECTED")}
-          comparisonValue={compare && perfData?.comparison?.rejectedCount != null ? perfData.comparison.rejectedCount.toLocaleString() : undefined}
-          comparisonLabel="Prev"
+          trend={rejectedTrend?.type as "up" | "down" | undefined}
+          trendValue={rejectedTrend?.value?.toString()}
+          comparisonValue={rejectedTrend?.label}
         />
 
       </div>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { budgets, branches, auditLogs } from "@/db/schema"
+import { budgets, branches, auditLogs, budgetAddons } from "@/db/schema"
 import { and, eq } from "drizzle-orm"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
@@ -94,16 +94,60 @@ export async function GET(req: NextRequest) {
           )
           // SUPER_ADMIN: if an organizationId is provided (via context), scope to it; otherwise, global
           // HEAD_OFFICE: always scoped to their organization
+          // Only show active branches (inactive/soft-deleted branches are hidden from budget management)
           .where(
-            role === "SUPER_ADMIN"
-              ? orgId
-                ? eq(branches.organizationId, orgId)
-                : undefined
-              : eq(branches.organizationId, orgId)
+            and(
+              eq(branches.status, 'active'),
+              role === "SUPER_ADMIN"
+                ? orgId
+                  ? eq(branches.organizationId, orgId)
+                  : undefined
+                : eq(branches.organizationId, orgId)
+            )
           )
 
+        // Identify branches missing a budget for the current month and auto-initialize them
+        const missingBudgets = allBranches.filter(b => b.amountAllocatedCents === null)
+        
+        if (missingBudgets.length > 0) {
+          console.log(`[Budgets] Auto-initializing ${missingBudgets.length} missing budgets for ${currentMonth} using baselines`)
+          const newRecords = missingBudgets.map(b => ({
+            organizationId: b.organizationId,
+            branchId: b.branchId,
+            period: currentMonth,
+            amountAllocatedCents: b.baselineBudgetCents || 0, // Automatically becomes the monthly base
+            amountSpentCents: 0,
+            amountHeldCents: 0,
+            amountCreditedCents: 0,
+          }))
+
+          await db.insert(budgets).values(newRecords).onConflictDoNothing()
+          
+          // Instead of recursing, we manually merge the results
+          const newRecordsMap = new Map(newRecords.map(r => [r.branchId, r]))
+          
+          const finalBudgets = allBranches.map(b => {
+            const record = b.amountAllocatedCents !== null ? b : newRecordsMap.get(b.branchId)
+            const allocated = record ? (record.amountAllocatedCents ?? b.baselineBudgetCents ?? 0) : (b.baselineBudgetCents ?? 0)
+            const credited = (record as any)?.amountCreditedCents || 0
+            const spent = (record as any)?.amountSpentCents || 0
+            const held = (record as any)?.amountHeldCents || 0
+            
+            return {
+              ...b,
+              amountAllocatedCents: allocated,
+              amountSpentCents: spent,
+              amountHeldCents: held,
+              amountCreditedCents: credited,
+              remainingCents: (allocated + credited) - (spent + held),
+            }
+          })
+
+          return NextResponse.json({ budgets: finalBudgets })
+        }
+
         const budgetsWithRemaining = allBranches.map(b => {
-          const allocated = b.amountAllocatedCents ?? b.baselineBudgetCents ?? 0
+          const allocated = b.amountAllocatedCents !== null ? b.amountAllocatedCents : (b.baselineBudgetCents || 0)
           const credited = b.amountCreditedCents || 0
           const spent = b.amountSpentCents || 0
           const held = b.amountHeldCents || 0
@@ -135,7 +179,7 @@ export async function GET(req: NextRequest) {
     }
 
     const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
-    const [b] = await db.select({
+    let [b] = await db.select({
       id: budgets.id,
       organizationId: budgets.organizationId,
       branchId: budgets.branchId,
@@ -146,36 +190,62 @@ export async function GET(req: NextRequest) {
       amountCreditedCents: budgets.amountCreditedCents,
       createdAt: budgets.createdAt,
       updatedAt: budgets.updatedAt,
-      baselineBudgetCents: branches.baselineBudgetCents
+      baselineBudgetCents: branches.baselineBudgetCents,
+      orgIdFromBranch: branches.organizationId
     })
       .from(budgets)
-      .innerJoin(branches, eq(budgets.branchId, branches.id))
-      .where(
-        and(
-          eq(budgets.branchId, branchId),
-          eq(budgets.period, currentMonth)
-        )
-      ).limit(1)
+      .rightJoin(branches, and(eq(budgets.branchId, branches.id), eq(budgets.period, currentMonth)))
+      .where(eq(branches.id, branchId))
+      .limit(1) as any[]
 
-    if (!b) {
-      return NextResponse.json({
-        error: `Budget not configured for current month (${currentMonth})`,
-        branchId,
-        period: currentMonth
-      }, { status: 404 })
+    // If no budget record exists for current month, auto-initialize it using branch baseline
+    if (!b || b.amountAllocatedCents === null) {
+      console.log(`[Budgets] Auto-initializing budget for branch ${branchId} for period ${currentMonth}`)
+      
+      const [branchRecord] = await db.select().from(branches).where(eq(branches.id, branchId)).limit(1)
+      if (!branchRecord) {
+        return NextResponse.json({ error: "Branch not found" }, { status: 404 })
+      }
+
+      const newBudget = {
+        organizationId: branchRecord.organizationId,
+        branchId: branchId,
+        period: currentMonth,
+        amountAllocatedCents: branchRecord.baselineBudgetCents || 0,
+        amountSpentCents: 0,
+        amountHeldCents: 0,
+        amountCreditedCents: 0,
+      }
+
+      const [inserted] = await db.insert(budgets).values(newBudget).onConflictDoNothing().returning()
+      
+      // Use the newly created/found budget
+      b = {
+        ...newBudget,
+        id: inserted?.id || 0,
+        createdAt: inserted?.createdAt || new Date(),
+        updatedAt: inserted?.updatedAt || new Date(),
+        baselineBudgetCents: branchRecord.baselineBudgetCents,
+        orgIdFromBranch: branchRecord.organizationId
+      } as any
     }
 
-    const remainingCents = (b.amountAllocatedCents + b.amountCreditedCents) - (b.amountSpentCents + b.amountHeldCents)
+    const allocated = b.amountAllocatedCents ?? 0
+    const spent = b.amountSpentCents ?? 0
+    const held = b.amountHeldCents ?? 0
+    const credited = b.amountCreditedCents ?? 0
+
+    const remainingCents = (allocated + credited) - (spent + held)
 
     return NextResponse.json({
       branchId,
-      amountAllocatedCents: b.amountAllocatedCents,
-      amountSpentCents: b.amountSpentCents,
-      amountHeldCents: b.amountHeldCents,
-      amountCreditedCents: b.amountCreditedCents,
+      amountAllocatedCents: allocated,
+      amountSpentCents: spent,
+      amountHeldCents: held,
+      amountCreditedCents: credited,
       remainingCents,
-      baselineBudgetCents: b.baselineBudgetCents,
-      period: b.period,
+      baselineBudgetCents: b.baselineBudgetCents || 0,
+      period: b.period || currentMonth,
     })
   } catch (e: any) {
     logError(e, 'BUDGETS_GET')
@@ -211,9 +281,13 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
     }
 
-    const { branchId, amountAllocatedCents, setAbsolute, type = "addon" } = body
-
-    // Validate required fields
+    const { branchId, amountAllocatedCents, setAbsolute, resetAddons, type = "addon" } = body as {
+      branchId: number;
+      amountAllocatedCents: number;
+      type?: "addon" | "monthly";
+      setAbsolute?: boolean;
+      resetAddons?: boolean;
+    }
     if (!branchId) {
       return NextResponse.json({ error: "branchId is required" }, { status: 400 })
     }
@@ -317,138 +391,110 @@ export async function PUT(req: NextRequest) {
       })
     }
 
-    // Default 'addon' logic (current month only)
-    if (budget) {
-      const oldAmount = budget.amountAllocatedCents
-      let newAmount: number
+    // Default 'addon' or 'adjustment' logic
+    let newAllocated: number
+    let newCredited: number
+    const oldAmount = budget?.amountAllocatedCents ?? branch.baselineBudgetCents ?? 0
+    const oldCredited = budget?.amountCreditedCents ?? 0
 
-      if (setAbsolute) {
-        // Set to absolute value (allows resetting to 0 or any specific amount)
-        newAmount = amountAllocatedCents
-
-        // Prevent negative budgets
-        if (newAmount < 0) {
-          return NextResponse.json({
-            error: `Budget cannot be negative. Attempted value: ${(amountAllocatedCents / 100).toFixed(2)} PKR`
-          }, { status: 400 })
-        }
-      } else {
-        // ADD to existing budget (default behavior for backward compatibility)
-        newAmount = oldAmount + amountAllocatedCents
-
-        // Prevent negative budgets
-        if (newAmount < 0) {
-          return NextResponse.json({
-            error: `Cannot reduce budget below zero. Current: ${(oldAmount / 100).toFixed(2)} PKR, Attempted reduction: ${(Math.abs(amountAllocatedCents) / 100).toFixed(2)} PKR`
-          }, { status: 400 })
-        }
-      }
-
-      // Prepare update object
-      const updateData: any = {
-        amountAllocatedCents: newAmount,
-        updatedAt: new Date(),
-      }
-
-      console.log(`[BUDGETS] Processing PUT request for branchId: ${branchId}, amount: ${amountAllocatedCents / 100} PKR, setAbsolute: ${setAbsolute}, type: ${type}`)
-
-      const isReset = setAbsolute && amountAllocatedCents === 0
-
-      if (isReset) {
-        console.log(`[BUDGETS] DEBUG: Deleting budget record. Branch: ${branchId}, Period: ${currentMonth}`)
-        const result = await db.delete(budgets)
-          .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
-        console.log(`[BUDGETS] Successfully deleted budget record for branch: ${branchId}. Result:`, result)
-      } else {
-        console.log(`[BUDGETS] DEBUG: Updating budget. Branch: ${branchId}, Period: ${currentMonth}, New Amount: ${newAmount / 100} PKR`)
-        await db.update(budgets)
-          .set(updateData)
-          .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
-        console.log(`[BUDGETS] Successfully updated budget record for branch: ${branchId}`)
-      }
-
-      // Log action
-      try {
-        await db.insert(auditLogs).values({
-          userId,
-          organizationId: branch.organizationId,
-          action: setAbsolute ? "SET_BUDGET_ALLOCATION" : "UPDATE_BUDGET_ALLOCATION",
-          entity: "BUDGET",
-          entityId: String(branchId),
-          metadata: {
-            branchName: branch.name,
-            period: currentMonth,
-            oldAmount: oldAmount / 100,
-            ...(setAbsolute
-              ? { newAmount: newAmount / 100, wasReset: isReset }
-              : { addedAmount: amountAllocatedCents / 100, newAmount: newAmount / 100 }
-            ),
-          },
-        })
-      } catch (auditError) {
-        // Log but don't fail the request
-        logError(auditError, 'BUDGETS_AUDIT_LOG')
-      }
-
-      return NextResponse.json({
-        message: setAbsolute ? (isReset ? "Budget emptied successfully" : "Budget set successfully") : "Budget updated successfully",
-        budget: {
-          branchId,
-          branchName: branch.name,
-          period: currentMonth,
-          oldAmount: oldAmount / 100,
-          newAmount: newAmount / 100,
-          wasReset: isReset
-        }
-      })
+    if (type === "addon") {
+      newAllocated = oldAmount
+      newCredited = resetAddons ? 0 : oldCredited + amountAllocatedCents
+    } else if (setAbsolute) {
+      newAllocated = amountAllocatedCents
+      newCredited = resetAddons ? 0 : oldCredited
     } else {
-      // Create new budget record for current period
-      // Cannot create with negative initial allocation
-      if (amountAllocatedCents < 0) {
-        return NextResponse.json({
-          error: "Cannot create budget with negative allocation"
-        }, { status: 400 })
-      }
+      newAllocated = oldAmount + amountAllocatedCents
+      newCredited = resetAddons ? 0 : oldCredited
+    }
 
-      await db.insert(budgets).values({
+    // SYNC: Also update the permanent branch baseline if we are setting an absolute value (e.g. Emptying/Wiping)
+    if (setAbsolute) {
+      await db.update(branches)
+        .set({
+          baselineBudgetCents: newAllocated,
+          updatedAt: new Date(),
+        })
+        .where(eq(branches.id, branchId))
+    }
+
+    // Prevent negative budgets
+    if (newAllocated < 0) {
+      return NextResponse.json({
+        error: `Base budget cannot be negative. Attempted value: ${(newAllocated / 100).toFixed(2)} PKR`
+      }, { status: 400 })
+    }
+
+    console.log(`[BUDGETS] Processing PUT request for branchId: ${branchId}, amount: ${amountAllocatedCents / 100} PKR, type: ${type}`)
+
+    // Use UPSERT for maximum reliability
+    const upsertResult = await db.insert(budgets)
+      .values({
         organizationId: branch.organizationId,
         branchId,
         period: currentMonth,
-        amountAllocatedCents,
-        amountSpentCents: 0,
-        amountHeldCents: 0,
-        amountCreditedCents: 0,
+        amountAllocatedCents: newAllocated,
+        amountCreditedCents: newCredited,
+        amountSpentCents: budget?.amountSpentCents ?? 0,
+        amountHeldCents: budget?.amountHeldCents ?? 0,
       })
-
-      // Log action
-      try {
-        await db.insert(auditLogs).values({
-          userId,
-          organizationId: branch.organizationId,
-          action: "CREATE_BUDGET_ALLOCATION",
-          entity: "BUDGET",
-          entityId: String(branchId),
-          metadata: {
-            branchName: branch.name,
-            amount: amountAllocatedCents / 100,
-            period: currentMonth,
-          },
-        })
-      } catch (auditError) {
-        // Log but don't fail the request
-        logError(auditError, 'BUDGETS_AUDIT_LOG')
-      }
-
-      return NextResponse.json({
-        message: "Budget created successfully",
-        budget: {
-          branchId,
-          branchName: branch.name,
-          period: currentMonth,
-          amount: amountAllocatedCents / 100
+      .onConflictDoUpdate({
+        target: [budgets.branchId, budgets.period],
+        set: {
+          amountAllocatedCents: newAllocated,
+          amountCreditedCents: newCredited,
+          updatedAt: new Date(),
         }
       })
+      .returning()
+
+    const finalRecord = upsertResult[0]
+
+    // Record addon transaction if needed
+    if (type === "addon" && finalRecord) {
+      await db.insert(budgetAddons).values({
+        budgetId: finalRecord.id,
+        amountCents: amountAllocatedCents,
+        reason: body.reason || "Monthly Add-on Credit",
+        createdByUserId: userId,
+      })
     }
+
+    console.log(`[BUDGETS] Successfully upserted budget record for branch: ${branchId}`)
+
+    // Log action
+    try {
+      await db.insert(auditLogs).values({
+        userId,
+        organizationId: branch.organizationId,
+        action: setAbsolute ? "SET_BUDGET_ALLOCATION" : (type === "addon" ? "ADD_CREDIT" : "UPDATE_BUDGET_ALLOCATION"),
+        entity: "BUDGET",
+        entityId: String(branchId),
+        metadata: {
+          branchName: branch.name,
+          period: currentMonth,
+          oldAmount: oldAmount / 100,
+          newAmount: newAllocated / 100,
+          addedAmount: type === "addon" ? amountAllocatedCents / 100 : undefined,
+          wasReset: newAllocated === 0
+        },
+      })
+    } catch (auditError) {
+      logError(auditError, 'BUDGETS_AUDIT_LOG')
+    }
+
+    return NextResponse.json({
+      message: type === "addon" ? "Add-on credited successfully" : (newAllocated === 0 ? "Budget emptied successfully" : "Budget updated successfully"),
+      budget: {
+        branchId,
+        branchName: branch.name,
+        period: currentMonth,
+        oldAmount: oldAmount / 100,
+        newAmount: newAllocated / 100,
+        newCredited: newCredited / 100,
+        wasReset: newAllocated === 0
+      }
+    })
   } catch (e: any) {
     logError(e, 'BUDGETS_PUT')
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -35,7 +35,7 @@ import { Badge } from "@/components/ui/badge"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import type { DateRange } from "@/lib/hooks/use-sales-performance"
 
-export type DrillDownType = "REVENUE" | "REJECTED" | "FULFILLED" | "ORDERS" | "REFUNDED"
+export type DrillDownType = "REVENUE" | "REJECTED" | "FULFILLED" | "ORDERS" | "REFUNDED" | "PENDING" | "APPROVED" | "PARTIAL"
 
 interface DrillDownSheetProps {
     isOpen: boolean
@@ -108,6 +108,39 @@ const TYPE_CONFIG = {
             { key: "tid", label: "Order ID" },
             { key: "refundAmount", label: "Refund Amount", isCurrency: true },
             { key: "grossValue", label: "Original Value", isCurrency: true },
+        ]
+    },
+    PENDING: {
+        title: "Pending Orders",
+        icon: Activity,
+        color: "text-orange-600 bg-orange-50 dark:bg-orange-900/20",
+        columns: [
+            { key: "tid", label: "Order ID" },
+            { key: "customerName", label: "Customer" },
+            { key: "grossValue", label: "Amount", isCurrency: true },
+            { key: "timeElapsed", label: "Waiting Time" },
+        ]
+    },
+    APPROVED: {
+        title: "Approved Orders",
+        icon: CheckCircle2,
+        color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
+        columns: [
+            { key: "tid", label: "Order ID" },
+            { key: "customerName", label: "Customer" },
+            { key: "grossValue", label: "Amount", isCurrency: true },
+            { key: "approvedBy", label: "Approved By" },
+        ]
+    },
+    PARTIAL: {
+        title: "Partial Fulfillment Analysis",
+        icon: Package,
+        color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20",
+        columns: [
+            { key: "tid", label: "Order ID" },
+            { key: "refundAmount", label: "Refunded", isCurrency: true },
+            { key: "netValue", label: "Net Value", isCurrency: true },
+            { key: "status", label: "Status", isBadge: true },
         ]
     }
 }
@@ -321,11 +354,10 @@ export function DrillDownSheet({
                         </div>
                     </div>
 
-                    {type === "REFUNDED" && (
+                    {type === "PARTIAL" && (
                         <div className="flex gap-1 mb-4 p-1.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
                             {[
-                                { id: "all", label: "All Refunds" },
-                                { id: "full", label: "Fully Refunded" },
+                                { id: "all", label: "All Partials" },
                                 { id: "partial", label: "Partially Refunded" },
                             ].map((t) => (
                                 <button

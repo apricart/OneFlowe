@@ -42,6 +42,7 @@ type OrderDetail = {
   createdAt: string
   orderItems?: OrderItem[]
   rejectionReason?: string | null
+  approvalToken?: string | null
 }
 
 export default function HeadOfficeOrderDetailsPage() {
@@ -370,8 +371,9 @@ export default function HeadOfficeOrderDetailsPage() {
                   {buildStatusTimeline(
                     order.status,
                     order.statusAtRefund,
-                    (order.refundAmountCents || 0) > 0 && order.status.toUpperCase() !== "REFUNDED"
-                  ).map((step, index, arr) => {
+                    (order.refundAmountCents || 0) > 0 && order.status.toUpperCase() !== "REFUNDED",
+                    null // HO users shouldn't see token according to requirements
+                  ).map((step: any, index, arr) => {
                     const isLast = index === arr.length - 1
                     const isComplete = step.state === "complete"
                     const isCurrent = step.state === "current"

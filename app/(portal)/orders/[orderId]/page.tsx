@@ -3,12 +3,14 @@
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import useSWR from "swr"
+import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { formatPKR } from "@/lib/utils"
 import { buildStatusTimeline } from "@/lib/order-utils"
-import { ArrowLeft, Clock, TrendingDown, CheckCircle, RefreshCw, Package, Receipt, Ban } from "lucide-react"
+import { ArrowLeft, Clock, TrendingDown, CheckCircle, RefreshCw, Package, Receipt, Ban, Copy } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 // ... (existing imports)
 
@@ -55,6 +57,9 @@ type OrderDetail = {
 export default function SuperAdminOrderDetailsPage() {
   const params = useParams<{ orderId: string }>()
   const router = useRouter()
+  const { data: session } = useSession()
+  const { toast } = useToast()
+  const userRole = (session?.user as any)?.role
   const rawId = Array.isArray(params?.orderId) ? params?.orderId[0] : params?.orderId
   const numericId = rawId && /^\d+$/.test(rawId) ? Number(rawId) : null
 
@@ -395,8 +400,9 @@ export default function SuperAdminOrderDetailsPage() {
                   {buildStatusTimeline(
                     order.status,
                     order.statusAtRefund,
-                    (order.refundAmountCents || 0) > 0 && order.status.toUpperCase() !== "REFUNDED"
-                  ).map((step, index, arr) => {
+                    (order.refundAmountCents || 0) > 0 && order.status.toUpperCase() !== "REFUNDED",
+                    userRole === "BRANCH_ADMIN" ? order.approvalToken : null
+                  ).map((step: any, index, arr) => {
                     const isLast = index === arr.length - 1
                     const isComplete = step.state === "complete"
                     const isCurrent = step.state === "current"
@@ -436,6 +442,28 @@ export default function SuperAdminOrderDetailsPage() {
                             {isSkipped && <span className="ml-2 text-[10px] font-normal text-muted-foreground uppercase tracking-wider">(Skipped)</span>}
                           </p>
                           <p className="text-xs text-muted-foreground">{step.description}</p>
+                          {step.approvalToken && (
+                            <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 p-2">
+                              <div className="flex flex-col">
+                                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Approval Token</span>
+                                <span className="font-mono text-xs font-black text-slate-900 dark:text-white mt-0.5">{step.approvalToken}</span>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-emerald-600 dark:text-emerald-400"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(step.approvalToken)
+                                  toast({
+                                    title: "Token Copied",
+                                    description: "Approval token copied to clipboard",
+                                  })
+                                }}
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </li>
                     )

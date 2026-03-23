@@ -1,8 +1,8 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { invalidateByPrefix } from "@/lib/cache-utils"
 import { db } from "@/lib/db"
-import { branches, users, orders, branchProducts, branchInventory, employeeCredentials, suppliers, budgets, restockRequests, inventory, systemLogs, notifications, auditLogs, groups } from "@/db/schema"
-import { eq, count, and, isNull } from "drizzle-orm"
+import { branches } from "@/db/schema"
+import { eq } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 
 export async function GET(
@@ -88,97 +88,33 @@ export async function DELETE(
     const [existing] = await db.select().from(branches).where(eq(branches.id, branchId))
     if (!existing) return error("Branch not found", 404)
 
-    // Check if branch is part of a group
-    if (existing.groupId) {
-      const [group] = await db.select({ name: groups.name }).from(groups).where(eq(groups.id, existing.groupId)).limit(1)
-      return error(`Cannot delete: This branch is assigned to the group "${group?.name || existing.groupId}". Please remove the branch from the group first.`, 400)
+    // Already inactive
+    if (existing.status === 'inactive') {
+      return error("Branch is already inactive", 400)
     }
 
-    // 1. Dependency Checks - Block deletion if critical data exists
+    // Soft-delete: mark as inactive instead of hard-deleting
+    // All historical data (budgets, orders, audit logs, etc.) is preserved
+    const [updated] = await db.update(branches)
+      .set({
+        status: 'inactive',
+        updatedAt: new Date(),
+      })
+      .where(eq(branches.id, branchId))
+      .returning()
 
-    // Check for users assigned to this branch (ignore soft-deleted users)
-    const [activeUserCount] = await db.select({ val: count() }).from(users).where(
-      and(
-        eq(users.branchId, branchId),
-        eq(users.isActive, true),
-        isNull(users.deletedAt)
-      )
-    )
-
-    if (activeUserCount.val > 0) {
-      return error(`Cannot delete: This branch has ${activeUserCount.val} active user(s) assigned. Please remove or deactivate every active user before deleting the branch.`, 400)
-    }
-
-    // Check for orders
-    const [orderCount] = await db.select({ val: count() }).from(orders).where(eq(orders.branchId, branchId))
-    if (orderCount.val > 0) {
-      return error(`Cannot delete: Historical order records were found. Branches with financial transaction history cannot be deleted.`, 400)
-    }
-
-    // Check for employee credentials
-    const [credsCount] = await db.select({ val: count() }).from(employeeCredentials).where(eq(employeeCredentials.branchId, branchId))
-    if (credsCount.val > 0 && existing.status === 'active') {
-      return error(`Cannot delete: This branch is active and has employee portal credentials. Please deactivate the branch or remove them first.`, 400)
-    }
-
-    // Check for inventory/products assigned
-    const [invCount] = await db.select({ val: count() }).from(branchInventory).where(eq(branchInventory.branchId, branchId))
-    if (invCount.val > 0 && existing.status === 'active') {
-      return error(`Cannot delete: This branch is active and has assigned inventory. Please deactivate the branch or unassign products first.`, 400)
-    }
-
-    const [prodCount] = await db.select({ val: count() }).from(branchProducts).where(eq(branchProducts.branchId, branchId))
-    if (prodCount.val > 0 && existing.status === 'active') {
-      return error(`Cannot delete: This branch is active and has product settings. Please deactivate the branch or unassign products first.`, 400)
-    }
-
-    // Check for suppliers
-    const [supplierCount] = await db.select({ val: count() }).from(suppliers).where(eq(suppliers.branchId, branchId))
-    if (supplierCount.val > 0 && existing.status === 'active') {
-      return error(`Cannot delete: This branch is active and has ${supplierCount.val} supplier record(s). Please deactivate the branch first.`, 400)
-    }
-
-    // Check for restock requests
-    const [restockCount] = await db.select({ val: count() }).from(restockRequests).where(eq(restockRequests.branchId, branchId))
-    if (restockCount.val > 0 && existing.status === 'active') {
-      return error(`Cannot delete: This branch is active and has restock requests. Please deactivate the branch first.`, 400)
-    }
-
-    // 2. Cascade Deletions - Clean up related data that can be safely deleted
-    // (We only reach here if it's inactive OR no critical data exists)
-
-    // Auto-cleanup users assignments (set to null)
-    await db.update(users).set({ branchId: null }).where(eq(users.branchId, branchId))
-
-    // Clear admin user ID from branch to avoid any lingering refs
-    await db.update(branches).set({ adminUserId: null }).where(eq(branches.id, branchId))
-
-    await db.delete(employeeCredentials).where(eq(employeeCredentials.branchId, branchId))
-    await db.delete(branchInventory).where(eq(branchInventory.branchId, branchId))
-    await db.delete(branchProducts).where(eq(branchProducts.branchId, branchId))
-    await db.delete(suppliers).where(eq(suppliers.branchId, branchId))
-    await db.delete(restockRequests).where(eq(restockRequests.branchId, branchId))
-    // Delete budget records (budgets are not critical data and can be recreated)
-    await db.delete(budgets).where(eq(budgets.branchId, branchId))
-
-    // Delete system logs, audit logs, and notifications (historical/non-critical data)
-    await db.delete(systemLogs).where(eq(systemLogs.branchId, branchId))
-    await db.delete(auditLogs).where(eq(auditLogs.branchId, branchId))
-    await db.delete(notifications).where(eq(notifications.branchId, branchId))
-
-    // Delete legacy inventory records (if any exist - this is an old table)
-    await db.delete(inventory).where(eq(inventory.branchId, branchId))
-
-    // 3. Delete the branch
-    await db.delete(branches).where(eq(branches.id, branchId))
-
-    // 4. Invalidate caches
+    // Invalidate caches
     await invalidateByPrefix('branches')
 
-    return ok({ ok: true })
+    return ok({
+      ok: true,
+      message: "Branch deactivated successfully. All historical data has been preserved.",
+      item: updated
+    })
 
   } catch (e: any) {
     console.error("Delete branch failed:", e)
-    return error("Failed to delete branch", 500)
+    return error("Failed to deactivate branch", 500)
   }
 }
+

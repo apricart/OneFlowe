@@ -1,0 +1,30 @@
+{
+  "stats": [
+    {
+      "status": "CANCELLED",
+      "count": 3
+    },
+    {
+      "status": "fulfilled",
+      "count": 17
+    },
+    {
+      "status": "FULFILLED",
+      "count": 62
+    },
+    {
+      "status": "REFUNDED",
+      "count": 51
+    },
+    {
+      "status": "rejected",
+      "count": 9
+    },
+    {
+      "status": "REJECTED",
+      "count": 5
+    }
+  ],
+  "total": 147,
+  "timestamp": "2026-03-23T08:02:47.329Z"
+}

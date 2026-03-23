@@ -12,8 +12,10 @@ import { formatPKR } from "@/lib/utils"
 import { Search, Package, Sparkles, Plus, Edit, Trash2, Building2, AlertTriangle, Loader2 } from "lucide-react"
 import { ProductForm } from "@/components/global-inventory/product-form"
 import { useToast } from "@/hooks/use-toast"
+import { useDebounce } from "@/hooks/use-debounce"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
+const PAGE_SIZE = 50
 
 type GlobalInventoryItem = {
     id: number
@@ -36,44 +38,92 @@ type GlobalInventoryItem = {
 export default function GlobalInventoryView() {
     const router = useRouter()
     const [searchQuery, setSearchQuery] = useState("")
+    const debouncedSearch = useDebounce(searchQuery, 300)
     const [statusFilter, setStatusFilter] = useState("all")
     const [categoryFilter, setCategoryFilter] = useState("")
     const [subCategoryFilter, setSubCategoryFilter] = useState("")
+    const [page, setPage] = useState(1)
     const [dialogMode, setDialogMode] = useState<"create" | "edit" | "delete" | null>(null)
     const [selectedProduct, setSelectedProduct] = useState<GlobalInventoryItem | null>(null)
     const [isDeleting, setIsDeleting] = useState(false)
     const { toast } = useToast()
 
-    const params = new URLSearchParams()
-    if (searchQuery) params.set("search", searchQuery)
-    if (statusFilter && statusFilter !== "all") params.set("status", statusFilter)
-    if (categoryFilter) params.set("category", categoryFilter)
-    if (subCategoryFilter) params.set("subCategory", subCategoryFilter)
-
+    // Fetch ALL products once — no filter params in URL
     const { data, isLoading, mutate } = useSWR<{
         items: GlobalInventoryItem[]
         pagination: { page: number; limit: number; total: number; totalPages: number }
-    }>(`/api/v1/admin/global-inventory?${params.toString()}`, fetcher, {
-        fallbackData: { items: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0 } },
+    }>(`/api/v1/admin/global-inventory?limit=5000`, fetcher, {
+        fallbackData: { items: [], pagination: { page: 1, limit: 5000, total: 0, totalPages: 0 } },
         revalidateOnFocus: false,
+        dedupingInterval: 30000,
     })
 
     const { data: categoriesData } = useSWR<{ items: Array<{ id: number; name: string }> }>(
         "/api/v1/categories?limit=100",
         fetcher,
-        { fallbackData: { items: [] } }
+        { fallbackData: { items: [] }, revalidateOnFocus: false, dedupingInterval: 60000 }
     )
 
     const { data: subcategoriesData } = useSWR<{ items: Array<{ id: number; name: string }> }>(
         categoryFilter ? `/api/v1/subcategories?categoryId=${categoryFilter}&limit=100` : null,
         fetcher,
-        { fallbackData: { items: [] } }
+        { fallbackData: { items: [] }, revalidateOnFocus: false, dedupingInterval: 60000 }
     )
 
-    const products = data?.items ?? []
-    const totalProducts = data?.pagination.total ?? 0
-    const activeProducts = useMemo(() => products.filter((p) => p.status === "active").length, [products])
-    const totalAssignments = useMemo(() => products.reduce((sum, p) => sum + p.assignedOrganizations, 0), [products])
+    const allProducts = data?.items ?? []
+
+    // Client-side filtering — instant, no API calls
+    const filteredProducts = useMemo(() => {
+        let filtered = allProducts
+
+        // Status filter
+        if (statusFilter && statusFilter !== "all") {
+            filtered = filtered.filter((p) => p.status === statusFilter)
+        }
+
+        // Category filter (parent category)
+        if (categoryFilter) {
+            const catId = parseInt(categoryFilter)
+            // Find subcategory IDs belonging to this parent
+            const subCatIds = (subcategoriesData?.items ?? []).map(sc => sc.id)
+            if (subCatIds.length > 0) {
+                filtered = filtered.filter((p) => p.categoryId && subCatIds.includes(p.categoryId))
+            }
+        }
+
+        // Subcategory filter
+        if (subCategoryFilter) {
+            const subCatId = parseInt(subCategoryFilter)
+            filtered = filtered.filter((p) => p.categoryId === subCatId)
+        }
+
+        // Debounced search filter
+        if (debouncedSearch) {
+            const q = debouncedSearch.toLowerCase()
+            filtered = filtered.filter(
+                (p) =>
+                    p.name.toLowerCase().includes(q) ||
+                    p.productCode.toLowerCase().includes(q) ||
+                    (p.description?.toLowerCase().includes(q))
+            )
+        }
+
+        return filtered
+    }, [allProducts, statusFilter, categoryFilter, subCategoryFilter, debouncedSearch, subcategoriesData?.items])
+
+    // Reset page when filters change
+    useMemo(() => { setPage(1) }, [statusFilter, categoryFilter, subCategoryFilter, debouncedSearch])
+
+    // Paginate the filtered results
+    const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE))
+    const paginatedProducts = useMemo(() => {
+        const start = (page - 1) * PAGE_SIZE
+        return filteredProducts.slice(start, start + PAGE_SIZE)
+    }, [filteredProducts, page])
+
+    const totalProducts = allProducts.length
+    const activeProducts = useMemo(() => allProducts.filter((p) => p.status === "active").length, [allProducts])
+    const totalAssignments = useMemo(() => allProducts.reduce((sum, p) => sum + p.assignedOrganizations, 0), [allProducts])
 
     const handleDelete = async () => {
         if (!selectedProduct) return
@@ -222,14 +272,16 @@ export default function GlobalInventoryView() {
                                             Loading global inventory…
                                         </TableCell>
                                     </TableRow>
-                                ) : products.length === 0 ? (
+                                ) : paginatedProducts.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-                                            No products found. Create your first global product to get started.
+                                            {filteredProducts.length === 0 && allProducts.length > 0
+                                                ? "No products match your filters."
+                                                : "No products found. Create your first global product to get started."}
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    products.map((product) => (
+                                    paginatedProducts.map((product) => (
                                         <TableRow key={product.id} className="hover:bg-muted/40">
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
@@ -300,6 +352,34 @@ export default function GlobalInventoryView() {
                                 )}
                             </TableBody>
                         </Table>
+                    </div>
+                    {/* Client-side pagination */}
+                    <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+                        <span>
+                            Showing{" "}
+                            <span className="font-medium text-foreground">
+                                {filteredProducts.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
+                                –
+                                {Math.min(filteredProducts.length, page * PAGE_SIZE)}
+                            </span>{" "}
+                            of <span className="font-medium text-foreground">{filteredProducts.length}</span> products
+                        </span>
+                        <div className="inline-flex items-center gap-2">
+                            <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>
+                                Prev
+                            </Button>
+                            <span className="text-xs">
+                                Page <span className="font-medium text-foreground">{page}</span> / {totalPages}
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={page === totalPages || filteredProducts.length === 0}
+                                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                            >
+                                Next
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>

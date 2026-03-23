@@ -132,7 +132,9 @@ export default function OrderPortalPage() {
   const { data: inventoryData, mutate: mutateBranchInventory, error: inventoryError } = useSWR<any>(branchInventoryUrl, fetcher, {
     refreshInterval: 5000, // Auto-refresh every 5s so admin changes appear quickly
   })
-  const { data: budget, mutate: mutateBudget } = useSWR<any>(budgetsUrl, fetcher)
+  const { data: budget, mutate: mutateBudget } = useSWR<any>(budgetsUrl, fetcher, {
+    refreshInterval: 5000,
+  })
   const { data: ordersData, mutate: mutateOrders } = useSWR<any>("/api/v1/orders", fetcher)
 
   // Fetch full details for selected order to get items
@@ -231,8 +233,9 @@ export default function OrderPortalPage() {
 
   const cartTotal = cart.reduce((sum, item) => sum + item.priceCents * item.quantity, 0)
   const remainingBudget = budget?.remainingCents || 0
+  const totalBudgetLimit = (budget?.amountAllocatedCents || 0) + (budget?.amountCreditedCents || 0)
   const canCheckout = cartTotal <= remainingBudget && cart.length > 0
-  const rawBudgetPercent = ((((budget?.amountAllocatedCents || 0) - remainingBudget) / (budget?.amountAllocatedCents || 1)) * 100)
+  const rawBudgetPercent = ((((totalBudgetLimit || 0) - remainingBudget) / (totalBudgetLimit || 1)) * 100)
   const budgetPercent = Math.min(100, Math.max(0, rawBudgetPercent || 0))
   const isLoadingInventory = !inventoryData && !inventoryError
 
@@ -332,9 +335,8 @@ export default function OrderPortalPage() {
       }
 
       toast({
-        title: "Order Placed & Approved",
-        description: `TID: ${json.order?.tid}. IMPORTANT: Save this Approval Token to give to Super Admin for fulfillment: ${json.approvalToken}`,
-        duration: 15000 // Show it longer so they can write it down
+        title: "Order Submitted",
+        description: `TID: ${json.order?.tid}. Your order is now pending approval by the branch admin.`,
       })
       setCart([])
       setShowCheckout(false)
@@ -455,7 +457,7 @@ export default function OrderPortalPage() {
                     PKR {(remainingBudget / 100).toFixed(2)}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    of PKR {((budget?.amountAllocatedCents || 0) / 100).toFixed(2)}
+                    of PKR {(totalBudgetLimit / 100).toFixed(2)}
                   </p>
                 </div>
                 <div className="mt-1 h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">

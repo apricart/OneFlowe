@@ -69,6 +69,7 @@ interface OrderItem {
   hasRefundRequests?: number
   rejectionReason?: string | null
   itemNames?: string | null
+  approvalToken?: string | null
 }
 
 export default function OrdersManagementPage() {
@@ -546,12 +547,12 @@ export default function OrdersManagementPage() {
                         <th className="pb-4 pr-2 font-medium w-[12%]">Org</th>
                       )}
                       <th className="pb-4 pr-2 font-medium w-[14%]">Branch</th>
-                      <th className="pb-4 pr-2 font-medium w-[10%]">Stage</th>
+                      <th className="pb-4 pr-2 font-medium w-[5%]">Stage</th>
                       <th className="pb-4 pr-2 font-medium w-[12%]">Status</th>
                       <th className="pb-4 pr-2 font-medium w-[10%]">Refund</th>
                       <th className="pb-4 pr-2 font-medium w-[10%] text-right">Amount</th>
                       <th className="pb-4 pr-2 font-medium w-[8%] text-right">Date</th>
-                      <th className="pb-4 font-medium w-[10%] text-right">Actions</th>
+                      <th className="pb-4 font-medium w-[15%] text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
@@ -616,6 +617,14 @@ export default function OrdersManagementPage() {
                                 {order.rejectionReason}
                               </div>
                             )}
+                            {isBranchAdmin && order.approvalToken && (
+                              <div className="mt-1.5 flex items-center gap-1.5">
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Token:</span>
+                                <code className="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/50">
+                                  {order.approvalToken}
+                                </code>
+                              </div>
+                            )}
                           </td>
                           <td className="py-4 pr-2">
                             <div className="flex flex-wrap gap-1">
@@ -652,8 +661,8 @@ export default function OrdersManagementPage() {
                               {new Date(order.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                             </p>
                           </td>
-                          <td className="py-4 text-right">
-                            <div className="inline-flex items-center gap-1.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-300">
+                          <td className="py-2 text-right">
+                            <div className="flex flex-wrap justify-end items-center gap-1.5 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-300">
                               <ReceiptIconButton orderId={order.id} />
 
                               <Button

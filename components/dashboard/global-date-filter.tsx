@@ -55,7 +55,7 @@ export const monthPresets: { id: MonthPreset; label: string }[] = [
     { id: "dec", label: "December" },
 ]
 
-export const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
+
 
 export function getPresetLabel(preset: FilterPreset, range?: DateRange | null): string {
     if (preset === "custom" && range) {
@@ -234,6 +234,10 @@ export function GlobalDateFilter({
     const selectedLabel = (months.length > 0 || years.length > 0) 
         ? "Custom Arrays" 
         : getPresetLabel(activePreset, value)
+
+    const currentYear = new Date().getFullYear()
+    const startYear = earliestDate ? earliestDate.getFullYear() : currentYear
+    const dynamicYears = Array.from({ length: currentYear - startYear + 1 }, (_, i) => currentYear - i)
 
     return (
         <div className={cn("flex items-center gap-2", className)}>

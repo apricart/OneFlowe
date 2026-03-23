@@ -68,6 +68,12 @@ export function SuperAdminDashboard() {
     activePreset === "all" ? "yearly" : undefined
   )
 
+  const { data: pendingData } = useSalesPerformance(
+    organizationId, branchId,
+    selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
+    undefined, dateRange, "PENDING", compare, compareRange
+  )
+
   const { data: fulfilledData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
@@ -100,6 +106,12 @@ export function SuperAdminDashboard() {
     activePreset === "all" ? "yearly" : undefined
   )
 
+  const { data: partialData } = useSalesPerformance(
+    organizationId, branchId,
+    selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
+    undefined, dateRange, "PARTIAL", compare, compareRange
+  )
+
 
   const handleDateChange = useCallback((
     range: DateRange | null, 
@@ -124,7 +136,9 @@ export function SuperAdminDashboard() {
 
   const totalRevenue = perfData?.totalNetSales ?? perfData?.totalSales ?? 0
   const totalOrders = perfData?.totalOrders ?? 0
+  const pendingCount = pendingData?.totalOrders ?? 0
   const fulfilledCount = fulfilledData?.totalOrders ?? 0
+  const partialCount = partialData?.totalOrders ?? 0
   const refundedCount = refundedData?.totalOrders || 0
   const rejectedCount = rejectedData?.totalOrders || 0
   const approvedCount = approvedData?.totalOrders || 0
@@ -152,9 +166,17 @@ export function SuperAdminDashboard() {
     totalOrders, perfData?.comparison?.totalOrders
   ), [buildTrend, totalOrders, perfData?.comparison])
 
+  const pendingTrend = useMemo(() => buildTrend(
+    pendingCount, perfData?.comparison?.pendingCount
+  ), [buildTrend, pendingCount, perfData?.comparison])
+
   const fulfilledTrend = useMemo(() => buildTrend(
     fulfilledCount, perfData?.comparison?.fulfilledCount
   ), [buildTrend, fulfilledCount, perfData?.comparison])
+
+  const partialTrend = useMemo(() => buildTrend(
+    partialCount, perfData?.comparison?.partialCount
+  ), [buildTrend, partialCount, perfData?.comparison])
 
   const refundedTrend = useMemo(() => buildTrend(
     refundedCount, perfData?.comparison?.refundedCount
@@ -202,7 +224,7 @@ export function SuperAdminDashboard() {
       </div>
 
       {/* ━━━ KPI Cards ━━━ */}
-      <div className="relative z-10 grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="relative z-10 grid gap-3 grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
         <BankingKPICard
           icon={TrendingUp} title="Revenue"
           value={formatPKR(totalRevenue, { maximumFractionDigits: 0 })}
@@ -226,14 +248,46 @@ export function SuperAdminDashboard() {
           comparisonLabel="Period Comparison"
         />
         <BankingKPICard
+          icon={Activity} title="Pending"
+          value={pendingCount.toLocaleString()}
+          subtitle={getPresetLabel(activePreset, dateRange)}
+          gradient="from-amber-400 to-orange-500" iconBg="text-amber-600 bg-amber-600" delay={75}
+          onClick={() => handleKPIOpen("PENDING" as any)} // Cast if PENDING is not in DrillDownType yet
+          trend={pendingTrend?.type as "up" | "down" | undefined}
+          trendValue={pendingTrend?.value}
+          comparisonValue={pendingTrend?.label}
+          comparisonLabel="Period Comparison"
+        />
+        <BankingKPICard
+          icon={CheckCircle2} title="Approved"
+          value={approvedCount.toLocaleString()}
+          subtitle={getPresetLabel(activePreset, dateRange)}
+          gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={100}
+          trend={approvedTrend?.type as "up" | "down" | undefined}
+          trendValue={approvedTrend?.value}
+          comparisonValue={approvedTrend?.label}
+          comparisonLabel="Period Comparison"
+        />
+        <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
           value={fulfilledCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
-          gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={100}
+          gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={125}
           onClick={() => handleKPIOpen("FULFILLED")}
           trend={fulfilledTrend?.type as "up" | "down" | undefined}
           trendValue={fulfilledTrend?.value}
           comparisonValue={fulfilledTrend?.label}
+          comparisonLabel="Period Comparison"
+        />
+        <BankingKPICard
+          icon={Package} title="Partial Fulfilled"
+          value={partialCount.toLocaleString()}
+          subtitle={getPresetLabel(activePreset, dateRange)}
+          gradient="from-indigo-500 to-purple-600" iconBg="text-indigo-600 bg-indigo-600" delay={135}
+          onClick={() => handleKPIOpen("PARTIAL" as any)}
+          trend={partialTrend?.type as "up" | "down" | undefined}
+          trendValue={partialTrend?.value}
+          comparisonValue={partialTrend?.label}
           comparisonLabel="Period Comparison"
         />
         <BankingKPICard
@@ -256,16 +310,6 @@ export function SuperAdminDashboard() {
           trend={rejectedTrend?.type as "up" | "down" | undefined}
           trendValue={rejectedTrend?.value}
           comparisonValue={rejectedTrend?.label}
-          comparisonLabel="Period Comparison"
-        />
-        <BankingKPICard
-          icon={CheckCircle2} title="Approved"
-          value={approvedCount.toLocaleString()}
-          subtitle={getPresetLabel(activePreset, dateRange)}
-          gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={190}
-          trend={approvedTrend?.type as "up" | "down" | undefined}
-          trendValue={approvedTrend?.value}
-          comparisonValue={approvedTrend?.label}
           comparisonLabel="Period Comparison"
         />
 

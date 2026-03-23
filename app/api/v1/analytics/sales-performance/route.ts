@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server"
-import { and, eq, gte, lte, sql, or, inArray, desc } from "drizzle-orm"
+import { and, eq, gte, lte, sql, or, inArray, desc, gt } from "drizzle-orm"
 import { requireApiRole, ok } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders, branches, organizations } from "@/db/schema"
@@ -134,6 +134,22 @@ export async function GET(req: NextRequest) {
         if (upperStatus && upperStatus !== "ALL") {
             if (upperStatus === "REJECTED") {
                 conditions.push(or(eq(sql`UPPER(${orders.status})`, "REJECTED"), eq(sql`UPPER(${orders.status})`, "CANCELLED")))
+            } else if (upperStatus === "PARTIAL") {
+                // PARTIAL = (Status is FULFILLED AND has refunds) OR (Status is actually PARTIAL)
+                conditions.push(
+                    or(
+                        and(eq(sql`UPPER(${orders.status})`, "FULFILLED"), gt(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0)),
+                        inArray(sql`UPPER(${orders.status})`, ["PARTIAL", "PARTIALLY_FULFILLED"])
+                    )
+                )
+            } else if (upperStatus === "FULFILLED") {
+                // FULFILLED (Fully) = Status is FULFILLED AND has NO refunds
+                conditions.push(
+                    and(
+                        eq(sql`UPPER(${orders.status})`, "FULFILLED"),
+                        eq(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0)
+                    )
+                )
             } else {
                 conditions.push(eq(sql`UPPER(${orders.status})`, upperStatus))
             }
@@ -371,11 +387,13 @@ export async function GET(req: NextRequest) {
             // Aggregated counts for all statuses (for KPI comparison)
             const compAllWhere = compAllStatusConditions.length > 0 ? and(...compAllStatusConditions) : undefined
             const compStatusCounts = await db.select({
-                fulfilledCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END), 0)`.mapWith(Number),
+                fulfilledCount: metricExpressions.fulfilledCount,
+                partialCount: metricExpressions.partialCount,
                 fulfilledNetSales: metricExpressions.revenue,
-                refundedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END), 0)`.mapWith(Number),
-                rejectedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END), 0)`.mapWith(Number),
-                approvedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' THEN 1 END), 0)`.mapWith(Number),
+                refundedCount: metricExpressions.refundedCount,
+                rejectedCount: metricExpressions.rejectedCount,
+                approvedCount: metricExpressions.approvedCount,
+                pendingCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'PENDING' THEN 1 END), 0)`.mapWith(Number),
             })
                 .from(orders)
                 .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -386,10 +404,12 @@ export async function GET(req: NextRequest) {
                 totalNetSales: compTotalNetSales,
                 totalOrders: compTotalOrders,
                 fulfilledCount: compStatusCounts[0]?.fulfilledCount || 0,
+                partialCount: compStatusCounts[0]?.partialCount || 0,
                 fulfilledNetSales: (compStatusCounts[0]?.fulfilledNetSales || 0) / 100,
                 refundedCount: compStatusCounts[0]?.refundedCount || 0,
                 rejectedCount: compStatusCounts[0]?.rejectedCount || 0,
                 approvedCount: compStatusCounts[0]?.approvedCount || 0,
+                pendingCount: compStatusCounts[0]?.pendingCount || 0,
                 seriesData: compSeriesData
             }
         }

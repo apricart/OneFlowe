@@ -7,6 +7,7 @@ import { eq, and, like, ilike, or, desc, sql, inArray, isNull, ne, type SQL } fr
 import { alias } from "drizzle-orm/pg-core"
 import { cascadeGlobalProductDeletion, cascadeGlobalProductStatusChange, cascadeGlobalProductFieldUpdate } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
+import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 // Increase body size limit to handle Base64-encoded product images
 export const config = {
@@ -102,6 +103,12 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
+
+    const cacheKey = scopedCacheKey('global-inv', { role: 'SUPER_ADMIN' }, {
+      search, category, subCategory: searchParams.get("subCategory") || '', status, page, limit
+    })
+
+    return getCached(cacheKey, async () => {
 
     const conditions: SQL[] = [
       isNull(globalProducts.deletedAt)
@@ -224,7 +231,7 @@ export async function GET(req: NextRequest) {
       assignedOrganizations: assignmentMap.get(item.id)?.assignedOrganizations || 0,
     }))
 
-    return NextResponse.json({
+    return {
       items: itemsWithAssignments,
       pagination: {
         page,
@@ -232,7 +239,8 @@ export async function GET(req: NextRequest) {
         total,
         totalPages: Math.ceil(total / limit)
       }
-    })
+    }
+    }, 30).then(data => NextResponse.json(data))
   } catch (error: any) {
     console.error("Error fetching global products:", error)
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -318,6 +326,9 @@ export async function POST(req: NextRequest) {
       entityId: newProduct.id.toString(),
       metadata: { productCode, name, basePrice },
     })
+
+    // Invalidate global inventory cache
+    await invalidateByPrefix('global-inv')
 
     return NextResponse.json({
       message: "Product created successfully",
@@ -493,6 +504,9 @@ export async function PUT(req: NextRequest) {
       metadata: updateData,
     })
 
+    // Invalidate global inventory cache
+    await invalidateByPrefix('global-inv')
+
     return NextResponse.json({
       message: "Product updated successfully",
       product: updatedProduct
@@ -601,6 +615,9 @@ export async function DELETE(req: NextRequest) {
         }
       },
     })
+
+    // Invalidate global inventory cache
+    await invalidateByPrefix('global-inv')
 
     return NextResponse.json({
       message: "Product deleted successfully",

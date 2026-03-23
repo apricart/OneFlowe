@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { budgets, orders, orderItems, branches, globalProducts, categories } from "@/db/schema"
-import { and, eq, gte, lte, inArray, sql, desc } from "drizzle-orm"
+import { and, eq, gte, lte, inArray, sql, desc, asc, isNotNull } from "drizzle-orm"
 import { Role } from "@/lib/rbac"
 
 export async function GET(req: NextRequest) {
@@ -52,30 +52,94 @@ export async function GET(req: NextRequest) {
         }
 
         // 2. Date/Period parsing
-        let startDate = startDateParam ? new Date(startDateParam) : new Date("2020-01-01")
-        let endDate = endDateParam ? new Date(endDateParam) : new Date()
+        let startDate: Date;
+        if (startDateParam) {
+            startDate = new Date(startDateParam)
+        } else {
+            // Default: "All Time" should start from the first budget record in the system
+            const firstBudget = await db.select({ period: budgets.period })
+                .from(budgets)
+                .where(
+                    allowedOrgId 
+                        ? eq(budgets.organizationId, allowedOrgId)
+                        : isNotNull(budgets.organizationId)
+                )
+                .orderBy(asc(budgets.period))
+                .limit(1)
+            
+            if (firstBudget.length > 0) {
+                // period is 'YYYY-MM'
+                startDate = new Date(firstBudget[0].period + "-01")
+            } else {
+                startDate = new Date()
+                startDate.setDate(1)
+            }
+        }
+        const endDate = endDateParam ? new Date(endDateParam) : new Date()
 
         startDate.setHours(0, 0, 0, 0)
         endDate.setHours(23, 59, 59, 999)
 
         // Get unique YYYY-MM periods from the date range to query budgets table
         const periods = new Set<string>()
-        let curr = new Date(startDate)
-        while (curr <= endDate) {
-            periods.add(curr.toISOString().slice(0, 7))
-            curr.setMonth(curr.getMonth() + 1)
+        
+        // Use component-based iteration to avoid timezone/DST/leap-year issues with Date objects
+        let startYear = startDate.getFullYear()
+        let startMonth = startDate.getMonth()
+        let endYear = endDate.getFullYear()
+        let endMonth = endDate.getMonth()
+        
+        for (let y = startYear; y <= endYear; y++) {
+            let mStart = (y === startYear) ? startMonth : 0
+            let mEnd = (y === endYear) ? endMonth : 11
+            for (let m = mStart; m <= mEnd; m++) {
+                const p = `${y}-${String(m + 1).padStart(2, '0')}`
+                periods.add(p)
+            }
         }
         const periodList = Array.from(periods)
 
         // 3. Fetch All Relevant Branches with Baselines
-        const activeBranches = await db
-            .select({
-                id: branches.id,
-                name: branches.name,
-                baselineBudgetCents: branches.baselineBudgetCents,
+        let activeBranches: any[] = []
+        if (branchIds.length > 0) {
+            activeBranches = await db
+                .select({
+                    id: branches.id,
+                    name: branches.name,
+                    baselineBudgetCents: branches.baselineBudgetCents,
+                    organizationId: branches.organizationId
+                })
+                .from(branches)
+                .where(inArray(branches.id, branchIds))
+        } else if (allowedOrgId) {
+            // Default to all active branches for the organization context
+            activeBranches = await db
+                .select({
+                    id: branches.id,
+                    name: branches.name,
+                    baselineBudgetCents: branches.baselineBudgetCents,
+                    organizationId: branches.organizationId
+                })
+                .from(branches)
+                .where(
+                    and(
+                        eq(branches.organizationId, allowedOrgId),
+                        eq(branches.status, 'active')
+                    )
+                )
+        }
+
+        if (activeBranches.length === 0) {
+            return NextResponse.json({
+                summary: { totalAllocated: 0, totalSpent: 0, totalHeld: 0, totalCredited: 0, totalRemaining: 0 },
+                chartData: [],
+                branchBreakdown: [],
+                insights: { spentGrowth: 0, allocationGrowth: 0 },
+                categories: []
             })
-            .from(branches)
-            .where(inArray(branches.id, branchIds))
+        }
+
+        const actualBranchIds = activeBranches.map(b => b.id)
 
         const branchMap = new Map(activeBranches.map(b => [b.id, b]))
 
@@ -93,7 +157,7 @@ export async function GET(req: NextRequest) {
             .from(budgets)
             .where(
                 and(
-                    inArray(budgets.branchId, branchIds),
+                    inArray(budgets.branchId, actualBranchIds),
                     inArray(budgets.period, periodList)
                 )
             )
@@ -145,7 +209,8 @@ export async function GET(req: NextRequest) {
 
         // 5. Fetch Category Breakdown of Spending
         // We calculate spending based on FULFILLED orders in this date range
-        const categorySpendingRows = await db
+        // But we only show it if budget records actually exist for these branches
+        const categorySpendingRows = budgetRecords.length > 0 ? await db
             .select({
                 categoryId: globalProducts.categoryId,
                 categoryName: categories.name,
@@ -155,16 +220,19 @@ export async function GET(req: NextRequest) {
             .innerJoin(orders, eq(orderItems.orderId, orders.id))
             .innerJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
             .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
-            .where(
-                and(
-                    inArray(orders.branchId, branchIds),
-                    gte(orders.createdAt, startDate),
-                    lte(orders.createdAt, endDate),
-                    inArray(orders.status, ['FULFILLED']) // Only FULFILLED = actually spent, APPROVED = held
+                .where(
+                    and(
+                        inArray(orders.branchId, actualBranchIds),
+                        gte(orders.createdAt, startDate),
+                        lte(orders.createdAt, endDate),
+                        inArray(orders.status, ['PENDING', 'APPROVED', 'FULFILLED']),
+                        // Only include branches that have an active budget record in the current result set
+                        inArray(orders.branchId, actualBranchIds)
+                    )
                 )
-            )
             .groupBy(globalProducts.categoryId, categories.name)
             .orderBy(desc(sql`SUM(${orderItems.priceCents} * ${orderItems.quantity})`))
+            : []
 
         // 5. MoM Insights calculation (Previous Period)
         const rangeDurationMs = endDate.getTime() - startDate.getTime()
@@ -172,10 +240,17 @@ export async function GET(req: NextRequest) {
         const prevStartDate = new Date(prevEndDate.getTime() - rangeDurationMs)
 
         const prevPeriods = new Set<string>()
-        curr = new Date(prevStartDate)
-        while (curr <= prevEndDate) {
-            prevPeriods.add(curr.toISOString().slice(0, 7))
-            curr.setMonth(curr.getMonth() + 1)
+        let pStartYear = prevStartDate.getFullYear()
+        let pStartMonth = prevStartDate.getMonth()
+        let pEndYear = prevEndDate.getFullYear()
+        let pEndMonth = prevEndDate.getMonth()
+        
+        for (let y = pStartYear; y <= pEndYear; y++) {
+            let mStart = (y === pStartYear) ? pStartMonth : 0
+            let mEnd = (y === pEndYear) ? pEndMonth : 11
+            for (let m = mStart; m <= mEnd; m++) {
+                prevPeriods.add(`${y}-${String(m + 1).padStart(2, '0')}`)
+            }
         }
         const prevPeriodList = Array.from(prevPeriods)
 
@@ -201,7 +276,11 @@ export async function GET(req: NextRequest) {
         const prevTotalRemaining = (prevTotalAllocated + prevTotalCredited) - (prevTotalSpent + prevTotalHeld)
 
         // Calculate deltas
-        const spentGrowth = prevTotalSpent > 0 ? ((totalSpent - prevTotalSpent) / prevTotalSpent) * 100 : 0
+        // Calculate deltas using merged spent values
+        const currentTotalExpenditure = totalSpent + totalHeld
+        const prevTotalExpenditure = prevTotalSpent + prevTotalHeld
+        
+        const spentGrowth = prevTotalExpenditure > 0 ? ((currentTotalExpenditure - prevTotalExpenditure) / prevTotalExpenditure) * 100 : 0
         const allocationGrowth = prevTotalAllocated > 0 ? ((totalAllocated - prevTotalAllocated) / prevTotalAllocated) * 100 : 0
 
         // 6. Unified Chart Data (Allocation + Spending)
@@ -219,51 +298,27 @@ export async function GET(req: NextRequest) {
                 
                 const record = budgetLookup[branch.id]?.[period]
                 const baselineSetting = branch.baselineBudgetCents || 0
-                const allocated = record ? (record.amountAllocatedCents || 0) : baselineSetting
+                const allocated = record ? (record.amountAllocatedCents || 0) : 0
+                const credited = record ? (record.amountCreditedCents || 0) : 0
                 
-                // User requirement: Add-on (credited) is one-time for current month only
-                const currentMonthPeriod = new Date().toISOString().slice(0, 7)
-                const credited = (record && period === currentMonthPeriod) ? (record.amountCreditedCents || 0) : 0
-                
-                // For the chart, we split into baseline vs addon explicitly based on DB fields
-                const baseline = allocated
-                const addon = credited
+                // For the chart, we split into baseline vs addon:
+                // Base is up to the branch's default baseline. 
+                // Everything else (excess allocation + credits) is Addon.
+                const baseline = Math.min(allocated, baselineSetting)
+                const addon = (allocated - baseline) + credited
+                const spent = record ? (record.amountSpentCents || 0) : 0
+                const held = record ? (record.amountHeldCents || 0) : 0
                 
                 if (!chartDataMap[period].branches[branch.id]) {
                     chartDataMap[period].branches[branch.id] = { branchName: branch.name, baseline: 0, addon: 0, spent: 0 }
                 }
                 chartDataMap[period].branches[branch.id].baseline += baseline
                 chartDataMap[period].branches[branch.id].addon += addon
+                chartDataMap[period].branches[branch.id].spent += (spent + held)
             })
         })
 
-        // Add spending data
-        const spendingRows = await db
-            .select({
-                period: sql<string>`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`,
-                branchId: orders.branchId,
-                spentCents: sql<number>`SUM(${orders.totalCents})`.mapWith(Number)
-            })
-            .from(orders)
-            .where(
-                and(
-                    inArray(orders.branchId, branchIds),
-                    gte(orders.createdAt, startDate),
-                    lte(orders.createdAt, endDate),
-                    inArray(sql`UPPER(${orders.status})`, ['FULFILLED'])
-                )
-            )
-            .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`, orders.branchId)
-
-        spendingRows.forEach(s => {
-            const p = s.period
-            if (!chartDataMap[p]) return
-            if (!chartDataMap[p].branches[s.branchId]) {
-                const b = branchMap.get(s.branchId)
-                chartDataMap[p].branches[s.branchId] = { branchName: b?.name || `Branch #${s.branchId}`, baseline: 0, addon: 0, spent: 0 }
-            }
-            chartDataMap[p].branches[s.branchId].spent += s.spentCents
-        })
+        // Spending data is now already populated from budget records in the previous loop
 
         // Format for response based on granularity
         let finalChartData = Object.values(chartDataMap).sort((a, b) => a.period.localeCompare(b.period))
@@ -322,7 +377,7 @@ export async function GET(req: NextRequest) {
                 branchId: branch.id,
                 branchName: branch.name,
                 allocated,
-                spent,
+                spent: spent + held, // Treat all purchases as spent for reporting
                 held,
                 credited,
                 remaining: (allocated + credited) - (spent + held),
@@ -333,7 +388,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({
             summary: {
                 totalAllocated,
-                totalSpent,
+                totalSpent: totalSpent + totalHeld, // Merged for "Purchases" view
                 totalHeld,
                 totalCredited,
                 totalRemaining

@@ -32,9 +32,22 @@ export const metricExpressions = {
     END
   ), 0)`.mapWith(Number),
 
-    /** Fulfilled order count */
+    /** Fulfilled order count (100% completed, no refunds) */
     fulfilledCount: sql<number>`COALESCE(COUNT(
-    CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END
+    CASE WHEN UPPER(${orders.status}) = 'FULFILLED' AND COALESCE(${orders.refundAmountCents}, 0) = 0 THEN 1 END
+  ), 0)`.mapWith(Number),
+
+    /** Partial order count (Fulfilled but with some refunds, or status is explicitly PARTIAL) */
+    partialCount: sql<number>`COALESCE(COUNT(
+    CASE 
+        WHEN UPPER(${orders.status}) = 'FULFILLED' AND COALESCE(${orders.refundAmountCents}, 0) > 0 THEN 1 
+        WHEN UPPER(${orders.status}) IN ('PARTIAL', 'PARTIALLY_FULFILLED') THEN 1
+    END
+  ), 0)`.mapWith(Number),
+
+    /** Total Fulfilled (Full + Partial) for legacy or high-level views */
+    totalFulfilledCount: sql<number>`COALESCE(COUNT(
+    CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'PARTIAL', 'PARTIALLY_FULFILLED') THEN 1 END
   ), 0)`.mapWith(Number),
 
     /** Rejected order count (includes CANCELLED) */

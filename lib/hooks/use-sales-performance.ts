@@ -37,6 +37,8 @@ export type SalesPerformanceResponse = {
         refundedCount?: number
         rejectedCount?: number
         approvedCount?: number
+        pendingCount?: number
+        partialCount?: number
         seriesData?: SalesSeriesPoint[]
     } | null
 }
@@ -46,7 +48,7 @@ export type DateRange = {
     endDate: Date
 }
 
-export type DashboardStatus = "all" | "PENDING" | "FULFILLED" | "REFUNDED" | "REJECTED" | "APPROVED"
+export type DashboardStatus = "all" | "PENDING" | "FULFILLED" | "REFUNDED" | "REJECTED" | "APPROVED" | "PARTIAL"
 
 export function useSalesPerformance(
     organizationId?: string | null,

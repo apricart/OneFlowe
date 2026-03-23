@@ -95,6 +95,7 @@ export async function PATCH(
     return error("Invalid status", 400)
   }
 
+  const session = await getServerSession(authOptions)
   const patch: any = {}
 
   // ✅ Always update status if provided
@@ -106,11 +107,62 @@ export async function PATCH(
     patch.fulfilledAt = sql`NOW()`
   }
 
-  const [item] = await db
-    .update(orders)
-    .set(patch)
-    .where(eq(orders.id, orderId))
-    .returning()
+  const [item] = await db.transaction(async (tx) => {
+    // Determine the month the order belongs to for budget lookup
+    const orderMonth = ord.createdAt
+      ? new Date(ord.createdAt).toISOString().slice(0, 7)
+      : new Date().toISOString().slice(0, 7)
+    
+    // Find the budget record
+    const { budgets, globalProducts, orderItems } = await import("@/db/schema")
+    const [budget] = await tx.select().from(budgets).where(
+      and(
+        eq(budgets.branchId, ord.branchId),
+        eq(budgets.period, orderMonth)
+      )
+    ).limit(1)
+
+    if (body.status === "REJECTED" || body.status === "CANCELLED") {
+      // Transitioning to rejected/cancelled, so restore budget & stock
+      if (budget && ord.status !== "REJECTED" && ord.status !== "CANCELLED" && ord.status !== "REFUNDED" && ord.status !== "FULFILLED") {
+        await tx.update(budgets).set({ 
+          amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}` 
+        }).where(eq(budgets.id, budget.id))
+      }
+
+      // Restore stock
+      const itemsList = await tx.select().from(orderItems).where(eq(orderItems.orderId, orderId))
+      for (const item of itemsList) {
+        await tx.update(globalProducts)
+          .set({
+            stockQuantity: sql`${globalProducts.stockQuantity} + ${item.quantity}`,
+            updatedAt: new Date()
+          })
+          .where(eq(globalProducts.id, item.globalProductId))
+      }
+
+      if (body.status === "REJECTED") {
+         patch.rejectedByUserId = session?.user ? (session.user as any).id : null
+         patch.rejectedAt = new Date()
+      }
+    } 
+    else if (body.status === "FULFILLED") {
+      // Transitioning to fulfilled, move from held to spent
+      if (budget && ord.status !== "FULFILLED") {
+        await tx.update(budgets).set({
+          amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,
+          amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
+        }).where(eq(budgets.id, budget.id))
+      }
+      patch.fulfilledAt = sql`NOW()`
+      patch.fulfilledByUserId = session?.user ? (session.user as any).id : null
+    }
+
+    return await tx.update(orders)
+      .set(patch)
+      .where(eq(orders.id, orderId))
+      .returning()
+  })
 
   return ok({ item })
 }

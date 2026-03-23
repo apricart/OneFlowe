@@ -282,6 +282,23 @@ export const budgets = pgTable(
   }),
 )
 
+export const budgetAddons = pgTable(
+  "budget_addons",
+  {
+    id: serial("id").primaryKey(),
+    budgetId: integer("budget_id")
+      .references(() => budgets.id, { onDelete: "cascade" })
+      .notNull(),
+    amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
+    reason: text("reason"),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    budgetIdx: index("budget_addons_budget_idx").on(t.budgetId),
+  }),
+)
+
 export const organizationSettings = pgTable(
   "organization_settings",
   {

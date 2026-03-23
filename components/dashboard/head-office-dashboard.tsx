@@ -137,6 +137,17 @@ export function HeadOfficeDashboard() {
   // But to keep it simple and reactive, I'll just use the compare flag in useSalesPerformance if I update that hook.
   // Let's check use-sales-performance.ts again to see if I can add 'compare' param.
 
+  const { data: pendingData } = useSalesPerformance(
+    organizationId,
+    contextBranchId,
+    selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
+    undefined,
+    dateRange,
+    "PENDING",
+    compare,
+    compareRange
+  )
+
   const { data: fulfilledData } = useSalesPerformance(
     organizationId,
     contextBranchId,
@@ -201,6 +212,17 @@ export function HeadOfficeDashboard() {
     activePreset === "all" ? "yearly" : undefined
   )
 
+  const { data: partialData } = useSalesPerformance(
+    organizationId,
+    contextBranchId,
+    selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
+    undefined,
+    dateRange,
+    "PARTIAL",
+    compare,
+    compareRange
+  )
+
   const perfData = perfDataFull
   const summary = perfDataFull?.comparison
 
@@ -241,7 +263,9 @@ export function HeadOfficeDashboard() {
 
   const totalPurchases = perfData?.totalNetSales ?? perfData?.totalSales ?? 0
   const totalOrders = perfData?.totalOrders ?? 0
+  const pendingCount = pendingData?.totalOrders ?? 0
   const fulfilledCount = fulfilledData?.totalOrders ?? 0
+  const partialCount = partialData?.totalOrders ?? 0
   const refundedCount = refundedData?.totalOrders ?? 0
   const rejectedCount = rejectedData?.totalOrders ?? 0
   const approvedCount = approvedData?.totalOrders ?? 0
@@ -287,7 +311,7 @@ export function HeadOfficeDashboard() {
       </div>
 
       {/* ━━━ KPI Cards ━━━ */}
-      <div className="relative z-10 grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="relative z-10 grid gap-3 grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
         <BankingKPICard
           icon={TrendingUp} title="Purchases"
           value={formatPKR(totalPurchases, { maximumFractionDigits: 0 })}
@@ -311,12 +335,38 @@ export function HeadOfficeDashboard() {
           comparisonLabel="Prev"
         />
         <BankingKPICard
+          icon={Activity} title="Pending"
+          value={pendingCount.toLocaleString()}
+          subtitle={getPresetLabel(activePreset, dateRange)}
+          gradient="from-amber-400 to-orange-500" iconBg="text-amber-600 bg-amber-600" delay={75}
+          onClick={() => handleKPIOpen("PENDING" as any)} // Cast if PENDING is not in DrillDownType yet
+          comparisonValue={compare && summary?.pendingCount != null ? summary.pendingCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
+        />
+        <BankingKPICard
+          icon={CheckCircle2} title="Approved"
+          value={approvedCount.toLocaleString()}
+          subtitle={getPresetLabel(activePreset, dateRange)}
+          gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={100}
+          comparisonValue={compare && summary?.approvedCount != null ? summary.approvedCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
+        />
+        <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
           value={fulfilledCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
-          gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={100}
+          gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={125}
           onClick={() => handleKPIOpen("FULFILLED")}
           comparisonValue={compare && summary?.fulfilledCount != null ? summary.fulfilledCount.toLocaleString() : undefined}
+          comparisonLabel="Prev"
+        />
+        <BankingKPICard
+          icon={Package} title="Partial Fulfilled"
+          value={partialCount.toLocaleString()}
+          subtitle={getPresetLabel(activePreset, dateRange)}
+          gradient="from-indigo-500 to-purple-600" iconBg="text-indigo-600 bg-indigo-600" delay={135}
+          onClick={() => handleKPIOpen("PARTIAL" as any)}
+          comparisonValue={compare && summary?.partialCount != null ? summary.partialCount.toLocaleString() : undefined}
           comparisonLabel="Prev"
         />
         <BankingKPICard
@@ -335,14 +385,6 @@ export function HeadOfficeDashboard() {
           gradient="from-slate-500 to-slate-700" iconBg="text-slate-600 bg-slate-600" delay={175}
           onClick={() => handleKPIOpen("REJECTED")}
           comparisonValue={compare && summary?.rejectedCount != null ? summary.rejectedCount.toLocaleString() : undefined}
-          comparisonLabel="Prev"
-        />
-        <BankingKPICard
-          icon={CheckCircle2} title="Approved"
-          value={approvedCount.toLocaleString()}
-          subtitle={getPresetLabel(activePreset, dateRange)}
-          gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={190}
-          comparisonValue={compare && summary?.approvedCount != null ? summary.approvedCount.toLocaleString() : undefined}
           comparisonLabel="Prev"
         />
 

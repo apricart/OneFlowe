@@ -8,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, LineChart, Package, Tags, AlertOctagon, TrendingUp, History, Layers, Calculator, ChevronDown, Check
+    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, LineChart, Package, Tags, AlertOctagon, TrendingUp, History, Layers, Calculator, ChevronDown, Check, ArrowUpRight, ArrowDownRight, ChartBar as ChartBarIcon, ShieldCheck, ShieldX, Eye
 } from "lucide-react"
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Line, ComposedChart
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell
 } from "recharts"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -36,6 +36,8 @@ import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expa
 import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/reports/column-selector"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
+const CHART_COLORS = ['#6366f1', '#8b5cf6', '#a78bfa', '#c4b5fd', '#818cf8', '#7c3aed', '#4f46e5', '#4338ca', '#6d28d9', '#5b21b6']
 
 const LEDGER_COLUMNS: ColumnDef[] = [
     { key: "date", label: "Date", defaultVisible: true },
@@ -69,8 +71,6 @@ export default function ProductPerformancePage() {
     const [drawerOpen, setDrawerOpen] = useState(false)
     const [activeTab, setActiveTab] = useState<"analytics" | "reports">("analytics")
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
-    const [selectedChartProducts, setSelectedChartProducts] = useState<number[]>([])
-    const [chartProductDropdownOpen, setChartProductDropdownOpen] = useState(false)
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
@@ -200,30 +200,13 @@ export default function ProductPerformancePage() {
         }
     }, [])
 
-    const MONTHS = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-    ]
-    const YEARS = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
-
-    const handleMonthYearChange = (monthIdx: number, year: number) => {
-        const startDate = new Date(year, monthIdx, 1)
-        const endDate = new Date(year, monthIdx + 1, 0)
-        handleDateChange({ startDate, endDate }, "custom")
-    }
-
-    const currentYear = dateRange?.startDate.getFullYear() || new Date().getFullYear()
-    const currentMonthIdx = dateRange?.startDate.getMonth() || new Date().getMonth()
-
     const products = useMemo(() => {
         const p = perfData?.data || []
-        // Sort by revenue descending by default
         return [...p].sort((a: any, b: any) => (b.revenueGeneratedCents || 0) - (a.revenueGeneratedCents || 0))
     }, [perfData])
 
     const transactionItems = useMemo(() => {
         const items = summaryData?.items || []
-        // Sort by date descending
         return [...items].sort((a: any, b: any) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())
     }, [summaryData])
 
@@ -244,43 +227,38 @@ export default function ProductPerformancePage() {
     )
 
     const totalRevenue = products.reduce((sum: number, p: any) => sum + (p.revenueGeneratedCents || 0), 0)
+    const totalOrdered = products.reduce((sum: number, p: any) => sum + (p.qtyOrdered || 0), 0)
     const totalVolume = products.reduce((sum: number, p: any) => sum + (p.qtyFulfilled || 0), 0)
     const totalRefunds = products.reduce((sum: number, p: any) => sum + (p.qtyRefunded || 0), 0)
     const totalRefundLoss = products.reduce((sum: number, p: any) => sum + (p.refundLossCents || 0), 0)
-
-    const refundRate = (totalVolume + totalRefunds) > 0 ? (totalRefunds / (totalVolume + totalRefunds)) * 100 : 0
-
-    // Chart data: build per-product comparison data
-    const chartProducts = selectedChartProducts.length > 0
-        ? products.filter((p: any) => selectedChartProducts.includes(p.productId))
-        : products.slice(0, 5) // Default: top 5 products by revenue
-
-    const chartData = chartProducts.map((p: any) => ({
-        name: p.productName?.length > 18 ? p.productName.substring(0, 18) + '…' : p.productName,
-        fullName: p.productName,
-        ordered: p.qtyOrdered || 0,
-        fulfilled: p.qtyFulfilled || 0,
-        refunded: p.qtyRefunded || 0,
-        revenue: Math.round((p.revenueGeneratedCents || 0) / 100),
-        compFulfilled: p.compareQty || 0,
-        compRevenue: Math.round((p.compareRevenue || 0) / 100)
-    }))
+    const fulfillmentRate = totalOrdered > 0 ? (totalVolume / totalOrdered) * 100 : 0
+    const refundRate = totalOrdered > 0 ? (totalRefunds / totalOrdered) * 100 : 0
+    const activeProductCount = products.filter((p: any) => p.status === 'active').length
+    const inactiveProductCount = products.filter((p: any) => p.status !== 'active').length
 
     // Comparison Trends
     const comparison = perfData?.comparison
     const getTrend = (current: number, prev: number) => {
         if (!prev || prev === 0) return null
         const diff = ((current - prev) / prev) * 100
-        return {
-            value: Math.abs(diff).toFixed(1),
-            isUp: diff > 0,
-            isDown: diff < 0
-        }
+        return { value: Math.abs(diff).toFixed(1), isUp: diff > 0, isDown: diff < 0 }
     }
-
     const revenueTrend = getTrend(totalRevenue, comparison?.totalRevenue || 0)
     const volumeTrend = getTrend(totalVolume, comparison?.totalVolume || 0)
     const refundTrend = getTrend(totalRefunds, comparison?.totalRefunds || 0)
+
+    // Chart data: top 10 products by revenue
+    const chartData = useMemo(() => {
+        return filteredProducts.slice(0, 10).map((p: any) => ({
+            name: p.productName?.length > 22 ? p.productName.substring(0, 22) + '…' : p.productName,
+            fullName: p.productName,
+            revenue: Math.round((p.revenueGeneratedCents || 0) / 100),
+            ordered: p.qtyOrdered || 0,
+            fulfilled: p.qtyFulfilled || 0,
+            refunded: p.qtyRefunded || 0,
+            fulfillRate: p.qtyOrdered > 0 ? Math.round((p.qtyFulfilled / p.qtyOrdered) * 100) : 0,
+        }))
+    }, [filteredProducts])
 
     const handleRowClick = (item: any) => {
         setSelectedRow(item)
@@ -330,6 +308,39 @@ export default function ProductPerformancePage() {
         XLSX.writeFile(workbook, `product-intelligence-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
     }
 
+    // Custom tooltip for horizontal bar chart
+    const CustomBarTooltip = ({ active, payload }: any) => {
+        if (!active || !payload?.length) return null
+        const d = payload[0]?.payload
+        return (
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl p-4 min-w-[220px]">
+                <p className="font-bold text-sm text-slate-900 dark:text-white mb-2">{d.fullName}</p>
+                <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Revenue</span>
+                        <span className="font-bold text-indigo-600">{formatPKR(d.revenue)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Ordered</span>
+                        <span className="font-semibold">{d.ordered}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Fulfilled</span>
+                        <span className="font-semibold text-emerald-600">{d.fulfilled}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                        <span className="text-slate-500">Refunded</span>
+                        <span className="font-semibold text-rose-500">{d.refunded}</span>
+                    </div>
+                    <div className="pt-1 border-t border-slate-100 dark:border-slate-800 flex justify-between text-xs">
+                        <span className="text-slate-500">Fulfillment</span>
+                        <span className="font-bold text-emerald-600">{d.fulfillRate}%</span>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     if (!hasMounted) {
         return (
             <div className="flex h-[50vh] items-center justify-center">
@@ -355,8 +366,6 @@ export default function ProductPerformancePage() {
                     compareMonths={compareMonths}
                     compareYears={compareYears}
                 />
-                
-
 
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <BranchFilter
@@ -381,253 +390,193 @@ export default function ProductPerformancePage() {
 
             <div className="px-4 md:px-6 space-y-5">
 
-                {/* ━━━ "INTELLIGENCE" HEADER ━━━ */}
-                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#eab308] via-[#ca8a04] to-[#c2410c] px-6 py-6 text-white shadow-xl ring-1 ring-amber-500/30">
-                <div className="flex flex-wrap flex-col gap-2 relative z-10">
-                    <p className="text-xs tracking-[0.2em] text-white/80 font-bold uppercase">Centralized Reporting</p>
-                    <div className="flex items-center justify-between">
-                        <h1 className="text-3xl font-semibold tracking-tight">Product Intelligence</h1>
-                        <div className="flex bg-white/10 backdrop-blur-md p-1 rounded-2xl border border-white/20">
-                            <button
-                                onClick={() => setActiveTab("analytics")}
-                                className={cn(
-                                    "px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                                    activeTab === "analytics" 
-                                        ? "bg-white text-amber-600 shadow-lg" 
-                                        : "text-white/70 hover:text-white hover:bg-white/5"
-                                )}
-                            >
-                                <LineChart className="w-4 h-4 mr-2 inline-block" />
-                                Product analytics
-                            </button>
-                            <button
-                                onClick={() => setActiveTab("reports")}
-                                className={cn(
-                                    "px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                                    activeTab === "reports" 
-                                        ? "bg-white text-amber-600 shadow-lg" 
-                                        : "text-white/70 hover:text-white hover:bg-white/5"
-                                )}
-                            >
-                                <History className="w-4 h-4 mr-2 inline-block" />
-                                Product Reports
-                            </button>
+                {/* ━━━ HEADER WITH TAB SWITCHER ━━━ */}
+                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-900 px-6 py-6 text-white shadow-2xl">
+                    <div className="flex flex-wrap flex-col gap-2 relative z-10">
+                        <p className="text-xs tracking-[0.2em] text-white/60 font-bold uppercase">Centralized Reporting</p>
+                        <div className="flex items-center justify-between">
+                            <h1 className="text-3xl font-semibold tracking-tight">Product Intelligence</h1>
+                            <div className="flex bg-white/10 backdrop-blur-md p-1 rounded-2xl border border-white/20">
+                                <button
+                                    onClick={() => setActiveTab("analytics")}
+                                    className={cn(
+                                        "px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                                        activeTab === "analytics" 
+                                            ? "bg-white text-indigo-700 shadow-lg" 
+                                            : "text-white/70 hover:text-white hover:bg-white/5"
+                                    )}
+                                >
+                                    <ChartBarIcon className="w-4 h-4 mr-2 inline-block" />
+                                    Analytics
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab("reports")}
+                                    className={cn(
+                                        "px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                                        activeTab === "reports" 
+                                            ? "bg-white text-indigo-700 shadow-lg" 
+                                            : "text-white/70 hover:text-white hover:bg-white/5"
+                                    )}
+                                >
+                                    <History className="w-4 h-4 mr-2 inline-block" />
+                                    Reports
+                                </button>
+                            </div>
                         </div>
+                        <p className="text-sm text-white/70 font-medium max-w-2xl">
+                            Unified view of product performance metrics and transactional history across all branches.
+                        </p>
                     </div>
-                    <p className="text-sm text-white/90 font-medium max-w-2xl">
-                        Unified view of product performance and transactional history. Analyze top-line yield alongside ground-level order logs.
-                    </p>
-                </div>
-                    <div className="absolute top-0 right-0 -translate-y-12 translate-x-1/3 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+                    <div className="absolute top-0 right-0 -translate-y-12 translate-x-1/3 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 translate-y-12 -translate-x-1/4 w-64 h-64 bg-violet-500/20 rounded-full blur-3xl pointer-events-none" />
                 </div>
 
-                {/* ━━━ KPI BENTO GRID ━━━ */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <Card className="p-5 rounded-2xl border border-amber-200 dark:border-amber-800/50 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
+                {/* ━━━ KPI CARDS ━━━ */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {/* Revenue */}
+                    <KPICard
+                        label="Total Revenue"
+                        value={formatPKR(totalRevenue / 100)}
+                        icon={<TrendingUp className="h-4 w-4" />}
+                        iconBg="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
+                        trend={revenueTrend}
+                        trendColor="emerald"
+                        subtitle="From fulfilled products"
+                        compare={compare}
+                        compareValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined}
+                    />
+                    {/* Fulfilled */}
+                    <KPICard
+                        label="Qty Fulfilled"
+                        value={totalVolume.toLocaleString()}
+                        icon={<Package className="h-4 w-4" />}
+                        iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                        trend={volumeTrend}
+                        trendColor="emerald"
+                        subtitle={`${fulfillmentRate.toFixed(1)}% fulfillment rate`}
+                        compare={compare}
+                        compareValue={comparison ? comparison.totalVolume.toLocaleString() : undefined}
+                    />
+                    {/* Refunded */}
+                    <KPICard
+                        label="Refund Loss"
+                        value={formatPKR(totalRefundLoss / 100)}
+                        icon={<AlertOctagon className="h-4 w-4" />}
+                        iconBg="bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400"
+                        trend={refundTrend}
+                        trendColor="rose"
+                        subtitle={`${totalRefunds.toLocaleString()} items (${refundRate.toFixed(1)}%)`}
+                        compare={compare}
+                        compareValue={comparison ? `${comparison.totalRefunds.toLocaleString()} items` : undefined}
+                    />
+                    {/* Product Status */}
+                    <Card className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
                         <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">
-                                <TrendingUp className="h-4 w-4" />
+                            <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400">
+                                <Layers className="h-4 w-4" />
                             </div>
-                            <div className="flex flex-col items-end gap-1">
-                                <Badge variant="outline" className="border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 text-[10px] uppercase font-bold tracking-wider">Product Revenue</Badge>
-                                {revenueTrend && revenueTrend.value !== "0.0" && (
-                                    <div className={cn(
-                                        "text-[10px] font-black tracking-tighter",
-                                        revenueTrend.isUp ? "text-emerald-500" : revenueTrend.isDown ? "text-rose-500" : "text-slate-400"
-                                    )}>
-                                        {revenueTrend.isUp ? "↑" : revenueTrend.isDown ? "↓" : "•"} {revenueTrend.value}%
-                                    </div>
-                                )}
-                            </div>
+                            <Badge variant="outline" className="text-[9px] uppercase font-bold tracking-wider opacity-60">Catalog</Badge>
                         </div>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{formatPKR(totalRevenue / 100)}</p>
-                            {compare && comparison && (
-                                <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">
-                                    {formatPKR(comparison.totalRevenue / 100)}
-                                </span>
-                            )}
+                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{products.length}</p>
+                        <div className="flex items-center gap-3 mt-2">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                                <ShieldCheck className="h-3 w-3" /> {activeProductCount} active
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                <ShieldX className="h-3 w-3" /> {inactiveProductCount} inactive
+                            </span>
                         </div>
-                        <p className="text-xs font-semibold text-slate-400 mt-2">Yield from fulfilled products.</p>
-                    </Card>
-
-                    <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400">
-                                <Package className="h-4 w-4" />
-                            </div>
-                            <div className="flex flex-col items-end gap-1">
-                                <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Qty Fulfilled</Badge>
-                                {volumeTrend && volumeTrend.value !== "0.0" && (
-                                    <div className={cn(
-                                        "text-[10px] font-black tracking-tighter",
-                                        volumeTrend.isUp ? "text-emerald-500" : volumeTrend.isDown ? "text-rose-500" : "text-slate-400"
-                                    )}>
-                                        {volumeTrend.isUp ? "↑" : volumeTrend.isDown ? "↓" : "•"} {volumeTrend.value}%
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-3xl font-bold text-slate-900 dark:text-white mb-1">{totalVolume.toLocaleString()}</p>
-                            {compare && comparison && (
-                                <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">
-                                    {comparison.totalVolume.toLocaleString()}
-                                </span>
-                            )}
-                        </div>
-                        <p className="text-xs font-semibold text-slate-400 mt-2">Total successful units delivered.</p>
-                    </Card>
-
-                    <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-                                <AlertOctagon className="h-4 w-4" />
-                            </div>
-                            <div className="flex flex-col items-end gap-1">
-                                <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider opacity-60">Refund Rate</Badge>
-                                {refundTrend && refundTrend.value !== "0.0" && (
-                                    <div className={cn(
-                                        "text-[10px] font-black tracking-tighter",
-                                        refundTrend.isUp ? "text-rose-500" : refundTrend.isDown ? "text-emerald-500" : "text-slate-400"
-                                    )}>
-                                        {refundTrend.isUp ? "↑" : refundTrend.isDown ? "↓" : "•"} {refundTrend.value}%
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-3xl font-bold text-rose-600 dark:text-rose-400 mb-1">{refundRate.toFixed(2)}%</p>
-                            {compare && comparison && (
-                                <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">
-                                    {comparison.totalRefunds.toLocaleString()} items
-                                </span>
-                            )}
-                        </div>
-                        <p className="text-xs font-semibold text-slate-400 mt-2">{totalRefunds.toLocaleString()} items refunded.</p>
                     </Card>
                 </div>
 
                 {/* ━━━ TAB CONTENT ━━━ */}
                 {activeTab === "analytics" ? (
-                    <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-                        <div className="p-4 border-b border-slate-100 dark:border-slate-800/50 flex flex-wrap justify-between items-center gap-3 bg-white/50 dark:bg-slate-900/20">
-                            <h3 className="font-semibold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                                <LineChart className="h-4 w-4 text-amber-600" />
-                                Product analytics
-                            </h3>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                                <DropdownMenu open={chartProductDropdownOpen} onOpenChange={setChartProductDropdownOpen}>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 gap-1.5 px-3 rounded-md">
-                                            <Layers className="h-3 w-3" />
-                                            {selectedChartProducts.length === 0 ? "Top 5 Products" : `${selectedChartProducts.length} Selected`}
-                                            <ChevronDown className="h-3 w-3 opacity-50" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-64 max-h-[400px] overflow-y-auto rounded-xl p-1 shadow-2xl">
-                                        <div className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] border-b border-slate-50 mb-1">Visualize Comparison</div>
-                                        <div className="grid grid-cols-1 gap-1">
-                                            {products.slice(0, 30).map((p: any) => (
-                                                <DropdownMenuItem 
-                                                    key={p.productId} 
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        setSelectedChartProducts(prev => 
-                                                            prev.includes(p.productId) 
-                                                                ? prev.filter(id => id !== p.productId) 
-                                                                : [...prev, p.productId]
-                                                        )
-                                                    }}
-                                                    className={cn(
-                                                        "text-[11px] py-2.5 px-3 cursor-pointer flex items-center justify-between rounded-lg transition-all",
-                                                        selectedChartProducts.includes(p.productId) ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                                                    )}
-                                                >
-                                                    <div className="flex flex-col truncate pr-2">
-                                                        <span className="font-bold truncate">{p.productName}</span>
-                                                        <span className="text-[9px] opacity-50 font-mono tracking-tighter">{p.productCode}</span>
-                                                    </div>
-                                                    {selectedChartProducts.includes(p.productId) && (
-                                                        <div className="shrink-0 h-5 w-5 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30">
-                                                            <Check className="h-3 w-3" strokeWidth={4} />
-                                                        </div>
-                                                    )}
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </div>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                                <div className="h-4 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
-                                <div className="relative">
-                                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                    <Input
-                                        placeholder="Filter List..."
-                                        className="pl-8 h-8 w-40 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700 focus:ring-1 focus:ring-amber-500/50 transition-all rounded-md"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
+                    <>
+                        {/* Revenue Chart */}
+                        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+                            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                        <ChartBarIcon className="h-4 w-4 text-indigo-500" />
+                                        Top Products by Revenue
+                                    </CardTitle>
+                                    <p className="text-xs text-slate-400 mt-1">Revenue from fulfilled orders only</p>
                                 </div>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button size="sm" className="h-8 text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white gap-1.5 px-3 rounded-md shadow-lg shadow-amber-600/20" disabled={isPerfLoading}>
-                                            <Download className="h-3.5 w-3.5" /> EXPORT
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                                        <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2 cursor-pointer font-medium font-bold"><FileText className="mr-2 h-4 w-4 text-slate-400" /> CSV</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2 cursor-pointer font-medium font-bold"><FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel</DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer font-medium font-bold"><FilePdf className="mr-2 h-4 w-4 text-rose-500" /> PDF</DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </div>
-                        </div>
+                            </CardHeader>
+                            <CardContent className="pt-0 pb-4">
+                                {isPerfLoading ? (
+                                    <div className="h-[320px] flex items-center justify-center">
+                                        <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+                                    </div>
+                                ) : chartData.length === 0 ? (
+                                    <div className="h-[320px] flex items-center justify-center text-sm text-slate-400">
+                                        No product data available
+                                    </div>
+                                ) : (
+                                    <div className="h-[320px] w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" opacity={0.3} />
+                                                <XAxis 
+                                                    type="number" 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{ fill: '#94a3b8', fontSize: 10 }} 
+                                                    tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v.toString()}
+                                                />
+                                                <YAxis 
+                                                    type="category" 
+                                                    dataKey="name" 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{ fill: '#475569', fontSize: 11, fontWeight: 600 }} 
+                                                    width={180}
+                                                />
+                                                <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
+                                                <Bar dataKey="revenue" name="Revenue (PKR)" radius={[0, 8, 8, 0]} barSize={24}>
+                                                    {chartData.map((_: any, idx: number) => (
+                                                        <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                                                    ))}
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
 
-                        {/* Chart Section */}
-                        <div className="p-6 bg-slate-50/30 dark:bg-slate-900/10 border-b border-slate-100 dark:border-slate-800/50">
-                            <div className="h-[300px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
-                                        <XAxis 
-                                            dataKey="name" 
-                                            axisLine={false} 
-                                            tickLine={false} 
-                                            tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }}
-                                            interval={0}
+                        {/* Product Table */}
+                        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+                            <div className="p-4 border-b border-slate-100 dark:border-slate-800/50 flex flex-wrap justify-between items-center gap-3">
+                                <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                                    <Package className="h-4 w-4 text-indigo-500" />
+                                    All Products
+                                    <Badge variant="secondary" className="text-[10px] ml-1 font-mono">{filteredProducts.length}</Badge>
+                                </h3>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="relative">
+                                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                        <Input
+                                            placeholder="Search products..."
+                                            className="pl-8 h-8 w-44 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 rounded-lg"
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
                                         />
-                                        <YAxis 
-                                            yAxisId="left"
-                                            axisLine={false} 
-                                            tickLine={false} 
-                                            tick={{ fill: '#64748b', fontSize: 10 }}
-                                            label={{ value: 'Quantity', angle: -90, position: 'insideLeft', style: { fill: '#64748b', fontSize: 10, fontWeight: 700 } }}
-                                        />
-                                        <YAxis 
-                                            yAxisId="right"
-                                            orientation="right"
-                                            axisLine={false} 
-                                            tickLine={false} 
-                                            tick={{ fill: '#059669', fontSize: 10 }}
-                                            label={{ value: 'Revenue (PKR)', angle: 90, position: 'insideRight', style: { fill: '#059669', fontSize: 10, fontWeight: 700 } }}
-                                        />
-                                        <Tooltip 
-                                            contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                            itemStyle={{ fontSize: '11px', fontWeight: 600 }}
-                                            labelStyle={{ fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}
-                                            formatter={(value: any, name: string) => [name === 'revenue' ? formatPKR(value) : value, name.charAt(0).toUpperCase() + name.slice(1)]}
-                                        />
-                                        <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', paddingTop: '10px' }} />
-                                        <Bar yAxisId="left" dataKey="ordered" name="ordered" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={compare ? 10 : 20} />
-                                        <Bar yAxisId="left" dataKey="fulfilled" name="fulfilled" fill="#10b981" radius={[4, 4, 0, 0]} barSize={compare ? 10 : 20} />
-                                        <Bar yAxisId="left" dataKey="refunded" name="refunded" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={compare ? 10 : 20} />
-                                        {compare && <Bar yAxisId="left" dataKey="compFulfilled" name="prev fulfilled" fill="#fcd34d" radius={[4, 4, 0, 0]} barSize={10} />}
-                                        
-                                        <Line yAxisId="right" type="monotone" dataKey="revenue" name="revenue" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: '#f59e0b', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
-                                        {compare && <Line yAxisId="right" type="monotone" dataKey="compRevenue" name="prev revenue" stroke="#fcd34d" strokeWidth={3} strokeDasharray="4 4" dot={{ r: 4, fill: '#fcd34d', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />}
-                                    </ComposedChart>
-                                </ResponsiveContainer>
+                                    </div>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg shadow-lg shadow-indigo-600/20" disabled={isPerfLoading}>
+                                                <Download className="h-3.5 w-3.5" /> EXPORT
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                                            <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2 cursor-pointer font-bold"><FileText className="mr-2 h-4 w-4 text-slate-400" /> CSV</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2 cursor-pointer font-bold"><FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer font-bold"><FilePdf className="mr-2 h-4 w-4 text-rose-500" /> PDF</DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
                             </div>
                         </div>
                         <div className="overflow-x-auto">
@@ -706,12 +655,13 @@ export default function ProductPerformancePage() {
                         </div>
                     </Card>
                 ) : (
-                    <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl">
-                        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/20">
+                    /* ━━━ REPORTS TAB ━━━ */
+                    <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+                        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
                             <div className="flex items-center gap-3">
                                 <History className="h-4 w-4 text-indigo-500" />
-                                <h3 className="font-semibold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
-                                    Product Reports
+                                <h3 className="font-bold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
+                                    Transaction Ledger
                                 </h3>
                             </div>
                             <div className="flex items-center gap-2">
@@ -719,12 +669,12 @@ export default function ProductPerformancePage() {
                                     <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                                     <Input
                                         placeholder="Search by Trans ID, product..."
-                                        className="pl-8 h-8 w-56 text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700 focus:ring-1 focus:ring-indigo-500/50 transition-all rounded-md"
+                                        className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 rounded-lg"
                                         value={reportSearchTerm}
                                         onChange={(e) => setReportSearchTerm(e.target.value)}
                                     />
                                 </div>
-                                <Badge variant="secondary" className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 border-none text-[10px] font-bold uppercase">Transaction Audit</Badge>
+                                <Badge variant="secondary" className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 border-none text-[10px] font-bold uppercase">Audit Trail</Badge>
                             </div>
                         </div>
                         <div className="overflow-x-auto">
@@ -734,7 +684,7 @@ export default function ProductPerformancePage() {
                                         <TableHead className="w-8 h-10"></TableHead>
                                         <TableHead className="pl-2 h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Date</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Item / SKU</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Branch Context</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Branch</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Qty</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Unit Price</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Net Total</TableHead>
@@ -744,9 +694,9 @@ export default function ProductPerformancePage() {
                                 </TableHeader>
                                 <TableBody>
                                     {isSummaryLoading ? (
-                                        <TableRow><TableCell colSpan={8} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={9} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
                                     ) : filteredTransactions.length === 0 ? (
-                                        <TableRow><TableCell colSpan={8} className="h-32 text-center text-slate-500 text-xs text-black">No transactions recorded.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={9} className="h-32 text-center text-slate-400 text-xs">No transactions recorded.</TableCell></TableRow>
                                     ) : (
                                         Object.values(filteredTransactions.reduce((acc: any, curr: any) => {
                                             if (!acc[curr.orderId]) {
@@ -774,7 +724,7 @@ export default function ProductPerformancePage() {
                                                     <TableRow className={cn("hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors", order.items.length === 1 ? "cursor-pointer" : "")} onClick={() => { if (order.items.length === 1) handleRowClick(order.items[0]) }}>
                                                         <TableCell onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : `order-${order.id}`); }} className="w-8">
                                                             {order.items.length > 1 ? (
-                                                                <button className="flex items-center justify-center w-5 h-5 rounded-md bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400">
+                                                                <button className="flex items-center justify-center w-5 h-5 rounded-md bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold">
                                                                     {isExpanded ? "−" : "+"}
                                                                 </button>
                                                             ) : null}
@@ -785,7 +735,7 @@ export default function ProductPerformancePage() {
                                                                 <span className="font-bold text-[11px] text-slate-900 dark:text-white uppercase truncate max-w-[180px]">
                                                                     {order.items.length === 1 ? order.items[0].productName : `${order.items.length} Products`}
                                                                 </span>
-                                                                <span className="text-[10px] text-slate-400 font-mono italic">{order.items.length === 1 ? order.items[0].productCode : 'MULTIPLE'}</span>
+                                                                <span className="text-[10px] text-slate-400 font-mono">{order.items.length === 1 ? order.items[0].productCode : 'MULTIPLE'}</span>
                                                             </div>
                                                         </TableCell>
                                                         <TableCell className="py-3">
@@ -796,22 +746,30 @@ export default function ProductPerformancePage() {
                                                         <TableCell className="text-center font-mono text-[11px] font-bold text-indigo-500">{formatPKR(totalRevenue)}</TableCell>
                                                         <TableCell className="text-center font-mono text-[10px] text-slate-400">{order.tid}</TableCell>
                                                         <TableCell className="text-right pr-6">
-                                                            <Badge variant="outline" className={cn(
-                                                                "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border-none",
-                                                                order.status === "REFUNDED" ? "bg-rose-100 text-rose-600" : 
-                                                                order.status === "REJECTED" ? "bg-amber-100 text-amber-600" : 
-                                                                "bg-emerald-100 text-emerald-600"
-                                                            )}>
-                                                                {order.status}
-                                                            </Badge>
+                                                            {(() => {
+                                                                const s = (order.status || "").toUpperCase()
+                                                                let colors = "bg-slate-100 text-slate-600 dark:bg-slate-900/20 dark:text-slate-400" // Default
+                                                                if (s === 'FULFILLED') colors = "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400"
+                                                                else if (s === 'REJECTED') colors = "bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400"
+                                                                else if (s === 'REFUNDED') colors = "bg-rose-100 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400"
+                                                                else if (s === 'APPROVED') colors = "bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                                                                else if (s === 'PARTIAL' || s === 'PARTIALLY_FULFILLED') colors = "bg-sky-100 text-sky-600 dark:bg-sky-900/20 dark:text-sky-400"
+                                                                else if (s === 'CANCELLED') colors = "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                                                
+                                                                return (
+                                                                    <Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border-none", colors)}>
+                                                                        {order.status}
+                                                                    </Badge>
+                                                                )
+                                                            })()}
                                                         </TableCell>
                                                     </TableRow>
                                                     {isExpanded && order.items.map((prod: any, pIdx: number) => {
                                                         const pTotal = (prod.quantity * prod.priceCents) / 100
                                                         return (
-                                                        <TableRow key={`${order.id}-${pIdx}`} className="bg-slate-50 dark:bg-slate-800/80 border-l-4 border-indigo-600 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shadow-inner" onClick={() => handleRowClick(prod)}>
+                                                        <TableRow key={`${order.id}-${pIdx}`} className="bg-slate-50/80 dark:bg-slate-800/80 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors" onClick={() => handleRowClick(prod)}>
                                                             <TableCell className="w-8 pl-3">
-                                                                <div className="w-2 h-2 rounded-full bg-indigo-400" />
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
                                                             </TableCell>
                                                             <TableCell className="pl-2 py-3 text-[11px] font-mono text-slate-500">{new Date(prod.orderDate).toLocaleDateString()}</TableCell>
                                                             <TableCell className="py-3 pl-4">
@@ -826,14 +784,22 @@ export default function ProductPerformancePage() {
                                                             <TableCell className="text-center font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">{formatPKR(pTotal)}</TableCell>
                                                             <TableCell className="text-center font-mono text-[10px] text-slate-500">{prod.tid}</TableCell>
                                                             <TableCell className="text-right pr-6">
-                                                                <Badge variant="outline" className={cn(
-                                                                    "text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border-none",
-                                                                    prod.orderStatus === "REFUNDED" ? "bg-rose-100 text-rose-600" :
-                                                                    prod.orderStatus === "REJECTED" ? "bg-amber-100 text-amber-600" :
-                                                                    "bg-emerald-100 text-emerald-600"
-                                                                )}>
-                                                                    {prod.orderStatus}
-                                                                </Badge>
+                                                                {(() => {
+                                                                    const s = (prod.orderStatus || "").toUpperCase()
+                                                                    let colors = "bg-slate-100 text-slate-600 dark:bg-slate-900/10 dark:text-slate-400" // Default
+                                                                    if (s === 'FULFILLED') colors = "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400"
+                                                                    else if (s === 'REJECTED') colors = "bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400"
+                                                                    else if (s === 'REFUNDED') colors = "bg-rose-100 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400"
+                                                                    else if (s === 'APPROVED') colors = "bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
+                                                                    else if (s === 'PARTIAL' || s === 'PARTIALLY_FULFILLED') colors = "bg-sky-100 text-sky-600 dark:bg-sky-900/20 dark:text-sky-400"
+                                                                    else if (s === 'CANCELLED') colors = "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                                                                    
+                                                                    return (
+                                                                        <Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border-none", colors)}>
+                                                                            {prod.orderStatus}
+                                                                        </Badge>
+                                                                    )
+                                                                })()}
                                                             </TableCell>
                                                         </TableRow>
                                                     )})}
@@ -855,5 +821,47 @@ export default function ProductPerformancePage() {
                 fields={selectedRow ? getDrawerFields(selectedRow) : []}
             />
         </div>
+    )
+}
+
+/* ━━━ KPI Card Component ━━━ */
+function KPICard({ label, value, icon, iconBg, trend, trendColor, subtitle, compare, compareValue }: {
+    label: string
+    value: string | number
+    icon: React.ReactNode
+    iconBg: string
+    trend: { value: string; isUp: boolean; isDown: boolean } | null
+    trendColor: 'emerald' | 'rose'
+    subtitle: string
+    compare?: boolean
+    compareValue?: string
+}) {
+    return (
+        <Card className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+            <div className="flex items-center justify-between mb-2">
+                <div className={cn("p-2 rounded-xl", iconBg)}>{icon}</div>
+                <div className="flex flex-col items-end gap-1">
+                    <Badge variant="outline" className="text-[9px] uppercase font-bold tracking-wider opacity-60">{label}</Badge>
+                    {trend && trend.value !== "0.0" && (
+                        <div className={cn(
+                            "flex items-center gap-0.5 text-[10px] font-bold",
+                            trendColor === 'rose'
+                                ? (trend.isUp ? "text-rose-500" : "text-emerald-500")
+                                : (trend.isUp ? "text-emerald-500" : "text-rose-500")
+                        )}>
+                            {trend.isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                            {trend.value}%
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
+                {compare && compareValue && (
+                    <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">{compareValue}</span>
+                )}
+            </div>
+            <p className="text-[10px] font-semibold text-slate-400 mt-1.5">{subtitle}</p>
+        </Card>
     )
 }

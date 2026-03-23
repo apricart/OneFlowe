@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
 
         const baseConditions: any[] = [
             inArray(orders.branchId, branchIds),
-            inArray(orders.status, ['FULFILLED', 'REFUNDED', 'APPROVED'])
+            sql`UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED')`
         ]
 
         if (parsedMonths.length > 0) {
@@ -163,7 +163,8 @@ export async function GET(req: NextRequest) {
                 pInfo.qtyOrdered += row.qtyOrdered
 
                 // Determine Fulfilled vs Refunded universally for recognized statuses
-                if (row.status === 'FULFILLED' || row.status === 'REFUNDED' || row.status === 'APPROVED') {
+                const s = (row.status || "").toUpperCase()
+                if (s === 'FULFILLED' || s === 'REFUNDED' || s === 'APPROVED' || s === 'PARTIAL' || s === 'PARTIALLY_FULFILLED') {
                     const refundedCount = refundQuantities[row.orderItemId] || 0
                     const fulfilledCount = Math.max(0, row.qtyOrdered - refundedCount)
 
@@ -221,7 +222,7 @@ export async function GET(req: NextRequest) {
                 .where(
                     and(
                         inArray(orders.branchId, branchIds),
-                        inArray(orders.status, ['FULFILLED', 'REFUNDED', 'APPROVED']),
+                        sql`UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED')`,
                         (() => {
                             const compCond: any[] = []
                             if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {
@@ -252,10 +253,14 @@ export async function GET(req: NextRequest) {
 
             let compRev = 0, compVol = 0, compRef = 0
             compResults.forEach(r => {
-                if (r.status === 'FULFILLED' || r.status === 'APPROVED') {
-                    compVol += r.qtyOrdered
-                    compRev += (r.qtyOrdered * r.priceCents)
-                } else if (r.status === 'REFUNDED') {
+                const s = (r.status || "").toUpperCase()
+                if (s === 'FULFILLED' || s === 'APPROVED' || s === 'PARTIAL' || s === 'PARTIALLY_FULFILLED') {
+                    const refQ = compRefundQuantities[r.orderItemId] || 0
+                    compRef += refQ
+                    const fulfilledCount = Math.max(0, r.qtyOrdered - refQ)
+                    compVol += fulfilledCount
+                    compRev += (fulfilledCount * r.priceCents)
+                } else if (s === 'REFUNDED') {
                     const refQ = compRefundQuantities[r.orderItemId] || 0
                     compRef += refQ
                     compVol += Math.max(0, r.qtyOrdered - refQ)
@@ -279,10 +284,13 @@ export async function GET(req: NextRequest) {
                     compProductMap[gpid] = { qtyFulfilled: 0, revenueGeneratedCents: 0 }
                 }
                 const pInfo = compProductMap[gpid]
-                if (row.status === 'FULFILLED' || row.status === 'APPROVED') {
-                    pInfo.qtyFulfilled += row.qtyOrdered
-                    pInfo.revenueGeneratedCents += (row.qtyOrdered * row.priceCents)
-                } else if (row.status === 'REFUNDED') {
+                const s = (row.status || "").toUpperCase()
+                if (s === 'FULFILLED' || s === 'APPROVED' || s === 'PARTIAL' || s === 'PARTIALLY_FULFILLED') {
+                    const refQ = compRefundQuantities[row.orderItemId] || 0
+                    const fulfilledCount = Math.max(0, row.qtyOrdered - refQ)
+                    pInfo.qtyFulfilled += fulfilledCount
+                    pInfo.revenueGeneratedCents += (fulfilledCount * row.priceCents)
+                } else if (s === 'REFUNDED') {
                     const refQ = compRefundQuantities[row.orderItemId] || 0
                     const fulfilledCount = Math.max(0, row.qtyOrdered - refQ)
                     pInfo.qtyFulfilled += fulfilledCount

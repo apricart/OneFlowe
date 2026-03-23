@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useMemo } from "react"
-import useSWR from "swr"
+import useSWR, { useSWRConfig } from "swr"
 import { useSession } from "next-auth/react"
 import { useToast } from "@/hooks/use-toast"
 import { Card } from "@/components/ui/card"
@@ -30,6 +30,7 @@ interface BudgetAllocation {
 export default function BudgetsPage() {
   const { data: session } = useSession()
   const { toast } = useToast()
+  const { mutate: globalMutate } = useSWRConfig()
   const role = (session?.user as any)?.role
   const isHeadOffice = role === "HEAD_OFFICE" || role === "SUPER_ADMIN"
   const { organizationId, branchId, isInitialized } = useAppContext()
@@ -78,7 +79,7 @@ export default function BudgetsPage() {
     )
   }, [scopedBudgets, searchQuery])
 
-  const totalAllocated = scopedBudgets.reduce((sum, b) => sum + b.amountAllocatedCents, 0)
+  const totalAllocated = scopedBudgets.reduce((sum, b) => sum + b.amountAllocatedCents + (b.amountCreditedCents || 0), 0)
   const totalSpent = scopedBudgets.reduce((sum, b) => sum + b.amountSpentCents, 0)
   const totalHeld = scopedBudgets.reduce((sum, b) => sum + b.amountHeldCents, 0)
   const totalRemaining = scopedBudgets.reduce((sum, b) => sum + b.remainingCents, 0)
@@ -122,6 +123,9 @@ export default function BudgetsPage() {
       setShowDialog(false)
       setEditingBudget(null)
       mutate()
+      
+      // Global revalidation for analytics
+      globalMutate(key => typeof key === 'string' && key.includes('/api/v1/analytics/budgets/summary'))
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" })
     }
@@ -143,6 +147,7 @@ export default function BudgetsPage() {
           branchId: emptyingBudget.branchId,
           amountAllocatedCents: 0,
           setAbsolute: true,
+          resetAddons: true,
         })
       })
 
@@ -158,6 +163,9 @@ export default function BudgetsPage() {
       setShowEmptyDialog(false)
       setEmptyingBudget(null)
       mutate()
+      
+      // Global revalidation for analytics
+      globalMutate(key => typeof key === 'string' && key.includes('/api/v1/analytics/budgets/summary'))
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" })
     }
@@ -174,6 +182,7 @@ export default function BudgetsPage() {
             branchId: budget.branchId,
             amountAllocatedCents: 0,
             setAbsolute: true,
+            resetAddons: true,
           })
         })
         if (res.ok) successCount++
@@ -185,6 +194,9 @@ export default function BudgetsPage() {
       })
       setShowEmptyAllDialog(false)
       mutate()
+      
+      // Global revalidation for analytics
+      globalMutate(key => typeof key === 'string' && key.includes('/api/v1/analytics/budgets/summary'))
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" })
     }
@@ -219,16 +231,19 @@ export default function BudgetsPage() {
       setShowBulkDialog(false)
       setBulkAmount("")
       mutate()
+
+      // Global revalidation for analytics
+      globalMutate(key => typeof key === 'string' && key.includes('/api/v1/analytics/budgets/summary'))
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" })
     }
   }
 
   const getSpendingPercentage = (budget: BudgetAllocation) => {
-    const total = budget.amountAllocatedCents || 1
-    // Net spend = Spent + Held - Credited
-    const netSpend = (budget.amountSpentCents + budget.amountHeldCents) - (budget.amountCreditedCents || 0)
-    return (netSpend / total) * 100
+    const total = (budget.amountAllocatedCents || 0) + (budget.amountCreditedCents || 0)
+    if (total <= 0) return 0
+    const usage = (budget.amountSpentCents + budget.amountHeldCents)
+    return (usage / total) * 100
   }
 
   const getStatusColor = (percentage: number) => {
@@ -290,7 +305,7 @@ export default function BudgetsPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[
-          { label: "Total Monthly Allocation", value: formatAmount(totalAllocated), icon: Wallet, gradient: "from-indigo-500 to-purple-500", sub: `Limit for ${currentMonth}` },
+          { label: "Total Budget Limit", value: formatAmount(totalAllocated), icon: Wallet, gradient: "from-indigo-500 to-purple-500", sub: `Base + Addons for ${currentMonth}` },
           { label: "Consumed This Month", value: formatAmount(totalSpent + totalHeld), icon: PieChart, gradient: "from-orange-400 to-pink-500", sub: "Includes pending orders" },
           { label: "Remaining This Month", value: formatAmount(totalRemaining), icon: CheckCircle2, gradient: "from-emerald-400 to-teal-500", sub: `Available for ${currentMonth}` },
         ].map((metric) => {
@@ -403,9 +418,9 @@ export default function BudgetsPage() {
                         {formatAmount(budget.baselineBudgetCents)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {(budget.amountAllocatedCents > budget.baselineBudgetCents || budget.amountCreditedCents > 0) ? (
+                        {budget.amountCreditedCents > 0 ? (
                           <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 font-bold">
-                            +{formatAmount((budget.amountAllocatedCents - budget.baselineBudgetCents) + budget.amountCreditedCents)}
+                            +{formatAmount(budget.amountCreditedCents)}
                           </Badge>
                         ) : (
                           <span className="text-slate-300 dark:text-slate-700">-</span>
