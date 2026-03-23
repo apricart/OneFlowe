@@ -89,8 +89,8 @@ export async function POST(req: NextRequest) {
         branchId: orders.branchId,
         organizationId: orders.organizationId,
         period: sql<string>`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`,
-        totalSpentCents: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
-        totalHeldCents: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) IN ('PENDING', 'APPROVED') THEN ${orders.totalCents} ELSE 0 END), 0)`.mapWith(Number),
+        totalSpentCents: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
+        totalHeldCents: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) IN ('PENDING', 'APPROVED') THEN ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0) ELSE 0 END), 0)`.mapWith(Number),
       })
       .from(orders)
       .where(inArray(orders.branchId, targetBranchIds))

@@ -214,7 +214,7 @@ export async function GET(req: NextRequest) {
             .select({
                 categoryId: globalProducts.categoryId,
                 categoryName: categories.name,
-                spentCents: sql<number>`SUM(${orderItems.priceCents} * ${orderItems.quantity})`.mapWith(Number)
+                spentCents: sql<number>`SUM((${orderItems.priceCents} * ${orderItems.quantity}) - COALESCE((SELECT SUM(amount_cents) FROM refund_items WHERE order_item_id = ${orderItems.id}), 0))`.mapWith(Number)
             })
             .from(orderItems)
             .innerJoin(orders, eq(orderItems.orderId, orders.id))

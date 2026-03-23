@@ -312,7 +312,7 @@ export default function OrderReportPage() {
 
         const rows = filteredOrders.map((order: any) => {
             const row: any[] = []
-            if (isVisible("orderDate")) row.push(new Date(order.orderCreatedAt).toLocaleDateString())
+            if (isVisible("orderDate")) row.push(new Date(order.createdAt || order.orderCreatedAt).toLocaleDateString())
             if (isVisible("userName")) row.push(order.userName || "-")
             if (isVisible("tid")) row.push(order.tid)
             if (isVisible("organizationName")) row.push(order.organizationName || "N/A")
@@ -321,7 +321,7 @@ export default function OrderReportPage() {
             if (isVisible("status")) row.push(order.status)
             if (isVisible("subtotalValue")) row.push(((order.subtotalCents || 0) / 100).toFixed(2))
             if (isVisible("refundValue")) row.push(((order.refundAmountCents || 0) / 100).toFixed(2))
-            if (isVisible("netTotalValue")) row.push(((order.netTotalCents || 0) / 100).toFixed(2))
+            if (isVisible("netTotalValue")) row.push((( (order.totalCents || 0) - (order.refundAmountCents || 0)) / 100).toFixed(2))
             return row
         })
 
@@ -724,7 +724,7 @@ export default function OrderReportPage() {
                                                 const refQty = Math.max(0, order.qtyOrdered - order.qtyDelivered)
                                                 return (
                                                     <TableRow key={order.id} className="hover:bg-indigo-50/40 dark:hover:bg-indigo-900/10 cursor-default transition-colors border-b border-slate-100 dark:border-slate-800/50 text-[11px] font-medium">
-                                                        {isVisible("orderDate") && <TableCell className="whitespace-nowrap py-3 font-mono text-[10px]" suppressHydrationWarning>{new Date(order.orderCreatedAt).toLocaleDateString()}</TableCell>}
+                                                        {isVisible("orderDate") && <TableCell className="whitespace-nowrap py-3 font-mono text-[10px]" suppressHydrationWarning>{new Date(order.createdAt || order.orderCreatedAt).toLocaleDateString()}</TableCell>}
                                                         {isVisible("userName") && <TableCell className="whitespace-nowrap py-3 font-semibold text-slate-800 dark:text-slate-200 capitalize">{order.userName}</TableCell>}
                                                         {isVisible("tid") && <TableCell className="whitespace-nowrap py-3 font-mono font-bold text-slate-700 dark:text-slate-300">{order.tid}</TableCell>}
                                                         {isVisible("organizationName") && <TableCell className="whitespace-nowrap py-3">{order.organizationName}</TableCell>}
@@ -744,7 +744,7 @@ export default function OrderReportPage() {
                                                         )}
                                                         {isVisible("subtotalValue") && <TableCell className="text-right py-3 font-mono font-bold">{formatPKR(order.subtotalCents / 100)}</TableCell>}
                                                         {isVisible("refundValue") && <TableCell className="text-right py-3 font-mono font-bold text-rose-600">{formatPKR(order.refundAmountCents / 100)}</TableCell>}
-                                                        {isVisible("netTotalValue") && <TableCell className="text-right py-3 font-mono font-black text-slate-900 dark:text-white">{formatPKR(order.netTotalCents / 100)}</TableCell>}
+                                                        {isVisible("netTotalValue") && <TableCell className="text-right py-3 font-mono font-black text-slate-900 dark:text-white">{formatPKR(((order.totalCents || 0) - (order.refundAmountCents || 0)) / 100)}</TableCell>}
 
                                                     </TableRow>
                                                 )

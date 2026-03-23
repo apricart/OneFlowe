@@ -713,7 +713,7 @@ export default function OrderPortalPage() {
                               <p className="font-semibold text-slate-900 dark:text-white">Order {order.tid}</p>
                               <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
                                 <StatusIcon className="h-3 w-3 mr-1" />
-                                {order.status || "PENDING"}
+                                 {order.status?.toUpperCase() || "PENDING"}
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">
@@ -746,7 +746,7 @@ export default function OrderPortalPage() {
                           </div>
                         </div>
 
-                        {(order.status.toLowerCase() === 'rejected' || order.status === 'REJECTED') && order.rejectionReason && (
+                        {(order.status?.toUpperCase() === 'REJECTED') && order.rejectionReason && (
                           <div className="mb-3 rounded bg-red-50 p-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300 border border-red-100 dark:border-red-900">
                             <span className="font-semibold mr-1">Reason:</span>
                             {order.rejectionReason}

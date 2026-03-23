@@ -287,12 +287,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           .limit(1)
 
         if (budget) {
+          // Determine which bucket the order money was in:
+          // FULFILLED → amountSpentCents; APPROVED/PENDING → amountHeldCents
+          // We NEVER touch amountCreditedCents (addon) on a refund — that field
+          // is exclusively for manual Head-Office add-on credits.
+          const isFulfilled = orderStatus === "FULFILLED"
           await tx
             .update(budgets)
-            .set({
-              amountCreditedCents: sql`${budgets.amountCreditedCents} + ${totalRefundAmount}`,
-              updatedAt: new Date(),
-            })
+            .set(
+              isFulfilled
+                ? {
+                    // Money was already moved to spent; give it back
+                    amountSpentCents: sql`GREATEST(0, ${budgets.amountSpentCents} - ${totalRefundAmount})`,
+                    updatedAt: new Date(),
+                  }
+                : {
+                    // Money was still on hold; release the held amount
+                    amountHeldCents: sql`GREATEST(0, ${budgets.amountHeldCents} - ${totalRefundAmount})`,
+                    updatedAt: new Date(),
+                  }
+            )
             .where(eq(budgets.id, budget.id))
         }
 

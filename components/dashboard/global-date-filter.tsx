@@ -112,10 +112,12 @@ import { Switch } from "@/components/ui/switch"
 import { Check, ChevronDown, Calendar as CalendarIcon, ArrowRightLeft, Calculator } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+const EMPTY_ARRAY: number[] = []
+
 export function GlobalDateFilter({ 
     value, onChange, activePreset, className, hidePresets, 
-    compare, compareRange, months = [], years = [], 
-    compareMonths = [], compareYears = [] 
+    compare, compareRange, months = EMPTY_ARRAY, years = EMPTY_ARRAY, 
+    compareMonths = EMPTY_ARRAY, compareYears = EMPTY_ARRAY 
 }: GlobalDateFilterProps) {
     const [calendarOpen, setCalendarOpen] = useState(false)
     const [compareCalendarOpen, setCompareCalendarOpen] = useState(false)
