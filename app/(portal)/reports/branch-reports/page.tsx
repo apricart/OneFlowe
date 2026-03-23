@@ -130,9 +130,14 @@ export default function BranchReportsPage() {
         undefined,
         groupId || undefined,
         dateRange,
-        activePreset === "all" ? "yearly" : "all",
+        "all",
         compare,
-        compareRange
+        compareRange,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        activePreset === "all" ? "yearly" : "daily"
     )
 
     useEffect(() => {

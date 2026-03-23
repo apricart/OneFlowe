@@ -2,6 +2,7 @@ import { db } from "../lib/db";
 import { orders } from "../db/schema";
 import { sql } from "drizzle-orm";
 import fs from "fs";
+import path from "path";
 
 async function main() {
   console.log("Fetching order status distribution...");

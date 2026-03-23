@@ -92,8 +92,8 @@ export function BranchAdminDashboard() {
     organizationId, branchId, undefined, undefined, dateRange, "APPROVED", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined
   )
 
-  const { data: pendingData } = useSalesPerformance(
-    organizationId, branchId, undefined, undefined, dateRange, "PENDING", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined
+  const { data: partialData } = useSalesPerformance(
+    organizationId, branchId, undefined, undefined, dateRange, "PARTIAL", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined
   )
 
   const handleDateChange = useCallback((
@@ -215,7 +215,7 @@ export function BranchAdminDashboard() {
           value={pendingCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-amber-400 to-orange-500" iconBg="text-amber-600 bg-amber-600" delay={75}
-          onClick={() => handleKPIOpen("PENDING" as any)}
+          onClick={() => handleKPIOpen("PENDING")}
           trend={pendingTrend?.type as "up" | "down" | undefined}
           trendValue={pendingTrend?.value?.toString()}
           comparisonValue={pendingTrend?.label}
@@ -226,7 +226,7 @@ export function BranchAdminDashboard() {
           value={approvedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={100}
-          onClick={() => handleKPIOpen("APPROVED" as any)}
+          onClick={() => handleKPIOpen("APPROVED")}
           trend={approvedTrend?.type as "up" | "down" | undefined}
           trendValue={approvedTrend?.value?.toString()}
           comparisonValue={approvedTrend?.label}
@@ -248,7 +248,7 @@ export function BranchAdminDashboard() {
           value={partialCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-indigo-500 to-purple-600" iconBg="text-indigo-600 bg-indigo-600" delay={135}
-          onClick={() => handleKPIOpen("PARTIAL" as any)}
+          onClick={() => handleKPIOpen("PARTIAL")}
           trend={partialTrend?.type as "up" | "down" | undefined}
           trendValue={partialTrend?.value?.toString()}
           comparisonValue={partialTrend?.label}

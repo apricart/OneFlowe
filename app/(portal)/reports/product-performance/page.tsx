@@ -578,82 +578,82 @@ export default function ProductPerformancePage() {
                                     </DropdownMenu>
                                 </div>
                             </div>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800">
-                                        <TableHead className="pl-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Code</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Product Name</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Category</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Sub-category</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Status</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">{compare ? "Qty Ord (A/B)" : "Qty Ordered"}</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-emerald-600">{compare ? "Fulfilled (A/B)" : "Fulfilled"}</TableHead>
-                                        <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-rose-500">{compare ? "Refunded (A/B)" : "Refunded"}</TableHead>
-                                        <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">{compare ? "Revenue (A/B)" : "Revenue"}</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {isPerfLoading ? (
-                                        <TableRow><TableCell colSpan={8} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-500" /></TableCell></TableRow>
-                                    ) : filteredProducts.length === 0 ? (
-                                        <TableRow><TableCell colSpan={8} className="h-32 text-center text-slate-500 text-sm">No products found.</TableCell></TableRow>
-                                    ) : (
-                                        filteredProducts.map((p: any) => (
-                                            <TableRow key={p.productId} className="hover:bg-amber-50/40 dark:hover:bg-amber-900/10 border-b border-slate-100 dark:border-slate-800/50">
-                                                <TableCell className="font-mono text-[11px] pl-6 text-slate-500 font-semibold">{p.productCode}</TableCell>
-                                                <TableCell className="font-medium text-xs text-slate-900 dark:text-slate-200">
-                                                    <div className="flex flex-col">
-                                                        <span>{p.productName}</span>
-                                                        <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded w-fit mt-1">{p.unit}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.category}</TableCell>
-                                                <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.subCategory}</TableCell>
-                                                <TableCell className="text-center">
-                                                    <Badge 
-                                                        className={cn(
-                                                            "text-[9px] uppercase px-2 py-0.5 rounded-full border-none font-bold tracking-wider",
-                                                            (p.status === 'active' || !p.status) 
-                                                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" 
-                                                                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                                                        )}
-                                                    >
-                                                        {p.status || 'ACTIVE'}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-center font-mono text-xs">
-                                                    <div className="flex flex-col items-center">
-                                                        <span>{p.qtyOrdered}</span>
-                                                        {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5">{p.compareQtyOrdered || 0}</span>}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-center font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
-                                                    <div className="flex flex-col items-center">
-                                                        <span>{p.qtyFulfilled}</span>
-                                                        {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{p.compareQty || 0}</span>}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-center font-mono font-bold text-xs text-rose-500">
-                                                    <div className="flex flex-col items-center">
-                                                        <span>{p.qtyRefunded}</span>
-                                                        {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{p.compareQtyRefunded || 0}</span>}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right font-mono font-bold text-xs text-slate-900 dark:text-white">
-                                                    <div className="flex flex-col items-end">
-                                                        <span>{formatPKR(p.revenueGeneratedCents / 100)}</span>
-                                                        {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{formatPKR((p.compareRevenue || 0) / 100)}</span>}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    </Card>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-800">
+                                            <TableHead className="pl-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Code</TableHead>
+                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Product Name</TableHead>
+                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Category</TableHead>
+                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500">Sub-category</TableHead>
+                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Status</TableHead>
+                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">{compare ? "Qty Ord (A/B)" : "Qty Ordered"}</TableHead>
+                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-emerald-600">{compare ? "Fulfilled (A/B)" : "Fulfilled"}</TableHead>
+                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-rose-500">{compare ? "Refunded (A/B)" : "Refunded"}</TableHead>
+                                            <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">{compare ? "Revenue (A/B)" : "Revenue"}</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isPerfLoading ? (
+                                            <TableRow><TableCell colSpan={8} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-500" /></TableCell></TableRow>
+                                        ) : filteredProducts.length === 0 ? (
+                                            <TableRow><TableCell colSpan={8} className="h-32 text-center text-slate-500 text-sm">No products found.</TableCell></TableRow>
+                                        ) : (
+                                            filteredProducts.map((p: any) => (
+                                                <TableRow key={p.productId} className="hover:bg-amber-50/40 dark:hover:bg-amber-900/10 border-b border-slate-100 dark:border-slate-800/50">
+                                                    <TableCell className="font-mono text-[11px] pl-6 text-slate-500 font-semibold">{p.productCode}</TableCell>
+                                                    <TableCell className="font-medium text-xs text-slate-900 dark:text-slate-200">
+                                                        <div className="flex flex-col">
+                                                            <span>{p.productName}</span>
+                                                            <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded w-fit mt-1">{p.unit}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.category}</TableCell>
+                                                    <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.subCategory}</TableCell>
+                                                    <TableCell className="text-center">
+                                                        <Badge 
+                                                            className={cn(
+                                                                "text-[9px] uppercase px-2 py-0.5 rounded-full border-none font-bold tracking-wider",
+                                                                (p.status === 'active' || !p.status) 
+                                                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" 
+                                                                    : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                                                            )}
+                                                        >
+                                                            {p.status || 'ACTIVE'}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-mono text-xs">
+                                                        <div className="flex flex-col items-center">
+                                                            <span>{p.qtyOrdered}</span>
+                                                            {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5">{p.compareQtyOrdered || 0}</span>}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                                                        <div className="flex flex-col items-center">
+                                                            <span>{p.qtyFulfilled}</span>
+                                                            {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{p.compareQty || 0}</span>}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-mono font-bold text-xs text-rose-500">
+                                                        <div className="flex flex-col items-center">
+                                                            <span>{p.qtyRefunded}</span>
+                                                            {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{p.compareQtyRefunded || 0}</span>}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-mono font-bold text-xs text-slate-900 dark:text-white">
+                                                        <div className="flex flex-col items-end">
+                                                            <span>{formatPKR(p.revenueGeneratedCents / 100)}</span>
+                                                            {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{formatPKR((p.compareRevenue || 0) / 100)}</span>}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </Card>
+                    </>
                 ) : (
                     /* ━━━ REPORTS TAB ━━━ */
                     <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
@@ -793,7 +793,6 @@ export default function ProductPerformancePage() {
                                                                     else if (s === 'APPROVED') colors = "bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
                                                                     else if (s === 'PARTIAL' || s === 'PARTIALLY_FULFILLED') colors = "bg-sky-100 text-sky-600 dark:bg-sky-900/20 dark:text-sky-400"
                                                                     else if (s === 'CANCELLED') colors = "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                                                                    
                                                                     return (
                                                                         <Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border-none", colors)}>
                                                                             {prod.orderStatus}

@@ -326,7 +326,7 @@ export function GlobalDateFilter({
                             </PopoverTrigger>
                             <PopoverContent className="w-32 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" align="start">
                                 <div className="space-y-1">
-                                    {YEARS.map((y) => (
+                                    {dynamicYears.map((y: number) => (
                                         <div 
                                             key={y} 
                                             className={cn(
@@ -435,7 +435,7 @@ export function GlobalDateFilter({
                                                     </PopoverTrigger>
                                                     <PopoverContent className="w-32 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" align="start">
                                                         <div className="space-y-1">
-                                                            {YEARS.map((y) => (
+                                                            {dynamicYears.map((y) => (
                                                                 <div 
                                                                     key={y} 
                                                                     className={cn(

@@ -244,7 +244,7 @@ export default function HeadOfficeInventoryView() {
                                             Loading assigned catalog…
                                         </TableCell>
                                     </TableRow>
-                                ) : assignedProducts.length === 0 ? (
+                                ) : allProducts.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
                                             No products have been assigned yet. Once Super Admin approves products for your organization, they
