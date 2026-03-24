@@ -106,6 +106,9 @@ export const users = pgTable(
     organizationId: integer("organization_id").references(() => organizations.id),
     // Avoid circular type init; store branch id without FK
     branchId: integer("branch_id"),
+    imprestHolder: varchar("imprest_holder", { length: 255 }),
+    contactPerson: varchar("contact_person", { length: 255 }),
+    address: text("address"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -117,6 +120,7 @@ export const users = pgTable(
     activeIdx: index("users_active_idx").on(t.isActive),
     orgIdx: index("users_org_idx").on(t.organizationId),
     branchIdx: index("users_branch_idx").on(t.branchId),
+    employeeIdIdx: uniqueIndex("users_employee_id_idx").on(t.employeeId),
   }),
 )
 

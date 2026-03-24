@@ -31,6 +31,10 @@ type UserRow = {
   mfaEnabled?: boolean
   isActive: boolean
   createdAt: string
+  employeeId?: string | null
+  imprestHolder?: string | null
+  contactPerson?: string | null
+  address?: string | null
 }
 
 type HeadOfficeUsersTableProps = {
@@ -64,7 +68,11 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
     mfaEnabled: false,
     isActive: true,
     password: "",
-    confirmPassword: ""
+    confirmPassword: "",
+    employeeId: "",
+    imprestHolder: "",
+    contactPerson: "",
+    address: ""
   })
 
   // Filter users
@@ -162,7 +170,11 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       mfaEnabled: user.mfaEnabled || false,
       isActive: user.isActive,
       password: "",
-      confirmPassword: ""
+      confirmPassword: "",
+      employeeId: user.employeeId || "",
+      imprestHolder: user.imprestHolder || "",
+      contactPerson: user.contactPerson || "",
+      address: user.address || ""
     })
   }
 
@@ -181,7 +193,11 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       mfaEnabled: false,
       isActive: true,
       password: "",
-      confirmPassword: ""
+      confirmPassword: "",
+      employeeId: "",
+      imprestHolder: "",
+      contactPerson: "",
+      address: ""
     })
   }
 
@@ -216,7 +232,11 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
         organizationId: editForm.organizationId ? parseInt(editForm.organizationId) : null,
         branchId: editForm.branchId ? parseInt(editForm.branchId) : null,
         mfaEnabled: editForm.mfaEnabled,
-        isActive: editForm.isActive
+        isActive: editForm.isActive,
+        employeeId: editForm.employeeId.trim() || null,
+        imprestHolder: editForm.imprestHolder.trim() || null,
+        contactPerson: editForm.contactPerson.trim() || null,
+        address: editForm.address.trim() || null
       }
 
       // Include password if password reset is enabled
@@ -424,9 +444,13 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
           <TableHeader>
             <TableRow className="bg-muted/50">
               <TableHead className="w-[200px]">User</TableHead>
+              <TableHead className="w-[100px]">Employee #</TableHead>
               <TableHead className="w-[150px]">Contact</TableHead>
               <TableHead className="w-[100px]">Role</TableHead>
               <TableHead className="w-[150px]">Assignment</TableHead>
+              <TableHead className="w-[100px]">Imprest</TableHead>
+              <TableHead className="w-[100px]">Contact Person</TableHead>
+              <TableHead className="w-[150px]">Address</TableHead>
               <TableHead className="w-[120px]">Company Status</TableHead>
               <TableHead className="w-[120px]">User Status</TableHead>
               <TableHead className="w-[100px]">Security</TableHead>
@@ -436,7 +460,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
           <TableBody>
             {filteredUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12">
+                <TableCell colSpan={12} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <User className="h-12 w-12 opacity-20" />
                     <p className="text-sm font-medium">No users found</p>
@@ -459,6 +483,9 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                         </div>
                       </div>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm">{user.employeeId || "—"}</span>
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
@@ -494,6 +521,17 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                         </div>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm">{user.imprestHolder || "—"}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm">{user.contactPerson || "—"}</span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm line-clamp-2 max-w-[150px]" title={user.address || ""}>
+                      {user.address || "—"}
+                    </span>
                   </TableCell>
                   <TableCell>
                     {user.organizationId ? (
@@ -657,6 +695,46 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                   value={editForm.phone}
                   onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
                   placeholder="Enter phone number"
+                />
+              </div>
+              {/* New Fields: Employee #, Imprest Holder, Contact Person */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-employeeId">Employee #</Label>
+                  <Input
+                    id="edit-employeeId"
+                    value={editForm.employeeId}
+                    onChange={e => setEditForm({ ...editForm, employeeId: e.target.value })}
+                    placeholder="Enter employee number"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-contactPerson">Contact Person</Label>
+                  <Input
+                  id="edit-contactPerson"
+                  value={editForm.contactPerson}
+                  onChange={e => setEditForm({ ...editForm, contactPerson: e.target.value })}
+                  placeholder="Enter contact person"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-address">Address</Label>
+              <Textarea
+                id="edit-address"
+                value={editForm.address}
+                onChange={e => setEditForm({ ...editForm, address: e.target.value })}
+                placeholder="Enter full address"
+                className="h-20"
+              />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="edit-imprestHolder">Imprest Holder</Label>
+                <Input
+                  id="edit-imprestHolder"
+                  value={editForm.imprestHolder}
+                  onChange={e => setEditForm({ ...editForm, imprestHolder: e.target.value })}
+                  placeholder="Enter imprest holder name"
                 />
               </div>
             </div>

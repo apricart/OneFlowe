@@ -42,7 +42,11 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     organizationId: "",
     branchId: "",
     mfaEnabled: false,
-    isActive: true
+    isActive: true,
+    employeeId: "",
+    imprestHolder: "",
+    contactPerson: "",
+    address: ""
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -84,7 +88,11 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         organizationId: organizationId || "",
         branchId: "",
         mfaEnabled: false,
-        isActive: true
+        isActive: true,
+        employeeId: "",
+        imprestHolder: "",
+        contactPerson: "",
+        address: ""
       })
       setErrors({})
       setStep(1)
@@ -213,7 +221,11 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
           organizationId: form.organizationId ? parseInt(form.organizationId) : null,
           branchId: (form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && form.branchId ? parseInt(form.branchId) : null,
           mfaEnabled: form.mfaEnabled,
-          isActive: form.isActive
+          isActive: form.isActive,
+          employeeId: form.employeeId.trim() || null,
+          imprestHolder: form.imprestHolder.trim() || null,
+          contactPerson: form.contactPerson.trim() || null,
+          address: form.address.trim() || null
         })
       }) as any
 
@@ -436,6 +448,51 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   {errors.password && (
                     <p className="text-xs text-red-600">{errors.password}</p>
                   )}
+                </div>
+
+                {/* New Fields: Employee #, Imprest Holder, Contact Person */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="employeeId">Employee #</Label>
+                    <Input
+                      id="employeeId"
+                      name="employeeId"
+                      value={form.employeeId}
+                      onChange={e => setForm({ ...form, employeeId: e.target.value })}
+                      placeholder="Enter employee number"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="contactPerson">Contact Person</Label>
+                    <Input
+                      id="contactPerson"
+                      name="contactPerson"
+                      value={form.contactPerson}
+                      onChange={e => setForm({ ...form, contactPerson: e.target.value })}
+                      placeholder="Enter contact person"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="imprestHolder">Imprest Holder</Label>
+                  <Input
+                    id="imprestHolder"
+                    name="imprestHolder"
+                    value={form.imprestHolder}
+                    onChange={e => setForm({ ...form, imprestHolder: e.target.value })}
+                    placeholder="Enter imprest holder name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="address">Address</Label>
+                  <Textarea
+                    id="address"
+                    name="address"
+                    value={form.address}
+                    onChange={e => setForm({ ...form, address: e.target.value })}
+                    placeholder="Enter full address"
+                    className="h-20"
+                  />
                 </div>
               </div>
             )}

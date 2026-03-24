@@ -38,6 +38,10 @@ export async function GET(req: Request) {
         createdAt: usersTable.createdAt,
         role: rolesTable.name,
         isActive: usersTable.isActive,
+        employeeId: usersTable.employeeId,
+        imprestHolder: usersTable.imprestHolder,
+        contactPerson: usersTable.contactPerson,
+        address: usersTable.address,
       })
       .from(usersTable)
       .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
@@ -56,6 +60,10 @@ export async function GET(req: Request) {
       createdAt: r.createdAt as any,
       role: r.role || "",
       isActive: !!r.isActive,
+      employeeId: r.employeeId || null,
+      imprestHolder: r.imprestHolder || null,
+      contactPerson: r.contactPerson || null,
+      address: r.address || null,
     }))
   }, CACHE_TTL.LISTING)
 
@@ -158,6 +166,10 @@ export async function POST(req: Request) {
         organizationId,
         branchId,
         fullName: `${firstName} ${lastName}`,
+        employeeId: body.employeeId ? String(body.employeeId) : null,
+        imprestHolder: body.imprestHolder ? String(body.imprestHolder) : null,
+        contactPerson: body.contactPerson ? String(body.contactPerson) : null,
+        address: body.address ? String(body.address) : null,
       })
       .returning()
 

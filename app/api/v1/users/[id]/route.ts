@@ -43,6 +43,10 @@ export async function PATCH(
     if (body.phone !== undefined) patch.phone = body.phone
     if (typeof body.isActive === "boolean") patch.isActive = body.isActive
     if (typeof body.mfaEnabled === "boolean") patch.mfaEnabled = body.mfaEnabled
+    if (body.employeeId !== undefined) patch.employeeId = body.employeeId || null
+    if (body.imprestHolder !== undefined) patch.imprestHolder = body.imprestHolder || null
+    if (body.contactPerson !== undefined) patch.contactPerson = body.contactPerson || null
+    if (body.address !== undefined) patch.address = body.address || null
 
     // Update full name if first or last name changed
     if (body.firstName || body.lastName) {
