@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     const orgIdParam = searchParams.get("organizationId")
     const branchIdParam = searchParams.get("branchId")
     const branchIdsParam = searchParams.get("branchIds") // comma-separated
+    const organizationIdsParam = searchParams.get("organizationIds") // comma-separated
     const groupIdParam = searchParams.get("groupId")
     const groupIdsParam = searchParams.get("groupIds")
     const statusParam = searchParams.get("status") // PENDING | FULFILLED | REFUNDED | all
@@ -44,6 +45,7 @@ export async function GET(req: NextRequest) {
     let groupId: number | null = null
     let groupIds: number[] = []
     let branchIds: number[] = []
+    let organizationIds: number[] = []
 
     // Role-based scoping
     if (role === "BRANCH_ADMIN") {
@@ -66,6 +68,10 @@ export async function GET(req: NextRequest) {
 
     if (branchIdsParam) {
         branchIds = branchIdsParam.split(",").map(Number).filter(n => !isNaN(n) && n > 0)
+    }
+
+    if (organizationIdsParam) {
+        organizationIds = organizationIdsParam.split(",").map(Number).filter(n => !isNaN(n) && n > 0)
     }
 
     if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") {
@@ -111,6 +117,7 @@ export async function GET(req: NextRequest) {
     const cacheKey = generateCacheKey("sales-perf", {
         role, organizationId, branchId,
         branchIds: branchIds.join(","),
+        organizationIds: organizationIds.join(","),
         groupIds: groupIds.join(","),
         status: statusParam,
         start: startDate.toISOString().slice(0, 16),
@@ -165,7 +172,11 @@ export async function GET(req: NextRequest) {
         }
 
         // Scope filters
-        if (organizationId) conditions.push(eq(orders.organizationId, organizationId))
+        if (organizationIds.length > 0) {
+            conditions.push(inArray(orders.organizationId, organizationIds))
+        } else if (organizationId) {
+            conditions.push(eq(orders.organizationId, organizationId))
+        }
 
         if (branchIds.length > 0) {
             conditions.push(inArray(orders.branchId, branchIds))
@@ -241,7 +252,12 @@ export async function GET(req: NextRequest) {
                 sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'REFUNDED', 'PENDING', 'REJECTED', 'CANCELLED')`
             )
         }
-        if (organizationId) branchConditions.push(eq(orders.organizationId, organizationId))
+        
+        if (organizationIds.length > 0) {
+            branchConditions.push(inArray(orders.organizationId, organizationIds))
+        } else if (organizationId) {
+            branchConditions.push(eq(orders.organizationId, organizationId))
+        }
         if (branchIds.length > 0) {
             branchConditions.push(inArray(orders.branchId, branchIds))
         } else if (branchId) {
@@ -264,7 +280,9 @@ export async function GET(req: NextRequest) {
             .from(branches)
             .leftJoin(orders, and(eq(orders.branchId, branches.id), and(...branchConditions)))
 
-        if (organizationId) {
+        if (organizationIds.length > 0) {
+            branchQuery = branchQuery.where(inArray(branches.organizationId, organizationIds)) as any
+        } else if (organizationId) {
             branchQuery = branchQuery.where(eq(branches.organizationId, organizationId)) as any
         }
 
@@ -357,7 +375,10 @@ export async function GET(req: NextRequest) {
                 }
             }
 
-            if (organizationId) {
+            if (organizationIds.length > 0) {
+                compConditions.push(inArray(orders.organizationId, organizationIds))
+                compAllStatusConditions.push(inArray(orders.organizationId, organizationIds))
+            } else if (organizationId) {
                 compConditions.push(eq(orders.organizationId, organizationId))
                 compAllStatusConditions.push(eq(orders.organizationId, organizationId))
             }

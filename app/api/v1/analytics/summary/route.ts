@@ -238,6 +238,7 @@ export async function GET(req: NextRequest) {
         orderCount: isFilteredByStatus
             ? count(orders.id)
             : metricExpressions.orderVolume,
+        totalOrderCount: count(orders.id),
         totalRefunds: sum(orders.refundAmountCents),
     })
         .from(orders)

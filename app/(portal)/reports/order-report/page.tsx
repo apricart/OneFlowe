@@ -186,7 +186,7 @@ export default function OrderReportPage() {
     }, [setContextBranchIds])
 
     // ━━━ DATA PROCESSING ━━━
-    const summary = globalData?.summary || { totalSales: 0, totalRefunds: 0, totalTax: 0, totalSubtotal: 0, orderCount: 0 }
+    const summary = globalData?.summary || { totalSales: 0, totalRefunds: 0, totalTax: 0, totalSubtotal: 0, orderCount: 0, totalOrderCount: 0 }
     const comparison = globalData?.comparison
     const chartOrders = chartData?.orders || []
     const reportOrders = reportData?.orders || []
@@ -213,14 +213,19 @@ export default function OrderReportPage() {
 
     // ━━━ CHART TREND DATA: Normalized X-Axis ━━━
     const chartTrendData = useMemo(() => {
-        const trend = chartOrders || []
+        const trend = (chartOrders || []).filter((o: any) => 
+            ['FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes((o.status || "").toUpperCase())
+        )
         const currentYear = new Date().getFullYear()
         
         // Case A: Multiple years -> Show Years on X-Axis
         if (chartYears.length > 1) {
             return chartYears.sort((a,b) => a-b).map(year => {
                 const yearOrders = trend.filter((o: any) => new Date(o.createdAt || o.orderDate).getFullYear() === year)
-                const compOrders = chartData?.comparisonOrders?.filter((o: any) => new Date(o.createdAt || o.orderDate).getFullYear() === year) || []
+                const compOrders = (chartData?.comparisonOrders || []).filter((o: any) => 
+                    ['FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes((o.status || "").toUpperCase()) &&
+                    new Date(o.createdAt || o.orderDate).getFullYear() === year
+                )
                 
                 return {
                     label: String(year),
@@ -244,10 +249,11 @@ export default function OrderReportPage() {
                 const d = new Date(o.createdAt || o.orderDate)
                 return d.getFullYear() === activeYear && (d.getMonth() + 1) === m
             })
-            const compOrders = chartData?.comparisonOrders?.filter((o: any) => {
+            const compOrders = (chartData?.comparisonOrders || []).filter((o: any) => {
                 const d = new Date(o.createdAt || o.orderDate)
-                return d.getFullYear() === activeYear && (d.getMonth() + 1) === m
-            }) || []
+                return ['FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes((o.status || "").toUpperCase()) &&
+                       d.getFullYear() === activeYear && (d.getMonth() + 1) === m
+            })
 
             return {
                 label: monthNames[m-1],
@@ -362,7 +368,7 @@ export default function OrderReportPage() {
                                 </h1>
                                 <p className="text-slate-400 font-medium text-sm flex items-center gap-2 max-w-md">
                                     <Calculator className="h-4 w-4 opacity-50" />
-                                    Detailed audit of <strong className="text-white">{summary.orderCount}</strong> transactions across selected domains.
+                                    Detailed audit of <strong className="text-white">{summary.totalOrderCount}</strong> transactions across selected domains.
                                 </p>
                             </div>
 
@@ -392,10 +398,10 @@ export default function OrderReportPage() {
 
                 {/* â” â” â”  KPI BENTO GRID â” â” â”  */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-                    <KPICard label="Net Revenue" value={formatPKR((summary.totalSales - summary.totalRefunds) / 100)} icon={<TrendingUp className="h-6 w-6" />} iconBg="bg-indigo-500/10 text-indigo-500" trend={revenueTrend} trendColor="indigo" subtitle="Gross fulfilled minus refunds." compare={compare} compareValue={formatPKR(((comparison?.totalSales || 0) - (comparison?.totalRefunds || 0)) / 100)} />
+                    <KPICard label="Net Revenue" value={formatPKR(summary.totalSales / 100)} icon={<TrendingUp className="h-6 w-6" />} iconBg="bg-indigo-500/10 text-indigo-500" trend={revenueTrend} trendColor="indigo" subtitle="Gross fulfilled minus refunds." compare={compare} compareValue={formatPKR((comparison?.totalSales || 0) / 100)} />
                     <KPICard label="Refund Impact" value={formatPKR(summary.totalRefunds / 100)} icon={<RotateCcw className="h-6 w-6" />} iconBg="bg-rose-500/10 text-rose-500" trend={refundsTrend} trendColor="rose" subtitle="Total value returned to users." compare={compare} compareValue={formatPKR((comparison?.totalRefunds || 0) / 100)} />
-                    <KPICard label="Total Orders" value={summary.orderCount} icon={<Package className="h-6 w-6" />} iconBg="bg-blue-500/10 text-blue-500" trend={ordersTrend} trendColor="blue" subtitle="Gross transaction count." compare={compare} compareValue={comparison?.totalOrders} />
-                    <KPICard label="Avg Value" value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={<Calculator className="h-6 w-6" />} iconBg="bg-amber-500/10 text-amber-500" subtitle="Gross revenue per order." />
+                    <KPICard label="Total Orders" value={summary.totalOrderCount} icon={<Package className="h-6 w-6" />} iconBg="bg-blue-500/10 text-blue-500" trend={ordersTrend} trendColor="blue" subtitle="Gross transaction count." compare={compare} compareValue={comparison?.totalOrders} />
+                    <KPICard label="Avg Value" value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={<Calculator className="h-6 w-6" />} iconBg="bg-amber-500/10 text-amber-500" subtitle="Net revenue per transacting order." />
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6 pt-4">

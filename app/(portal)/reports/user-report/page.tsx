@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
     Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, Users, Package, CheckCircle, TrendingUp, Filter, UserCircle, Calculator, ChevronDown, UserPlus,
-    Calendar, Hash, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, BarChart3
+    Calendar, Hash, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, BarChart3, Layers
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -585,14 +585,14 @@ function MonthFilter({ selected, onChange }: any) {
 }
 
 function YearFilter({ selected, onChange, availableYears }: any) {
-    const items = availableYears.map((y: number) => ({ id: y, label: String(y) }))
+    const items = (availableYears || []).map((y: number) => ({ id: y, label: String(y) }))
     return (
         <MultiSelectFilter
             title="Years"
             items={items}
             selectedIds={selected}
             onChange={(ids) => onChange(ids.sort((a,b) => b - a))}
-            icon={<Hash className="h-3.5 w-3.5 mr-2 text-blue-500" />}
+            icon={<Layers className="h-3.5 w-3.5 mr-2 text-indigo-500" />}
             placeholder="Years"
             showSearch={false}
         />

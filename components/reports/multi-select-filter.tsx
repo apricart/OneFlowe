@@ -25,6 +25,7 @@ interface MultiSelectFilterProps {
     className?: string
     buttonClassName?: string
     disabled?: boolean
+    maxSelect?: number
 }
 
 export function MultiSelectFilter({
@@ -38,7 +39,8 @@ export function MultiSelectFilter({
     showSearch = true,
     className,
     buttonClassName,
-    disabled = false
+    disabled = false,
+    maxSelect
 }: MultiSelectFilterProps) {
     const [open, setOpen] = React.useState(false)
     const [draft, setDraft] = React.useState<(string | number)[]>(selectedIds)
@@ -59,9 +61,18 @@ export function MultiSelectFilter({
     }, [items, searchQuery])
 
     const toggleItem = (id: string | number) => {
-        setDraft(prev => 
-            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-        )
+        setDraft(prev => {
+            if (prev.includes(id)) {
+                return prev.filter(i => i !== id)
+            }
+            if (maxSelect === 1) {
+                return [id]
+            }
+            if (maxSelect && prev.length >= maxSelect) {
+                return prev
+            }
+            return [...prev, id]
+        })
     }
 
     const selectAll = () => setDraft(items.map(i => i.id))

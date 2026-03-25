@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
         const compare = url.searchParams.get("compare") === "true"
         const summaryOnly = url.searchParams.get("summaryOnly") === "true"
         const trendOnly = url.searchParams.get("trendOnly") === "true"
+        const allTime = url.searchParams.get("allTime") === "true"
         const compareStartDateParam = url.searchParams.get("compareStartDate")
         const compareEndDateParam = url.searchParams.get("compareEndDate")
 
@@ -159,6 +160,20 @@ export async function GET(req: NextRequest) {
                 totalSpentCents: Number(compStats?.compSpent || 0),
                 totalUsers: Number(compStats?.compUsers || 0)
             }
+        }
+
+        if (allTime) {
+            // Get distinct years from orders
+            const distinctYears = await db
+                .select({ year: sql<number>`EXTRACT(YEAR FROM ${orders.createdAt})::int` })
+                .from(orders)
+                .where(inArray(orders.branchId, branchIds))
+                .groupBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`)
+                .orderBy(desc(sql`EXTRACT(YEAR FROM ${orders.createdAt})`))
+
+            return NextResponse.json({
+                years: distinctYears.map(y => y.year)
+            })
         }
 
         if (summaryOnly) {

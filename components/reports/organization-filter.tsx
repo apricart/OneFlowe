@@ -15,12 +15,14 @@ interface OrganizationFilterProps {
     selectedIds: string[]
     onChange: (ids: string[]) => void
     placeholder?: string
+    maxSelect?: number
 }
 
 export function OrganizationFilter({ 
     selectedIds, 
     onChange, 
-    placeholder = "Select Organizations" 
+    placeholder = "Select Organizations",
+    maxSelect
 }: OrganizationFilterProps) {
     const { data, isLoading } = useOrganizations()
     const orgs = (data?.items || []) as Organization[]
@@ -28,13 +30,14 @@ export function OrganizationFilter({
 
     return (
         <MultiSelectFilter
-            title="Organizations"
+            title={maxSelect === 1 ? "Organization" : "Organizations"}
             items={items}
             selectedIds={selectedIds}
             onChange={onChange}
             icon={<Building2 className={cn("h-4 w-4 shrink-0", selectedIds.length > 0 ? "text-indigo-600" : "text-slate-400")} />}
             placeholder={placeholder}
             className="w-[220px]"
+            maxSelect={maxSelect}
         />
     )
 }

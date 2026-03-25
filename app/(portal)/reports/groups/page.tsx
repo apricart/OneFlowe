@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback, useMemo, Fragment } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import useSWR from "swr"
+import { fetcher } from "@/lib/fetcher"
 import { useAppContext } from "@/components/context/app-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, FolderTree, ShoppingBag, TrendingUp, ChevronDown, ChevronRight, Layers, LayoutGrid
+    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, FolderTree, ShoppingBag, TrendingUp, ChevronDown, ChevronRight, Layers, LayoutGrid, Building2, Calendar, ShoppingCart, Percent, ArrowUpRight, ArrowDownRight, LayoutDashboard, Table as TableIcon, LineChart as LineChartIcon, RotateCcw
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -24,136 +25,167 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
+import { OrganizationFilter as OrgFilter } from "@/components/reports/organization-filter"
+import { GroupFilter } from "@/components/reports/group-filter"
+import { BranchFilter } from "@/components/reports/branch-filter"
 
-import { KPICard } from "@/components/reports/kpi-card"
-import { SalesPerformanceLineChart } from "@/components/dashboard/charts"
-import { useSalesPerformance } from "@/lib/hooks/use-sales-performance"
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
-interface Branch {
-    id: number
-    name: string
-    orders: number
-    revenue: number
-    refunds: number
-    rejected: number
-}
-
-interface Group {
-    id: number
-    name: string
-    organizationId: number
-    organizationName: string
-    branchCount: number
-    totalOrders: number
-    totalAmountCents: number
-    totalRefundCents: number
-    rejectedOrders: number
-    branches: Branch[]
-}
+type DateRange = { startDate: Date; endDate: Date }
 
 export default function GroupsReportPage() {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
 
-    const { organizationId } = useAppContext()
+    const { organizationId: contextOrgId } = useAppContext()
     const [searchTerm, setSearchTerm] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
     const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set())
+    const [activeTab, setActiveTab] = useState("analytics")
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
+    const userOrgId = (session?.user as any)?.organizationId
     const [hasMounted, setHasMounted] = useState(false)
 
-    // URL States for filtering
-    const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "thisMonth"
-    const startFromUrl = searchParams.get("startDate") || ""
-    const endFromUrl = searchParams.get("endDate") || ""
-    const compareFromUrl = searchParams.get("compare") === "true"
-
-    const [compare, setCompare] = useState(compareFromUrl)
-    const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
-
-    const activePreset = presetFromUrl
-    const dateRange = useMemo(() => {
-        if (startFromUrl && endFromUrl) {
-            return { startDate: new Date(startFromUrl), endDate: new Date(endFromUrl) }
-        }
-        return null
-    }, [startFromUrl, endFromUrl])
-
-    const handleDateChange = useCallback((range: { startDate: Date; endDate: Date } | null, preset: FilterPreset, compareMode?: boolean, compRange?: { startDate: Date; endDate: Date } | null) => {
-        const params = new URLSearchParams(searchParams.toString())
-        params.set("preset", preset)
-        if (compareMode !== undefined) {
-            params.set("compare", String(compareMode))
-            setCompare(compareMode)
-        }
-        if (compRange !== undefined) {
-            setCompareRange(compRange)
-        }
-        if (range) {
-            params.set("startDate", range.startDate.toISOString())
-            params.set("endDate", range.endDate.toISOString())
-        } else {
-            params.delete("startDate")
-            params.delete("endDate")
-        }
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-    }, [searchParams, pathname, router])
-
-    const queryParams = new URLSearchParams()
-    if (organizationId) queryParams.set("organizationId", organizationId.toString())
-    if (startFromUrl) queryParams.set("startDate", startFromUrl)
-    if (endFromUrl) queryParams.set("endDate", endFromUrl)
-    if (compare) {
-        queryParams.set("compare", "true")
-        if (compareRange) {
-            queryParams.set("compareStartDate", compareRange.startDate.toISOString())
-            queryParams.set("compareEndDate", compareRange.endDate.toISOString())
-        }
-    }
-
-    const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/groups?${queryParams.toString()}`, fetcher)
-
-    // Sales performance chart data
-    const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
-        organizationId || undefined,
-        undefined,
-        undefined,
-        undefined,
-        dateRange,
-        "all",
-        compare,
-        compareRange
+    // ━━━ GLOBAL CONTEXT FILTERS ━━━
+    const startFromUrl = searchParams.get("startDate")
+    const endFromUrl = searchParams.get("endDate")
+    const [dateRange, setDateRange] = useState<DateRange | null>(
+        startFromUrl && endFromUrl 
+            ? { startDate: new Date(startFromUrl), endDate: new Date(endFromUrl) }
+            : { startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1), endDate: new Date() }
     )
+    const [activePreset, setActivePreset] = useState<FilterPreset>((searchParams.get("preset") as FilterPreset) || "thisMonth")
+    const [compare, setCompare] = useState(searchParams.get("compare") === "true")
+    const [compareRange, setCompareRange] = useState<DateRange | null>(null)
+    
+    const [selectedMonths, setSelectedMonths] = useState<number[]>([])
+    const [selectedYears, setSelectedYears] = useState<number[]>([])
+    const [compareMonths, setCompareMonths] = useState<number[]>([])
+    const [compareYears, setCompareYears] = useState<number[]>([])
+    const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>(contextOrgId ? [String(contextOrgId)] : [])
+    const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
+    const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
+
+    // ━━━ TIER 1: GLOBAL SUMMARY DATA ━━━
+    const globalQueryParams = new URLSearchParams()
+    if (dateRange) {
+        globalQueryParams.set("startDate", dateRange.startDate.toISOString())
+        globalQueryParams.set("endDate", dateRange.endDate.toISOString())
+    }
+    if (selectedOrgIds.length > 0) globalQueryParams.set("organizationId", selectedOrgIds[0])
+    if (selectedGroupIds.length > 0) globalQueryParams.set("groupIds", selectedGroupIds.join(","))
+    if (selectedBranchIds.length > 0) globalQueryParams.set("branchIds", selectedBranchIds.join(","))
+    if (selectedMonths.length > 0) globalQueryParams.set("months", selectedMonths.join(","))
+    if (selectedYears.length > 0) globalQueryParams.set("years", selectedYears.join(","))
+    if (compare) globalQueryParams.set("compare", "true")
+    if (compareRange) {
+        globalQueryParams.set("compareStartDate", compareRange.startDate.toISOString())
+        globalQueryParams.set("compareEndDate", compareRange.endDate.toISOString())
+    }
+    if (compareMonths.length > 0) globalQueryParams.set("compareMonths", compareMonths.join(","))
+    if (compareYears.length > 0) globalQueryParams.set("compareYears", compareYears.join(","))
+
+    const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR<any>(`/api/v1/analytics/groups?summaryOnly=true&${globalQueryParams.toString()}`, fetcher)
+
+    // ━━━ TIER 2: CHART (ANALYTICS) ━━━
+    const [chartMonths, setChartMonths] = useState<number[]>([])
+    const [chartYears, setChartYears] = useState<number[]>([])
+    
+    const chartQueryParams = new URLSearchParams(globalQueryParams.toString())
+    if (chartMonths.length > 0) chartQueryParams.set("months", chartMonths.join(","))
+    if (chartYears.length > 0) chartQueryParams.set("years", chartYears.join(","))
+    
+    const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR<any>(`/api/v1/analytics/groups?trendOnly=true&${chartQueryParams.toString()}`, fetcher)
+
+    // ━━━ TIER 3: REPORT (TABLE) ━━━
+    const [reportMonths, setReportMonths] = useState<number[]>([])
+    const [reportYears, setReportYears] = useState<number[]>([])
+    const [reportOrgIds, setReportOrgIds] = useState<string[]>([])
+    const [reportSearch, setReportSearch] = useState("")
+
+    const reportQueryParams = new URLSearchParams(globalQueryParams.toString())
+    if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
+    if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
+
+    const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR<any>(`/api/v1/analytics/groups?${reportQueryParams.toString()}`, fetcher)
+
+    // ━━━ TIER 4: ALL-TIME (YEAR SELECTION) ━━━
+    const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/groups?allTime=true&${globalQueryParams.toString()}`, fetcher)
 
     useEffect(() => {
         setHasMounted(true)
         setGeneratedDate(new Date().toLocaleString())
     }, [])
 
-    const groups: Group[] = data?.groups || []
-    const summary = data?.summary || { totalGroups: 0, totalOrders: 0, totalRevenue: 0 }
-    const comparison = data?.comparison
+    const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, c?: boolean, cr?: DateRange | null, m?: number[], y?: number[], cm?: number[], cy?: number[]) => {
+        setDateRange(range)
+        setActivePreset(preset)
+        if (c !== undefined) setCompare(c)
+        if (cr !== undefined) setCompareRange(cr)
+        if (m !== undefined) setSelectedMonths(m)
+        if (y !== undefined) setSelectedYears(y)
+        if (cm !== undefined) setCompareMonths(cm)
+        if (cy !== undefined) setCompareYears(cy)
+    }, [])
 
-    const getTrendPercentage = (current: number, prev: number) => {
-        if (!prev || prev === 0) return undefined
-        return ((current - prev) / prev) * 100
-    }
+    const summary = globalData?.summary || { totalGroups: 0, totalOrders: 0, totalRevenue: 0, totalRefunds: 0 }
+    const comparison = globalData?.comparison
 
-    const orderTrend = getTrendPercentage(summary.totalOrders, comparison?.totalOrders || 0)
-    const revenueTrend = getTrendPercentage(summary.totalRevenue, comparison?.totalRevenue || 0)
-    const groupsTrend = getTrendPercentage(summary.totalGroups, comparison?.totalGroups || 0)
+    const revenueTrend = useMemo(() => {
+        if (!compare || !comparison?.totalRevenue) return null
+        const pct = ((summary.totalRevenue - comparison.totalRevenue) / comparison.totalRevenue) * 100
+        return { value: Math.abs(pct).toFixed(1), isUp: pct > 0, isDown: pct < 0 }
+    }, [summary.totalRevenue, comparison?.totalRevenue, compare])
 
-    const filteredGroups = groups.filter((group) =>
-        group.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        group.organizationName?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const orderTrend = useMemo(() => {
+        if (!compare || !comparison?.totalOrders) return null
+        const pct = ((summary.totalOrders - comparison.totalOrders) / comparison.totalOrders) * 100
+        return { value: Math.abs(pct).toFixed(1), isUp: pct > 0, isDown: pct < 0 }
+    }, [summary.totalOrders, comparison?.totalOrders, compare])
+
+    const groups = reportData?.groups || []
+    const filteredGroups = useMemo(() => {
+        return groups.filter((g: any) => g.name?.toLowerCase().includes(reportSearch.toLowerCase()) || g.organizationName?.toLowerCase().includes(reportSearch.toLowerCase()))
+    }, [groups, reportSearch])
+
+    const normalizedTrend = useMemo(() => {
+        const trend = chartData?.trend || []
+        const currentYear = new Date().getFullYear()
+        
+        if (chartYears.length > 1) {
+            return chartYears.sort((a,b) => a-b).map(year => {
+                const yearData = trend.filter((t: any) => t.date.startsWith(String(year)))
+                const compData = chartData?.compareTrend?.filter((t: any) => t.date.startsWith(String(year))) || []
+                return {
+                    period: String(year),
+                    revenue: yearData.reduce((sum: number, t: any) => sum + (t.revenue || 0), 0) / 100,
+                    orders: yearData.reduce((sum: number, t: any) => sum + (t.orders || 0), 0),
+                    prevRevenue: compData.reduce((sum: number, t: any) => sum + (t.revenue || 0), 0) / 100
+                }
+            })
+        }
+
+        const activeYear = chartYears.length === 1 ? chartYears[0] : currentYear
+        const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12 ? [...chartMonths].sort((a,b) => a-b) : [1,2,3,4,5,6,7,8,9,10,11,12]
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+        return monthsToShow.map(m => {
+            const periodKey = `${activeYear}-${String(m).padStart(2, '0')}`
+            const monthData = trend.find((t: any) => t.date === periodKey)
+            const compData = chartData?.compareTrend?.find((t: any) => t.date === periodKey)
+            return {
+                period: monthNames[m-1],
+                revenue: (monthData?.revenue || 0) / 100,
+                orders: monthData?.orders || 0,
+                prevRevenue: (compData?.revenue || 0) / 100
+            }
+        })
+    }, [chartData, chartMonths, chartYears])
 
     const toggleGroupExpansion = (groupId: number) => {
         setExpandedGroups((prev) => {
@@ -166,7 +198,7 @@ export default function GroupsReportPage() {
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
         const headers = ["Group Name", "Units", "Total Orders", "Total Spent"]
-        const rows = filteredGroups.map((group) => [
+        const rows = filteredGroups.map((group: any) => [
             group.name, group.branchCount, group.totalOrders, (group.totalAmountCents / 100).toFixed(2)
         ])
 
@@ -185,231 +217,402 @@ export default function GroupsReportPage() {
         XLSX.writeFile(workbook, `group-report-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
     }
 
-    if (!hasMounted) {
-        return (
-            <div className="flex h-[50vh] items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-            </div>
-        )
-    }
+    if (!hasMounted) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950"><Loader2 className="h-8 w-8 animate-spin text-indigo-500" /></div>
 
     return (
-        <div className="space-y-5 pb-12 bg-slate-50 dark:bg-slate-950 min-h-screen">
+        <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] pb-20">
+            {/* ━━━ STICKY PREMIUM HEADER ━━━ */}
+            <div className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
+                <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center shadow-lg shadow-indigo-500/20 rotate-3 group hover:rotate-0 transition-all duration-500">
+                            <FolderTree className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Group Intelligence</h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                                <LayoutGrid className="h-3 w-3" />
+                                Branch Cluster Analytics
+                            </p>
+                        </div>
+                    </div>
 
-            {/* ━━━ GLOBAL STICKY HEADER ━━━ */}
-            <div className="sticky top-0 z-30 flex flex-wrap items-center gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                <GlobalDateFilter
-                    value={dateRange}
-                    onChange={handleDateChange}
-                    activePreset={activePreset}
-                    hidePresets={false}
-                    compare={compare}
-                    compareRange={compareRange}
-                />
-                <div className="flex-1" />
-                
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => mutate()}
-                    disabled={isLoading}
-                    className="h-9 text-[12px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-full px-4"
-                >
-                    <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                    REFRESH
-                </Button>
+                    <div className="flex items-center gap-3">
+                        <div className="hidden lg:flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
+                            <GlobalDateFilter 
+                                value={dateRange} 
+                                activePreset={activePreset} 
+                                compare={compare}
+                                compareRange={compareRange}
+                                months={selectedMonths}
+                                years={selectedYears}
+                                compareMonths={compareMonths}
+                                compareYears={compareYears}
+                                onChange={handleDateChange} 
+                            />
+                        </div>
+                        {/* Filters moved to local tabs */}
+                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => mutateGlobal()}>
+                            <RefreshCw className={cn("h-4 w-4", isGlobalLoading && "animate-spin")} />
+                        </Button>
+                    </div>
+                </div>
             </div>
 
-            <div className="px-4 md:px-6 space-y-5">
-
-                {/* ━━━ "INTELLIGENCE" HEADER ━━━ */}
-                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#4338ca] via-[#3730a3] to-[#312e81] px-6 py-8 text-white shadow-xl ring-1 ring-indigo-500/30">
-                    <div className="flex flex-col gap-2 relative z-10">
-                        <p className="text-xs tracking-[0.3em] text-indigo-200 font-bold uppercase">Branch Cluster Summary</p>
-                        <h1 className="text-4xl font-bold tracking-tight">Organization Groups</h1>
-                        <p className="text-sm text-indigo-100/80 font-medium max-w-xl">
-                            Cluster-level performance breakdown of <strong>{groups.length}</strong> identified organization groups and their constituent units.
-                        </p>
-                    </div>
-                    <div className="absolute top-0 right-0 -translate-y-12 translate-x-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-                </div>
-
-                {/* ━━━ KPI BENTO GRID ━━━ */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <KPICard
-                        title="Total Groups"
-                        value={summary.totalGroups}
-                        icon={FolderTree}
-                        colorScheme="blue"
-                        trend={groupsTrend}
-                        comparisonValue={compare && comparison ? comparison.totalGroups : undefined}
-                        comparisonLabel="Prev"
-                    />
-                    <KPICard
-                        title="Clustered Orders"
-                        value={summary.totalOrders}
-                        icon={ShoppingBag}
-                        colorScheme="violet"
-                        trend={orderTrend}
-                        comparisonValue={compare && comparison ? comparison.totalOrders : undefined}
-                        comparisonLabel="Prev"
-                    />
-                    <KPICard
-                        title="Group Revenue"
+            <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
+                {/* ━━━ BENTO KPI GRID ━━━ */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <KPICard 
+                        label="Group Net Revenue"
                         value={formatPKR(summary.totalRevenue / 100)}
-                        icon={TrendingUp}
-                        colorScheme="emerald"
+                        icon={<TrendingUp className="h-4 w-4" />}
+                        iconBg="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
                         trend={revenueTrend}
-                        comparisonValue={compare && comparison ? formatPKR(comparison.totalRevenue / 100) : undefined}
-                        comparisonLabel="Prev"
+                        trendColor="emerald"
+                        subtitle="Consolidated cluster sales"
+                        compare={compare}
+                        compareValue={formatPKR((comparison?.totalRevenue || 0) / 100)}
+                    />
+                    <KPICard 
+                        label="Refund Impact"
+                        value={formatPKR(summary.totalRefunds / 100)}
+                        icon={<RotateCcw className="h-4 w-4" />}
+                        iconBg="bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400"
+                        subtitle="Total refunds processed"
+                        trendColor="rose"
+                    />
+                    <KPICard 
+                        label="Clustered Orders"
+                        value={summary.totalOrders.toLocaleString()}
+                        icon={<ShoppingBag className="h-4 w-4" />}
+                        iconBg="bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400"
+                        trend={orderTrend}
+                        trendColor="violet"
+                        subtitle="Total group transactions"
+                    />
+                    <KPICard 
+                        label="Active Groups"
+                        value={summary.totalGroups.toLocaleString()}
+                        icon={<FolderTree className="h-4 w-4" />}
+                        iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                        subtitle="Clustered entities"
                     />
                 </div>
 
-                {/* ━━━ PERFORMANCE ANALYTICS CHART ━━━ */}
-                <Card className="rounded-[24px] border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
-                    <CardHeader className="px-8 py-6 border-b border-slate-100 dark:border-slate-800">
-                        <CardTitle className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                            <TrendingUp className="w-5 h-5 text-indigo-500" />
-                            Group Performance Analytics
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-8">
-                        {isLoadingPerf ? (
-                            <div className="h-[300px] flex items-center justify-center">
-                                <RefreshCw className="w-8 h-8 animate-spin text-slate-200" />
-                            </div>
-                        ) : (
-                            <SalesPerformanceLineChart
-                                seriesData={perfData?.seriesData ?? []}
-                                comparisonSeries={perfData?.comparison?.seriesData}
-                                totalSales={perfData?.totalSales ?? 0}
-                                avgSales={perfData?.avgSales ?? 0}
-                                totalOrders={perfData?.totalOrders ?? 0}
-                                peakPeriod={perfData?.peakPeriod ?? null}
-                                granularity={perfData?.granularity ?? "daily"}
-                                dateRange={dateRange}
-                            />
-                        )}
-                    </CardContent>
-                </Card>
+                {/* ━━━ TABBED INTERFACE ━━━ */}
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+                    <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-1">
+                        <TabsList className="bg-transparent h-auto p-0 gap-8">
+                            <TabsTrigger value="analytics" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
+                                <LayoutDashboard className="h-4 w-4 mr-2" />
+                                Analytics
+                            </TabsTrigger>
+                            <TabsTrigger value="reports" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
+                                <TableIcon className="h-4 w-4 mr-2" />
+                                Reports
+                            </TabsTrigger>
+                        </TabsList>
+                    </div>
 
-                {/* ━━━ REFINED HIERARCHICAL TABLE ━━━ */}
-                <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/50 backdrop-blur-xl pt-1">
-                    <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-4 bg-white/50 dark:bg-slate-900/20">
-                        <div className="flex items-center gap-3">
-                            <LayoutGrid className="h-4 w-4 text-indigo-600" />
-                            <h3 className="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">Group Performance Ledgers</h3>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <div className="relative">
-                                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                <Input
-                                    placeholder="Search groups..."
-                                    className="pl-9 h-8 w-48 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-md"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
+                    <TabsContent value="analytics" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900/50 backdrop-blur-3xl rounded-[2rem] relative group transition-all duration-700">
+                            <div className="px-8 py-7 border-b border-slate-100 dark:border-slate-800 space-y-5">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-2 rounded-xl bg-violet-500/10 text-violet-500">
+                                                <LineChartIcon className="h-4 w-4" />
+                                            </div>
+                                            <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">Group Monthly Performance</h3>
+                                        </div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11">Consolidated revenue stream</p>
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={() => mutateChart()} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800">
+                                        <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isChartLoading && "animate-spin")} />
+                                    </Button>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                        <>
+                                            <OrgFilter 
+                                                selectedIds={selectedOrgIds} 
+                                                onChange={(ids: string[]) => { 
+                                                    setSelectedOrgIds(ids); 
+                                                    setSelectedGroupIds([]); 
+                                                    setSelectedBranchIds([]); 
+                                                }} 
+                                                maxSelect={1} 
+                                            />
+                                            {selectedOrgIds.length > 0 && (
+                                                <GroupFilter 
+                                                    selectedIds={selectedGroupIds} 
+                                                    onChange={(ids) => {
+                                                        setSelectedGroupIds(ids);
+                                                        setSelectedBranchIds([]);
+                                                    }} 
+                                                    organizationId={parseInt(selectedOrgIds[0])} 
+                                                />
+                                            )}
+                                            {selectedOrgIds.length > 0 && (
+                                                <BranchFilter 
+                                                    selectedIds={selectedBranchIds} 
+                                                    onChange={setSelectedBranchIds} 
+                                                    organizationId={selectedOrgIds[0]}
+                                                    groupIds={selectedGroupIds}
+                                                />
+                                            )}
+                                        </>
+                                    )}
+                                    <MonthFilter selected={chartMonths} onChange={setChartMonths} />
+                                    <YearFilter selected={chartYears} onChange={setChartYears} availableYears={allTimeData?.years || [new Date().getFullYear()]} />
+                                </div>
                             </div>
+                            <CardContent className="p-8">
+                                {(isChartLoading || !normalizedTrend.length) ? (
+                                    <div className="h-[450px] flex flex-col items-center justify-center gap-4 animate-pulse">
+                                        <div className="h-10 w-10 border-4 border-violet-500/20 border-t-violet-500 rounded-full animate-spin" />
+                                        <p className="text-[10px] font-black uppercase text-slate-400">Syncing Analytics...</p>
+                                    </div>
+                                ) : (
+                                    <div className="h-[450px] w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <ComposedChart data={normalizedTrend} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.3} />
+                                                <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} dy={10} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} tickFormatter={(v) => `₨${v >= 1000 ? (v/1000).toFixed(0)+'K' : v}`} />
+                                                <Tooltip content={(props) => <CustomTooltip {...props} compare={compare} />} />
+                                                <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 30, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }} />
+                                                <Bar dataKey="revenue" name="Net Revenue" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={32} />
+                                                {compare && <Bar dataKey="prevRevenue" name="Prior Period" fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />}
+                                            </ComposedChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <div className="flex flex-wrap items-center gap-2.5 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+                              <div className="relative flex-1 min-w-[240px]">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                <Input placeholder="Search groups..." value={reportSearch} onChange={(e) => setReportSearch(e.target.value)} className="pl-9 h-10 bg-slate-100/50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold font-mono" />
+                            </div>
+                            {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                <>
+                                    <OrgFilter 
+                                        selectedIds={selectedOrgIds} 
+                                        onChange={(ids: string[]) => { 
+                                            setSelectedOrgIds(ids); 
+                                            setSelectedGroupIds([]); 
+                                            setSelectedBranchIds([]); 
+                                        }} 
+                                        maxSelect={1} 
+                                    />
+                                    {selectedOrgIds.length > 0 && (
+                                        <GroupFilter 
+                                            selectedIds={selectedGroupIds} 
+                                            onChange={(ids) => {
+                                                setSelectedGroupIds(ids);
+                                                setSelectedBranchIds([]);
+                                            }} 
+                                            organizationId={parseInt(selectedOrgIds[0])} 
+                                        />
+                                    )}
+                                    {selectedOrgIds.length > 0 && (
+                                        <BranchFilter 
+                                            selectedIds={selectedBranchIds} 
+                                            onChange={setSelectedBranchIds} 
+                                            organizationId={selectedOrgIds[0]}
+                                            groupIds={selectedGroupIds}
+                                        />
+                                    )}
+                                </>
+                            )}
+                            <MonthFilter selected={reportMonths} onChange={setReportMonths} />
+                            <YearFilter selected={reportYears} onChange={setReportYears} availableYears={allTimeData?.years || [new Date().getFullYear()]} />
+                            <Button variant="outline" size="sm" onClick={() => mutateReport()} className="h-10 w-10 p-0 rounded-xl">
+                                <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isReportLoading && "animate-spin")} />
+                            </Button>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold gap-2 rounded-md border-slate-200 dark:border-slate-800 shadow-sm">
-                                        <Download className="h-3.5 w-3.5" /> EXPORT
+                                    <Button variant="outline" className="h-10 rounded-xl font-black text-[10px] tracking-widest uppercase">
+                                        <Download className="h-3.5 w-3.5 mr-2" /> Export
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                                    <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2 cursor-pointer">CSV</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2 cursor-pointer">Excel</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer">PDF</DropdownMenuItem>
+                                <DropdownMenuContent align="end" className="rounded-xl border-slate-200">
+                                    <DropdownMenuItem onClick={() => handleExport('csv')} className="text-[10px] font-black uppercase">CSV</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleExport('excel')} className="text-[10px] font-black uppercase">Excel</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-[10px] font-black uppercase">PDF</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
-                    </div>
 
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-slate-50/50 dark:bg-slate-800/30">
-                                    <TableHead className="w-10 pl-6 h-10"></TableHead>
-                                    <TableHead className="h-10 text-[10px] font-bold uppercase text-slate-500">Group Name</TableHead>
-                                    <TableHead className="h-10 text-[10px] font-bold uppercase text-slate-500 text-center">Units</TableHead>
-                                    <TableHead className="h-10 text-[10px] font-bold uppercase text-slate-500 text-right">Orders</TableHead>
-                                    <TableHead className="h-10 text-[10px] font-bold uppercase text-slate-500 text-right text-rose-500">Refunds</TableHead>
-                                    <TableHead className="h-10 text-[10px] font-bold uppercase text-slate-500 text-right text-amber-500">Rejected</TableHead>
-                                    <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase text-indigo-600">Net Revenue</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                    <TableRow><TableCell colSpan={7} className="h-40 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-500/40" /></TableCell></TableRow>
-                                ) : filteredGroups.length === 0 ? (
-                                    <TableRow><TableCell colSpan={7} className="h-40 text-center text-slate-500 text-sm">No group clusters found in this period.</TableCell></TableRow>
-                                ) : (
-                                    filteredGroups.map((group) => {
-                                        const isExpanded = expandedGroups.has(group.id)
-                                        const hasBranches = group.branches && group.branches.length > 0
-                                        return (
-                                            <Fragment key={group.id}>
-                                                <TableRow
-                                                    className={cn(
-                                                        "group transition-colors border-b border-slate-100 dark:border-slate-800 cursor-pointer",
-                                                        isExpanded ? "bg-indigo-50/20" : "hover:bg-slate-50/80 dark:hover:bg-slate-800/20"
-                                                    )}
-                                                    onClick={() => hasBranches && toggleGroupExpansion(group.id)}
-                                                >
-                                                    <TableCell className="pl-6">
-                                                        {hasBranches && (
-                                                            isExpanded ? <ChevronDown className="h-4 w-4 text-indigo-500" /> : <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-indigo-400" />
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="py-4">
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold text-sm text-slate-900 dark:text-white capitalize">{group.name}</span>
-                                                            <span className="text-[10px] text-slate-400 font-medium tracking-tight uppercase">{group.organizationName}</span>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-center">
-                                                        <Badge variant="secondary" className="bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400 text-[10px] font-bold border-none">
-                                                            {group.branchCount} MEMBER{group.branchCount !== 1 ? 'S' : ''}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="text-right font-mono text-xs font-semibold text-slate-700 dark:text-slate-300">{group.totalOrders.toLocaleString()}</TableCell>
-                                                    <TableCell className="text-right font-mono text-xs text-rose-500">{formatPKR(group.totalRefundCents / 100)}</TableCell>
-                                                    <TableCell className="text-right font-mono text-xs text-amber-500">{group.rejectedOrders}</TableCell>
-                                                    <TableCell className="text-right pr-6 font-mono font-bold text-sm text-indigo-600 dark:text-indigo-400">
-                                                        {formatPKR(group.totalAmountCents / 100)}
-                                                    </TableCell>
-                                                </TableRow>
-                                                {isExpanded && hasBranches && (
-                                                    group.branches.map((branch) => (
-                                                        <TableRow key={`${group.id}-${branch.id}`} className="bg-slate-50/40 dark:bg-slate-900/40 border-b border-slate-50 dark:border-slate-800/50">
-                                                            <TableCell></TableCell>
-                                                            <TableCell className="pl-8 py-3">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-200 dark:bg-indigo-800 ring-2 ring-indigo-50 dark:ring-indigo-900/30" />
-                                                                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{branch.name}</span>
+                        <Card className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-2xl overflow-hidden min-h-[600px]">
+                            <CardHeader className="px-8 pt-8 pb-4 border-b border-slate-100 dark:border-slate-800">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-slate-900 dark:text-white font-black tracking-tight flex items-center gap-3">
+                                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl text-indigo-600">
+                                            <LayoutGrid className="w-5 h-5" />
+                                        </div>
+                                        Group Performance Ledger
+                                    </CardTitle>
+                                    <Badge variant="outline" className="h-8 rounded-lg px-3 text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-50 dark:bg-slate-900">
+                                        {filteredGroups.length} ENTRIES
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+                                            <TableHead className="w-10 pl-6"></TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Group Name</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Managed Units</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Revenue (PKR)</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isReportLoading ? (
+                                            Array(6).fill(0).map((_, i) => (
+                                                <TableRow key={i} className="h-20 animate-pulse"><TableCell colSpan={6}><div className="h-10 bg-slate-50 dark:bg-slate-900/50 rounded-xl mx-4" /></TableCell></TableRow>
+                                            ))
+                                        ) : filteredGroups.length === 0 ? (
+                                            <TableRow><TableCell colSpan={6} className="h-60 text-center text-slate-400 text-xs font-black uppercase tracking-widest">No records found</TableCell></TableRow>
+                                        ) : (
+                                            filteredGroups.map((group: any) => {
+                                                const isExpanded = expandedGroups.has(group.id)
+                                                const hasBranches = group.branches && group.branches.length > 0
+                                                return (
+                                                    <Fragment key={group.id}>
+                                                        <TableRow className="group hover:bg-slate-50/80 dark:hover:bg-slate-900/40 border-b border-slate-50 dark:border-slate-900 transition-all cursor-pointer h-20" onClick={() => hasBranches && toggleGroupExpansion(group.id)}>
+                                                            <TableCell className="pl-6">
+                                                                {hasBranches && (isExpanded ? <ChevronDown className="h-4 w-4 text-indigo-500" /> : <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-500" />)}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{group.name}</span>
+                                                                    <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase italic">{group.organizationName}</span>
                                                                 </div>
                                                             </TableCell>
-                                                            <TableCell className="text-center text-[9px] text-slate-400 uppercase font-black tracking-tighter">Branch Unit</TableCell>
-                                                            <TableCell className="text-right font-mono text-[11px] text-slate-400">{branch.orders}</TableCell>
-                                                            <TableCell className="text-right font-mono text-[11px] text-rose-400/60">{formatPKR(branch.refunds / 100)}</TableCell>
-                                                            <TableCell className="text-right font-mono text-[11px] text-amber-500/50">{branch.rejected}</TableCell>
-                                                            <TableCell className="text-right pr-6 font-mono font-medium text-xs text-indigo-400/80">{formatPKR(branch.revenue / 100)}</TableCell>
+                                                            <TableCell className="text-center font-black">
+                                                                <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-500/10 rounded-full text-[10px]">
+                                                                    <Building2 className="h-3 w-3 text-indigo-500" />
+                                                                    <span className="text-indigo-600 dark:text-indigo-400 uppercase">{group.branchCount} Units</span>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">{formatPKR(group.totalAmountCents / 100)}</span>
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                <span className="text-sm font-bold text-rose-500 tracking-tight">{formatPKR(group.totalRefundCents / 100)}</span>
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-black text-sm text-slate-900 dark:text-white tracking-tight">
+                                                                {group.totalOrders.toLocaleString()}
+                                                            </TableCell>
                                                         </TableRow>
-                                                    ))
-                                                )}
-                                            </Fragment>
-                                        )
-                                    })
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                    <div className="p-4 bg-slate-50/50 dark:bg-slate-900/20 text-center border-t border-slate-100 dark:border-slate-800">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">Report State Validated at {generatedDate}</p>
-                    </div>
-                </Card>
+                                                        {isExpanded && group.branches.map((branch: any) => (
+                                                            <TableRow key={`${group.id}-${branch.id}`} className="bg-slate-50/50 dark:bg-slate-900/20 border-b border-slate-100 dark:border-slate-800 transition-colors h-16">
+                                                                <TableCell></TableCell>
+                                                                <TableCell className="pl-10">
+                                                                    <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                                                                        <div className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                                                                        <span className="text-xs font-bold uppercase tracking-tight">{branch.name}</span>
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell className="text-center text-[10px] text-slate-400 uppercase font-bold">Branch Component</TableCell>
+                                                                <TableCell className="text-right text-xs font-bold text-slate-500">{formatPKR(branch.revenue / 100)}</TableCell>
+                                                                <TableCell className="text-right text-xs font-bold text-rose-400/70">{formatPKR(branch.refunds / 100)}</TableCell>
+                                                                <TableCell className="text-right text-xs font-bold text-slate-500">{branch.orders.toLocaleString()}</TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </Fragment>
+                                                )
+                                            })
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                            <div className="px-8 py-5 border-t border-slate-100 dark:border-slate-900 bg-slate-50/50 dark:bg-slate-900/40 flex items-center justify-between">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{filteredGroups.length} groups analyzed</p>
+                                <p className="text-[10px] font-bold text-slate-300 dark:text-slate-700 font-mono italic" suppressHydrationWarning>GEN_TS: {generatedDate}</p>
+                            </div>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </div>
         </div>
     )
+}
+
+function CustomTooltip({ active, payload, label, compare }: any) {
+    if (active && payload && payload.length) {
+        const d = payload[0].payload
+        return (
+            <div className="bg-white dark:bg-slate-900/95 p-4 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl backdrop-blur-xl">
+                <p className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-[0.2em]">{label}</p>
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-10">
+                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-indigo-500" /> Net Revenue
+                        </span>
+                        <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{formatPKR(payload[0].value)}</span>
+                    </div>
+                    {compare && (
+                        <div className="flex items-center justify-between gap-10">
+                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                                <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" /> Prior Revenue
+                            </span>
+                            <span className="text-xs font-black text-slate-500">{formatPKR(d.prevRevenue)}</span>
+                        </div>
+                    )}
+                    <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-400 uppercase">Orders</span>
+                        <span className="text-xs font-black text-indigo-600">{d.orders}</span>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+    return null
+}
+
+function KPICard({ label, value, icon, iconBg, trend, trendColor, subtitle, compare, compareValue }: any) {
+    return (
+        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/40 dark:shadow-none bg-white/80 dark:bg-slate-900/50 backdrop-blur-3xl rounded-[2rem] relative group transition-all duration-500 hover:shadow-indigo-500/10 hover:translate-y-[-4px]">
+            <div className="p-7">
+                <div className="flex items-center justify-between mb-6">
+                    <div className={cn("p-2.5 rounded-2xl shadow-lg transition-transform group-hover:scale-110 duration-500", iconBg)}>{icon}</div>
+                    {trend && (
+                        <div className={cn("px-3 py-1 rounded-full text-[10px] font-black tracking-widest flex items-center gap-1 shadow-sm", trendColor === "emerald" ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400")}>
+                            {trend.isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                            {trend.value}%
+                        </div>
+                    )}
+                </div>
+                <div className="space-y-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{label}</p>
+                    <h4 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{value}</h4>
+                    {compare && <p className="text-[10px] font-bold text-slate-400 italic">Prior: <span className="font-mono">{compareValue}</span></p>}
+                    <p className="text-[10px] font-bold text-slate-400 italic opacity-0 group-hover:opacity-100 transition-opacity duration-500">{subtitle}</p>
+                </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gradient-to-r from-transparent via-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        </Card>
+    )
+}
+
+
+
+function MonthFilter({ selected, onChange }: { selected: number[], onChange: (v: number[]) => void }) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const items = months.map((m, i) => ({ id: i + 1, label: m }))
+    return <MultiSelectFilter title="Months" items={items} selectedIds={selected} onChange={(ids) => onChange(ids.sort((a, b) => a - b))} icon={<Calendar className="h-3.5 w-3.5 mr-2 text-indigo-500" />} placeholder="Months" showSearch={false} />
+}
+
+function YearFilter({ selected, onChange, availableYears }: { selected: number[], onChange: (v: number[]) => void, availableYears: number[] }) {
+    const items = availableYears.map(y => ({ id: y, label: String(y) }))
+    return <MultiSelectFilter title="Years" items={items} selectedIds={selected} onChange={(ids) => onChange(ids.sort((a, b) => a - b))} icon={<Layers className="h-3.5 w-3.5 mr-2 text-indigo-500" />} placeholder="Years" showSearch={false} />
 }
