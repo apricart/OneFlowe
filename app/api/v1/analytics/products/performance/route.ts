@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, branches, globalProducts, categories, refundItems, refunds } from "@/db/schema"
+import { orders, orderItems, branches, globalProducts, categories, refundItems, refunds, organizationInventory } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, isNull, sql } from "drizzle-orm"
 import { aliasedTable } from "drizzle-orm"
 
@@ -146,13 +146,18 @@ export async function GET(req: NextRequest) {
                 name: globalProducts.name,
                 unit: globalProducts.unit,
                 status: globalProducts.status,
+                deletedAt: globalProducts.deletedAt,
+                orgIsActive: organizationInventory.isActive,
                 categoryName: sql<string>`COALESCE(${parentCategories.name}, ${categories.name})`,
                 subCategoryName: sql<string>`CASE WHEN ${parentCategories.id} IS NOT NULL THEN ${categories.name} ELSE NULL END`
             })
             .from(globalProducts)
             .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
             .leftJoin(parentCategories, eq(categories.parentId, parentCategories.id))
-            .where(isNull(globalProducts.deletedAt)) // Exclude deleted products
+            .leftJoin(organizationInventory, and(
+                eq(organizationInventory.globalProductId, globalProducts.id),
+                userOrgId ? eq(organizationInventory.organizationId, userOrgId) : undefined
+            ))
             
         // 2. Initialize the product map with ALL products
         const productMap: Record<number, any> = {}
@@ -164,7 +169,7 @@ export async function GET(req: NextRequest) {
                 unit: p.unit,
                 category: p.categoryName || 'Uncategorized',
                 subCategory: p.subCategoryName || '-',
-                status: p.status, // Add exact status exactly for matching Global Products
+                status: p.deletedAt ? 'deleted' : (p.orgIsActive === false ? 'inactive' : p.status), // Add exact status exactly for matching Global Products
                 totalOrders: new Set(),
                 qtyOrdered: 0,
                 qtyFulfilled: 0,

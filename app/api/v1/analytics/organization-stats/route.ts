@@ -219,8 +219,8 @@ export async function GET(req: NextRequest) {
 
         return await db.select({
             period: grouping,
-            revenue: sql<number>`SUM(${orders.totalCents}) / 100`.mapWith(Number),
-            orders: count(orders.id),
+            revenue: sql<number>`${metricExpressions.revenue} / 100`.mapWith(Number),
+            orders: metricExpressions.totalOrderCount,
         })
         .from(orders)
         .where(and(...conditions))

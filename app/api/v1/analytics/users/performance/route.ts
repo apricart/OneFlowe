@@ -18,8 +18,11 @@ export async function GET(req: NextRequest) {
         const url = new URL(req.url)
         const startDateParam = url.searchParams.get("startDate")
         const endDateParam = url.searchParams.get("endDate")
+        const organizationIdsParam = url.searchParams.get("organizationIds")
         const branchIdsParam = url.searchParams.get("branchIds")
         const compare = url.searchParams.get("compare") === "true"
+        const summaryOnly = url.searchParams.get("summaryOnly") === "true"
+        const trendOnly = url.searchParams.get("trendOnly") === "true"
         const compareStartDateParam = url.searchParams.get("compareStartDate")
         const compareEndDateParam = url.searchParams.get("compareEndDate")
 
@@ -33,14 +36,28 @@ export async function GET(req: NextRequest) {
         const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
         const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
 
-        // RBAC Context Parsing
+        // RBAC & Filter Context Parsing
+        let organizationIds: number[] = []
+        if (organizationIdsParam) {
+            organizationIds = organizationIdsParam.split(",").map(Number).filter(id => !isNaN(id) && id > 0)
+        } else if (userOrgId) {
+            organizationIds = [userOrgId]
+        }
+
         let branchIds: number[] = []
         if (branchIdsParam) {
             branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {
             branchIds = [userBranchId]
+        } else if (organizationIds.length > 0) {
+            const b = await db.select({ id: branches.id }).from(branches).where(inArray(branches.organizationId, organizationIds))
+            branchIds = b.map(br => br.id)
+        } else if (userOrgId) {
+            const b = await db.select({ id: branches.id }).from(branches).where(eq(branches.organizationId, userOrgId))
+            branchIds = b.map(br => br.id)
         } else {
-            const b = await db.select({ id: branches.id }).from(branches).where(userOrgId ? eq(branches.organizationId, userOrgId) : undefined)
+            // Super admin with no filters -> all branches (caution: high volume)
+            const b = await db.select({ id: branches.id }).from(branches)
             branchIds = b.map(br => br.id)
         }
 
@@ -137,11 +154,79 @@ export async function GET(req: NextRequest) {
                 )
 
             comparisonSummary = {
-                totalOrders: compStats?.compOrders || 0,
-                totalFulfilled: compStats?.compFulfilled || 0,
-                totalSpentCents: compStats?.compSpent || 0,
-                totalUsers: compStats?.compUsers || 0
+                totalOrders: Number(compStats?.compOrders || 0),
+                totalFulfilled: Number(compStats?.compFulfilled || 0),
+                totalSpentCents: Number(compStats?.compSpent || 0),
+                totalUsers: Number(compStats?.compUsers || 0)
             }
+        }
+
+        if (summaryOnly) {
+            return NextResponse.json({
+                data: {
+                    totalOrders: results.reduce((sum, u) => sum + u.totalOrders, 0),
+                    fulfilledOrders: results.reduce((sum, u) => sum + u.fulfilledOrders, 0),
+                    totalSpentCents: results.reduce((sum, u) => sum + u.totalSpentCents, 0),
+                    totalUsers: results.length
+                },
+                comparison: comparisonSummary
+            })
+        }
+
+        if (trendOnly) {
+            // Aggregate orders by month
+            const trendData = await db
+                .select({
+                    date: sql<string>`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`,
+                    revenue: metricExpressions.revenue,
+                    qtyOrdered: metricExpressions.totalOrderCount,
+                    qtyFulfilled: metricExpressions.fulfilledCount,
+                    qtyRefunded: metricExpressions.refundedCount,
+                })
+                .from(orders)
+                .where(and(...baseConditions))
+                .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
+                .orderBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
+
+            // Comparison trend if requested
+            let compareTrend: any[] = []
+            if (compare && (parsedCompMonths.length > 0 || parsedCompYears.length > 0 || (compareStartDateParam && compareEndDateParam))) {
+                compareTrend = await db
+                    .select({
+                        date: sql<string>`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`,
+                        revenue: metricExpressions.revenue,
+                        qtyOrdered: metricExpressions.totalOrderCount,
+                    })
+                    .from(orders)
+                    .where(
+                        and(
+                            inArray(orders.branchId, branchIds),
+                            (() => {
+                                const compCond: any[] = []
+                                if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {
+                                    if (parsedCompMonths.length > 0) compCond.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
+                                    if (parsedCompYears.length > 0) compCond.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
+                                } else {
+                                    const cStart = new Date(compareStartDateParam!)
+                                    const cEnd = new Date(compareEndDateParam!)
+                                    cStart.setHours(0,0,0,0)
+                                    cEnd.setHours(23,59,59,999)
+                                    compCond.push(gte(orders.createdAt, cStart))
+                                    compCond.push(lte(orders.createdAt, cEnd))
+                                }
+                                return and(...compCond)
+                            })()
+                        )
+                    )
+                    .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
+            }
+
+            return NextResponse.json({
+                data: results, // Keep users list for fallback or top performers
+                trend: trendData,
+                compareTrend,
+                comparison: comparisonSummary
+            })
         }
 
         return NextResponse.json({

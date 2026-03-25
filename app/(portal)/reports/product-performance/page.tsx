@@ -355,7 +355,8 @@ export default function ProductPerformancePage() {
     const fulfillmentRate = totalOrdered > 0 ? (totalVolume / totalOrdered) * 100 : 0
     const refundRate = totalOrdered > 0 ? (totalRefunds / totalOrdered) * 100 : 0
     const activeProductCount = products.filter((p: any) => p.status === 'active').length
-    const inactiveProductCount = products.filter((p: any) => p.status !== 'active').length
+    const inactiveProductCount = products.filter((p: any) => p.status === 'inactive').length
+    const deletedProductCount = products.filter((p: any) => p.status === 'deleted').length
 
     // Comparison Trends
     const comparison = globalPerfData?.comparison
@@ -427,7 +428,16 @@ export default function ProductPerformancePage() {
 
     const getDrawerFields = (item: any): DetailField[] => [
         { key: "s2", label: "Product Details", value: "", type: "section" },
-        { key: "status", label: "Status", value: item.status, type: "badge" },
+        { key: "status", label: "Status", value: (
+            <Badge className={cn(
+                "border-none text-[10px] uppercase font-black tracking-widest px-2.5 py-0.5",
+                item.status === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
+                item.status === "inactive" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+            )}>
+                {item.status}
+            </Badge>
+        )},
         { key: "productCode", label: "Product Code", value: item.productCode || "-", type: "mono" },
         { key: "productName", label: "Product Name", value: item.productName || "-" },
         { key: "category", label: "Category", value: item.categoryName || "-" },
@@ -667,11 +677,14 @@ export default function ProductPerformancePage() {
                                 <div>
                                     <p className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{products.length.toLocaleString()}</p>
                                     <div className="flex items-center gap-3">
-                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                                             <ShieldCheck className="h-3 w-3" /> {activeProductCount} active
                                         </span>
-                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
                                             <ShieldX className="h-3 w-3" /> {inactiveProductCount} inactive
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 dark:text-red-400">
+                                            <ShieldX className="h-3 w-3" /> {deletedProductCount} deleted
                                         </span>
                                     </div>
                                 </div>
@@ -1120,8 +1133,10 @@ export default function ProductPerformancePage() {
                                                     <TableCell className="pl-6 py-3">
                                                         {product.status === "active" ? (
                                                             <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">Active</Badge>
+                                                        ) : product.status === "inactive" ? (
+                                                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">Inactive</Badge>
                                                         ) : (
-                                                            <Badge className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">Inactive</Badge>
+                                                            <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">Deleted</Badge>
                                                         )}
                                                     </TableCell>
                                                     <TableCell className="py-3">

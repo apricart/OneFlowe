@@ -39,6 +39,7 @@ import {
 } from "recharts"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import type { DateRange } from "@/lib/hooks/use-sales-performance"
+import { OrganizationFilter } from "@/components/reports/organization-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
@@ -75,25 +76,30 @@ export default function UserReportPage() {
     // Global Multi-Selects
     const [selectedMonths, setSelectedMonths] = useState<number[]>([])
     const [selectedYears, setSelectedYears] = useState<number[]>([])
+    const [globalOrganizationIds, setGlobalOrganizationIds] = useState<string[]>([])
     const [compareMonths, setCompareMonths] = useState<number[]>([])
     const [compareYears, setCompareYears] = useState<number[]>([])
 
     // ━━━ 2. ANALYTICS LOCAL STATE ━━━
-    const [chartMonths, setChartMonths] = useState<number[]>([])
     const [chartYears, setChartYears] = useState<number[]>([])
+    const [chartMonths, setChartMonths] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     const [chartBranchIds, setChartBranchIds] = useState<string[]>([])
+    const [chartOrganizationIds, setChartOrganizationIds] = useState<string[]>([])
 
     // ━━━ 3. REPORTS LOCAL STATE ━━━
-    const [reportMonths, setReportMonths] = useState<number[]>([])
+    const [reportMonths, setReportMonths] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     const [reportYears, setReportYears] = useState<number[]>([])
     const [reportBranchIds, setReportBranchIds] = useState<string[]>([])
+    const [reportOrganizationIds, setReportOrganizationIds] = useState<string[]>([])
 
     // ━━━ DATA FETCHING (3-TIER) ━━━
     const organizationId = userOrgId || contextOrgId
 
     // Tier 1: Global Summary
     const globalParams = new URLSearchParams()
-    if (organizationId) globalParams.set("organizationId", organizationId.toString())
+    if (globalOrganizationIds.length) globalParams.set("organizationIds", globalOrganizationIds.join(","))
+    else if (organizationId) globalParams.set("organizationIds", organizationId.toString())
+    
     if (dateRange?.startDate) globalParams.set("startDate", dateRange.startDate.toISOString())
     if (dateRange?.endDate) globalParams.set("endDate", dateRange.endDate.toISOString())
     if (selectedMonths.length) globalParams.set("months", selectedMonths.join(","))
@@ -111,7 +117,9 @@ export default function UserReportPage() {
 
     // Tier 2: Chart/Trend Data
     const chartParams = new URLSearchParams()
-    if (organizationId) chartParams.set("organizationId", organizationId.toString())
+    if (chartOrganizationIds.length) chartParams.set("organizationIds", chartOrganizationIds.join(","))
+    else if (organizationId) chartParams.set("organizationIds", organizationId.toString())
+    
     if (chartBranchIds.length) chartParams.set("branchIds", chartBranchIds.join(","))
     if (chartMonths.length) chartParams.set("months", chartMonths.join(","))
     if (chartYears.length) chartParams.set("years", chartYears.join(","))
@@ -122,7 +130,9 @@ export default function UserReportPage() {
 
     // Tier 3: Report Table Data
     const reportParams = new URLSearchParams()
-    if (organizationId) reportParams.set("organizationId", organizationId.toString())
+    if (reportOrganizationIds.length) reportParams.set("organizationIds", reportOrganizationIds.join(","))
+    else if (organizationId) reportParams.set("organizationIds", organizationId.toString())
+    
     if (reportBranchIds.length) reportParams.set("branchIds", reportBranchIds.join(","))
     if (reportMonths.length) reportParams.set("months", reportMonths.join(","))
     if (reportYears.length) reportParams.set("years", reportYears.join(","))
@@ -151,8 +161,10 @@ export default function UserReportPage() {
 
     // ━━━ DATA PROCESSING ━━━
     const summary = globalData?.data || {}
-    const trend = chartData?.data || []
+    const trend = chartData?.trend || []
+    const compareTrend = chartData?.compareTrend || []
     const reportItems = reportData?.data || []
+    const CHART_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
     const filteredUsers = reportItems.filter((u: any) =>
         (u.userName || "").toLowerCase().includes(reportSearch.toLowerCase()) ||
@@ -182,16 +194,32 @@ export default function UserReportPage() {
     const prevSuccess = (comparison?.totalOrders || 0) > 0 ? (comparison.totalFulfilled / comparison.totalOrders) * 100 : 0
     const successTrend = getTrend(currentSuccess, prevSuccess)
 
-    // Processed Chart Data (Top 5 Users by default or selection)
-    const processedChartData = trend.slice(0, 10).map((u: any) => ({
-        name: u.userName?.split(' ')[0] || "User",
-        fullName: u.userName,
-        orders: u.totalOrders || 0,
-        fulfilled: u.fulfilledOrders || 0,
-        spent: Math.round((u.totalSpentCents || 0) / 100),
-        compOrders: u.compareTotalOrders || 0,
-        compSpent: Math.round((u.compareTotalSpentCents || 0) / 100)
-    }))
+    // Processed Chart Data (Monthly performance)
+    const processedChartData = useMemo(() => {
+        // If multiple years selected, show years on X-axis (optional, but keep monthly for now as requested)
+        // One year selected (or default to current year) -> show months
+        const activeYear = chartYears.length === 1 ? chartYears[0] : new Date().getFullYear();
+        
+        const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12 
+            ? [...chartMonths].sort((a, b) => a - b) 
+            : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+        return monthsToShow.map(m => {
+            const dateStr = `${activeYear}-${String(m).padStart(2, '0')}`;
+            const dataPoint = trend.find((d: any) => d.date === dateStr);
+            const compPoint = compareTrend.find((d: any) => d.date === dateStr);
+            
+            return {
+                name: CHART_MONTH_NAMES[m - 1],
+                orders: dataPoint?.qtyOrdered || 0,
+                fulfilled: dataPoint?.qtyFulfilled || 0,
+                spent: Math.round((dataPoint?.revenue || 0) / 100),
+                compOrders: compPoint?.qtyOrdered || 0,
+                compSpent: Math.round((compPoint?.revenue || 0) / 100),
+                fullName: `${CHART_MONTH_NAMES[m - 1]} ${activeYear}`
+            }
+        });
+    }, [trend, compareTrend, chartYears, chartMonths])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
         const headers = ["Employee ID", "Name", "Email", "Organization", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
@@ -233,6 +261,12 @@ export default function UserReportPage() {
                     compareMonths={compareMonths}
                     compareYears={compareYears}
                 />
+                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                    <OrganizationFilter
+                        selectedIds={globalOrganizationIds}
+                        onChange={setGlobalOrganizationIds}
+                    />
+                )}
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <BranchFilter
                         selectedIds={contextBranchIds}
@@ -295,8 +329,11 @@ export default function UserReportPage() {
                                 <div className="flex flex-wrap items-center gap-2">
                                     <MonthFilter selected={chartMonths} onChange={setChartMonths} />
                                     <YearFilter selected={chartYears} onChange={setChartYears} availableYears={allTimeData?.years || []} />
-                                    <BranchFilter selectedIds={chartBranchIds} onChange={setChartBranchIds} organizationId={organizationId || undefined} />
-                                    <Button variant="ghost" size="icon" onClick={() => { setChartMonths([]); setChartYears([]); setChartBranchIds([]); }} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all"><RefreshCw className="h-4 w-4" /></Button>
+                                    <OrganizationFilter selectedIds={chartOrganizationIds} onChange={setChartOrganizationIds} />
+                                    {(chartOrganizationIds.length > 0 || role !== "SUPER_ADMIN") && (
+                                        <BranchFilter selectedIds={chartBranchIds} onChange={setChartBranchIds} organizationId={organizationId || undefined} />
+                                    )}
+                                    <Button variant="ghost" size="icon" onClick={() => { setChartMonths([1,2,3,4,5,6,7,8,9,10,11,12]); setChartYears([]); setChartBranchIds([]); setChartOrganizationIds([]); }} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all"><RefreshCw className="h-4 w-4" /></Button>
                                 </div>
                             </div>
                             <CardContent className="p-8 pt-4">
@@ -350,8 +387,8 @@ export default function UserReportPage() {
                                                     }}
                                                 />
                                                 <Legend verticalAlign="top" align="right" height={40} iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
-                                                <Bar yAxisId="left" dataKey="orders" name={compare ? "Orders (A)" : "Total Orders"} fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={compare ? 15 : 30} />
-                                                {compare && <Bar yAxisId="left" dataKey="compOrders" name="Orders (B)" fill="#94a3b8" radius={[6, 6, 0, 0]} barSize={15} opacity={0.5} />}
+                                                <Bar yAxisId="left" dataKey="orders" name={compare ? "Orders (A)" : "Total Orders"} fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={compare ? 20 : 40} />
+                                                {compare && <Bar yAxisId="left" dataKey="compOrders" name="Orders (B)" fill="#94a3b8" radius={[6, 6, 0, 0]} barSize={20} opacity={0.5} />}
                                                 <Line yAxisId="right" type="monotone" dataKey="spent" name={compare ? "Spent (A)" : "Yield"} stroke="#6366f1" strokeWidth={4} dot={{ r: 5, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }} />
                                                 {compare && <Line yAxisId="right" type="monotone" dataKey="compSpent" name="Spent (B)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 4 }} />}
                                             </ComposedChart>
@@ -390,7 +427,10 @@ export default function UserReportPage() {
                                     </div>
                                     <MonthFilter selected={reportMonths} onChange={setReportMonths} />
                                     <YearFilter selected={reportYears} onChange={setReportYears} availableYears={allTimeData?.years || []} />
-                                    <BranchFilter selectedIds={reportBranchIds} onChange={setReportBranchIds} organizationId={organizationId || undefined} />
+                                    <OrganizationFilter selectedIds={reportOrganizationIds} onChange={setReportOrganizationIds} />
+                                    {(reportOrganizationIds.length > 0 || role !== "SUPER_ADMIN") && (
+                                        <BranchFilter selectedIds={reportBranchIds} onChange={setReportBranchIds} organizationId={organizationId || undefined} />
+                                    )}
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                             <Button variant="outline" size="sm" className="h-10 text-[11px] font-black underline decoration-slate-200 gap-2 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm px-5">

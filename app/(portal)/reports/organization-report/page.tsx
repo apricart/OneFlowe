@@ -326,7 +326,7 @@ export default function OrganizationReportPage() {
                         iconBg="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
                         trend={revenueTrend}
                         trendColor="emerald"
-                        subtitle="Consolidated gross sales"
+                        subtitle="Consolidated net sales"
                         compare={compare}
                         compareValue={formatPKR(comparisonSummary.revenue)}
                     />
@@ -463,7 +463,7 @@ export default function OrganizationReportPage() {
                                                                     <div className="space-y-3">
                                                                         <div className="flex items-center justify-between gap-10">
                                                                             <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                                                                <div className="h-2 w-2 rounded-full bg-indigo-500" /> Current Revenue
+                                                                                <div className="h-2 w-2 rounded-full bg-indigo-500" /> Net Revenue
                                                                             </span>
                                                                             <span className="text-xs font-black text-slate-900 dark:text-white">{formatPKR(payload[0].value as number)}</span>
                                                                         </div>
@@ -492,7 +492,7 @@ export default function OrganizationReportPage() {
                                                     iconType="circle" 
                                                     wrapperStyle={{ paddingBottom: 30, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}
                                                 />
-                                                <Bar dataKey="revenue" name="Current Revenue" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={32} />
+                                                <Bar dataKey="revenue" name="Net Revenue" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={32} />
                                                 {compare && (
                                                     <Bar dataKey="prevRevenue" name="Prior Period" fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />
                                                 )}

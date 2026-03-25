@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, orderItems, branches, globalProducts, categories, organizationInventory, branchInventory } from "@/db/schema"
-import { and, eq, gte, lte, inArray, desc, sql, exists } from "drizzle-orm"
+import { and, eq, gte, lte, inArray, desc, isNull, sql, exists, or, isNotNull } from "drizzle-orm"
 import { getCached, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 export async function GET(req: NextRequest) {
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
 
         const result = await getCached(cacheKey, async () => {
             // 1. Fetch products with optional Organization Price and Branch Assignment filtering
-            const productConditions: any[] = [eq(globalProducts.status, 'active')]
+            const productConditions: any[] = []
             
             if (parsedProductIds.length > 0) {
                 productConditions.push(inArray(globalProducts.id, parsedProductIds))
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
                         .where(and(
                             eq(organizationInventory.globalProductId, globalProducts.id),
                             inArray(branchInventory.branchId, branchIds),
-                            eq(branchInventory.isActive, true)
+                            inArray(branchInventory.branchId, branchIds)
                         ))
                     )
                 )
@@ -104,7 +104,14 @@ export async function GET(req: NextRequest) {
                         .from(organizationInventory)
                         .where(and(
                             eq(organizationInventory.globalProductId, globalProducts.id),
-                            inArray(organizationInventory.organizationId, parsedOrganizationIds)
+                            inArray(organizationInventory.organizationId, parsedOrganizationIds),
+                            // Only include those that are NOT unassigned, UNLESS they have historical sales 
+                            // (we'll handle sales-based inclusion by allowing unassigned ones if they have transactions later if needed,
+                            // OR we just allow them if they were deleted GLOBALLY)
+                             or(
+                                isNull(organizationInventory.deletedAt),
+                                isNotNull(globalProducts.deletedAt)
+                            )
                         ))
                     )
                 )
@@ -128,6 +135,8 @@ export async function GET(req: NextRequest) {
                 categoryId: globalProducts.categoryId,
                 customPrice: organizationInventory.customPrice,
                 customName: organizationInventory.customName,
+                deletedAt: globalProducts.deletedAt,
+                organizationIsActive: organizationInventory.isActive,
             })
             .from(globalProducts)
             .leftJoin(organizationInventory, and(
@@ -196,7 +205,9 @@ export async function GET(req: NextRequest) {
                     productCode: p.productCode,
                     productName: p.customName || p.name,
                     unit: p.unit,
-                    status: p.status,
+                    status: p.deletedAt 
+                        ? "deleted" 
+                        : (p.organizationIsActive === false ? "inactive" : p.status),
                     basePriceCents: p.customPrice || p.basePrice,
                     stockQuantity: p.stockQuantity,
                     categoryName: catInfo?.name || "Uncategorized",
