@@ -46,7 +46,7 @@ export default function BranchReportsPage() {
 
     const [searchTerm, setSearchTerm] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
-    const [groupId, setGroupId] = useState("")
+    const [groupIds, setGroupIds] = useState<string[]>([])
     const [selectedMonths, setSelectedMonths] = useState<number[]>([new Date().getMonth()])
     const [selectedYears, setSelectedYears] = useState<number[]>([new Date().getFullYear()])
     const [compareMonths, setCompareMonths] = useState<number[]>([])
@@ -118,7 +118,7 @@ export default function BranchReportsPage() {
         if (compareYears.length > 0) queryParams.set("compareYears", compareYears.join(","))
     }
 
-    if (groupId) queryParams.set("groupId", groupId)
+    if (groupIds.length > 0) queryParams.set("groupIds", groupIds.join(","))
     queryParams.set("limit", "10000")
 
     const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${queryParams.toString()}`, fetcher)
@@ -128,7 +128,7 @@ export default function BranchReportsPage() {
         organizationId || undefined,
         undefined,
         undefined,
-        groupId || undefined,
+        groupIds.length > 0 ? groupIds.join(",") : undefined,
         dateRange,
         "all",
         compare,
@@ -145,8 +145,8 @@ export default function BranchReportsPage() {
         setGeneratedDate(new Date().toLocaleString())
     }, [])
 
-    const handleGroupChange = (id: string) => {
-        setGroupId(id)
+    const handleGroupChange = (ids: string[]) => {
+        setGroupIds(ids)
     }
 
     const topPerformers = data?.topPerformers || []
@@ -204,7 +204,7 @@ export default function BranchReportsPage() {
 
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <GroupFilter
-                        value={groupId}
+                        selectedIds={groupIds}
                         onChange={handleGroupChange}
                         organizationId={organizationId || undefined}
                     />

@@ -1,17 +1,18 @@
 "use client"
 
-import React, { useState, useEffect, useCallback, useMemo } from "react"
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import useSWR from "swr"
+import { format } from "date-fns"
 import { useAppContext } from "@/components/context/app-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, LineChart, Package, Tags, AlertOctagon, TrendingUp, History, Layers, Calculator, ChevronDown, Check, ArrowUpRight, ArrowDownRight, ChartBar as ChartBarIcon, ShieldCheck, ShieldX, Eye
+    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, LineChart, Package, Tags, AlertOctagon, TrendingUp, History, Layers, Calculator, ChevronDown, Check, ArrowUpRight, ArrowDownRight, ChartBar as ChartBarIcon, ShieldCheck, ShieldX, Eye, Building2, Filter, RotateCcw, X, LayoutGrid, LayoutDashboard, Database
 } from "lucide-react"
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell
+    ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell
 } from "recharts"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -28,12 +29,20 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
+import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
+import { useBranches, useGlobalProducts, useOrganizations } from "@/lib/hooks/use-api"
 
 import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expandable-row-drawer"
 import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/reports/column-selector"
+import { ProductFilter } from "@/components/reports/product-filter"
+import { OrganizationFilter } from "@/components/reports/organization-filter"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -69,7 +78,14 @@ export default function ProductPerformancePage() {
     const [generatedDate, setGeneratedDate] = useState("")
     const [selectedRow, setSelectedRow] = useState<any>(null)
     const [drawerOpen, setDrawerOpen] = useState(false)
-    const [activeTab, setActiveTab] = useState<"analytics" | "reports">("analytics")
+    const tabFromUrl = (searchParams.get("tab") as "analytics" | "reports") || "analytics"
+    const [activeTab, setActiveTab] = useState<"analytics" | "reports">(tabFromUrl)
+
+    useEffect(() => {
+        if (tabFromUrl !== activeTab) {
+            setActiveTab(tabFromUrl)
+        }
+    }, [tabFromUrl])
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
     const { data: session } = useSession()
@@ -98,6 +114,102 @@ export default function ProductPerformancePage() {
     const [compareYears, setCompareYears] = useState<number[]>(
         searchParams.get("compareYears")?.split(",").map(Number).filter(n => !isNaN(n)) || []
     )
+
+    // Chart-local filters
+    const [chartYears, setChartYears] = useState<number[]>([])
+    const [chartMonths, setChartMonths] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    const [chartBranchIds, setChartBranchIds] = useState<string[]>([])
+    const [chartGroupIds, setChartGroupIds] = useState<string[]>([])
+    const hasInitializedChartDefaults = useRef(false)
+
+    // Report-local filters
+    const [reportYears, setReportYears] = useState<number[]>([])
+    const [reportMonths, setReportMonths] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    const [reportBranchIds, setReportBranchIds] = useState<string[]>([])
+    const [reportGroupIds, setReportGroupIds] = useState<string[]>([])
+    const [reportProductIds, setReportProductIds] = useState<string[]>([])
+    const [reportOrganizationIds, setReportOrganizationIds] = useState<string[]>([])
+
+    // Auto-clear branch selection if a group is selected (Group Inventory mode)
+    useEffect(() => {
+        if (reportGroupIds.length > 0) {
+            setReportBranchIds([])
+        }
+    }, [reportGroupIds])
+
+    const CHART_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    const toggleChartYear = (year: number) => setChartYears(prev => prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year])
+    const toggleChartMonth = (month: number) => setChartMonths(prev => prev.includes(month) ? prev.filter(m => m !== month) : [...prev, month])
+    const toggleChartBranch = (branchId: string) => setChartBranchIds(prev => prev.includes(branchId) ? prev.filter(b => b !== branchId) : [...prev, branchId])
+    const toggleChartGroup = (groupId: string) => setChartGroupIds(prev => prev.includes(groupId) ? prev.filter(g => g !== groupId) : [...prev, groupId])
+    
+    const toggleReportYear = (year: number) => setReportYears(prev => prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year])
+    const toggleReportMonth = (month: number) => setReportMonths(prev => prev.includes(month) ? prev.filter(m => m !== month) : [...prev, month])
+    const toggleReportBranch = (branchId: string) => setReportBranchIds(prev => prev.includes(branchId) ? prev.filter(b => b !== branchId) : [...prev, branchId])
+    const toggleReportGroup = (groupId: string) => setReportGroupIds(prev => prev.includes(groupId) ? prev.filter(g => g !== groupId) : [...prev, groupId])
+
+    // ━━━ DATA FOR DYNAMIC FILTERS (All-Time) ━━━
+    const allTimeQueryParams = new URLSearchParams()
+    if (organizationId) allTimeQueryParams.set("organizationId", organizationId.toString())
+    allTimeQueryParams.set("preset", "all")
+    const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/products/performance?${allTimeQueryParams.toString()}`, fetcher)
+    
+    const { data: groupsData } = useSWR( organizationId ? `/api/v1/groups?organizationId=${organizationId}` : "/api/v1/groups", fetcher )
+    const availableGroups = groupsData?.groups || []
+    const { data: branchesData } = useSWR( organizationId ? `/api/v1/branches?organizationId=${organizationId}` : "/api/v1/branches", fetcher )
+    const availableBranches = branchesData?.items || []
+    
+    // Organizations for filter display names
+    const { data: orgsData } = useOrganizations()
+    const availableOrgs = orgsData?.items || []
+    
+    // Products for filter display names
+    const { data: productsData } = useGlobalProducts(organizationId ? String(organizationId) : undefined)
+    const availableProducts = productsData?.items || []
+    
+    const validChartBranches = availableGroups.length > 0 && chartGroupIds.length > 0 
+        ? availableBranches.filter((b: any) => chartGroupIds.includes(String(b.groupId))) 
+        : availableBranches;
+        
+    const validReportBranches = availableGroups.length > 0 && reportGroupIds.length > 0 
+        ? availableBranches.filter((b: any) => reportGroupIds.includes(String(b.groupId))) 
+        : availableBranches;
+
+    const availableChartYears = useMemo(() => {
+        const years = new Set<number>()
+        const currentY = new Date().getFullYear();
+        
+        // Derive from ALL-TIME trend data if available
+        if (allTimeData?.trend?.length) {
+            allTimeData.trend.forEach((d: any) => {
+                const y = parseInt(d.date.split("-")[0]);
+                if (!isNaN(y)) years.add(y);
+            });
+        }
+        
+        // Ensure at least current year
+        if (years.size === 0) {
+            years.add(currentY);
+        }
+        
+        return Array.from(years).sort((a, b) => a - b)
+    }, [allTimeData?.trend])
+
+    // Smart defaults logic
+    useEffect(() => {
+        if (!hasInitializedChartDefaults.current && availableChartYears.length > 0) {
+            const currentYear = new Date().getFullYear();
+            if (availableChartYears.includes(currentYear)) {
+                setChartYears([currentYear])
+                setReportYears([currentYear])
+            } else {
+                setChartYears([availableChartYears[availableChartYears.length - 1]])
+                setReportYears([availableChartYears[availableChartYears.length - 1]])
+            }
+            hasInitializedChartDefaults.current = true
+        }
+    }, [availableChartYears])
 
     const activePreset = presetFromUrl
     const dateRange = useMemo(() => {
@@ -158,39 +270,44 @@ export default function ProductPerformancePage() {
         setContextBranchIds(ids)
     }, [setContextBranchIds])
 
-    // Build query strings
-    const queryParams = new URLSearchParams()
-    if (organizationId) queryParams.set("organizationId", organizationId.toString())
-    if (startFromUrl) queryParams.set("startDate", startFromUrl)
-    if (endFromUrl) queryParams.set("endDate", endFromUrl)
-
-    if (contextBranchIds.length > 0) {
-        queryParams.set("branchIds", contextBranchIds.join(","))
-    } else if (contextBranchId) {
-        queryParams.set("branchId", contextBranchId)
+    // ━━━ GLOBAL DATA (Bento Grid) ━━━
+    const globalQueryParams = new URLSearchParams()
+    if (organizationId) globalQueryParams.set("organizationId", organizationId.toString())
+    if (contextBranchIds.length > 0) globalQueryParams.set("branchIds", contextBranchIds.join(","))
+    if (selectedMonths.length > 0) globalQueryParams.set("months", selectedMonths.join(","))
+    if (selectedYears.length > 0) globalQueryParams.set("years", selectedYears.join(","))
+    if (dateRange) {
+        globalQueryParams.set("startDate", dateRange.startDate.toISOString())
+        globalQueryParams.set("endDate", dateRange.endDate.toISOString())
     }
+    if (compare) globalQueryParams.set("compare", "true")
 
-    if (selectedMonths.length > 0) queryParams.set("months", selectedMonths.join(","))
-    if (selectedYears.length > 0) queryParams.set("years", selectedYears.join(","))
-    if (compareMonths.length > 0) queryParams.set("compareMonths", compareMonths.join(","))
-    if (compareYears.length > 0) queryParams.set("compareYears", compareYears.join(","))
+    const { data: globalPerfData, isLoading: isGlobalPerfLoading, mutate: mutateGlobalPerf } = useSWR<any>(`/api/v1/analytics/products/performance?${globalQueryParams.toString()}`, fetcher)
 
-    if (compare) {
-        queryParams.set("compare", "true")
-        if (compareRange) {
-            queryParams.set("compareStartDate", compareRange.startDate.toISOString())
-            queryParams.set("compareEndDate", compareRange.endDate.toISOString())
-        }
-    }
+    // ━━━ CHART DATA (Local Filtered) ━━━
+    const chartQueryParams = new URLSearchParams()
+    if (organizationId) chartQueryParams.set("organizationId", organizationId.toString())
+    if (chartBranchIds.length > 0) chartQueryParams.set("branchIds", chartBranchIds.join(","))
+    if (chartGroupIds.length > 0) chartQueryParams.set("groupIds", chartGroupIds.join(","))
+    if (chartMonths.length > 0) chartQueryParams.set("months", chartMonths.join(","))
+    if (chartYears.length > 0) chartQueryParams.set("years", chartYears.join(","))
+    if (compare) chartQueryParams.set("compare", "true")
 
-    // Performance Data (Aggregated)
-    const { data: perfData, isLoading: isPerfLoading, mutate: mutatePerf } = useSWR(`/api/v1/analytics/products/performance?${queryParams.toString()}`, fetcher)
+    const { data: chartPerfData, isLoading: isChartPerfLoading, mutate: mutateChart } = useSWR<any>(`/api/v1/analytics/products/performance?${chartQueryParams.toString()}`, fetcher)
 
-    // Transactional Summary Data (Line Items)
-    const summaryParams = new URLSearchParams(queryParams.toString())
-    summaryParams.set("limit", "100")
-    const { data: summaryData, isLoading: isSummaryLoading, mutate: mutateSummary } = useSWR(`/api/v1/analytics/products/summary?${summaryParams.toString()}`, fetcher)
+    // ━━━ REPORT DATA (Local Filtered) ━━━
+    const reportQueryParams = new URLSearchParams()
+    if (organizationId) reportQueryParams.set("organizationId", organizationId.toString())
+    if (reportBranchIds.length > 0) reportQueryParams.set("branchIds", reportBranchIds.join(","))
+    if (reportGroupIds.length > 0) reportQueryParams.set("groupIds", reportGroupIds.join(","))
+    if (reportOrganizationIds.length > 0) reportQueryParams.set("organizationIds", reportOrganizationIds.join(","))
+    if (reportProductIds.length > 0) reportQueryParams.set("productIds", reportProductIds.join(","))
+    if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
+    if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
+    if (reportSearchTerm) reportQueryParams.set("searchTerm", reportSearchTerm)
 
+    const { data: catalogData, isLoading: isCatalogLoading, mutate: mutateCatalog } = useSWR<any>(`/api/v1/analytics/products/catalog-performance?${reportQueryParams.toString()}`, fetcher)
+    
     useEffect(() => {
         setHasMounted(true)
         setGeneratedDate(new Date().toLocaleString())
@@ -201,24 +318,28 @@ export default function ProductPerformancePage() {
     }, [])
 
     const products = useMemo(() => {
-        const p = perfData?.data || []
+        const p = globalPerfData?.data || []
         return [...p].sort((a: any, b: any) => (b.revenueGeneratedCents || 0) - (a.revenueGeneratedCents || 0))
-    }, [perfData])
+    }, [globalPerfData])
+    
+    const chartProducts = useMemo(() => {
+        const p = chartPerfData?.data || []
+        return [...p].sort((a: any, b: any) => (b.revenueGeneratedCents || 0) - (a.revenueGeneratedCents || 0))
+    }, [chartPerfData])
 
-    const transactionItems = useMemo(() => {
-        const items = summaryData?.items || []
-        return [...items].sort((a: any, b: any) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime())
-    }, [summaryData])
+    const catalogItems = useMemo(() => {
+        const items = catalogData?.data || []
+        return [...items].sort((a: any, b: any) => (b.revenueGeneratedCents || 0) - (a.revenueGeneratedCents || 0))
+    }, [catalogData])
 
-    const filteredTransactions = useMemo(() => {
-        if (!reportSearchTerm) return transactionItems
+    const filteredCatalog = useMemo(() => {
+        if (!reportSearchTerm) return catalogItems
         const term = reportSearchTerm.toLowerCase()
-        return transactionItems.filter((i: any) => 
-            (i.tid || "").toLowerCase().includes(term) ||
-            (i.productName || "").toLowerCase().includes(term) ||
-            (i.productCode || "").toLowerCase().includes(term)
+        return catalogItems.filter((i: any) => 
+            (i.productCode || "").toLowerCase().includes(term) ||
+            (i.productName || "").toLowerCase().includes(term)
         )
-    }, [transactionItems, reportSearchTerm])
+    }, [catalogItems, reportSearchTerm])
 
     const filteredProducts = products.filter((p: any) =>
         (p.productName || p.productCode || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -237,7 +358,7 @@ export default function ProductPerformancePage() {
     const inactiveProductCount = products.filter((p: any) => p.status !== 'active').length
 
     // Comparison Trends
-    const comparison = perfData?.comparison
+    const comparison = globalPerfData?.comparison
     const getTrend = (current: number, prev: number) => {
         if (!prev || prev === 0) return null
         const diff = ((current - prev) / prev) * 100
@@ -247,18 +368,57 @@ export default function ProductPerformancePage() {
     const volumeTrend = getTrend(totalVolume, comparison?.totalVolume || 0)
     const refundTrend = getTrend(totalRefunds, comparison?.totalRefunds || 0)
 
-    // Chart data: top 10 products by revenue
+    // ━━━ CHART DATA: Normalized trends ━━━
     const chartData = useMemo(() => {
-        return filteredProducts.slice(0, 10).map((p: any) => ({
-            name: p.productName?.length > 22 ? p.productName.substring(0, 22) + '…' : p.productName,
-            fullName: p.productName,
-            revenue: Math.round((p.revenueGeneratedCents || 0) / 100),
-            ordered: p.qtyOrdered || 0,
-            fulfilled: p.qtyFulfilled || 0,
-            refunded: p.qtyRefunded || 0,
-            fulfillRate: p.qtyOrdered > 0 ? Math.round((p.qtyFulfilled / p.qtyOrdered) * 100) : 0,
-        }))
-    }, [filteredProducts])
+        const trend = chartPerfData?.trend || []
+        
+        // If multiple years selected, show years on X-axis
+        if (chartYears.length > 1) {
+            return chartYears.sort((a, b) => a - b).map(year => {
+                const yearStr = String(year);
+                // Aggregating by year if the trend data is monthly or raw
+                const yearData = trend.filter((d: any) => d.date.startsWith(yearStr));
+                return {
+                    name: yearStr,
+                    revenue: Math.round(yearData.reduce((sum: number, d: any) => sum + (d.revenue || 0), 0) / 100),
+                    compareRevenue: Math.round(yearData.reduce((sum: number, d: any) => sum + (d.compareRevenue || 0), 0) / 100),
+                    ordered: yearData.reduce((sum: number, d: any) => sum + (d.qtyOrdered || 0), 0),
+                    fulfilled: yearData.reduce((sum: number, d: any) => sum + (d.qtyFulfilled || 0), 0),
+                    refunded: yearData.reduce((sum: number, d: any) => sum + (d.qtyRefunded || 0), 0),
+                    fulfillRate: yearData.reduce((sum: number, d: any) => sum + (d.qtyOrdered || 0), 0) > 0 
+                        ? ((yearData.reduce((sum: number, d: any) => sum + (d.qtyFulfilled || 0), 0) / yearData.reduce((sum: number, d: any) => sum + (d.qtyOrdered || 0), 0)) * 100).toFixed(1)
+                        : "0.0",
+                    fullName: `${yearStr} Annual Performance`
+                }
+            });
+        }
+
+        // One year selected (or default to current year) -> show months
+        const activeYear = chartYears.length === 1 ? chartYears[0] : new Date().getFullYear();
+        
+        // If specific months are filtered, show only those. Otherwise show all 12.
+        const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12 
+            ? [...chartMonths].sort((a, b) => a - b) 
+            : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+        return monthsToShow.map(m => {
+            const dateStr = `${activeYear}-${String(m).padStart(2, '0')}`;
+            const dataPoint = trend.find((d: any) => d.date === dateStr);
+            return {
+                name: CHART_MONTH_NAMES[m - 1],
+                revenue: dataPoint ? Math.round(dataPoint.revenue / 100) : 0,
+                compareRevenue: dataPoint ? Math.round((dataPoint.compareRevenue || 0) / 100) : 0,
+                fullName: `${CHART_MONTH_NAMES[m - 1]} ${activeYear}`,
+                ordered: dataPoint?.qtyOrdered || 0,
+                fulfilled: dataPoint?.qtyFulfilled || 0,
+                refunded: dataPoint?.qtyRefunded || 0,
+                fulfillRate: dataPoint?.qtyOrdered > 0 ? ((dataPoint.qtyFulfilled / dataPoint.qtyOrdered) * 100).toFixed(1) : "0.0"
+            }
+        });
+    }, [chartPerfData, chartYears, chartMonths, CHART_MONTH_NAMES])
+
+    const isPriceCustom = reportGroupIds.length > 0 || reportOrganizationIds.length > 0
+    const priceLabel = isPriceCustom ? "Price" : "Base Price"
 
     const handleRowClick = (item: any) => {
         setSelectedRow(item)
@@ -266,29 +426,32 @@ export default function ProductPerformancePage() {
     }
 
     const getDrawerFields = (item: any): DetailField[] => [
-        { key: "s1", label: "Order Information", value: "", type: "section" },
-        { key: "tid", label: "Transaction ID", value: item.tid || "-", type: "mono" },
-        { key: "orderDate", label: "Date & Time", value: new Date(item.orderDate).toLocaleString(), type: "date" },
-        { key: "status", label: "Order Status", value: item.orderStatus, type: "badge" },
-        { key: "branch", label: "Branch", value: item.branchName || "-" },
-        { key: "org", label: "Organization", value: item.organizationName || "-" },
         { key: "s2", label: "Product Details", value: "", type: "section" },
+        { key: "status", label: "Status", value: item.status, type: "badge" },
         { key: "productCode", label: "Product Code", value: item.productCode || "-", type: "mono" },
         { key: "productName", label: "Product Name", value: item.productName || "-" },
         { key: "category", label: "Category", value: item.categoryName || "-" },
-        { key: "price", label: "Unit Price", value: formatPKR(item.priceCents / 100), type: "currency" },
+        { key: "price", label: priceLabel, value: formatPKR(item.basePriceCents / 100), type: "currency" },
+        { key: "unit", label: "Unit", value: item.unit || "unit" },
         { key: "s3", label: "Quantities & Revenue", value: "", type: "section" },
-        { key: "qtyOrdered", label: "Qty Ordered", value: String(item.quantity || 0) },
-        { key: "qtyFulfilled", label: "Qty Fulfilled", value: String(item.qtyFulfilled ?? item.quantity ?? 0) },
-        { key: "qtyRefunded", label: "Qty Refunded", value: String(item.qtyRefunded ?? 0) },
-        { key: "revenue", label: "Revenue Generated", value: formatPKR(((item.qtyFulfilled ?? item.quantity ?? 0) * item.priceCents) / 100), type: "currency" },
-        { key: "refundLoss", label: "Refund Loss", value: formatPKR(((item.qtyRefunded ?? 0) * item.priceCents) / 100), type: "currency" },
-        { key: "total", label: "Net Total", value: formatPKR((item.quantity * item.priceCents) / 100), type: "currency" },
+        { key: "stock", label: "Current Stock", value: `${item.stockQuantity} ${item.unit}` },
+        { key: "qtyOrdered", label: "Qty Ordered", value: String(item.qtyOrdered || 0) },
+        { key: "qtyFulfilled", label: "Qty Fulfilled", value: String(item.qtyFulfilled || 0) },
+        { key: "revenue", label: "Revenue Generated", value: formatPKR(item.revenueGeneratedCents / 100), type: "currency" },
     ]
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Qty Fulfilled", "Qty Refunded", "Revenue Generated"]
-        const rows = filteredProducts.map((p: any) => [
+        const isReports = activeTab === "reports"
+        const exportData = isReports ? filteredCatalog : filteredProducts
+
+        const headers = isReports 
+            ? ["Product Code", "Product Name", "Category", "Status", "Base Price", "Stock", "Qty Sold", "Revenue"]
+            : ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Qty Fulfilled", "Qty Refunded", "Revenue Generated"]
+        
+        const rows = exportData.map((p: any) => isReports ? [
+            p.productCode, p.productName, p.categoryName || "-", p.status, 
+            (p.basePriceCents / 100).toFixed(2), p.stockQuantity, p.qtyFulfilled, (p.revenueGeneratedCents / 100).toFixed(2)
+        ] : [
             p.productCode, p.productName, p.category, p.subCategory, p.status || 'active', p.qtyOrdered, p.qtyFulfilled, p.qtyRefunded,
             (p.revenueGeneratedCents / 100).toFixed(2)
         ])
@@ -296,16 +459,16 @@ export default function ProductPerformancePage() {
         if (format === 'pdf') {
             const doc = new jsPDF('landscape')
             doc.setFontSize(20); doc.text("Product Intelligence Report", 14, 20)
-            doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
+            doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()} | Tab: ${activeTab.toUpperCase()}`, 14, 28)
             autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid' })
-            doc.save(`product-intelligence-${new Date().getTime()}.pdf`)
+            doc.save(`product-intelligence-${activeTab}-${new Date().getTime()}.pdf`)
             return
         }
 
         const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
         const workbook = XLSX.utils.book_new()
         XLSX.utils.book_append_sheet(workbook, worksheet, "Performance")
-        XLSX.writeFile(workbook, `product-intelligence-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
+        XLSX.writeFile(workbook, `product-intelligence-${activeTab}-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
     }
 
     // Custom tooltip for horizontal bar chart
@@ -353,193 +516,326 @@ export default function ProductPerformancePage() {
         <div className="space-y-5 pb-12 bg-slate-50 dark:bg-slate-950 min-h-screen">
 
             {/* ━━━ GLOBAL STICKY HEADER ━━━ */}
-            <div className="sticky top-0 z-30 flex flex-wrap items-center gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                <GlobalDateFilter
-                    value={dateRange}
-                    onChange={handleDateChange}
-                    activePreset={activePreset}
-                    hidePresets={false}
-                    compare={compare}
-                    compareRange={compareRange}
-                    months={selectedMonths}
-                    years={selectedYears}
-                    compareMonths={compareMonths}
-                    compareYears={compareYears}
-                />
-
-                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-                    <BranchFilter
-                        selectedIds={contextBranchIds}
-                        onChange={handleBranchChange}
-                        organizationId={organizationId || undefined}
+            <div className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-6 h-14 flex items-center shadow-sm">
+                <div className="flex items-center gap-3">
+                    <GlobalDateFilter
+                        value={dateRange}
+                        onChange={handleDateChange}
+                        activePreset={activePreset}
+                        hidePresets={false}
+                        compare={compare}
+                        compareRange={compareRange}
+                        months={selectedMonths}
+                        years={selectedYears}
+                        compareMonths={compareMonths}
+                        compareYears={compareYears}
                     />
-                )}
+
+                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                        <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
+                            <BranchFilter
+                                selectedIds={contextBranchIds}
+                                onChange={handleBranchChange}
+                                organizationId={organizationId || undefined}
+                            />
+                        </div>
+                    )}
+                </div>
                 <div className="flex-1" />
-                
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { mutatePerf(); mutateSummary(); }}
-                    disabled={isPerfLoading || isSummaryLoading}
-                    className="h-9 text-[12px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-full px-4"
-                >
-                    <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isPerfLoading || isSummaryLoading ? "animate-spin" : ""}`} />
-                    REFRESH
-                </Button>
             </div>
 
-            <div className="px-4 md:px-6 space-y-5">
-
-                {/* ━━━ HEADER WITH TAB SWITCHER ━━━ */}
-                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-violet-900 px-6 py-6 text-white shadow-2xl">
-                    <div className="flex flex-wrap flex-col gap-2 relative z-10">
-                        <p className="text-xs tracking-[0.2em] text-white/60 font-bold uppercase">Centralized Reporting</p>
-                        <div className="flex items-center justify-between">
-                            <h1 className="text-3xl font-semibold tracking-tight">Product Intelligence</h1>
-                            <div className="flex bg-white/10 backdrop-blur-md p-1 rounded-2xl border border-white/20">
-                                <button
-                                    onClick={() => setActiveTab("analytics")}
-                                    className={cn(
-                                        "px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                                        activeTab === "analytics" 
-                                            ? "bg-white text-indigo-700 shadow-lg" 
-                                            : "text-white/70 hover:text-white hover:bg-white/5"
-                                    )}
-                                >
-                                    <ChartBarIcon className="w-4 h-4 mr-2 inline-block" />
-                                    Analytics
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab("reports")}
-                                    className={cn(
-                                        "px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
-                                        activeTab === "reports" 
-                                            ? "bg-white text-indigo-700 shadow-lg" 
-                                            : "text-white/70 hover:text-white hover:bg-white/5"
-                                    )}
-                                >
-                                    <History className="w-4 h-4 mr-2 inline-block" />
-                                    Reports
-                                </button>
-                            </div>
-                        </div>
-                        <p className="text-sm text-white/70 font-medium max-w-2xl">
-                            Unified view of product performance metrics and transactional history across all branches.
-                        </p>
-                    </div>
-                    <div className="absolute top-0 right-0 -translate-y-12 translate-x-1/3 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
-                    <div className="absolute bottom-0 left-0 translate-y-12 -translate-x-1/4 w-64 h-64 bg-violet-500/20 rounded-full blur-3xl pointer-events-none" />
-                </div>
-
-                {/* ━━━ KPI CARDS ━━━ */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    {/* Revenue */}
-                    <KPICard
-                        label="Total Revenue"
-                        value={formatPKR(totalRevenue / 100)}
-                        icon={<TrendingUp className="h-4 w-4" />}
-                        iconBg="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
-                        trend={revenueTrend}
-                        trendColor="emerald"
-                        subtitle="From fulfilled products"
-                        compare={compare}
-                        compareValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined}
-                    />
-                    {/* Fulfilled */}
-                    <KPICard
-                        label="Qty Fulfilled"
-                        value={totalVolume.toLocaleString()}
-                        icon={<Package className="h-4 w-4" />}
-                        iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
-                        trend={volumeTrend}
-                        trendColor="emerald"
-                        subtitle={`${fulfillmentRate.toFixed(1)}% fulfillment rate`}
-                        compare={compare}
-                        compareValue={comparison ? comparison.totalVolume.toLocaleString() : undefined}
-                    />
-                    {/* Refunded */}
-                    <KPICard
-                        label="Refund Loss"
-                        value={formatPKR(totalRefundLoss / 100)}
-                        icon={<AlertOctagon className="h-4 w-4" />}
-                        iconBg="bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400"
-                        trend={refundTrend}
-                        trendColor="rose"
-                        subtitle={`${totalRefunds.toLocaleString()} items (${refundRate.toFixed(1)}%)`}
-                        compare={compare}
-                        compareValue={comparison ? `${comparison.totalRefunds.toLocaleString()} items` : undefined}
-                    />
-                    {/* Product Status */}
-                    <Card className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400">
-                                <Layers className="h-4 w-4" />
-                            </div>
-                            <Badge variant="outline" className="text-[9px] uppercase font-bold tracking-wider opacity-60">Catalog</Badge>
-                        </div>
-                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{products.length}</p>
-                        <div className="flex items-center gap-3 mt-2">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600">
-                                <ShieldCheck className="h-3 w-3" /> {activeProductCount} active
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400">
-                                <ShieldX className="h-3 w-3" /> {inactiveProductCount} inactive
-                            </span>
-                        </div>
-                    </Card>
-                </div>
-
-                {/* ━━━ TAB CONTENT ━━━ */}
-                {activeTab === "analytics" ? (
-                    <>
-                        {/* Revenue Chart */}
-                        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
-                            <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                                <div>
-                                    <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                                        <ChartBarIcon className="h-4 w-4 text-indigo-500" />
-                                        Top Products by Revenue
-                                    </CardTitle>
-                                    <p className="text-xs text-slate-400 mt-1">Revenue from fulfilled orders only</p>
+            <div className="px-4 md:px-6 pt-6 space-y-6">
+                <Tabs value={activeTab} onValueChange={(val) => {
+                    setActiveTab(val as any)
+                    const params = new URLSearchParams(searchParams.toString())
+                    params.set("tab", val)
+                    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+                }} className="space-y-6">
+                    
+                    {/* ━━━ LUXURY INTELLIGENCE HEADER ━━━ */}
+                    <div className="relative overflow-hidden bg-slate-900 border-b border-slate-800 shadow-2xl rounded-[2.5rem]">
+                        {/* Ambient Background Elements */}
+                        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-indigo-600/20 blur-[120px] rounded-full animate-pulse" />
+                        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-600/10 blur-[100px] rounded-full" />
+                        
+                        <div className="px-8 py-10 relative">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 max-w-7xl mx-auto">
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 rounded-2xl bg-indigo-600/20 text-indigo-400 ring-1 ring-indigo-500/30 shadow-lg shadow-indigo-500/10">
+                                            <TrendingUp className="h-5 w-5" />
+                                        </div>
+                                        <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-[10px] font-black uppercase tracking-widest px-3 py-1 animate-in slide-in-from-left-4 duration-700">
+                                            Centralized Reporting
+                                        </Badge>
+                                    </div>
+                                    <h1 className="text-4xl font-black text-white tracking-tight sm:text-5xl">
+                                        Product <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-400 to-emerald-400">Intelligence</span>
+                                    </h1>
+                                    <p className="text-slate-400 font-medium text-sm flex items-center gap-2 max-w-md">
+                                        <Calculator className="h-4 w-4 opacity-50" />
+                                        Unified view of product performance metrics and transactional history across all branches.
+                                    </p>
                                 </div>
+
+                                <div className="flex flex-col items-end gap-6">
+                                    <TabsList className="bg-slate-800/50 p-1.5 rounded-2xl border border-slate-700/50 backdrop-blur-md">
+                                        <TabsTrigger value="analytics" className="rounded-xl px-8 py-3 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 transition-all duration-300 gap-2">
+                                            <LayoutDashboard className="h-3.5 w-3.5" /> Analytics
+                                        </TabsTrigger>
+                                        <TabsTrigger value="reports" className="rounded-xl px-8 py-3 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 transition-all duration-300 gap-2">
+                                            <Database className="h-3.5 w-3.5" /> Reports
+                                        </TabsTrigger>
+                                    </TabsList>
+                                    
+                                    <div className="flex items-center gap-3">
+                                        <Button 
+                                            variant="outline" 
+                                            onClick={() => { mutateGlobalPerf(); mutateCatalog(); mutateChart(); }}
+                                            className="h-11 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl px-5 gap-2 transition-all duration-300 group"
+                                        >
+                                            <RefreshCw className={cn("h-4 w-4 transition-transform duration-500 group-hover:rotate-180", (isGlobalPerfLoading || isCatalogLoading || isChartPerfLoading) && "animate-spin")} />
+                                            Synchronize
+                                        </Button>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button className="h-11 bg-indigo-600 hover:bg-indigo-500 text-white border-none rounded-xl px-6 gap-2 shadow-lg shadow-indigo-600/20 transition-all duration-300 font-bold uppercase tracking-widest text-[11px]">
+                                                    <Download className="h-4 w-4" /> Export
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-52 bg-slate-900 border-slate-800 text-slate-300 rounded-2xl p-2 shadow-2xl">
+                                                <DropdownMenuItem onClick={() => handleExport('csv')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
+                                                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500"><FileSpreadsheet className="h-4 w-4" /></div> CSV Spreadsheet
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
+                                                    <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500"><FileText className="h-4 w-4" /></div> Excel Workbook
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
+                                                    <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500"><FilePdf className="h-4 w-4" /></div> PDF Document
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                        {/* ━━━ KPI BENTO GRID ━━━ */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <KPICard
+                                label="Total Revenue"
+                                value={formatPKR(totalRevenue / 100)}
+                                icon={<TrendingUp className="h-4 w-4" />}
+                                iconBg="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
+                                trend={revenueTrend}
+                                trendColor="emerald"
+                                subtitle="From fulfilled products"
+                                compare={compare}
+                                compareValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined}
+                            />
+                            <KPICard
+                                label="Qty Fulfilled"
+                                value={totalVolume.toLocaleString()}
+                                icon={<Package className="h-4 w-4" />}
+                                iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                                trend={volumeTrend}
+                                trendColor="emerald"
+                                subtitle={`${fulfillmentRate.toFixed(1)}% fulfillment rate`}
+                                compare={compare}
+                                compareValue={comparison ? comparison.totalVolume.toLocaleString() : undefined}
+                            />
+                            <KPICard
+                                label="Refund Loss"
+                                value={formatPKR(totalRefundLoss / 100)}
+                                icon={<AlertOctagon className="h-4 w-4" />}
+                                iconBg="bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400"
+                                trend={refundTrend}
+                                trendColor="rose"
+                                subtitle={`${totalRefunds.toLocaleString()} items (${refundRate.toFixed(1)}%)`}
+                                compare={compare}
+                                compareValue={comparison ? `${comparison.totalRefunds.toLocaleString()} items` : undefined}
+                            />
+                            <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 flex flex-col justify-between">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400">
+                                        <Layers className="h-4 w-4" />
+                                    </div>
+                                    <Badge variant="outline" className="text-[9px] uppercase font-bold tracking-wider opacity-60 font-mono">Status</Badge>
+                                </div>
+                                <div>
+                                    <p className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{products.length.toLocaleString()}</p>
+                                    <div className="flex items-center gap-3">
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                                            <ShieldCheck className="h-3 w-3" /> {activeProductCount} active
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                                            <ShieldX className="h-3 w-3" /> {inactiveProductCount} inactive
+                                        </span>
+                                    </div>
+                                </div>
+                            </Card>
+                        </div>
+                        {/* Revenue Chart */}
+                        {/* Revenue Chart with Filters */}
+                        <Card className="overflow-hidden border border-slate-200/80 dark:border-slate-800 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl rounded-[2rem] relative group transition-all duration-700 hover:shadow-indigo-500/10 hover:border-indigo-400/40">
+                            <CardHeader className="relative z-10 pb-4 border-b border-slate-100/80 dark:border-slate-800/50 space-y-4 bg-gradient-to-r from-slate-50/50 via-white/50 to-indigo-50/20 dark:from-slate-950/20 dark:via-slate-900/80 dark:to-indigo-950/10">
+                                <div className="flex flex-row items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <CardTitle className="text-sm font-bold flex items-center gap-2.5 uppercase tracking-tight text-slate-800 dark:text-slate-200">
+                                            <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/20">
+                                                <ChartBarIcon className="h-3.5 w-3.5" />
+                                            </div>
+                                            Top Products by Revenue
+                                            <Badge variant="outline" className="text-[9px] font-bold tracking-widest border-indigo-200 dark:border-indigo-800 text-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 ml-1">Fulfilled Only</Badge>
+                                        </CardTitle>
+                                    </div>
+                                    {(chartYears.length > 0 || chartMonths.length > 0 || chartBranchIds.length > 0 || chartGroupIds.length > 0) && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                setChartYears([]);
+                                                setChartMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+                                                setChartBranchIds([]);
+                                                setChartGroupIds([]);
+                                            }}
+                                            className="h-7 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full px-3 gap-1 transition-all duration-200 hover:scale-105"
+                                        >
+                                            <RotateCcw className="h-3 w-3" /> Reset Defaults
+                                        </Button>
+                                    )}
+                                </div>
+
+                                {/* ── Chart Filters ── */}
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <MultiSelectFilter
+                                        title="Months"
+                                        items={CHART_MONTH_NAMES.map((name, i) => ({ id: i + 1, label: name }))}
+                                        selectedIds={chartMonths}
+                                        onChange={(ids) => setChartMonths(ids.sort((a, b) => a - b))}
+                                        icon={<Filter className="h-3.5 w-3.5 text-emerald-500" />}
+                                        placeholder="Months"
+                                        showSearch={false}
+                                    />
+                                    <MultiSelectFilter
+                                        title="Years"
+                                        items={availableChartYears.map(y => ({ id: y, label: String(y) }))}
+                                        selectedIds={chartYears}
+                                        onChange={(ids) => setChartYears(ids.sort((a, b) => b - a))}
+                                        icon={<History className="h-3.5 w-3.5 text-indigo-500" />}
+                                        placeholder="Years"
+                                        showSearch={false}
+                                    />
+                                    <GroupFilter
+                                        selectedIds={chartGroupIds}
+                                        onChange={setChartGroupIds}
+                                        organizationId={organizationId || undefined}
+                                        placeholder="Groups"
+                                    />
+                                    <BranchFilter
+                                        selectedIds={chartBranchIds}
+                                        onChange={setChartBranchIds}
+                                        organizationId={organizationId || undefined}
+                                        placeholder="Branches"
+                                    />
+                                </div>
+                                    
+                                    {/* Active Filters Badges */}
+                                    {chartYears.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 ml-1">
+                                            {chartYears.map(y => (
+                                                <Badge key={y} className="text-[10px] font-bold bg-gradient-to-r from-indigo-500 to-violet-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartYear(y)}>
+                                                    {y} <X className="h-2.5 w-2.5" />
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {chartMonths.length > 0 && chartMonths.length < 12 && (
+                                        <div className="flex flex-wrap gap-1.5 ml-1">
+                                            {chartMonths.map(m => (
+                                                <Badge key={m} className="text-[10px] font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartMonth(m)}>
+                                                    {CHART_MONTH_NAMES[m - 1]} <X className="h-2.5 w-2.5" />
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {chartGroupIds.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 ml-1">
+                                            {chartGroupIds.map(gid => {
+                                                const gr = availableGroups.find((g: any) => String(g.id) === gid)
+                                                return (
+                                                    <Badge key={gid} className="text-[10px] font-bold bg-gradient-to-r from-sky-500 to-blue-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartGroup(gid)}>
+                                                        {gr?.name || gid} <X className="h-2.5 w-2.5" />
+                                                    </Badge>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                    {chartBranchIds.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 ml-1">
+                                            {chartBranchIds.map(bid => {
+                                                const br = availableBranches.find((b: any) => String(b.id) === bid)
+                                                return (
+                                                    <Badge key={bid} className="text-[10px] font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartBranch(bid)}>
+                                                        {br?.name || bid} <X className="h-2.5 w-2.5" />
+                                                    </Badge>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
                             </CardHeader>
-                            <CardContent className="pt-0 pb-4">
-                                {isPerfLoading ? (
+                            <CardContent className="pt-6 pb-6 pr-6 pl-0">
+                                {isChartPerfLoading || isGlobalPerfLoading ? (
                                     <div className="h-[320px] flex items-center justify-center">
                                         <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
                                     </div>
-                                ) : chartData.length === 0 ? (
-                                    <div className="h-[320px] flex items-center justify-center text-sm text-slate-400">
-                                        No product data available
-                                    </div>
                                 ) : (
-                                    <div className="h-[320px] w-full">
+                                    <div className="h-[320px] w-full ml-4">
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
-                                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" opacity={0.3} />
+                                            <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.3} />
                                                 <XAxis 
-                                                    type="number" 
+                                                    dataKey="name" 
+                                                    axisLine={false} 
+                                                    tickLine={false} 
+                                                    tick={{ fill: '#475569', fontSize: 11, fontWeight: 600 }}
+                                                    dy={10}
+                                                />
+                                                <YAxis 
                                                     axisLine={false} 
                                                     tickLine={false} 
                                                     tick={{ fill: '#94a3b8', fontSize: 10 }} 
                                                     tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v.toString()}
-                                                />
-                                                <YAxis 
-                                                    type="category" 
-                                                    dataKey="name" 
-                                                    axisLine={false} 
-                                                    tickLine={false} 
-                                                    tick={{ fill: '#475569', fontSize: 11, fontWeight: 600 }} 
-                                                    width={180}
+                                                    dx={-10}
                                                 />
                                                 <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
-                                                <Bar dataKey="revenue" name="Revenue (PKR)" radius={[0, 8, 8, 0]} barSize={24}>
-                                                    {chartData.map((_: any, idx: number) => (
-                                                        <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                                                    ))}
-                                                </Bar>
-                                            </BarChart>
-                                        </ResponsiveContainer>
+                                                <Legend 
+                                                    verticalAlign="top" 
+                                                    align="right" 
+                                                    iconType="circle" 
+                                                    wrapperStyle={{ paddingBottom: 20, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}
+                                                />
+                                                <Bar 
+                                                    dataKey="revenue" 
+                                                    name="REVENUE" 
+                                                    fill="#6366f1" 
+                                                    radius={[6, 6, 0, 0]} 
+                                                    barSize={24} 
+                                                />
+                                                {compare && (
+                                                    <Bar 
+                                                        dataKey="compareRevenue" 
+                                                        name="PRIOR PERIOD" 
+                                                        fill="#94a3b8" 
+                                                        fillOpacity={0.4}
+                                                        radius={[6, 6, 0, 0]} 
+                                                        barSize={24} 
+                                                    />
+                                                )}
+                                                </ComposedChart>
+                                            </ResponsiveContainer>
                                     </div>
                                 )}
                             </CardContent>
@@ -566,7 +862,7 @@ export default function ProductPerformancePage() {
                                     </div>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                            <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg shadow-lg shadow-indigo-600/20" disabled={isPerfLoading}>
+                                            <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg shadow-lg shadow-indigo-600/20" disabled={isGlobalPerfLoading}>
                                                 <Download className="h-3.5 w-3.5" /> EXPORT
                                             </Button>
                                         </DropdownMenuTrigger>
@@ -594,7 +890,7 @@ export default function ProductPerformancePage() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {isPerfLoading ? (
+                                        {isGlobalPerfLoading ? (
                                             <TableRow><TableCell colSpan={8} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-500" /></TableCell></TableRow>
                                         ) : filteredProducts.length === 0 ? (
                                             <TableRow><TableCell colSpan={8} className="h-32 text-center text-slate-500 text-sm">No products found.</TableCell></TableRow>
@@ -653,156 +949,210 @@ export default function ProductPerformancePage() {
                                 </Table>
                             </div>
                         </Card>
-                    </>
-                ) : (
-                    /* ━━━ REPORTS TAB ━━━ */
-                    <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
-                        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <History className="h-4 w-4 text-indigo-500" />
-                                <h3 className="font-bold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
-                                    Transaction Ledger
-                                </h3>
+                        </TabsContent>
+                        <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                        {/* ━━━ REPORTS TAB ━━━ */}
+                        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
+                        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <History className="h-4 w-4 text-indigo-500" />
+                                    <h3 className="font-bold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
+                                        Product Catalog Report
+                                    </h3>
+                                </div>
+                                {(reportYears.length > 0 || reportMonths.length > 0 || reportBranchIds.length > 0 || reportGroupIds.length > 0) && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setReportYears([]);
+                                            setReportMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+                                            setReportBranchIds([]);
+                                            setReportGroupIds([]);
+                                            setReportProductIds([]);
+                                            setReportOrganizationIds([]);
+                                        }}
+                                        className="h-7 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full px-3 gap-1 transition-all duration-200 hover:scale-105"
+                                    >
+                                        <RotateCcw className="h-3 w-3" /> Reset Defaults
+                                    </Button>
+                                )}
                             </div>
-                            <div className="flex items-center gap-2">
-                                <div className="relative">
-                                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                    <Input
-                                        placeholder="Search by Trans ID, product..."
-                                        className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 rounded-lg"
-                                        value={reportSearchTerm}
-                                        onChange={(e) => setReportSearchTerm(e.target.value)}
+                            
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                {/* ── Report Filters ── */}
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <MultiSelectFilter
+                                        title="Months"
+                                        items={CHART_MONTH_NAMES.map((name, i) => ({ id: i + 1, label: name }))}
+                                        selectedIds={reportMonths}
+                                        onChange={(ids) => setReportMonths(ids.sort((a,b) => a - b))}
+                                        icon={<Filter className="h-3.5 w-3.5 text-emerald-500" />}
+                                        placeholder="Months"
+                                        showSearch={false}
+                                    />
+                                    <MultiSelectFilter
+                                        title="Years"
+                                        items={availableChartYears.map(y => ({ id: y, label: String(y) }))}
+                                        selectedIds={reportYears}
+                                        onChange={(ids) => setReportYears(ids.sort((a, b) => b - a))}
+                                        icon={<History className="h-3.5 w-3.5 text-indigo-500" />}
+                                        placeholder="Years"
+                                        showSearch={false}
+                                    />
+                                    <OrganizationFilter
+                                        selectedIds={reportOrganizationIds}
+                                        onChange={setReportOrganizationIds}
+                                        placeholder="Organizations"
+                                    />
+                                    {reportOrganizationIds.length > 0 && (
+                                        <GroupFilter
+                                            selectedIds={reportGroupIds}
+                                            onChange={setReportGroupIds}
+                                            organizationId={organizationId || undefined}
+                                            organizationIds={reportOrganizationIds}
+                                            placeholder="Groups"
+                                        />
+                                    )}
+                                    {reportGroupIds.length > 0 && (
+                                        <BranchFilter
+                                            selectedIds={reportBranchIds}
+                                            onChange={setReportBranchIds}
+                                            organizationId={organizationId ?? undefined}
+                                            organizationIds={reportOrganizationIds}
+                                            groupIds={reportGroupIds}
+                                            disabled={reportGroupIds.length > 0}
+                                            placeholder="Branches"
+                                        />
+                                    )}
+                                    <ProductFilter
+                                        selectedIds={reportProductIds}
+                                        onChange={setReportProductIds}
+                                        organizationId={organizationId || undefined}
+                                        organizationIds={reportOrganizationIds}
+                                        groupIds={reportGroupIds}
+                                        placeholder="Products"
                                     />
                                 </div>
-                                <Badge variant="secondary" className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400 border-none text-[10px] font-bold uppercase">Audit Trail</Badge>
+                                
+                                <div className="flex items-center gap-2">
+                                    <div className="relative">
+                                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                        <Input
+                                            placeholder="Search by code, product..."
+                                            className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 rounded-lg"
+                                            value={reportSearchTerm}
+                                            onChange={(e) => setReportSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Active Filters Badges */}
+                            <div className="flex flex-wrap gap-2">
+                                {reportYears.length > 0 && reportYears.map(y => (
+                                    <Badge key={y} className="text-[10px] font-bold bg-indigo-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportYear(y)}>
+                                        {y} <X className="h-2.5 w-2.5" />
+                                    </Badge>
+                                ))}
+                                {reportMonths.length > 0 && reportMonths.length < 12 && reportMonths.map(m => (
+                                    <Badge key={m} className="text-[10px] font-bold bg-emerald-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportMonth(m)}>
+                                        {CHART_MONTH_NAMES[m - 1]} <X className="h-2.5 w-2.5" />
+                                    </Badge>
+                                ))}
+                                {reportGroupIds.length > 0 && reportGroupIds.map(gid => {
+                                    const gr = availableGroups.find((g: any) => String(g.id) === gid)
+                                    return (
+                                        <Badge key={gid} className="text-[10px] font-bold bg-sky-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportGroup(gid)}>
+                                            {gr?.name || gid} <X className="h-2.5 w-2.5" />
+                                        </Badge>
+                                    )
+                                })}
+                                {reportBranchIds.length > 0 && reportBranchIds.map(bid => {
+                                    const br = availableBranches.find((b: any) => String(b.id) === bid)
+                                    return (
+                                        <Badge key={bid} className="text-[10px] font-bold bg-amber-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportBranch(bid)}>
+                                            {br?.name || bid} <X className="h-2.5 w-2.5" />
+                                        </Badge>
+                                    )
+                                })}
+                                {reportOrganizationIds.length > 0 && reportOrganizationIds.map(oid => {
+                                    const org = availableOrgs.find((o: any) => String(o.id) === oid)
+                                    return (
+                                        <Badge key={oid} className="text-[10px] font-bold bg-indigo-600 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => setReportOrganizationIds(prev => prev.filter(p => p !== oid))}>
+                                            Org: {org?.name || oid} <X className="h-2.5 w-2.5" />
+                                        </Badge>
+                                    )
+                                })}
+                                {reportProductIds.length > 0 && reportProductIds.map(pid => {
+                                    const pr = availableProducts.find((p: any) => String(p.id) === pid)
+                                    return (
+                                        <Badge key={pid} className="text-[10px] font-bold bg-slate-600 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => setReportProductIds(prev => prev.filter(p => p !== pid))}>
+                                            {pr?.name || pid} <X className="h-2.5 w-2.5" />
+                                        </Badge>
+                                    )
+                                })}
                             </div>
                         </div>
                         <div className="overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-slate-50/20 dark:bg-slate-800/10">
-                                        <TableHead className="w-8 h-10"></TableHead>
-                                        <TableHead className="pl-2 h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Date</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Item / SKU</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Branch</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Qty</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Unit Price</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Net Total</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Trans ID</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-right pr-6">Status</TableHead>
+                                        <TableHead className="pl-6 h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Status</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Product Info</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Category</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">{priceLabel}</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Stock</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Qty Sold</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-right pr-6">Revenue</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {isSummaryLoading ? (
+                                    {isCatalogLoading ? (
                                         <TableRow><TableCell colSpan={9} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
-                                    ) : filteredTransactions.length === 0 ? (
-                                        <TableRow><TableCell colSpan={9} className="h-32 text-center text-slate-400 text-xs">No transactions recorded.</TableCell></TableRow>
+                                    ) : filteredCatalog.length === 0 ? (
+                                        <TableRow><TableCell colSpan={9} className="h-32 text-center text-slate-400 text-xs">No products found in catalog.</TableCell></TableRow>
                                     ) : (
-                                        Object.values(filteredTransactions.reduce((acc: any, curr: any) => {
-                                            if (!acc[curr.orderId]) {
-                                                acc[curr.orderId] = {
-                                                    id: curr.orderId,
-                                                    tid: curr.tid,
-                                                    date: curr.orderDate,
-                                                    branch: curr.branchName,
-                                                    status: curr.orderStatus,
-                                                    items: []
-                                                }
-                                            }
-                                            acc[curr.orderId].items.push(curr)
-                                            return acc
-                                        }, {} as any))
-                                        .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                        .map((order: any) => {
-                                            const isExpanded = expandedRow === `order-${order.id}`
-                                            const totalQty = order.items.reduce((s: number, i: any) => s + i.quantity, 0)
-                                            const totalRevenue = order.items.reduce((s: number, i: any) => s + (i.quantity * i.priceCents) / 100, 0)
-                                            const avgUnitPrice = order.items.length === 1 ? order.items[0].priceCents / 100 : totalRevenue / totalQty
-
+                                        filteredCatalog.map((product: any) => {
                                             return (
-                                                <React.Fragment key={order.id}>
-                                                    <TableRow className={cn("hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors", order.items.length === 1 ? "cursor-pointer" : "")} onClick={() => { if (order.items.length === 1) handleRowClick(order.items[0]) }}>
-                                                        <TableCell onClick={(e) => { e.stopPropagation(); setExpandedRow(isExpanded ? null : `order-${order.id}`); }} className="w-8">
-                                                            {order.items.length > 1 ? (
-                                                                <button className="flex items-center justify-center w-5 h-5 rounded-md bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold">
-                                                                    {isExpanded ? "−" : "+"}
-                                                                </button>
-                                                            ) : null}
-                                                        </TableCell>
-                                                        <TableCell className="pl-2 py-3 text-[11px] font-mono text-slate-500">{new Date(order.date).toLocaleDateString()}</TableCell>
-                                                        <TableCell className="py-3">
-                                                            <div className="flex flex-col">
-                                                                <span className="font-bold text-[11px] text-slate-900 dark:text-white uppercase truncate max-w-[180px]">
-                                                                    {order.items.length === 1 ? order.items[0].productName : `${order.items.length} Products`}
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-400 font-mono">{order.items.length === 1 ? order.items[0].productCode : 'MULTIPLE'}</span>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="py-3">
-                                                            <Badge variant="outline" className="text-[10px] font-medium opacity-70 px-2 rounded-full">{order.branch}</Badge>
-                                                        </TableCell>
-                                                        <TableCell className="text-center font-mono text-[11px] font-bold">{totalQty}</TableCell>
-                                                        <TableCell className="text-center font-mono text-[11px] font-medium text-slate-400">{order.items.length === 1 ? formatPKR(avgUnitPrice) : 'Mixed'}</TableCell>
-                                                        <TableCell className="text-center font-mono text-[11px] font-bold text-indigo-500">{formatPKR(totalRevenue)}</TableCell>
-                                                        <TableCell className="text-center font-mono text-[10px] text-slate-400">{order.tid}</TableCell>
-                                                        <TableCell className="text-right pr-6">
-                                                            {(() => {
-                                                                const s = (order.status || "").toUpperCase()
-                                                                let colors = "bg-slate-100 text-slate-600 dark:bg-slate-900/20 dark:text-slate-400" // Default
-                                                                if (s === 'FULFILLED') colors = "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400"
-                                                                else if (s === 'REJECTED') colors = "bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400"
-                                                                else if (s === 'REFUNDED') colors = "bg-rose-100 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400"
-                                                                else if (s === 'APPROVED') colors = "bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                                                                else if (s === 'PARTIAL' || s === 'PARTIALLY_FULFILLED') colors = "bg-sky-100 text-sky-600 dark:bg-sky-900/20 dark:text-sky-400"
-                                                                else if (s === 'CANCELLED') colors = "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                                                                
-                                                                return (
-                                                                    <Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border-none", colors)}>
-                                                                        {order.status}
-                                                                    </Badge>
-                                                                )
-                                                            })()}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                    {isExpanded && order.items.map((prod: any, pIdx: number) => {
-                                                        const pTotal = (prod.quantity * prod.priceCents) / 100
-                                                        return (
-                                                        <TableRow key={`${order.id}-${pIdx}`} className="bg-slate-50/80 dark:bg-slate-800/80 border-l-4 border-indigo-500 cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 transition-colors" onClick={() => handleRowClick(prod)}>
-                                                            <TableCell className="w-8 pl-3">
-                                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                                                            </TableCell>
-                                                            <TableCell className="pl-2 py-3 text-[11px] font-mono text-slate-500">{new Date(prod.orderDate).toLocaleDateString()}</TableCell>
-                                                            <TableCell className="py-3 pl-4">
-                                                                <div className="flex flex-col">
-                                                                    <span className="font-bold text-[11px] text-indigo-700 dark:text-indigo-300 uppercase">{prod.productName}</span>
-                                                                    <span className="text-[10px] text-slate-500 font-mono">{prod.productCode}</span>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="py-3 text-[11px] text-slate-500 font-medium">{order.branch}</TableCell>
-                                                            <TableCell className="text-center font-mono text-[11px] text-slate-700 dark:text-slate-300 font-bold">{prod.quantity}</TableCell>
-                                                            <TableCell className="text-center font-mono text-[11px] text-slate-600 dark:text-slate-400 font-medium">{formatPKR(prod.priceCents / 100)}</TableCell>
-                                                            <TableCell className="text-center font-mono text-[11px] text-indigo-600 dark:text-indigo-400 font-bold">{formatPKR(pTotal)}</TableCell>
-                                                            <TableCell className="text-center font-mono text-[10px] text-slate-500">{prod.tid}</TableCell>
-                                                            <TableCell className="text-right pr-6">
-                                                                {(() => {
-                                                                    const s = (prod.orderStatus || "").toUpperCase()
-                                                                    let colors = "bg-slate-100 text-slate-600 dark:bg-slate-900/10 dark:text-slate-400" // Default
-                                                                    if (s === 'FULFILLED') colors = "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400"
-                                                                    else if (s === 'REJECTED') colors = "bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400"
-                                                                    else if (s === 'REFUNDED') colors = "bg-rose-100 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400"
-                                                                    else if (s === 'APPROVED') colors = "bg-blue-100 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400"
-                                                                    else if (s === 'PARTIAL' || s === 'PARTIALLY_FULFILLED') colors = "bg-sky-100 text-sky-600 dark:bg-sky-900/20 dark:text-sky-400"
-                                                                    else if (s === 'CANCELLED') colors = "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                                                                    return (
-                                                                        <Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border-none", colors)}>
-                                                                            {prod.orderStatus}
-                                                                        </Badge>
-                                                                    )
-                                                                })()}
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    )})}
-                                                </React.Fragment>
+                                                <TableRow key={product.globalProductId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer" onClick={() => handleRowClick(product)}>
+                                                    <TableCell className="pl-6 py-3">
+                                                        {product.status === "active" ? (
+                                                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">Active</Badge>
+                                                        ) : (
+                                                            <Badge className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">Inactive</Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="py-3">
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-[11px] text-slate-900 dark:text-white uppercase truncate max-w-[200px]">
+                                                                {product.productName}
+                                                            </span>
+                                                            <span className="text-[10px] text-slate-400 font-mono">{product.productCode}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="py-3">
+                                                        <Badge variant="outline" className="text-[10px] font-medium opacity-70 px-2 rounded-full truncate max-w-[120px]">{product.categoryName}</Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-mono text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                                                        {formatPKR(product.basePriceCents / 100)}
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-mono text-[11px] font-bold">
+                                                        <Badge variant="secondary" className={cn(
+                                                            "text-[10px] font-black px-2 py-0.5 rounded-md border-none",
+                                                            product.stockQuantity <= 5 ? "bg-rose-100 text-rose-600" : "bg-slate-100 text-slate-600"
+                                                        )}>
+                                                            {product.stockQuantity} {product.unit}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-mono text-[11px] font-bold text-emerald-600">
+                                                        {product.qtyFulfilled}
+                                                    </TableCell>
+                                                    <TableCell className="text-right pr-6 font-mono text-[11px] font-black text-indigo-600">
+                                                        {formatPKR(product.revenueGeneratedCents / 100)}
+                                                    </TableCell>
+                                                </TableRow>
                                             )
                                         })
                                     )}
@@ -810,8 +1160,9 @@ export default function ProductPerformancePage() {
                             </Table>
                         </div>
                     </Card>
-                )}
-            </div>
+                </TabsContent>
+            </Tabs>
+        </div>
 
             <ExpandableRowDrawer
                 open={drawerOpen} onClose={() => setDrawerOpen(false)}

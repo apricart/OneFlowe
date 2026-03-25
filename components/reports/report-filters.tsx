@@ -25,8 +25,8 @@ interface ReportFiltersProps {
     endDate: string
     onDateChange: (range: DateRange | null, preset: FilterPreset) => void
     activePreset: FilterPreset
-    groupId?: string
-    setGroupId?: (value: string) => void
+    groupIds?: string[]
+    onGroupChange?: (ids: string[]) => void
     selectedBranchIds?: string[]
     onBranchChange?: (ids: string[]) => void
     onRefresh: () => void
@@ -46,8 +46,8 @@ export function ReportFilters({
     endDate,
     onDateChange,
     activePreset,
-    groupId,
-    setGroupId,
+    groupIds = [],
+    onGroupChange,
     selectedBranchIds = [],
     onBranchChange,
     onRefresh,
@@ -84,10 +84,10 @@ export function ReportFilters({
 
             <div className="flex items-center gap-1.5 ml-auto">
                 {/* Group Filter */}
-                {showGroupFilter && setGroupId && (role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                {showGroupFilter && onGroupChange && (role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
                     <GroupFilter
-                        value={groupId}
-                        onChange={setGroupId}
+                        selectedIds={groupIds}
+                        onChange={onGroupChange}
                         organizationId={organizationId}
                     />
                 )}

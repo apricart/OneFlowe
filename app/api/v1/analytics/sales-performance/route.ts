@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     const branchIdParam = searchParams.get("branchId")
     const branchIdsParam = searchParams.get("branchIds") // comma-separated
     const groupIdParam = searchParams.get("groupId")
+    const groupIdsParam = searchParams.get("groupIds")
     const statusParam = searchParams.get("status") // PENDING | FULFILLED | REFUNDED | all
     const startDateParam = searchParams.get("startDate")
     const endDateParam = searchParams.get("endDate")
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
     let organizationId: number | null = null
     let branchId: number | null = null
     let groupId: number | null = null
+    let groupIds: number[] = []
     let branchIds: number[] = []
 
     // Role-based scoping
@@ -68,6 +70,12 @@ export async function GET(req: NextRequest) {
 
     if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") {
         groupId = Number(groupIdParam)
+    }
+
+    if (groupIdsParam) {
+        groupIds = groupIdsParam.split(",").map(Number).filter(n => !isNaN(n) && n > 0)
+    } else if (groupId) {
+        groupIds = [groupId]
     }
 
     // Date range - default to today
@@ -103,7 +111,8 @@ export async function GET(req: NextRequest) {
     const cacheKey = generateCacheKey("sales-perf", {
         role, organizationId, branchId,
         branchIds: branchIds.join(","),
-        groupId, status: statusParam,
+        groupIds: groupIds.join(","),
+        status: statusParam,
         start: startDate.toISOString().slice(0, 16),
         end: endDate.toISOString().slice(0, 16),
         compareStart: compareStartDateParam || "",
@@ -164,7 +173,11 @@ export async function GET(req: NextRequest) {
             conditions.push(eq(orders.branchId, branchId))
         }
 
-        if (groupId) conditions.push(eq(branches.groupId, groupId))
+        if (groupIds.length > 0) {
+            conditions.push(inArray(branches.groupId, groupIds))
+        } else if (groupId) {
+            conditions.push(eq(branches.groupId, groupId))
+        }
 
         const whereClause = and(...conditions)
 
@@ -234,7 +247,11 @@ export async function GET(req: NextRequest) {
         } else if (branchId) {
             branchConditions.push(eq(orders.branchId, branchId))
         }
-        if (groupId) branchConditions.push(eq(branches.groupId, groupId))
+        if (groupIds.length > 0) {
+            branchConditions.push(inArray(branches.groupId, groupIds))
+        } else if (groupId) {
+            branchConditions.push(eq(branches.groupId, groupId))
+        }
 
         let branchQuery = db
             .select({
@@ -351,7 +368,10 @@ export async function GET(req: NextRequest) {
                 compConditions.push(eq(orders.branchId, branchId))
                 compAllStatusConditions.push(eq(orders.branchId, branchId))
             }
-            if (groupId) {
+            if (groupIds.length > 0) {
+                compConditions.push(inArray(branches.groupId, groupIds))
+                compAllStatusConditions.push(inArray(branches.groupId, groupIds))
+            } else if (groupId) {
                 compConditions.push(eq(branches.groupId, groupId))
                 compAllStatusConditions.push(eq(branches.groupId, groupId))
             }

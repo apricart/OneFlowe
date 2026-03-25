@@ -60,7 +60,7 @@ export default function PurchaseReportPage() {
   const [compareYears, setCompareYears] = useState<number[]>([])
 
   const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
-  const [selectedGroupId, setSelectedGroupId] = useState<string>("all")
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
 
   const handleDateChange = useCallback((
     range: { startDate: Date; endDate: Date } | null, 
@@ -86,8 +86,8 @@ export default function PurchaseReportPage() {
     setSelectedBranchIds(ids)
   }, [])
 
-  const handleGroupChange = useCallback((id: string) => {
-    setSelectedGroupId(id)
+  const handleGroupChange = useCallback((ids: string[]) => {
+    setSelectedGroupIds(ids)
   }, [])
 
   // Build API URL
@@ -105,7 +105,7 @@ export default function PurchaseReportPage() {
       params.set("branchId", contextBranchId)
     }
 
-    if (selectedGroupId !== "all") params.set("groupId", selectedGroupId)
+    if (selectedGroupIds.length > 0) params.set("groupIds", selectedGroupIds.join(","))
     
     params.set("startDate", dateRange.startDate.toISOString())
     params.set("endDate", dateRange.endDate.toISOString())
@@ -123,7 +123,7 @@ export default function PurchaseReportPage() {
     }
     
     return params.toString()
-  }, [organizationId, contextBranchId, contextBranchIds, selectedBranchIds, selectedGroupId, dateRange, compare, compareRange])
+  }, [organizationId, contextBranchId, contextBranchIds, selectedBranchIds, selectedGroupIds, dateRange, compare, compareRange])
 
   const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/sales-performance?${queryParams}`, fetcher)
 
@@ -139,7 +139,7 @@ export default function PurchaseReportPage() {
       organizationId || undefined,
       undefined,
       selectedBranchIds.length > 0 ? selectedBranchIds : (contextBranchIds.length > 0 ? contextBranchIds : undefined),
-      selectedGroupId !== "all" ? selectedGroupId : undefined,
+      selectedGroupIds.length > 0 ? selectedGroupIds.join(",") : undefined,
       dateRange,
       "all",
       compare,
@@ -207,7 +207,7 @@ export default function PurchaseReportPage() {
           compareYears={compareYears}
         />
         <GroupFilter 
-          value={selectedGroupId} 
+          selectedIds={selectedGroupIds} 
           onChange={handleGroupChange} 
           organizationId={organizationId || undefined}
         />
