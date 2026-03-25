@@ -95,7 +95,6 @@ export async function GET(req: NextRequest) {
 
         // Build group conditions
         const groupConditions = []
-        groupConditions.push(sql`${groups.status} != 'deleted'`)
         if (orgId) {
             groupConditions.push(eq(groups.organizationId, orgId))
         }
@@ -171,6 +170,7 @@ export async function GET(req: NextRequest) {
             .select({
                 id: groups.id,
                 name: groups.name,
+                status: groups.status,
                 organizationId: groups.organizationId,
                 organizationName: organizations.name,
                 totalOrders: sql<number>`count(${orders.id})::int`,
@@ -209,6 +209,7 @@ export async function GET(req: NextRequest) {
                 .select({
                     id: branches.id,
                     name: branches.name,
+                    status: branches.status,
                     groupId: branches.groupId,
                     orders: sql<number>`count(${orders.id})::int`,
                     revenue: metricExpressions.revenue,

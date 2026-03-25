@@ -222,9 +222,9 @@ export default function UserReportPage() {
     }, [trend, compareTrend, chartYears, chartMonths])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Employee ID", "Name", "Email", "Organization", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
+        const headers = ["Employee ID", "Name", "Email", "Status", "Organization", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
         const rows = filteredUsers.map((u: any) => [
-            u.employeeId || "-", u.userName, u.userEmail, u.organizationName || 'N/A', u.branchName || 'N/A', 
+            u.employeeId || "-", u.userName, u.userEmail, u.status || "active", u.organizationName || 'N/A', u.branchName || 'N/A', 
             u.totalOrders, u.fulfilledOrders, u.refundedOrders,
             (u.totalSpentCents / 100).toFixed(2)
         ])
@@ -457,6 +457,7 @@ export default function UserReportPage() {
                                     <TableHeader>
                                         <TableRow className="bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-100/50 dark:border-slate-800/50">
                                             <TableHead className="pl-8 h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Employee Profile</TableHead>
+                                            <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">ID Reference</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Domain / Branch</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Orders {compare && "(A/B)"}</TableHead>
@@ -467,7 +468,7 @@ export default function UserReportPage() {
                                     </TableHeader>
                                     <TableBody>
                                         {filteredUsers.length === 0 ? (
-                                            <TableRow><TableCell colSpan={7} className="h-60 text-center text-slate-400 font-bold uppercase tracking-widest italic opacity-50">No audits found for this criteria</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={8} className="h-60 text-center text-slate-400 font-bold uppercase tracking-widest italic opacity-50">No audits found for this criteria</TableCell></TableRow>
                                         ) : (
                                             filteredUsers.map((u: any) => (
                                                 <TableRow key={`${u.userId}-${u.userEmail}`} className="group hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-all duration-300">
@@ -476,6 +477,11 @@ export default function UserReportPage() {
                                                             <span className="font-black text-xs text-slate-900 dark:text-white capitalize tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{u.userName || "Anonymous"}</span>
                                                             <span className="text-[10px] text-slate-400 font-bold lowercase tracking-tighter opacity-80">{u.userEmail}</span>
                                                         </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-center py-5">
+                                                        <Badge variant="outline" className={cn("text-[10px] font-black uppercase tracking-widest", u.status === "active" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : u.status === "deleted" ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-amber-50 text-amber-600 border-amber-200")}>
+                                                            {u.status || "Unknown"}
+                                                        </Badge>
                                                     </TableCell>
                                                     <TableCell className="py-5">
                                                         <Badge variant="outline" className="text-[10px] font-black font-mono px-2.5 py-1 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 group-hover:border-indigo-500/30 transition-all">

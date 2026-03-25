@@ -1097,47 +1097,47 @@ export function SalesPerformanceBarChart({
   const hasComparison = !!comparisonSeries && comparisonSeries.length > 0
 
   const safeData = useMemo(() => {
-    if (!dateRange || !dateRange.startDate || !dateRange.endDate) {
-      return seriesData
-    }
+    let dataToMap = seriesData || []
 
-    const { startDate, endDate } = dateRange
-    let intervals: Date[] = []
+    if (dateRange && dateRange.startDate && dateRange.endDate) {
+      const { startDate, endDate } = dateRange
+      let intervals: Date[] = []
 
-    if (granularity === 'hourly') {
-      intervals = eachHourOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
-    } else if (granularity === 'daily') {
-      intervals = eachDayOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
-    } else if (granularity === 'yearly') {
-      intervals = eachYearOfInterval({ start: startOfYear(startDate), end: endOfYear(endDate) })
-    } else {
-      intervals = eachMonthOfInterval({ start: startOfMonth(startDate), end: endOfMonth(endDate) })
-    }
-
-    const padded = intervals.map((date, index) => {
-      let labelStr = ""
-      if (granularity === 'hourly') labelStr = format(date, 'hh:mm a')
-      else if (granularity === 'daily') labelStr = format(date, 'dd MMM')
-      else if (granularity === 'yearly') labelStr = format(date, 'yyyy')
-      else labelStr = format(date, 'MMM yyyy')
-
-      const match = seriesData?.find(d => d.label === labelStr)
-      const compMatch = comparisonSeries ? (comparisonSeries[index] || null) : null
-
-      return {
-        label: labelStr,
-        sales: match?.sales ?? 0,
-        orders: match?.orders ?? 0,
-        compSales: compMatch?.sales ?? 0,
-        compOrders: compMatch?.orders ?? 0,
-        fullDate: date
+      if (granularity === 'hourly') {
+        intervals = eachHourOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
+      } else if (granularity === 'daily') {
+        intervals = eachDayOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
+      } else if (granularity === 'yearly') {
+        intervals = eachYearOfInterval({ start: startOfYear(startDate), end: endOfYear(endDate) })
+      } else {
+        intervals = eachMonthOfInterval({ start: startOfMonth(startDate), end: endOfMonth(endDate) })
       }
-    })
 
-    return padded.map(d => ({
+      dataToMap = intervals.map((date, index) => {
+        let labelStr = ""
+        if (granularity === 'hourly') labelStr = format(date, 'hh:mm a')
+        else if (granularity === 'daily') labelStr = format(date, 'dd MMM')
+        else if (granularity === 'yearly') labelStr = format(date, 'yyyy')
+        else labelStr = format(date, 'MMM yyyy')
+
+        const match = seriesData?.find(d => d.label === labelStr)
+        const compMatch = comparisonSeries ? (comparisonSeries[index] || null) : null
+
+        return {
+          label: labelStr,
+          sales: match?.sales ?? 0,
+          orders: match?.orders ?? 0,
+          compSales: compMatch?.sales ?? 0,
+          compOrders: compMatch?.orders ?? 0,
+          fullDate: date
+        }
+      })
+    }
+
+    return dataToMap.map((d: any) => ({
       ...d,
-      active: activeMetric === 'revenue' ? d.sales : d.orders,
-      compActive: activeMetric === 'revenue' ? d.compSales : d.compOrders,
+      active: activeMetric === 'revenue' ? (d.sales || 0) : (d.orders || 0),
+      compActive: activeMetric === 'revenue' ? (d.compSales || 0) : (d.compOrders || 0),
     }))
   }, [seriesData, comparisonSeries, dateRange, granularity, activeMetric])
 

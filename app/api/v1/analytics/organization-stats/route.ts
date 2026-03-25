@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
         branchName: branches.name,
         organizationId: branches.organizationId,
         organizationName: organizations.name,
+        organizationStatus: organizations.status,
         branchStatus: branches.status,
         activeUserCount: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.branchId} = ${branches.id} AND ${users.isActive} = true)`.mapWith(Number),
         totalUserCount: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.branchId} = ${branches.id})`.mapWith(Number),
@@ -127,6 +128,7 @@ export async function GET(req: NextRequest) {
             orgMap[orgId] = {
                 organizationId: orgId,
                 organizationName: b.organizationName || "Unknown Organization",
+                organizationStatus: b.organizationStatus || "active",
                 branchCount: 0,
                 activeBranchCount: 0,
                 inactiveBranchCount: 0,

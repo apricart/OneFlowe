@@ -46,6 +46,8 @@ import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import type { DateRange } from "@/lib/hooks/use-sales-performance"
 import { BranchFilter } from "@/components/reports/branch-filter"
+import { GroupFilter } from "@/components/reports/group-filter"
+import { OrganizationFilter } from "@/components/reports/organization-filter"
 import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -112,11 +114,15 @@ export default function OrderReportPage() {
     // ━━━ 2. ANALYTICS LOCAL STATE ━━━
     const [chartMonths, setChartMonths] = useState<number[]>([])
     const [chartYears, setChartYears] = useState<number[]>([])
+    const [chartOrgIds, setChartOrgIds] = useState<string[]>([])
+    const [chartGroupIds, setChartGroupIds] = useState<string[]>([])
     const [chartBranchIds, setChartBranchIds] = useState<string[]>([])
 
     // ━━━ 3. REPORTS LOCAL STATE ━━━
     const [reportMonths, setReportMonths] = useState<number[]>([])
     const [reportYears, setReportYears] = useState<number[]>([])
+    const [reportOrgIds, setReportOrgIds] = useState<string[]>([])
+    const [reportGroupIds, setReportGroupIds] = useState<string[]>([])
     const [reportBranchIds, setReportBranchIds] = useState<string[]>([])
 
     const { visibleKeys, isVisible, setVisibleKeys } = useColumnSelector(ALL_COLUMNS, "order-report-v2")
@@ -143,10 +149,13 @@ export default function OrderReportPage() {
 
     // Tier 2: Chart/Trend Data
     const chartParams = new URLSearchParams()
-    if (organizationId) chartParams.set("organizationId", organizationId.toString())
-    if (chartBranchIds.length) chartParams.set("branchIds", chartBranchIds.join(","))
-    if (chartMonths.length) chartParams.set("months", chartMonths.join(","))
-    if (chartYears.length) chartParams.set("years", chartYears.join(","))
+    if (chartOrgIds.length > 0) chartParams.set("organizationIds", chartOrgIds.join(","))
+    else if (organizationId) chartParams.set("organizationId", organizationId.toString())
+
+    if (chartBranchIds.length > 0) chartParams.set("branchIds", chartBranchIds.join(","))
+    if (chartGroupIds.length > 0) chartParams.set("groupIds", chartGroupIds.join(","))
+    if (chartMonths.length > 0) chartParams.set("months", chartMonths.join(","))
+    if (chartYears.length > 0) chartParams.set("years", chartYears.join(","))
     if (compare) chartParams.set("compare", "true")
     const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR(
         `/api/v1/analytics/summary?${chartParams.toString()}&trendOnly=true`, fetcher
@@ -154,10 +163,13 @@ export default function OrderReportPage() {
 
     // Tier 3: Report Table Data
     const reportParams = new URLSearchParams()
-    if (organizationId) reportParams.set("organizationId", organizationId.toString())
-    if (reportBranchIds.length) reportParams.set("branchIds", reportBranchIds.join(","))
-    if (reportMonths.length) reportParams.set("months", reportMonths.join(","))
-    if (reportYears.length) reportParams.set("years", reportYears.join(","))
+    if (reportOrgIds.length > 0) reportParams.set("organizationIds", reportOrgIds.join(","))
+    else if (organizationId) reportParams.set("organizationId", organizationId.toString())
+
+    if (reportBranchIds.length > 0) reportParams.set("branchIds", reportBranchIds.join(","))
+    if (reportGroupIds.length > 0) reportParams.set("groupIds", reportGroupIds.join(","))
+    if (reportMonths.length > 0) reportParams.set("months", reportMonths.join(","))
+    if (reportYears.length > 0) reportParams.set("years", reportYears.join(","))
     const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR(
         `/api/v1/analytics/summary?${reportParams.toString()}`, fetcher
     )
@@ -431,7 +443,25 @@ export default function OrderReportPage() {
                                         <MonthFilter selected={chartMonths} onChange={setChartMonths} />
                                         <YearFilter selected={chartYears} onChange={setChartYears} allTimeData={allTimeData} />
                                         {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-                                            <BranchFilter selectedIds={chartBranchIds} onChange={setChartBranchIds} organizationId={organizationId || undefined} />
+                                            <>
+                                                <OrganizationFilter selectedIds={chartOrgIds} onChange={setChartOrgIds} />
+                                                {(chartOrgIds.length > 0 || (role !== "SUPER_ADMIN" && organizationId)) && (
+                                                    <>
+                                                        <GroupFilter 
+                                                            selectedIds={chartGroupIds} 
+                                                            onChange={setChartGroupIds} 
+                                                            organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [String(organizationId)] : [])}
+                                                            disabled={chartBranchIds.length > 0}
+                                                        />
+                                                        <BranchFilter 
+                                                            selectedIds={chartBranchIds} 
+                                                            onChange={setChartBranchIds} 
+                                                            organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [organizationId] : [])} 
+                                                            groupIds={chartGroupIds}
+                                                        />
+                                                    </>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </div>
@@ -534,6 +564,27 @@ export default function OrderReportPage() {
                                 <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
                                 <MonthFilter selected={reportMonths} onChange={setReportMonths} />
                                 <YearFilter selected={reportYears} onChange={setReportYears} allTimeData={allTimeData} />
+                                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                    <>
+                                        <OrganizationFilter selectedIds={reportOrgIds} onChange={setReportOrgIds} />
+                                        {(reportOrgIds.length > 0 || (role !== "SUPER_ADMIN" && organizationId)) && (
+                                            <>
+                                                <GroupFilter 
+                                                    selectedIds={reportGroupIds} 
+                                                    onChange={setReportGroupIds} 
+                                                    organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [String(organizationId)] : [])}
+                                                    disabled={reportBranchIds.length > 0}
+                                                />
+                                                <BranchFilter 
+                                                    selectedIds={reportBranchIds} 
+                                                    onChange={setReportBranchIds} 
+                                                    organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [organizationId] : [])} 
+                                                    groupIds={reportGroupIds}
+                                                />
+                                            </>
+                                        )}
+                                    </>
+                                )}
                                 <ColumnSelector columns={ALL_COLUMNS} storageKey="order-report-v2" visibleKeys={visibleKeys} onChange={setVisibleKeys} />
                             </div>
                         </div>
@@ -644,7 +695,7 @@ function MonthFilter({ selected, onChange }: { selected: number[], onChange: (va
             title="Months"
             items={items}
             selectedIds={selected}
-            onChange={(ids) => onChange(ids.sort((a,b) => a - b))}
+            onChange={(ids: number[]) => onChange([...ids].sort((a, b) => a - b))}
             icon={<Filter className="h-3.5 w-3.5 text-indigo-500" />}
             placeholder="Months"
             showSearch={false}
@@ -667,7 +718,7 @@ function YearFilter({ selected, onChange, allTimeData }: { selected: number[], o
             title="Years"
             items={items}
             selectedIds={selected}
-            onChange={(ids) => onChange(ids.sort((a,b) => b - a))}
+            onChange={(ids: number[]) => onChange([...ids].sort((a, b) => b - a))}
             icon={<Calendar className="h-3.5 w-3.5 text-blue-500" />}
             placeholder="Years"
             showSearch={false}

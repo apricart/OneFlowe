@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useCallback } from "react"
+import { useMemo, useState, useCallback, useEffect } from "react"
 import useSWR from "swr"
 import { fetcher } from "@/lib/fetcher"
 import { useOrganizations, useBranches, useUsers } from "@/lib/hooks/use-api"
@@ -99,6 +99,31 @@ export function SuperAdminDashboard() {
     setChartMonths([])
     setChartYears([])
   }, [])
+
+  // ── Sync Global Filters to Local Chart Filters ──
+  useEffect(() => {
+    // 1. Sync Date Filters
+    if (activePreset === "today") setChartQuickFilter("today")
+    else if (activePreset === "7d") setChartQuickFilter("7d")
+    else setChartQuickFilter(null)
+
+    setChartMonths(months || [])
+    setChartYears(years || [])
+  }, [activePreset, months, years])
+
+  useEffect(() => {
+    // 2. Sync Organizations
+    if (organizationId) {
+      setChartSelectedOrgIds([String(organizationId)])
+    } else {
+      setChartSelectedOrgIds([])
+    }
+  }, [organizationId])
+
+  useEffect(() => {
+    // 3. Sync Branches
+    setChartSelectedBranchIds(selectedBranchIds || [])
+  }, [selectedBranchIds])
 
   const handleKPIOpen = (type: DrillDownType) => {
     setDrillDownType(type)

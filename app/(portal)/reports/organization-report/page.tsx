@@ -63,6 +63,12 @@ import {
     PieChart as PieChartIcon
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -178,6 +184,33 @@ export default function OrganizationReportPage() {
         if (cm !== undefined) setCompareMonths(cm)
         if (cy !== undefined) setCompareYears(cy)
     }, [])
+
+    const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
+        const headers = ["Organization Name", "Status", "Active Branches", "Inactive Branches", "Managed Users", "Revenue (PKR)", "Orders"]
+        const rows = filteredStats.map((org: any) => [
+            org.organizationName, 
+            org.organizationStatus || "active", 
+            org.activeBranchCount, 
+            org.inactiveBranchCount, 
+            org.totalUserCount, 
+            org.revenue.toFixed(2), 
+            org.orderCount
+        ])
+
+        if (format === 'pdf') {
+            const doc = new jsPDF()
+            doc.setFontSize(20); doc.text("Corporate Performance Ledger", 14, 20)
+            doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
+            autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid' })
+            doc.save(`organization-report-${new Date().getTime()}.pdf`)
+            return
+        }
+
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+        const workbook = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Organizations")
+        XLSX.writeFile(workbook, `organization-report-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
+    }
 
     const handleBranchChange = (ids: string[]) => setSelectedBranchIds(ids)
 
@@ -535,6 +568,18 @@ export default function OrganizationReportPage() {
                             <Button variant="outline" size="sm" onClick={() => mutateReport()} className="h-10 w-10 p-0 rounded-xl border-slate-200 dark:border-slate-800">
                                 <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isReportLoading && "animate-spin")} />
                             </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" className="h-10 rounded-xl font-black text-[10px] tracking-widest uppercase">
+                                        <Download className="h-3.5 w-3.5 mr-2" /> Export
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="rounded-xl border-slate-200">
+                                    <DropdownMenuItem onClick={() => handleExport('csv')} className="text-[10px] font-black uppercase">CSV</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleExport('excel')} className="text-[10px] font-black uppercase">Excel</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-[10px] font-black uppercase">PDF</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
 
                         <Card className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-2xl overflow-hidden min-h-[600px] flex flex-col">
@@ -558,6 +603,7 @@ export default function OrganizationReportPage() {
                                     <TableHeader>
                                         <TableRow className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
                                             <TableHead className="pl-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Organization</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Branches (Act/Ina)</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Managed Users</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Revenue (PKR)</TableHead>
@@ -569,12 +615,12 @@ export default function OrganizationReportPage() {
                                         {isReportLoading ? (
                                             Array(6).fill(0).map((_, i) => (
                                                 <TableRow key={i} className="h-20 animate-pulse border-b border-slate-50 dark:border-slate-900">
-                                                    <TableCell colSpan={6}><div className="h-10 bg-slate-50 dark:bg-slate-900/50 rounded-xl mx-4" /></TableCell>
+                                                    <TableCell colSpan={7}><div className="h-10 bg-slate-50 dark:bg-slate-900/50 rounded-xl mx-4" /></TableCell>
                                                 </TableRow>
                                             ))
                                         ) : filteredStats.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={6} className="h-60 text-center">
+                                                <TableCell colSpan={7} className="h-60 text-center">
                                                     <div className="flex flex-col items-center gap-4 opacity-30">
                                                         <Database className="h-12 w-12" />
                                                         <p className="text-xs font-black uppercase tracking-widest">No records found</p>
@@ -589,6 +635,11 @@ export default function OrganizationReportPage() {
                                                             <span className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{org.organizationName}</span>
                                                             <span className="text-[10px] font-bold text-slate-400 font-mono tracking-tight uppercase tracking-widest">ID: {org.organizationId}</span>
                                                         </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-black">
+                                                        <Badge variant="outline" className={cn("text-[10px] font-black uppercase tracking-widest", org.organizationStatus === "active" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : org.organizationStatus === "deleted" ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-amber-50 text-amber-600 border-amber-200")}>
+                                                            {org.organizationStatus || "Unknown"}
+                                                        </Badge>
                                                     </TableCell>
                                                     <TableCell className="text-center font-black">
                                                         <div className="flex items-center justify-center gap-6">

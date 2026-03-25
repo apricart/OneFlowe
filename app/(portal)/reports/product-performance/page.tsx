@@ -120,6 +120,8 @@ export default function ProductPerformancePage() {
     const [chartMonths, setChartMonths] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     const [chartBranchIds, setChartBranchIds] = useState<string[]>([])
     const [chartGroupIds, setChartGroupIds] = useState<string[]>([])
+    const [chartOrgIds, setChartOrgIds] = useState<string[]>([])
+    const [globalGroupId, setGlobalGroupId] = useState<string>("")
     const hasInitializedChartDefaults = useRef(false)
 
     // Report-local filters
@@ -274,6 +276,7 @@ export default function ProductPerformancePage() {
     const globalQueryParams = new URLSearchParams()
     if (organizationId) globalQueryParams.set("organizationId", organizationId.toString())
     if (contextBranchIds.length > 0) globalQueryParams.set("branchIds", contextBranchIds.join(","))
+    if (globalGroupId) globalQueryParams.set("groupIds", globalGroupId)
     if (selectedMonths.length > 0) globalQueryParams.set("months", selectedMonths.join(","))
     if (selectedYears.length > 0) globalQueryParams.set("years", selectedYears.join(","))
     if (dateRange) {
@@ -286,7 +289,8 @@ export default function ProductPerformancePage() {
 
     // ━━━ CHART DATA (Local Filtered) ━━━
     const chartQueryParams = new URLSearchParams()
-    if (organizationId) chartQueryParams.set("organizationId", organizationId.toString())
+    if (chartOrgIds.length > 0) chartQueryParams.set("organizationIds", chartOrgIds.join(","))
+    else if (organizationId) chartQueryParams.set("organizationId", organizationId.toString())
     if (chartBranchIds.length > 0) chartQueryParams.set("branchIds", chartBranchIds.join(","))
     if (chartGroupIds.length > 0) chartQueryParams.set("groupIds", chartGroupIds.join(","))
     if (chartMonths.length > 0) chartQueryParams.set("months", chartMonths.join(","))
@@ -444,7 +448,6 @@ export default function ProductPerformancePage() {
         { key: "price", label: priceLabel, value: formatPKR(item.basePriceCents / 100), type: "currency" },
         { key: "unit", label: "Unit", value: item.unit || "unit" },
         { key: "s3", label: "Quantities & Revenue", value: "", type: "section" },
-        { key: "stock", label: "Current Stock", value: `${item.stockQuantity} ${item.unit}` },
         { key: "qtyOrdered", label: "Qty Ordered", value: String(item.qtyOrdered || 0) },
         { key: "qtyFulfilled", label: "Qty Fulfilled", value: String(item.qtyFulfilled || 0) },
         { key: "revenue", label: "Revenue Generated", value: formatPKR(item.revenueGeneratedCents / 100), type: "currency" },
@@ -455,12 +458,12 @@ export default function ProductPerformancePage() {
         const exportData = isReports ? filteredCatalog : filteredProducts
 
         const headers = isReports 
-            ? ["Product Code", "Product Name", "Category", "Status", "Base Price", "Stock", "Qty Sold", "Revenue"]
+            ? ["Product Code", "Product Name", "Category", "Status", "Base Price", "Qty Sold", "Revenue"]
             : ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Qty Fulfilled", "Qty Refunded", "Revenue Generated"]
         
         const rows = exportData.map((p: any) => isReports ? [
             p.productCode, p.productName, p.categoryName || "-", p.status, 
-            (p.basePriceCents / 100).toFixed(2), p.stockQuantity, p.qtyFulfilled, (p.revenueGeneratedCents / 100).toFixed(2)
+            (p.basePriceCents / 100).toFixed(2), p.qtyFulfilled, (p.revenueGeneratedCents / 100).toFixed(2)
         ] : [
             p.productCode, p.productName, p.category, p.subCategory, p.status || 'active', p.qtyOrdered, p.qtyFulfilled, p.qtyRefunded,
             (p.revenueGeneratedCents / 100).toFixed(2)
@@ -541,12 +544,19 @@ export default function ProductPerformancePage() {
                         compareYears={compareYears}
                     />
 
-                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && organizationId && (
                         <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
+                            <GroupFilter
+                                selectedIds={globalGroupId ? [globalGroupId] : []}
+                                onChange={(ids) => setGlobalGroupId(ids[0] || "")}
+                                organizationId={organizationId}
+                                disabled={contextBranchIds.length > 0}
+                            />
                             <BranchFilter
                                 selectedIds={contextBranchIds}
                                 onChange={handleBranchChange}
-                                organizationId={organizationId || undefined}
+                                organizationId={organizationId}
+                                groupIds={globalGroupId ? [globalGroupId] : undefined}
                             />
                         </div>
                     )}
@@ -741,18 +751,35 @@ export default function ProductPerformancePage() {
                                         placeholder="Years"
                                         showSearch={false}
                                     />
-                                    <GroupFilter
-                                        selectedIds={chartGroupIds}
-                                        onChange={setChartGroupIds}
-                                        organizationId={organizationId || undefined}
-                                        placeholder="Groups"
-                                    />
-                                    <BranchFilter
-                                        selectedIds={chartBranchIds}
-                                        onChange={setChartBranchIds}
-                                        organizationId={organizationId || undefined}
-                                        placeholder="Branches"
-                                    />
+                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                        <>
+                                            <OrganizationFilter
+                                                selectedIds={chartOrgIds}
+                                                onChange={setChartOrgIds}
+                                                placeholder="Organizations"
+                                            />
+                                            {(chartOrgIds.length > 0 || organizationId) && (
+                                                <>
+                                                    <GroupFilter
+                                                        selectedIds={chartGroupIds}
+                                                        onChange={setChartGroupIds}
+                                                        organizationId={organizationId || undefined}
+                                                        organizationIds={chartOrgIds.length > 0 ? chartOrgIds : undefined}
+                                                        disabled={chartBranchIds.length > 0}
+                                                        placeholder="Groups"
+                                                    />
+                                                    <BranchFilter
+                                                        selectedIds={chartBranchIds}
+                                                        onChange={setChartBranchIds}
+                                                        organizationId={organizationId || undefined}
+                                                        organizationIds={chartOrgIds.length > 0 ? chartOrgIds : undefined}
+                                                        groupIds={chartGroupIds}
+                                                        placeholder="Branches"
+                                                    />
+                                                </>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                                     
                                     {/* Active Filters Badges */}
@@ -1014,30 +1041,34 @@ export default function ProductPerformancePage() {
                                         placeholder="Years"
                                         showSearch={false}
                                     />
-                                    <OrganizationFilter
-                                        selectedIds={reportOrganizationIds}
-                                        onChange={setReportOrganizationIds}
-                                        placeholder="Organizations"
-                                    />
-                                    {reportOrganizationIds.length > 0 && (
-                                        <GroupFilter
-                                            selectedIds={reportGroupIds}
-                                            onChange={setReportGroupIds}
-                                            organizationId={organizationId || undefined}
-                                            organizationIds={reportOrganizationIds}
-                                            placeholder="Groups"
-                                        />
-                                    )}
-                                    {reportGroupIds.length > 0 && (
-                                        <BranchFilter
-                                            selectedIds={reportBranchIds}
-                                            onChange={setReportBranchIds}
-                                            organizationId={organizationId ?? undefined}
-                                            organizationIds={reportOrganizationIds}
-                                            groupIds={reportGroupIds}
-                                            disabled={reportGroupIds.length > 0}
-                                            placeholder="Branches"
-                                        />
+                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                        <>
+                                            <OrganizationFilter
+                                                selectedIds={reportOrganizationIds}
+                                                onChange={setReportOrganizationIds}
+                                                placeholder="Organizations"
+                                            />
+                                            {(reportOrganizationIds.length > 0 || organizationId) && (
+                                                <>
+                                                    <GroupFilter
+                                                        selectedIds={reportGroupIds}
+                                                        onChange={setReportGroupIds}
+                                                        organizationId={organizationId || undefined}
+                                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
+                                                        disabled={reportBranchIds.length > 0}
+                                                        placeholder="Groups"
+                                                    />
+                                                    <BranchFilter
+                                                        selectedIds={reportBranchIds}
+                                                        onChange={setReportBranchIds}
+                                                        organizationId={organizationId || undefined}
+                                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
+                                                        groupIds={reportGroupIds}
+                                                        placeholder="Branches"
+                                                    />
+                                                </>
+                                            )}
+                                        </>
                                     )}
                                     <ProductFilter
                                         selectedIds={reportProductIds}
@@ -1116,16 +1147,15 @@ export default function ProductPerformancePage() {
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Product Info</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Category</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">{priceLabel}</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Stock</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Qty Sold</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-right pr-6">Revenue</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {isCatalogLoading ? (
-                                        <TableRow><TableCell colSpan={9} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={6} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
                                     ) : filteredCatalog.length === 0 ? (
-                                        <TableRow><TableCell colSpan={9} className="h-32 text-center text-slate-400 text-xs">No products found in catalog.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={6} className="h-32 text-center text-slate-400 text-xs">No products found in catalog.</TableCell></TableRow>
                                     ) : (
                                         filteredCatalog.map((product: any) => {
                                             return (
@@ -1152,14 +1182,6 @@ export default function ProductPerformancePage() {
                                                     </TableCell>
                                                     <TableCell className="text-center font-mono text-[11px] font-bold text-slate-600 dark:text-slate-400">
                                                         {formatPKR(product.basePriceCents / 100)}
-                                                    </TableCell>
-                                                    <TableCell className="text-center font-mono text-[11px] font-bold">
-                                                        <Badge variant="secondary" className={cn(
-                                                            "text-[10px] font-black px-2 py-0.5 rounded-md border-none",
-                                                            product.stockQuantity <= 5 ? "bg-rose-100 text-rose-600" : "bg-slate-100 text-slate-600"
-                                                        )}>
-                                                            {product.stockQuantity} {product.unit}
-                                                        </Badge>
                                                     </TableCell>
                                                     <TableCell className="text-center font-mono text-[11px] font-bold text-emerald-600">
                                                         {product.qtyFulfilled}

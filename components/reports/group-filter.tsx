@@ -19,9 +19,10 @@ interface GroupFilterProps {
     organizationId?: string | number
     organizationIds?: string[]
     placeholder?: string
+    disabled?: boolean
 }
 
-export function GroupFilter({ selectedIds, onChange, organizationId, organizationIds, placeholder = "Select Groups" }: GroupFilterProps) {
+export function GroupFilter({ selectedIds, onChange, organizationId, organizationIds, placeholder = "Select Groups", disabled = false }: GroupFilterProps) {
     const orgsQuery = organizationIds?.length ? organizationIds.join(",") : (organizationId ? String(organizationId) : undefined)
     const { data } = useSWR(
         orgsQuery ? `/api/v1/groups?organizationId=${orgsQuery}` : "/api/v1/groups",
@@ -37,7 +38,8 @@ export function GroupFilter({ selectedIds, onChange, organizationId, organizatio
             items={items}
             selectedIds={selectedIds}
             onChange={onChange}
-            icon={<LayoutGrid size={16} className={cn(selectedIds.length > 0 ? "text-indigo-600" : "text-slate-400", "shrink-0")} />}
+            disabled={disabled}
+            icon={<LayoutGrid size={16} className={cn((selectedIds.length > 0 || disabled) ? "text-indigo-600" : "text-slate-400", "shrink-0")} />}
             placeholder={placeholder}
             className="w-[240px]"
         />

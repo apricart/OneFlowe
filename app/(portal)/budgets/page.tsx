@@ -12,6 +12,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw, Trash2, Search } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
+import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { OrganizationFilter } from "@/components/reports/organization-filter"
+import { GroupFilter } from "@/components/reports/group-filter"
+import { BranchFilter } from "@/components/reports/branch-filter"
+import { useCallback } from "react"
+import { type DateRange } from "@/lib/hooks/use-sales-performance"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -46,16 +52,52 @@ export default function BudgetsPage() {
   const [emptyingBudget, setEmptyingBudget] = useState<BudgetAllocation | null>(null)
   const [allocationType, setAllocationType] = useState<"monthly" | "addon">("addon")
 
+  // ━━━ GLOBAL FILTERS ━━━
+  const [dateRange, setDateRange] = useState<DateRange | null>({
+    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    endDate: new Date()
+  })
+  const [activePreset, setActivePreset] = useState<FilterPreset>("thisMonth")
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([])
+  const [selectedYears, setSelectedYears] = useState<number[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState<string>(organizationId ? String(organizationId) : "")
+
+  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, c?: boolean, cr?: DateRange | null, m?: number[], y?: number[]) => {
+    setDateRange(range)
+    setActivePreset(preset)
+    if (m !== undefined) setSelectedMonths(m)
+    if (y !== undefined) setSelectedYears(y)
+  }, [])
+
+  // Sync selectedOrgId when context changes
+  React.useEffect(() => {
+    if (organizationId && !selectedOrgId) {
+      setSelectedOrgId(String(organizationId))
+    }
+  }, [organizationId])
+
   // Build endpoint respecting context (organization scope)
   const budgetsEndpoint = useMemo(() => {
     if (!isHeadOffice || !isInitialized) return null
     const params = new URLSearchParams()
     params.set("all", "true")
-    if (organizationId) {
-      params.set("organizationId", organizationId)
+    if (selectedOrgId) {
+      params.set("organizationId", selectedOrgId)
     }
+
+    if (dateRange?.startDate) {
+      const year = dateRange.startDate.getFullYear()
+      const month = String(dateRange.startDate.getMonth() + 1).padStart(2, '0')
+      params.set("period", `${year}-${month}`)
+    }
+
+    if (selectedGroupIds.length > 0) params.set("groupIds", selectedGroupIds.join(","))
+    if (selectedBranchIds.length > 0) params.set("branchIds", selectedBranchIds.join(","))
+
     return `/api/v1/budgets?${params.toString()}`
-  }, [isHeadOffice, isInitialized, organizationId])
+  }, [isHeadOffice, isInitialized, selectedOrgId, dateRange, selectedGroupIds, selectedBranchIds])
 
   const { data: budgetsData, mutate } = useSWR<any>(budgetsEndpoint, fetcher)
 
@@ -66,11 +108,11 @@ export default function BudgetsPage() {
   // Filter by organization scope only (not branch) - budgets should show all branches in the org
   const scopedBudgets = useMemo(() => {
     return budgets.filter((b) => {
-      if (organizationId && String(b.organizationId) !== organizationId) return false
+      if (selectedOrgId && String(b.organizationId) !== selectedOrgId) return false
       // Branch-level filtering removed - Head Office needs to see all branches for budget management
       return true
     })
-  }, [budgets, organizationId])
+  }, [budgets, selectedOrgId])
 
   const filteredBudgets = useMemo(() => {
     return scopedBudgets.filter((b) =>
@@ -266,42 +308,85 @@ export default function BudgetsPage() {
   const currentMonth = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })
 
   return (
-    <div className="space-y-6 bg-slate-50 dark:bg-slate-950 min-h-screen p-4 md:p-6">
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0A1C92] via-[#2F2CC9] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs tracking-[0.2em] text-white/70">HEAD OFFICE · FINANCE</p>
-            <h1 className="text-3xl font-semibold">Monthly Budget Intelligence</h1>
-            <p className="text-sm text-white/80">
-              Manage {currentMonth} allocations, spending, and remaining budgets for every branch.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              className="gap-2 bg-white/15 text-white hover:bg-white/25 border-0"
-              onClick={() => mutate()}
-            >
-              <RefreshCw className="h-4 w-4" />
-              Refresh data
-            </Button>
-            {/* <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="gap-2 bg-white text-indigo-600 hover:bg-slate-100"
-              onClick={() => setShowBulkDialog(true)}
-            >
-              <Zap className="h-4 w-4" />
-              Allocate all
-            </Button> */}
-            <div className="rounded-full bg-white/20 px-4 py-2 text-sm font-semibold">
-              {scopedBudgets.length} branches in view
+    <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] pb-20">
+      {/* ━━━ STICKY PREMIUM HEADER ━━━ */}
+      <div className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
+        <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center shadow-lg shadow-indigo-500/20 rotate-3 group hover:rotate-0 transition-all duration-500">
+              <Wallet className="h-6 w-6 text-white" />
             </div>
+            <div>
+              <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Budget Intelligence</h1>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                <PieChart className="h-3.5 w-3.5" />
+                Financial Allocation Hub
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
+              <GlobalDateFilter 
+                value={dateRange} 
+                activePreset={activePreset} 
+                onChange={handleDateChange} 
+              />
+              <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+              {role === "SUPER_ADMIN" && (
+                <OrganizationFilter 
+                  selectedIds={selectedOrgId ? [selectedOrgId] : []} 
+                  onChange={(ids) => {
+                    setSelectedOrgId(ids[0] || "");
+                    setSelectedGroupIds([]);
+                    setSelectedBranchIds([]);
+                  }}
+                  maxSelect={1}
+                />
+              )}
+              {selectedOrgId && (
+                <GroupFilter 
+                  selectedIds={selectedGroupIds} 
+                  onChange={(ids) => {
+                    setSelectedGroupIds(ids);
+                    setSelectedBranchIds([]);
+                  }} 
+                  organizationId={parseInt(selectedOrgId)} 
+                />
+              )}
+              {selectedOrgId && (
+                <BranchFilter 
+                  selectedIds={selectedBranchIds} 
+                  onChange={setSelectedBranchIds} 
+                  organizationId={selectedOrgId}
+                  groupIds={selectedGroupIds}
+                />
+              )}
+            </div>
+            <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => mutate()}>
+              <RefreshCw className={cn("h-4 w-4", !budgetsData && "animate-spin")} />
+            </Button>
           </div>
         </div>
       </div>
+
+      <div className="space-y-6 p-4 md:p-6 max-w-[1600px] mx-auto">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0A1C92] via-[#2F2CC9] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs tracking-[0.2em] text-white/70">HEAD OFFICE · FINANCE</p>
+              <h2 className="text-3xl font-semibold">Monthly Allocations</h2>
+              <p className="text-sm text-white/80">
+                Manage {currentMonth} spending and baseline budgets for every unit.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-full bg-white/20 px-4 py-2 text-sm font-semibold">
+                {scopedBudgets.length} units in view
+              </div>
+            </div>
+          </div>
+        </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[
@@ -483,7 +568,7 @@ export default function BudgetsPage() {
             </TableBody>
           </Table>
         </div>
-      </Card >
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-6 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
@@ -705,6 +790,7 @@ export default function BudgetsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div >
+      </div>
+    </div>
   )
 }

@@ -187,9 +187,9 @@ export default function BranchReportsPage() {
     }, [chartData, chartMonths, chartYears])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Branch Name", "Group", "Orders", "Net Revenue"]
+        const headers = ["Branch Name", "Group", "Status", "Orders", "Net Revenue"]
         const rows = filteredBranches.map((b: any) => [
-            b.name, b.groupName || "-", b.totalOrders, (b.revenue / 100).toFixed(2)
+            b.name || "-", b.groupName || "-", b.status || "active", b.totalOrders, (b.revenue / 100).toFixed(2)
         ])
 
         if (format === 'pdf') {
@@ -456,6 +456,7 @@ export default function BranchReportsPage() {
                                     <TableHeader>
                                         <TableRow className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
                                             <TableHead className="pl-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Rank & Branch</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Cluster / Group</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Revenue (PKR)</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
@@ -466,10 +467,10 @@ export default function BranchReportsPage() {
                                     <TableBody>
                                         {isReportLoading ? (
                                             Array(6).fill(0).map((_, i) => (
-                                                <TableRow key={i} className="h-20 animate-pulse"><TableCell colSpan={6}><div className="h-10 bg-slate-50 dark:bg-slate-900/50 rounded-xl mx-4" /></TableCell></TableRow>
+                                                <TableRow key={i} className="h-20 animate-pulse"><TableCell colSpan={7}><div className="h-10 bg-slate-50 dark:bg-slate-900/50 rounded-xl mx-4" /></TableCell></TableRow>
                                             ))
                                         ) : filteredBranches.length === 0 ? (
-                                            <TableRow><TableCell colSpan={6} className="h-60 text-center text-slate-400 text-xs font-black uppercase tracking-widest">No branch records found</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={7} className="h-60 text-center text-slate-400 text-xs font-black uppercase tracking-widest">No branch records found</TableCell></TableRow>
                                         ) : (
                                             filteredBranches.map((branch: any, idx: number) => (
                                                 <TableRow key={branch.id} className="group hover:bg-slate-50/80 dark:hover:bg-slate-900/40 border-b border-slate-50 dark:border-slate-900 transition-all h-20">
@@ -483,6 +484,11 @@ export default function BranchReportsPage() {
                                                                 <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase italic">{branch.organizationName}</span>
                                                             </div>
                                                         </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-black">
+                                                        <Badge variant="outline" className={cn("text-[10px] font-black uppercase tracking-widest", branch.status === "active" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : branch.status === "deleted" ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-amber-50 text-amber-600 border-amber-200")}>
+                                                            {branch.status || "Unknown"}
+                                                        </Badge>
                                                     </TableCell>
                                                     <TableCell>
                                                         <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-[10px] font-bold border-none uppercase tracking-tighter">

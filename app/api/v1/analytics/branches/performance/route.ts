@@ -203,6 +203,7 @@ export async function GET(req: NextRequest) {
             .select({
                 id: branches.id,
                 name: branches.name,
+                status: branches.status,
                 organizationName: organizations.name,
                 groupName: groups.name,
                 totalOrders: sql<number>`count(${orders.id})`.mapWith(Number),
