@@ -140,6 +140,11 @@ export default function UserReportPage() {
         `/api/v1/analytics/users/performance?${reportParams.toString()}`, fetcher
     )
 
+    // Tier 4: User Products Data
+    const { data: userProductsData, isLoading: isUserProductsLoading, mutate: mutateUserProducts } = useSWR(
+        `/api/v1/analytics/users/products?${reportParams.toString()}`, fetcher
+    )
+
     // All-time Data (for year ranges)
     const { data: allTimeData } = useSWR(organizationId ? `/api/v1/analytics/users/performance?organizationId=${organizationId}&allTime=true` : null, fetcher)
 
@@ -278,8 +283,8 @@ export default function UserReportPage() {
                 <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => { mutateGlobal(); mutateChart(); mutateReport(); }}
-                    disabled={isGlobalLoading || isChartLoading || isReportLoading}
+                    onClick={() => { mutateGlobal(); mutateChart(); mutateReport(); mutateUserProducts(); }}
+                    disabled={isGlobalLoading || isChartLoading || isReportLoading || isUserProductsLoading}
                     className="h-9 text-[12px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-full px-4"
                 >
                     <RefreshCw className={`h-3.5 w-3.5 mr-2 ${(isGlobalLoading || isChartLoading || isReportLoading) ? "animate-spin" : ""}`} />
@@ -404,6 +409,102 @@ export default function UserReportPage() {
                                 </div>
                             </CardContent>
                         </Card>
+
+                        {/* ━━━ USER-WISE TOP PRODUCTS ━━━ */}
+                        <div className="space-y-4 pt-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
+                                    <Package className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-sm uppercase tracking-[0.1em] text-slate-900 dark:text-white">Product Analytics by User</h3>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Top performing items per employee</p>
+                                </div>
+                            </div>
+
+                            {isUserProductsLoading ? (
+                                <div className="h-40 flex items-center justify-center">
+                                    <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+                                </div>
+                            ) : (userProductsData?.data || []).length === 0 ? (
+                                <div className="p-12 flex flex-col items-center justify-center text-slate-400 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-3xl">
+                                    <Package className="h-12 w-12 mb-4 opacity-20" />
+                                    <p className="text-xs font-black uppercase tracking-widest">No product data found</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {(userProductsData?.data || [])
+                                        .filter((u: any) => 
+                                            !reportSearch || 
+                                            u.userName?.toLowerCase().includes(reportSearch.toLowerCase()) || 
+                                            u.userId.toString().includes(reportSearch)
+                                        )
+                                        .slice(0, 6)
+                                        .map((user: any, idx: number) => (
+                                        <Card key={user.userId} className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900/40 backdrop-blur-3xl rounded-[2rem] transition-all hover:-translate-y-1 hover:shadow-indigo-500/10">
+                                            <div className="p-5 border-b border-slate-100 dark:border-slate-800/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/20">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={cn(
+                                                        "h-10 w-10 flex items-center justify-center rounded-2xl font-black shadow-sm",
+                                                        idx === 0 ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20" : 
+                                                        idx === 1 ? "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300" :
+                                                        idx === 2 ? "bg-orange-100 text-orange-600 dark:bg-orange-500/20" :
+                                                        "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 text-indigo-400"
+                                                    )}>
+                                                        #{idx + 1}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate max-w-[120px]">{user.userName}</h4>
+                                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                                            <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest"><span className="text-slate-900 dark:text-white font-black">{formatPKR(user.fulfilledProductRevenueCents / 100)}</span> Total</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <Badge variant="outline" className="text-[10px] font-black uppercase bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/30">
+                                                        {user.totalProductsSold} Items
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                            <CardContent className="p-0">
+                                                <div className="divide-y divide-slate-100 dark:divide-slate-800 mt-2">
+                                                    {user.products.slice(0, 3).map((product: any, pIdx: number) => (
+                                                        <div key={product.productId} className="flex justify-between items-center px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                                                            <div className="flex items-start gap-3 w-1/2">
+                                                                <span className="text-[10px] font-black text-slate-300 dark:text-slate-600 mt-0.5 w-3 text-right">{pIdx + 1}.</span>
+                                                                <div className="min-w-0">
+                                                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight truncate break-words" title={product.productName}>
+                                                                        {product.productName}
+                                                                    </p>
+                                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">{product.categoryName}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right flex flex-col items-end gap-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className="text-[11px] font-black text-slate-700 dark:text-slate-300 tracking-tight">{formatPKR(product.fulfilledRevenueCents / 100)}</p>
+                                                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded cursor-help" title={`Total Qty: ${product.quantity}`}>Qty: {product.fulfilledQuantity}</p>
+                                                                </div>
+                                                                {product.refundedQuantity > 0 && (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <p className="text-[9px] font-black text-rose-500 tracking-tight">-{formatPKR(product.refundedRevenueCents / 100)}</p>
+                                                                        <p className="text-[8px] font-bold text-rose-500 uppercase tracking-widest whitespace-nowrap bg-rose-50 dark:bg-rose-500/10 px-1.5 py-0.5 rounded" title={`Refunded Money: ${formatPKR(product.refundedRevenueCents / 100)}`}>Ref: {product.refundedQuantity}</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {user.products.length > 3 && (
+                                                        <div className="px-6 py-3 text-center bg-slate-50/30 dark:bg-slate-900/30">
+                                                            <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors">+{user.products.length - 3} more items...</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </TabsContent>
 
                     <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -529,6 +630,8 @@ export default function UserReportPage() {
                                 </div>
                             </div>
                         </Card>
+
+
                     </TabsContent>
                 </Tabs>
             </div>

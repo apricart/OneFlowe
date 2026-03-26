@@ -464,11 +464,11 @@ export default function OrdersManagementPage() {
               {/* Right Side: Environment Filters & Actions */}
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0 pb-1 lg:pb-0">
                 <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
-                
+
                 {organizationId && (isSuperAdmin || isHeadOffice) && (
                   <MultiBranchFilter organizationId={organizationId} selectedBranchIds={branchIds} onChange={handleBranchChange} />
                 )}
-                
+
                 <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
                 <OrderExport orders={filteredOrders} role={userRole} />
               </div>
@@ -499,7 +499,7 @@ export default function OrdersManagementPage() {
           </div>
 
           <div className="px-1 sm:px-4 pb-4 w-full">
-            <OrdersDirectory 
+            <OrdersDirectory
               orders={filteredOrders}
               userRole={userRole}
               isSuperAdmin={isSuperAdmin}
@@ -568,7 +568,7 @@ function CompactStatCard({
           </p>
         </div>
         <div className={cn("flex h-14 w-14 items-center justify-center rounded-2xl relative z-10", iconBadge)}>
-           {icon}
+          {icon}
         </div>
       </CardContent>
     </Card>

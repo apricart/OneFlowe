@@ -550,6 +550,121 @@ export default function OrganizationReportPage() {
                                 )}
                             </CardContent>
                         </Card>
+
+                        {/* ━━━ TOP ORGANIZATIONS BY VOLUME ━━━ */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900/50 backdrop-blur-3xl rounded-[2rem] transition-all duration-700 hover:shadow-indigo-500/10 h-full">
+                                <CardHeader className="px-8 py-7 border-b border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
+                                            <TrendingUp className="h-4 w-4" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <CardTitle className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
+                                                Top Orgs by Order Volume
+                                            </CardTitle>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Highest performing organizations</p>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                                        {[...statsData]
+                                            .sort((a: any, b: any) => b.orderCount - a.orderCount)
+                                            .slice(0, 5)
+                                            .map((org: any, idx: number) => (
+                                                <div key={org.organizationId} className="flex items-center justify-between p-6 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors group">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={cn(
+                                                            "h-10 w-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm",
+                                                            idx === 0 ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20" : 
+                                                            idx === 1 ? "bg-slate-200 text-slate-500 dark:bg-slate-700" :
+                                                            idx === 2 ? "bg-orange-100 text-orange-600 dark:bg-orange-500/20" :
+                                                            "bg-indigo-50 text-indigo-500 dark:bg-indigo-500/10"
+                                                        )}>
+                                                            #{idx + 1}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-indigo-500 transition-colors">
+                                                                {org.organizationName}
+                                                            </p>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                                {org.activeBranchCount} Active Branches
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="font-black text-lg text-slate-900 dark:text-white tracking-tighter">
+                                                            {org.orderCount.toLocaleString()}
+                                                        </p>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Orders</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        {statsData.length === 0 && (
+                                            <div className="p-12 flex flex-col items-center justify-center text-slate-400">
+                                                <Store className="h-8 w-8 mb-3 opacity-20" />
+                                                <p className="text-[10px] font-black uppercase tracking-widest">No data available</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900/50 backdrop-blur-3xl rounded-[2rem] transition-all duration-700 hover:shadow-indigo-500/10 h-full">
+                                <CardHeader className="px-8 py-7 border-b border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+                                            <BarChart3 className="h-4 w-4" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <CardTitle className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
+                                                Top Orgs by Revenue
+                                            </CardTitle>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Highest grossing organizations</p>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                                        {[...statsData]
+                                            .sort((a: any, b: any) => b.revenue - a.revenue)
+                                            .slice(0, 5)
+                                            .map((org: any, idx: number) => (
+                                                <div key={org.organizationId} className="flex items-center justify-between p-6 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors group">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={cn(
+                                                            "h-10 w-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm",
+                                                            idx === 0 ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20" : 
+                                                            "bg-blue-50 text-blue-500 dark:bg-blue-500/10"
+                                                        )}>
+                                                            #{idx + 1}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-blue-500 transition-colors">
+                                                                {org.organizationName}
+                                                            </p>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{org.totalUserCount} Managed Users</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="font-black text-lg text-slate-900 dark:text-white tracking-tight">
+                                                            {formatPKR(org.revenue)}
+                                                        </p>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Net Revenue</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        {statsData.length === 0 && (
+                                            <div className="p-12 flex flex-col items-center justify-center text-slate-400">
+                                                <Store className="h-8 w-8 mb-3 opacity-20" />
+                                                <p className="text-[10px] font-black uppercase tracking-widest">No data available</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
                     </TabsContent>
 
                     <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
