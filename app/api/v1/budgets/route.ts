@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { budgets, branches, auditLogs, budgetAddons } from "@/db/schema"
-import { and, eq } from "drizzle-orm"
+import { budgets, branches, auditLogs, budgetAddons, groups } from "@/db/schema"
+import { and, eq, inArray } from "drizzle-orm"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
 
@@ -45,6 +45,9 @@ export async function GET(req: NextRequest) {
     const allParam = searchParams.get("all")
     const branchIdParam = searchParams.get("branchId")
     const orgIdParam = searchParams.get("organizationId")
+    const periodParam = searchParams.get("period")
+    const groupIdsParam = searchParams.get("groupIds")
+    const branchIdsParam = searchParams.get("branchIds")
 
     // Validate organization ID from session
     if (orgId && !/^\d+$/.test(String(orgId))) {
@@ -66,7 +69,12 @@ export async function GET(req: NextRequest) {
     // Head Office users can fetch all budgets in their org
     if (allParam && (role === "HEAD_OFFICE" || role === "SUPER_ADMIN")) {
       try {
-        const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
+        const currentMonth = periodParam && /^\d{4}-\d{2}$/.test(periodParam) 
+            ? periodParam 
+            : new Date().toISOString().slice(0, 7) // YYYY-MM format
+
+        const parsedGroupIds = groupIdsParam ? groupIdsParam.split(',').map(Number).filter(id => !isNaN(id)) : []
+        const parsedBranchIds = branchIdsParam ? branchIdsParam.split(',').map(Number).filter(id => !isNaN(id)) : []
 
         // Validate organization context for HEAD_OFFICE
         if (role === "HEAD_OFFICE" && !orgId) {
@@ -81,6 +89,8 @@ export async function GET(req: NextRequest) {
             branchId: branches.id,
             branchName: branches.name,
             organizationId: branches.organizationId,
+            groupId: branches.groupId,
+            groupName: groups.name,
             amountAllocatedCents: budgets.amountAllocatedCents,
             amountSpentCents: budgets.amountSpentCents,
             amountHeldCents: budgets.amountHeldCents,
@@ -88,6 +98,7 @@ export async function GET(req: NextRequest) {
             baselineBudgetCents: branches.baselineBudgetCents,
           })
           .from(branches)
+          .leftJoin(groups, eq(branches.groupId, groups.id))
           .leftJoin(
             budgets,
             and(eq(budgets.branchId, branches.id), eq(budgets.period, currentMonth))
@@ -102,7 +113,9 @@ export async function GET(req: NextRequest) {
                 ? orgId
                   ? eq(branches.organizationId, orgId)
                   : undefined
-                : eq(branches.organizationId, orgId)
+                : eq(branches.organizationId, orgId),
+              parsedGroupIds.length > 0 ? inArray(branches.groupId, parsedGroupIds) : undefined,
+              parsedBranchIds.length > 0 ? inArray(branches.id, parsedBranchIds) : undefined
             )
           )
 

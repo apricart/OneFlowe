@@ -1078,6 +1078,203 @@ export function SalesPerformanceLineChart({
 }
 
 
+// ── Sales Performance Bar Chart (Standardized) ──
+export function SalesPerformanceBarChart({
+  seriesData,
+  comparisonSeries,
+  totalSales,
+  avgSales,
+  totalOrders,
+  peakPeriod,
+  label = "Sales",
+  granularity = "daily",
+  dateRange,
+}: SalesPerformanceLineChartProps & { comparisonSeries?: SalesSeriesPoint[] }) {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+  const [activeMetric, setActiveMetric] = useState<'revenue' | 'orders'>('revenue')
+
+  const hasComparison = !!comparisonSeries && comparisonSeries.length > 0
+
+  const safeData = useMemo(() => {
+    let dataToMap = seriesData || []
+
+    if (dateRange && dateRange.startDate && dateRange.endDate) {
+      const { startDate, endDate } = dateRange
+      let intervals: Date[] = []
+
+      if (granularity === 'hourly') {
+        intervals = eachHourOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
+      } else if (granularity === 'daily') {
+        intervals = eachDayOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
+      } else if (granularity === 'yearly') {
+        intervals = eachYearOfInterval({ start: startOfYear(startDate), end: endOfYear(endDate) })
+      } else {
+        intervals = eachMonthOfInterval({ start: startOfMonth(startDate), end: endOfMonth(endDate) })
+      }
+
+      dataToMap = intervals.map((date, index) => {
+        let labelStr = ""
+        if (granularity === 'hourly') labelStr = format(date, 'hh:mm a')
+        else if (granularity === 'daily') labelStr = format(date, 'dd MMM')
+        else if (granularity === 'yearly') labelStr = format(date, 'yyyy')
+        else labelStr = format(date, 'MMM yyyy')
+
+        const match = seriesData?.find(d => d.label === labelStr)
+        const compMatch = comparisonSeries ? (comparisonSeries[index] || null) : null
+
+        return {
+          label: labelStr,
+          sales: match?.sales ?? 0,
+          orders: match?.orders ?? 0,
+          compSales: compMatch?.sales ?? 0,
+          compOrders: compMatch?.orders ?? 0,
+          fullDate: date
+        }
+      })
+    }
+
+    return dataToMap.map((d: any) => ({
+      ...d,
+      active: activeMetric === 'revenue' ? (d.sales || 0) : (d.orders || 0),
+      compActive: activeMetric === 'revenue' ? (d.compSales || 0) : (d.compOrders || 0),
+    }))
+  }, [seriesData, comparisonSeries, dateRange, granularity, activeMetric])
+
+  const isEmpty = useMemo(() => !seriesData || seriesData.length === 0 || totalSales === 0, [seriesData, totalSales])
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+            {activeMetric === 'revenue' ? 'Revenue Distribution' : 'Order Volume'}
+          </p>
+        </div>
+
+        {/* Metric Toggle */}
+        <div className="flex p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+          <button
+            onClick={() => setActiveMetric('revenue')}
+            className={`
+              flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200
+              ${activeMetric === 'revenue'
+                ? "bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}
+            `}
+          >
+            <div className={`w-2 h-2 rounded-full ${activeMetric === 'revenue' ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+            Revenue
+          </button>
+          <button
+            onClick={() => setActiveMetric('orders')}
+            className={`
+              flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200
+              ${activeMetric === 'orders'
+                ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}
+            `}
+          >
+            <div className={`w-2 h-2 rounded-full ${activeMetric === 'orders' ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
+            Orders
+          </button>
+        </div>
+      </div>
+
+      <div className="relative bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-6 shadow-sm overflow-hidden min-h-[440px]">
+        {isEmpty && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/40 dark:bg-slate-950/40 backdrop-blur-[2px]">
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 shadow-inner">
+              <Info className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+            </div>
+            <p className="text-sm font-bold text-slate-400 dark:text-slate-500">No activity recorded for this period</p>
+          </div>
+        )}
+
+        <div className={`h-[380px] w-full transition-opacity duration-500 ${isEmpty ? 'opacity-30 grayscale-[50%]' : 'opacity-100'}`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={safeData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+              barGap={hasComparison ? 8 : 0}
+            >
+              <defs>
+                <linearGradient id="activeBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={activeMetric === 'revenue' ? "#10b981" : "#3b82f6"} stopOpacity={1} />
+                  <stop offset="100%" stopColor={activeMetric === 'revenue' ? "#059669" : "#2563eb"} stopOpacity={0.8} />
+                </linearGradient>
+                <linearGradient id="compBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.7} />
+                  <stop offset="100%" stopColor="#d97706" stopOpacity={0.5} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={isDark ? "#1e293b" : "#f1f5f9"} />
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontSize: 11, fontWeight: 700 }}
+                dy={15}
+                minTickGap={10}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: isDark ? "#94a3b8" : "#64748b", fontSize: 11, fontWeight: 700 }}
+                tickFormatter={(val) => {
+                  return activeMetric === 'revenue'
+                    ? formatCurrency(val)
+                    : val.toLocaleString()
+                }}
+                width={80}
+                dx={-10}
+              />
+              <Tooltip
+                content={<SalesPerfTooltip activeMetric={activeMetric} hasComparison={hasComparison} />}
+                cursor={{ fill: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)" }}
+              />
+
+              {hasComparison && (
+                <Bar
+                  dataKey="compActive"
+                  name="Previous Period"
+                  fill="url(#compBarGrad)"
+                  radius={[4, 4, 0, 0]}
+                  animationDuration={1500}
+                />
+              )}
+
+              <Bar
+                dataKey="active"
+                name="Current Period"
+                fill="url(#activeBarGrad)"
+                radius={[4, 4, 0, 0]}
+                animationDuration={1500}
+                barSize={granularity === 'daily' && safeData.length <= 7 ? 60 : undefined}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Legend */}
+        {hasComparison && (
+          <div className="flex items-center justify-center gap-8 mt-4 p-3 bg-slate-50/80 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <div className={`w-4 h-4 rounded-sm ${activeMetric === 'revenue' ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Current Period</span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-4 h-4 rounded-sm bg-amber-500" />
+              <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Previous Period</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
 // ── Branch Sales Horizontal Bar Chart ──
 const HorizontalBranchTooltip = ({ active, payload }: any) => {
   if (!active || !payload?.length) return null

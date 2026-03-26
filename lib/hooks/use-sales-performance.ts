@@ -63,7 +63,8 @@ export function useSalesPerformance(
     years?: number[],
     compareMonths?: number[],
     compareYears?: number[],
-    granularity?: "hourly" | "daily" | "monthly" | "yearly"
+    granularity?: "hourly" | "daily" | "monthly" | "yearly",
+    organizationIds?: string[] // multi-org selection
 ) {
     const url = useMemo(() => {
         const params = new URLSearchParams()
@@ -72,7 +73,9 @@ export function useSalesPerformance(
             params.set("granularity", granularity)
         }
 
-        if (organizationId && organizationId !== "null" && organizationId !== "0") {
+        if (organizationIds && organizationIds.length > 0) {
+            params.set("organizationIds", organizationIds.join(","))
+        } else if (organizationId && organizationId !== "null" && organizationId !== "0") {
             params.set("organizationId", organizationId)
         }
 
@@ -127,7 +130,7 @@ export function useSalesPerformance(
         }
 
         return `/api/v1/analytics/sales-performance?${params.toString()}`
-    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears, granularity])
+    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears, granularity, organizationIds])
 
     return useSWR<SalesPerformanceResponse>(url, fetcher, {
         revalidateOnFocus: false,
@@ -150,7 +153,8 @@ export function useDashboardKPIs(
     years?: number[],
     compareMonths?: number[],
     compareYears?: number[],
-    granularity?: "hourly" | "daily" | "monthly" | "yearly"
+    granularity?: "hourly" | "daily" | "monthly" | "yearly",
+    organizationIds?: string[]
 ) {
-    return useSalesPerformance(organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears, granularity)
+    return useSalesPerformance(organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears, granularity, organizationIds)
 }

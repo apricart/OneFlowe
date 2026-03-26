@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { organizationProducts, globalProducts, auditLogs } from "@/db/schema"
-import { eq, and, sql } from "drizzle-orm"
+import { organizationProducts, globalProducts, auditLogs, branchInventory, branches } from "@/db/schema"
+import { eq, and, sql, inArray, exists } from "drizzle-orm"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 // GET /api/v1/inventory/organization-products - Get products for organization
@@ -19,22 +19,26 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const organizationId = searchParams.get("organizationId")
-
-    if (!organizationId) {
-      return NextResponse.json({ error: "Organization ID is required" }, { status: 400 })
-    }
+    const groupIds = searchParams.get("groupIds")
+    const parsedOrgIds = organizationId ? organizationId.split(',').map(n => parseInt(n)).filter(n => !isNaN(n)) : []
+    const parsedGroupIds = groupIds ? groupIds.split(',').map(n => parseInt(n)).filter(n => !isNaN(n)) : []
 
     // Access control: users can only view their own organization's products
     // except SUPER_ADMIN who can view any organization
-    if (userRole !== "SUPER_ADMIN" && userOrgId !== parseInt(organizationId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (userRole !== "SUPER_ADMIN") {
+      if (parsedOrgIds.length > 0 && !parsedOrgIds.includes(userOrgId)) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
     }
 
-    const cacheKey = scopedCacheKey('inv:org-products', { orgId: organizationId })
+    const cacheKey = scopedCacheKey('inv:org-products', { 
+        orgId: parsedOrgIds.join(','),
+        role: userRole
+    })
 
     const items = await getCached(cacheKey, async () => {
-      // Fetch all products with organization-specific data
-      return db
+      // Fetch products with organization-specific data for the target organizations
+      const query = db
         .select({
           id: globalProducts.id,
           productCode: globalProducts.productCode,
@@ -55,14 +59,71 @@ export async function GET(req: NextRequest) {
           priority: organizationProducts.priority
         })
         .from(globalProducts)
-        .leftJoin(
+
+      if (parsedOrgIds.length === 1) {
+        // Single organization: join and filter
+        query.leftJoin(
           organizationProducts,
           and(
             eq(organizationProducts.globalProductId, globalProducts.id),
-            eq(organizationProducts.organizationId, parseInt(organizationId))
+            eq(organizationProducts.organizationId, parsedOrgIds[0])
           )
         )
-        .where(eq(globalProducts.status, "active"))
+      } else if (parsedOrgIds.length > 1) {
+        // Multiple organizations: might need to decide how to join (maybe just join first found? or skip org-specific data)
+        // For now, let's join the first one for the names/prices if they exist
+        query.leftJoin(
+          organizationProducts,
+          and(
+            eq(organizationProducts.globalProductId, globalProducts.id),
+            eq(organizationProducts.organizationId, parsedOrgIds[0])
+          )
+        )
+      } else if (userOrgId) {
+          // Default to user's org if none specified
+          query.leftJoin(
+            organizationProducts,
+            and(
+              eq(organizationProducts.globalProductId, globalProducts.id),
+              eq(organizationProducts.organizationId, userOrgId)
+            )
+          )
+      }
+
+      const whereConditions = [eq(globalProducts.status, "active")]
+
+      if (parsedGroupIds.length > 0) {
+        // Filter by group-specific inventory
+        whereConditions.push(
+          exists(
+            db.select()
+              .from(branchInventory)
+              .innerJoin(branches, eq(branchInventory.branchId, branches.id))
+              .innerJoin(organizationProducts, eq(branchInventory.organizationInventoryId, organizationProducts.id))
+              .where(
+                and(
+                  eq(organizationProducts.globalProductId, globalProducts.id),
+                  inArray(branches.groupId, parsedGroupIds),
+                  eq(branchInventory.isActive, true)
+                )
+              )
+          )
+        )
+      } else if (parsedOrgIds.length > 0) {
+          // If ONLY organization context is specified, only show products assigned to those organizations
+          whereConditions.push(
+              exists(
+                  db.select()
+                  .from(organizationProducts)
+                  .where(and(
+                      eq(organizationProducts.globalProductId, globalProducts.id),
+                      inArray(organizationProducts.organizationId, parsedOrgIds)
+                  ))
+              )
+          )
+      }
+
+      return query.where(and(...whereConditions))
     }, CACHE_TTL.LISTING)
 
     return NextResponse.json({ items })

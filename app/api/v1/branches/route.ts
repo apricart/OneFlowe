@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { branches as branchesTable, organizations } from "@/db/schema"
-import { and, desc, eq, sql } from "drizzle-orm"
+import { and, desc, eq, sql, inArray } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
@@ -19,17 +19,28 @@ export async function GET(req: Request) {
 
     const { searchParams } = new URL(req.url)
     const organizationIdRaw = searchParams.get("organizationId") || undefined
+    const groupIdsRaw = searchParams.get("groupIds") || undefined
 
-    // Validate organization ID parameter
-    let orgIdNum: number | undefined
+    // Validate organization ID parameter (supports single or comma-separated)
+    let orgIds: number[] = []
     if (organizationIdRaw) {
-      if (!/^\d+$/.test(organizationIdRaw)) {
-        return error("Invalid organization ID format", 400)
+      const ids = organizationIdRaw.split(',').map(id => id.trim())
+      for (const id of ids) {
+        if (!/^\d+$/.test(id)) {
+          return error("Invalid organization ID format", 400)
+        }
+        const n = Number(id)
+        if (n <= 0) {
+          return error("Organization ID must be positive", 400)
+        }
+        orgIds.push(n)
       }
-      orgIdNum = Number(organizationIdRaw)
-      if (orgIdNum <= 0) {
-        return error("Organization ID must be positive", 400)
-      }
+    }
+
+    // Validate group IDs parameter
+    let groupIds: number[] = []
+    if (groupIdsRaw) {
+      groupIds = groupIdsRaw.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id) && id > 0)
     }
 
     const scope = await getRequestScope()
@@ -40,17 +51,17 @@ export async function GET(req: Request) {
       return error("Invalid session data", 401)
     }
 
-    // Determine which organization to query based on role
-    const scopedOrgId = scope.role === "SUPER_ADMIN"
-      ? orgIdNum
-      : (scope.organizationId ?? undefined)
+    // Determine which organizations to query based on role
+    const scopedOrgIds = scope.role === "SUPER_ADMIN"
+      ? orgIds.length ? orgIds : undefined
+      : (scope.organizationId ? [scope.organizationId] : undefined)
 
     const scopedBranchId = scope.role === "BRANCH_ADMIN"
       ? scope.branchId
       : undefined
 
     // HEAD_OFFICE and BRANCH_ADMIN must have organization context
-    if ((scope.role === "HEAD_OFFICE" || scope.role === "BRANCH_ADMIN") && !scopedOrgId) {
+    if ((scope.role === "HEAD_OFFICE" || scope.role === "BRANCH_ADMIN") && (!scopedOrgIds || scopedOrgIds.length === 0)) {
       return error("Organization context required", 403)
     }
 
@@ -59,7 +70,14 @@ export async function GET(req: Request) {
       return error("Branch context required", 403)
     }
 
-    const cacheKey = scopedCacheKey('branches', { role: scope.role, orgId: scopedOrgId, branchId: scopedBranchId })
+    const cacheKey = scopedCacheKey(
+      'branches', 
+      { role: scope.role, branchId: scopedBranchId },
+      { 
+        orgIds: scopedOrgIds?.join(','),
+        groupIds: groupIds.join(',')
+      }
+    )
 
     const result = await getCached(cacheKey, async () => {
       const items = await db
@@ -79,7 +97,12 @@ export async function GET(req: Request) {
         })
         .from(branchesTable)
         .where(and(
-          scopedOrgId ? eq(branchesTable.organizationId, scopedOrgId) : undefined,
+          scopedOrgIds && scopedOrgIds.length > 0 
+            ? (scopedOrgIds.length === 1 
+                ? eq(branchesTable.organizationId, scopedOrgIds[0]) 
+                : inArray(branchesTable.organizationId, scopedOrgIds))
+            : undefined,
+          groupIds.length > 0 ? inArray(branchesTable.groupId, groupIds) : undefined,
           scopedBranchId ? eq(branchesTable.id, scopedBranchId) : undefined
         ))
         .orderBy(desc(branchesTable.createdAt))

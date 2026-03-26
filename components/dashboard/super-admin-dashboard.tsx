@@ -1,21 +1,28 @@
 "use client"
 
-import { useMemo, useState, useCallback } from "react"
+import { useMemo, useState, useCallback, useEffect } from "react"
+import useSWR from "swr"
+import { fetcher } from "@/lib/fetcher"
 import { useOrganizations, useBranches, useUsers } from "@/lib/hooks/use-api"
 import { useLifetimeStats } from "@/lib/hooks/use-dashboard-analytics"
 import { useSalesPerformance, type DateRange, type DashboardStatus } from "@/lib/hooks/use-sales-performance"
 import { Card, CardContent } from "@/components/ui/card"
 import { NotificationRail } from "@/components/notifications/notification-center"
-import { formatPKR } from "@/lib/utils"
+import { formatPKR, cn } from "@/lib/utils"
 import {
   Users, Building2, TrendingDown, TrendingUp,
   BarChart3, Package, RefreshCw, Filter, CheckCircle2, RotateCcw, XCircle, Activity,
+  Calendar, Layers, Clock
 } from "lucide-react"
-import { SalesPerformanceLineChart, BranchSalesBarChart, OrganizationSalesBarChart } from "@/components/dashboard/charts"
+import { Button } from "@/components/ui/button"
+import { SalesPerformanceBarChart, BranchSalesBarChart, OrganizationSalesBarChart } from "@/components/dashboard/charts"
 import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
 import { GlobalDateFilter, type FilterPreset, getPresetLabel } from "@/components/dashboard/global-date-filter"
 import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
+import { OrganizationFilter } from "@/components/reports/organization-filter"
+import { BranchFilter } from "@/components/reports/branch-filter"
 import { DrillDownSheet, type DrillDownType } from "@/components/dashboard/drill-down-sheet"
+import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 
 import { useAppContext } from "@/components/context/app-context"
 import { startOfDay, endOfDay } from "date-fns"
@@ -40,6 +47,83 @@ export function SuperAdminDashboard() {
 
   const [drillDownType, setDrillDownType] = useState<DrillDownType | null>(null)
   const [isDrillDownOpen, setIsDrillDownOpen] = useState(false)
+
+  // Fetch all-time data to extract available years from the database
+  const { data: allTimePerf } = useSWR(
+    `/api/v1/analytics/sales-performance?startDate=2015-01-01T00:00:00.000Z&endDate=${new Date().toISOString()}&granularity=yearly&status=all`,
+    fetcher
+  )
+
+  const chartYearsAvailable = useMemo(() => {
+    const series = (allTimePerf as any)?.seriesData || []
+    const years = new Set<number>()
+    series.forEach((s: any) => {
+      const y = parseInt(s.label)
+      if (!isNaN(y)) years.add(y)
+    })
+    if (years.size === 0) years.add(new Date().getFullYear())
+    return Array.from(years).sort((a, b) => b - a)
+  }, [allTimePerf]);
+
+  // ── Local Chart State (Fully Independent) ──
+  type ChartQuickFilter = "today" | "7d" | null
+  const [chartQuickFilter, setChartQuickFilter] = useState<ChartQuickFilter>("today")
+  const [chartMonths, setChartMonths] = useState<number[]>([])
+  const [chartYears, setChartYears] = useState<number[]>([])
+  const [chartSelectedOrgIds, setChartSelectedOrgIds] = useState<string[]>([])
+  const [chartSelectedBranchIds, setChartSelectedBranchIds] = useState<string[]>([])
+
+  // Quick filter → date range, or null when using months/years
+  const chartDateRange = useMemo(() => {
+    if (chartQuickFilter === "today") return getDefaultDateRange()
+    if (chartQuickFilter === "7d") {
+      const end = endOfDay(new Date())
+      const start = startOfDay(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000))
+      return { startDate: start, endDate: end }
+    }
+    return null // months/years mode
+  }, [chartQuickFilter])
+
+  // When user picks months/years, clear the quick filter
+  const handleChartMonths = useCallback((m: number[]) => {
+    setChartMonths(m)
+    if (m.length > 0) setChartQuickFilter(null)
+  }, [])
+  const handleChartYears = useCallback((y: number[]) => {
+    setChartYears(y)
+    if (y.length > 0) setChartQuickFilter(null)
+  }, [])
+  // When user picks a quick filter, clear months/years
+  const handleQuickFilter = useCallback((f: ChartQuickFilter) => {
+    setChartQuickFilter(f)
+    setChartMonths([])
+    setChartYears([])
+  }, [])
+
+  // ── Sync Global Filters to Local Chart Filters ──
+  useEffect(() => {
+    // 1. Sync Date Filters
+    if (activePreset === "today") setChartQuickFilter("today")
+    else if (activePreset === "7d") setChartQuickFilter("7d")
+    else setChartQuickFilter(null)
+
+    setChartMonths(months || [])
+    setChartYears(years || [])
+  }, [activePreset, months, years])
+
+  useEffect(() => {
+    // 2. Sync Organizations
+    if (organizationId) {
+      setChartSelectedOrgIds([String(organizationId)])
+    } else {
+      setChartSelectedOrgIds([])
+    }
+  }, [organizationId])
+
+  useEffect(() => {
+    // 3. Sync Branches
+    setChartSelectedBranchIds(selectedBranchIds || [])
+  }, [selectedBranchIds])
 
   const handleKPIOpen = (type: DrillDownType) => {
     setDrillDownType(type)
@@ -67,6 +151,79 @@ export function SuperAdminDashboard() {
     months, years, compareMonths, compareYears,
     activePreset === "all" ? "yearly" : undefined
   )
+
+  // ── Graph Data (Fully independent from global filters) ──
+  // For API fetching: When months/years are selected, bypass dateRange 
+  // (so it only uses month/year arrays). But for 'today'/'7d', we DO need to send dates.
+  const hasChartFilters = chartMonths.length > 0 || chartYears.length > 0
+  const effectiveChartDateRange = hasChartFilters ? null : chartDateRange
+
+  // For Chart Rendering: When rendering 'today', we manually aggregated 1 bar labeled 'Today'
+  // so we pass `null` to bypass the chart component's internal date padding logic.
+  const chartComponentDateRange = chartQuickFilter === "today" || hasChartFilters ? null : chartDateRange
+
+  const chartGranularity = chartYears.length > 1
+    ? "yearly" as const
+    : (chartMonths.length > 0 || chartYears.length === 1)
+      ? "monthly" as const
+      : "daily" as const
+
+  const { data: chartPerfData, isLoading: isLoadingChart } = useSalesPerformance(
+    undefined, undefined, // Super admin scope — no global org/branch
+    chartSelectedBranchIds.length > 0 ? chartSelectedBranchIds : undefined,
+    undefined, // groupId
+    chartDateRange, "all", false, null,
+    chartMonths, chartYears, [], [],
+    chartGranularity,
+    chartSelectedOrgIds.length > 0 ? chartSelectedOrgIds : undefined
+  )
+
+  // ── Client-Side Chart Normalization (Order Report Pattern) ──
+  const normalizedChartData = useMemo(() => {
+    const raw = chartPerfData?.seriesData ?? []
+
+    // Today → single bar labeled "Today"
+    if (chartQuickFilter === "today") {
+      const totalSales = raw.reduce((s: number, r: any) => s + (r.sales || 0), 0)
+      const totalOrders = raw.reduce((s: number, r: any) => s + (r.orders || 0), 0)
+      return [{ label: "Today", sales: totalSales, orders: totalOrders }]
+    }
+
+    // 7D → days on X-axis (already comes as "DD Mon" from API)
+    if (chartQuickFilter === "7d") {
+      return raw
+    }
+
+    // Multiple years → year numbers on X-axis
+    if (chartYears.length > 1) {
+      return chartYears.sort((a, b) => a - b).map(y => {
+        // API returns labels like "2024", "2025"
+        const match = raw.find((r: any) => r.label === String(y) || r.label?.startsWith(String(y)))
+        return {
+          label: String(y),
+          sales: match?.sales ?? 0,
+          orders: match?.orders ?? 0,
+        }
+      })
+    }
+
+    // Single year or months selected → month names on X-axis (Jan, Feb, Mar...)
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12
+      ? [...chartMonths].sort((a, b) => a - b)
+      : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+    return monthsToShow.map(m => {
+      // API returns labels like "Mar 2025" - match by month abbreviation
+      const monthPrefix = monthNames[m - 1]
+      const match = raw.find((r: any) => r.label?.startsWith(monthPrefix))
+      return {
+        label: monthPrefix,
+        sales: match?.sales ?? 0,
+        orders: match?.orders ?? 0,
+      }
+    })
+  }, [chartPerfData, chartQuickFilter, chartMonths, chartYears])
 
   const { data: pendingData } = useSalesPerformance(
     organizationId, branchId,
@@ -318,34 +475,93 @@ export function SuperAdminDashboard() {
       {/* ━━━ Sales Performance Chart ━━━ */}
       <Card className="border border-slate-200/80 dark:border-slate-800/60 shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl overflow-hidden">
         <CardContent className="p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
-              <TrendingUp className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
+          <div className="flex flex-wrap items-center gap-3 mb-6 p-3 bg-slate-50/50 dark:bg-slate-800/20 rounded-xl border border-slate-100 dark:border-slate-800/50">
+            <div className="flex items-center gap-2 pr-3 border-r border-slate-200 dark:border-slate-800">
+              <Filter className="h-3.5 w-3.5 text-slate-400" />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Filters</span>
             </div>
-            <div className="min-w-0">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">Sales Performance</h3>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-                {activePreset === "today" ? "Today" : activePreset === "3d" ? "Last 3 days" : activePreset === "7d" ? "Last 7 days" : activePreset === "monthly" ? "This month" : activePreset === "yearly" ? "This year" : "Custom period"}
-              </p>
+
+            {/* Quick date buttons */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant={chartQuickFilter === "today" ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleQuickFilter("today")}
+                className={cn(
+                  "h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider",
+                  chartQuickFilter === "today"
+                    ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                    : "border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-700"
+                )}
+              >
+                <Clock className="h-3 w-3 mr-1" /> Today
+              </Button>
+              <Button
+                variant={chartQuickFilter === "7d" ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleQuickFilter("7d")}
+                className={cn(
+                  "h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider",
+                  chartQuickFilter === "7d"
+                    ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                    : "border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-700"
+                )}
+              >
+                7D
+              </Button>
             </div>
-            {isLoadingPerf && (
-              <div className="ml-auto flex items-center gap-1.5 text-xs text-slate-400">
-                <RefreshCw className="h-3 w-3 animate-spin" /> Updating
+
+            <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
+            
+            <MonthFilter selected={chartMonths} onChange={handleChartMonths} />
+            <YearFilter selected={chartYears} onChange={handleChartYears} availableYears={chartYearsAvailable} />
+
+            <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-700 mx-0.5" />
+
+            <OrganizationFilter
+              selectedIds={chartSelectedOrgIds}
+              onChange={(ids) => {
+                setChartSelectedOrgIds(ids)
+                setChartSelectedBranchIds([])
+              }}
+              placeholder="Organizations"
+            />
+
+            {chartSelectedOrgIds.length > 0 && (
+              <BranchFilter
+                organizationIds={chartSelectedOrgIds}
+                selectedIds={chartSelectedBranchIds}
+                onChange={setChartSelectedBranchIds}
+                placeholder="Branches"
+              />
+            )}
+
+            {isLoadingChart && (
+              <div className="ml-auto flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+                <RefreshCw className="h-3 w-3 animate-spin text-emerald-500" /> 
+                Syncing Data
               </div>
             )}
           </div>
-          {isLoadingPerf ? (
-            <div className="h-[360px] flex items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-              <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-200 dark:border-slate-700 border-t-emerald-500" />
+
+          {isLoadingChart ? (
+            <div className="h-[400px] flex items-center justify-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">
+              <div className="flex flex-col items-center gap-3">
+                <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 dark:border-slate-800 border-t-emerald-500" />
+                <p className="text-sm font-medium text-slate-400 animate-pulse">Loading performance metrics...</p>
+              </div>
             </div>
           ) : (
-            <SalesPerformanceLineChart
-              seriesData={perfData?.seriesData ?? []}
-              totalSales={perfData?.totalSales ?? 0}
-              avgSales={perfData?.avgSales ?? 0} totalOrders={perfData?.totalOrders ?? 0}
-              peakPeriod={perfData?.peakPeriod ?? null} granularity={perfData?.granularity ?? "daily"}
-              label="Sales" dateRange={dateRange}
-              comparisonSeries={perfData?.comparison?.seriesData}
+            <SalesPerformanceBarChart
+              seriesData={normalizedChartData}
+              totalSales={chartPerfData?.totalSales ?? 0}
+              avgSales={chartPerfData?.avgSales ?? 0}
+              totalOrders={chartPerfData?.totalOrders ?? 0}
+              peakPeriod={chartPerfData?.peakPeriod ?? null}
+              granularity={chartGranularity}
+              label="Sales"
+              dateRange={chartComponentDateRange}
+              comparisonSeries={chartPerfData?.comparison?.seriesData}
             />
           )}
         </CardContent>
@@ -394,5 +610,38 @@ export function SuperAdminDashboard() {
         compareYears={compareYears}
       />
     </main>
+  )
+}
+
+function MonthFilter({ selected, onChange }: { selected: number[], onChange: (v: number[]) => void }) {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const items = months.map((m, i) => ({ id: i + 1, label: m }))
+  
+  return (
+    <MultiSelectFilter
+      title="Months"
+      items={items}
+      selectedIds={selected}
+      onChange={(ids) => onChange(ids.sort((a, b) => a - b))}
+      icon={<Calendar className="h-3.5 w-3.5 mr-2 text-indigo-500" />}
+      placeholder="Months"
+      showSearch={false}
+    />
+  )
+}
+
+function YearFilter({ selected, onChange, availableYears }: { selected: number[], onChange: (v: number[]) => void, availableYears: number[] }) {
+  const items = availableYears.map(y => ({ id: y, label: String(y) }))
+
+  return (
+    <MultiSelectFilter
+      title="Years"
+      items={items}
+      selectedIds={selected}
+      onChange={(ids) => onChange(ids.sort((a, b) => b - a))}
+      icon={<Layers className="h-3.5 w-3.5 mr-2 text-indigo-500" />}
+      placeholder="Years"
+      showSearch={false}
+    />
   )
 }

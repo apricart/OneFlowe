@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import useSWR from "swr"
+import { fetcher } from "@/lib/fetcher"
 import { useAppContext } from "@/components/context/app-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, Building2, TrendingUp, Search, Download, FileText, FileSpreadsheet, FileIcon as FilePdf, RefreshCw, Trophy, Crown, BarChart3, Calculator, ChevronDown
+    Loader2, Building2, TrendingUp, Search, Download, FileText, FileSpreadsheet, FileIcon as FilePdf, RefreshCw, Trophy, Crown, BarChart3, Calculator, ChevronDown, ShoppingBag, RotateCcw, LayoutGrid, Calendar, Layers, MapPin, ArrowUpRight, ArrowDownRight, LayoutDashboard, Table as TableIcon, LineChart as LineChartIcon
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -24,142 +25,171 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ResponsiveContainer, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
+import { OrganizationFilter as OrgFilter } from "@/components/reports/organization-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
+import { BranchFilter } from "@/components/reports/branch-filter"
 
-import { KPICard } from "@/components/reports/kpi-card"
-import { SalesPerformanceLineChart } from "@/components/dashboard/charts"
-import { useSalesPerformance } from "@/lib/hooks/use-sales-performance"
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+type DateRange = { startDate: Date; endDate: Date }
 
 export default function BranchReportsPage() {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
 
-    const {
-        organizationId,
-        setBranchIds: setContextBranchIds
-    } = useAppContext()
-
+    const { organizationId: contextOrgId } = useAppContext()
     const [searchTerm, setSearchTerm] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
-    const [groupId, setGroupId] = useState("")
-    const [selectedMonths, setSelectedMonths] = useState<number[]>([new Date().getMonth()])
-    const [selectedYears, setSelectedYears] = useState<number[]>([new Date().getFullYear()])
-    const [compareMonths, setCompareMonths] = useState<number[]>([])
-    const [compareYears, setCompareYears] = useState<number[]>([])
-
-    const [compare, setCompare] = useState(false)
-    const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
+    const [activeTab, setActiveTab] = useState("analytics")
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
+    const userOrgId = (session?.user as any)?.organizationId
     const [hasMounted, setHasMounted] = useState(false)
 
-    // URL States for filtering
-    const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "thisMonth"
-    const startFromUrl = searchParams.get("startDate") || ""
-    const endFromUrl = searchParams.get("endDate") || ""
-
-    const activePreset = presetFromUrl
-    const dateRange = useMemo(() => {
-        if (startFromUrl && endFromUrl) {
-            return { startDate: new Date(startFromUrl), endDate: new Date(endFromUrl) }
-        }
-        return null
-    }, [startFromUrl, endFromUrl])
-
-    const handleDateChange = useCallback((
-        range: { startDate: Date; endDate: Date } | null, 
-        preset: FilterPreset, 
-        compareMode?: boolean, 
-        compRange?: { startDate: Date; endDate: Date } | null,
-        months?: number[],
-        years?: number[],
-        cMonths?: number[],
-        cYears?: number[]
-    ) => {
-        const params = new URLSearchParams(searchParams.toString())
-        params.set("preset", preset)
-        if (compareMode !== undefined) setCompare(compareMode)
-        if (compRange !== undefined) setCompareRange(compRange)
-        if (months) setSelectedMonths(months)
-        if (years) setSelectedYears(years)
-        if (cMonths) setCompareMonths(cMonths)
-        if (cYears) setCompareYears(cYears)
-        
-        if (range) {
-            params.set("startDate", range.startDate.toISOString())
-            params.set("endDate", range.endDate.toISOString())
-        } else {
-            params.delete("startDate")
-            params.delete("endDate")
-        }
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-    }, [searchParams, pathname, router])
-
-    const queryParams = new URLSearchParams()
-    if (organizationId) queryParams.set("organizationId", organizationId.toString())
-    if (startFromUrl) queryParams.set("startDate", startFromUrl)
-    if (endFromUrl) queryParams.set("endDate", endFromUrl)
-    if (selectedMonths.length > 0) queryParams.set("months", selectedMonths.join(","))
-    if (selectedYears.length > 0) queryParams.set("years", selectedYears.join(","))
-
-    if (compare) {
-        queryParams.set("compare", "true")
-        if (compareRange) {
-            queryParams.set("compareStartDate", compareRange.startDate.toISOString())
-            queryParams.set("compareEndDate", compareRange.endDate.toISOString())
-        }
-        if (compareMonths.length > 0) queryParams.set("compareMonths", compareMonths.join(","))
-        if (compareYears.length > 0) queryParams.set("compareYears", compareYears.join(","))
-    }
-
-    if (groupId) queryParams.set("groupId", groupId)
-    queryParams.set("limit", "10000")
-
-    const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${queryParams.toString()}`, fetcher)
-
-    // Sales performance chart data
-    const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
-        organizationId || undefined,
-        undefined,
-        undefined,
-        groupId || undefined,
-        dateRange,
-        "all",
-        compare,
-        compareRange,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        activePreset === "all" ? "yearly" : "daily"
+    // ━━━ GLOBAL CONTEXT FILTERS ━━━
+    const startFromUrl = searchParams.get("startDate")
+    const endFromUrl = searchParams.get("endDate")
+    const [dateRange, setDateRange] = useState<DateRange | null>(
+        startFromUrl && endFromUrl 
+            ? { startDate: new Date(startFromUrl), endDate: new Date(endFromUrl) }
+            : { startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1), endDate: new Date() }
     )
+    const [activePreset, setActivePreset] = useState<FilterPreset>((searchParams.get("preset") as FilterPreset) || "thisMonth")
+    const [compare, setCompare] = useState(searchParams.get("compare") === "true")
+    const [compareRange, setCompareRange] = useState<DateRange | null>(null)
+    
+    const [selectedMonths, setSelectedMonths] = useState<number[]>([])
+    const [selectedYears, setSelectedYears] = useState<number[]>([])
+    const [compareMonths, setCompareMonths] = useState<number[]>([])
+    const [compareYears, setCompareYears] = useState<number[]>([])
+    
+    const [selectedOrgId, setSelectedOrgId] = useState<string>(contextOrgId ? String(contextOrgId) : "")
+    const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
+    const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
+
+    // ━━━ TIER 1: GLOBAL SUMMARY DATA ━━━
+    const globalQueryParams = new URLSearchParams()
+    if (dateRange) {
+        globalQueryParams.set("startDate", dateRange.startDate.toISOString())
+        globalQueryParams.set("endDate", dateRange.endDate.toISOString())
+    }
+    if (selectedOrgId) globalQueryParams.set("organizationId", selectedOrgId)
+    if (selectedGroupIds.length > 0) globalQueryParams.set("groupIds", selectedGroupIds.join(","))
+    if (selectedBranchIds.length > 0) globalQueryParams.set("branchIds", selectedBranchIds.join(","))
+    if (selectedMonths.length > 0) globalQueryParams.set("months", selectedMonths.join(","))
+    if (selectedYears.length > 0) globalQueryParams.set("years", selectedYears.join(","))
+    if (compare) globalQueryParams.set("compare", "true")
+    if (compareRange) {
+        globalQueryParams.set("compareStartDate", compareRange.startDate.toISOString())
+        globalQueryParams.set("compareEndDate", compareRange.endDate.toISOString())
+    }
+    if (compareMonths.length > 0) globalQueryParams.set("compareMonths", compareMonths.join(","))
+    if (compareYears.length > 0) globalQueryParams.set("compareYears", compareYears.join(","))
+
+    const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR<any>(`/api/v1/analytics/branches/performance?summaryOnly=true&${globalQueryParams.toString()}`, fetcher)
+
+    // ━━━ TIER 2: CHART (ANALYTICS) ━━━
+    const [chartMonths, setChartMonths] = useState<number[]>([])
+    const [chartYears, setChartYears] = useState<number[]>([])
+    
+    const chartQueryParams = new URLSearchParams(globalQueryParams.toString())
+    if (chartMonths.length > 0) chartQueryParams.set("months", chartMonths.join(","))
+    if (chartYears.length > 0) chartQueryParams.set("years", chartYears.join(","))
+    
+    const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR<any>(`/api/v1/analytics/branches/performance?trendOnly=true&${chartQueryParams.toString()}`, fetcher)
+
+    // ━━━ TIER 3: REPORT (TABLE) ━━━
+    const [reportMonths, setReportMonths] = useState<number[]>([])
+    const [reportYears, setReportYears] = useState<number[]>([])
+    const [reportSearch, setReportSearch] = useState("")
+
+    const reportQueryParams = new URLSearchParams(globalQueryParams.toString())
+    if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
+    if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
+
+    const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR<any>(`/api/v1/analytics/branches/performance?${reportQueryParams.toString()}`, fetcher)
+
+    // ━━━ TIER 4: ALL-TIME (YEAR SELECTION) ━━━
+    const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/branches/performance?allTime=true&${globalQueryParams.toString()}`, fetcher)
 
     useEffect(() => {
         setHasMounted(true)
         setGeneratedDate(new Date().toLocaleString())
     }, [])
 
-    const handleGroupChange = (id: string) => {
-        setGroupId(id)
-    }
+    const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, c?: boolean, cr?: DateRange | null, m?: number[], y?: number[], cm?: number[], cy?: number[]) => {
+        setDateRange(range)
+        setActivePreset(preset)
+        if (c !== undefined) setCompare(c)
+        if (cr !== undefined) setCompareRange(cr)
+        if (m !== undefined) setSelectedMonths(m)
+        if (y !== undefined) setSelectedYears(y)
+        if (cm !== undefined) setCompareMonths(cm)
+        if (cy !== undefined) setCompareYears(cy)
+    }, [])
 
-    const topPerformers = data?.topPerformers || []
-    const summary = data?.summary || { totalSales: 0, orderCount: 0 }
+    const summary = globalData?.summary || { totalOrders: 0, totalRevenue: 0, totalRefunds: 0, activeBranches: 0 }
+    const comparison = globalData?.comparison
 
-    const filteredBranches = topPerformers.filter((p: any) =>
-        (p.branchName || "").toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const revenueTrend = useMemo(() => {
+        if (!compare || !comparison?.totalRevenue) return null
+        const pct = ((summary.totalRevenue - comparison.totalRevenue) / comparison.totalRevenue) * 100
+        return { value: Math.abs(pct).toFixed(1), isUp: pct > 0, isDown: pct < 0 }
+    }, [summary.totalRevenue, comparison?.totalRevenue, compare])
+
+    const orderTrend = useMemo(() => {
+        if (!compare || !comparison?.totalOrders) return null
+        const pct = ((summary.totalOrders - comparison.totalOrders) / comparison.totalOrders) * 100
+        return { value: Math.abs(pct).toFixed(1), isUp: pct > 0, isDown: pct < 0 }
+    }, [summary.totalOrders, comparison?.totalOrders, compare])
+
+    const branches = reportData?.items || []
+    const filteredBranches = useMemo(() => {
+        return branches.filter((b: any) => b.name?.toLowerCase().includes(reportSearch.toLowerCase()) || b.groupName?.toLowerCase().includes(reportSearch.toLowerCase()))
+    }, [branches, reportSearch])
+
+    const normalizedTrend = useMemo(() => {
+        const trend = chartData?.trend || []
+        const currentYear = new Date().getFullYear()
+        
+        if (chartYears.length > 1) {
+            return chartYears.sort((a,b) => a-b).map(year => {
+                const yearData = trend.filter((t: any) => t.date.startsWith(String(year)))
+                const compData = chartData?.compareTrend?.filter((t: any) => t.date.startsWith(String(year))) || []
+                return {
+                    period: String(year),
+                    revenue: yearData.reduce((sum: number, t: any) => sum + (t.revenue || 0), 0) / 100,
+                    orders: yearData.reduce((sum: number, t: any) => sum + (t.orders || 0), 0),
+                    prevRevenue: compData.reduce((sum: number, t: any) => sum + (t.revenue || 0), 0) / 100
+                }
+            })
+        }
+
+        const activeYear = chartYears.length === 1 ? chartYears[0] : currentYear
+        const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12 ? [...chartMonths].sort((a,b) => a-b) : [1,2,3,4,5,6,7,8,9,10,11,12]
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+        return monthsToShow.map(m => {
+            const periodKey = `${activeYear}-${String(m).padStart(2, '0')}`
+            const monthData = trend.find((t: any) => t.date === periodKey)
+            const compData = chartData?.compareTrend?.find((t: any) => t.date === periodKey)
+            return {
+                period: monthNames[m-1],
+                revenue: (monthData?.revenue || 0) / 100,
+                orders: monthData?.orders || 0,
+                prevRevenue: (compData?.revenue || 0) / 100
+            }
+        })
+    }, [chartData, chartMonths, chartYears])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Rank", "Branch", "Group", "Orders", "Fulfilled", "Revenue"]
-        const rows = filteredBranches.map((p: any, i: number) => [
-            `#${i + 1}`, p.branchName, p.groupName || "-", p.orderCount, p.fulfilledCount, (p.sales / 100).toFixed(2)
+        const headers = ["Branch Name", "Group", "Status", "Orders", "Net Revenue"]
+        const rows = filteredBranches.map((b: any) => [
+            b.name || "-", b.groupName || "-", b.status || "active", b.totalOrders, (b.revenue / 100).toFixed(2)
         ])
 
         if (format === 'pdf') {
@@ -167,265 +197,402 @@ export default function BranchReportsPage() {
             doc.setFontSize(20); doc.text("Branch Performance Ledger", 14, 20)
             doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
             autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid' })
-            doc.save(`branch-performance-${new Date().getTime()}.pdf`)
+            doc.save(`branch-report-${new Date().getTime()}.pdf`)
             return
         }
 
         const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
         const workbook = XLSX.utils.book_new()
         XLSX.utils.book_append_sheet(workbook, worksheet, "Branches")
-        XLSX.writeFile(workbook, `branch-performance-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
+        XLSX.writeFile(workbook, `branch-report-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
     }
 
-    if (!hasMounted) {
-        return (
-            <div className="flex h-[50vh] items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-            </div>
-        )
-    }
+    if (!hasMounted) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950"><Loader2 className="h-8 w-8 animate-spin text-emerald-500" /></div>
 
     return (
-        <div className="space-y-5 pb-12 bg-slate-50 dark:bg-slate-950 min-h-screen">
+        <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] pb-20">
+            {/* ━━━ STICKY PREMIUM HEADER ━━━ */}
+            <div className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
+                <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-500/20 rotate-3 group hover:rotate-0 transition-all duration-500">
+                            <MapPin className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Branch Intelligence</h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                                <Building2 className="h-3 w-3" />
+                                Multi-Unit Performance Hub
+                            </p>
+                        </div>
+                    </div>
 
-            <div className="sticky top-0 z-30 flex flex-wrap items-center gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                <GlobalDateFilter
-                    value={dateRange}
-                    onChange={handleDateChange}
-                    activePreset={activePreset}
-                    hidePresets={false}
-                    compare={compare}
-                    compareRange={compareRange}
-                    months={selectedMonths}
-                    years={selectedYears}
-                    compareMonths={compareMonths}
-                    compareYears={compareYears}
-                />
-
-                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-                    <GroupFilter
-                        value={groupId}
-                        onChange={handleGroupChange}
-                        organizationId={organizationId || undefined}
-                    />
-                )}
-                <div className="flex-1" />
-                
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => mutate()}
-                    disabled={isLoading}
-                    className="h-9 text-[12px] font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-full px-4"
-                >
-                    <RefreshCw className={`h-3.5 w-3.5 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-                    REFRESH
-                </Button>
+                    <div className="flex items-center gap-3">
+                        <div className="hidden lg:flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
+                            <GlobalDateFilter 
+                                value={dateRange} 
+                                activePreset={activePreset} 
+                                compare={compare}
+                                compareRange={compareRange}
+                                months={selectedMonths}
+                                years={selectedYears}
+                                compareMonths={compareMonths}
+                                compareYears={compareYears}
+                                onChange={handleDateChange} 
+                            />
+                        </div>
+                        {/* Filters moved to local tabs */}
+                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-emerald-500 transition-colors" onClick={() => mutateGlobal()}>
+                            <RefreshCw className={cn("h-4 w-4", isGlobalLoading && "animate-spin")} />
+                        </Button>
+                    </div>
+                </div>
             </div>
 
-            <div className="px-4 md:px-6 space-y-5">
+            <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
+                {/* ━━━ BENTO KPI GRID ━━━ */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <KPICard 
+                        label="Branch Net Revenue"
+                        value={formatPKR(summary.totalRevenue / 100)}
+                        icon={<TrendingUp className="h-4 w-4" />}
+                        iconBg="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
+                        trend={revenueTrend}
+                        trendColor="emerald"
+                        subtitle="Consolidated network sales"
+                        compare={compare}
+                        compareValue={formatPKR((comparison?.totalRevenue || 0) / 100)}
+                    />
+                    <KPICard 
+                        label="Avg Order Value"
+                        value={formatPKR(summary.totalOrders > 0 ? (summary.totalRevenue / summary.totalOrders) / 100 : 0)}
+                        icon={<Calculator className="h-4 w-4" />}
+                        iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                        subtitle="Per-transaction average"
+                    />
+                    <KPICard 
+                        label="Fulfilled Orders"
+                        value={summary.totalOrders.toLocaleString()}
+                        icon={<ShoppingBag className="h-4 w-4" />}
+                        iconBg="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
+                        trend={orderTrend}
+                        trendColor="indigo"
+                        subtitle="Completed transactions"
+                    />
+                    <KPICard 
+                        label="Active Units"
+                        value={summary.activeBranches.toLocaleString()}
+                        icon={<Building2 className="h-4 w-4" />}
+                        iconBg="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                        subtitle="Managed branch locations"
+                    />
+                </div>
 
-                {/* ━━━ "INTELLIGENCE" HEADER ━━━ */}
-                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#064e3b] via-[#065f46] to-[#047857] px-6 py-8 text-white shadow-xl ring-1 ring-emerald-500/30">
-                    <div className="flex flex-col gap-2 relative z-10">
-                        <p className="text-xs tracking-[0.3em] text-emerald-200 font-bold uppercase">Multi-Unit Surveillance</p>
-                        <h1 className="text-4xl font-bold tracking-tight">Branch Performance</h1>
-                        <p className="text-sm text-emerald-100/80 font-medium max-w-xl">
-                            Comparative analysis of branch output, fulfillment efficiency, and market share across <strong>{topPerformers.length}</strong> active units.
-                        </p>
+                {/* ━━━ TABBED INTERFACE ━━━ */}
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+                    <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-1">
+                        <TabsList className="bg-transparent h-auto p-0 gap-8">
+                            <TabsTrigger value="analytics" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
+                                <LayoutDashboard className="h-4 w-4 mr-2" />
+                                Analytics
+                            </TabsTrigger>
+                            <TabsTrigger value="reports" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-emerald-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
+                                <TableIcon className="h-4 w-4 mr-2" />
+                                Reports
+                            </TabsTrigger>
+                        </TabsList>
                     </div>
-                    <div className="absolute top-0 right-0 -translate-y-12 translate-x-1/4 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-                </div>
 
-                {/* ━━━ KPI BENTO GRID ━━━ */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <KPICard
-                        title="Top Performer"
-                        value={topPerformers[0]?.branchName || "N/A"}
-                        icon={Trophy}
-                        colorScheme="amber"
-                        subtitle="Highest revenue branch"
-                    />
-                    <KPICard
-                        title="Total Units"
-                        value={topPerformers.length}
-                        icon={Building2}
-                        colorScheme="blue"
-                    />
-                    <KPICard
-                        title="Network Revenue"
-                        value={formatPKR(summary.totalSales / 100)}
-                        icon={TrendingUp}
-                        colorScheme="emerald"
-                    />
-                    <KPICard
-                        title="Avg Order Value"
-                        value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)}
-                        icon={BarChart3}
-                        colorScheme="indigo"
-                    />
-                </div>
-
-                {/* ━━━ PERFORMANCE ANALYTICS CHART ━━━ */}
-                <Card className="rounded-[24px] border border-slate-200/60 dark:border-slate-800/60 shadow-sm overflow-hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
-                    <CardHeader className="px-8 py-6 border-b border-slate-100 dark:border-slate-800">
-                        <CardTitle className="text-lg font-black tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                            <TrendingUp className="w-5 h-5 text-emerald-500" />
-                            Performance Analytics
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-8">
-                        {isLoadingPerf ? (
-                            <div className="h-[300px] flex items-center justify-center">
-                                <RefreshCw className="w-8 h-8 animate-spin text-slate-200" />
+                    <TabsContent value="analytics" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900/50 backdrop-blur-3xl rounded-[2rem] relative group transition-all duration-700">
+                            <div className="px-8 py-7 border-b border-slate-100 dark:border-slate-800 space-y-5">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
+                                                <LineChartIcon className="h-4 w-4" />
+                                            </div>
+                                            <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">Branch Monthly Trend</h3>
+                                        </div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11">Comparative output analysis</p>
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={() => mutateChart()} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800">
+                                        <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isChartLoading && "animate-spin")} />
+                                    </Button>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                        <>
+                                            <OrgFilter 
+                                                selectedIds={selectedOrgId ? [selectedOrgId] : []} 
+                                                onChange={(ids: string[]) => { 
+                                                    setSelectedOrgId(ids[0] || ""); 
+                                                    setSelectedGroupIds([]); 
+                                                    setSelectedBranchIds([]); 
+                                                }} 
+                                                maxSelect={1} 
+                                            />
+                                            {selectedOrgId && (
+                                                <GroupFilter 
+                                                    selectedIds={selectedGroupIds} 
+                                                    onChange={(ids) => {
+                                                        setSelectedGroupIds(ids);
+                                                        setSelectedBranchIds([]);
+                                                    }} 
+                                                    organizationId={parseInt(selectedOrgId)} 
+                                                />
+                                            )}
+                                            {selectedOrgId && (
+                                                <BranchFilter 
+                                                    selectedIds={selectedBranchIds} 
+                                                    onChange={setSelectedBranchIds} 
+                                                    organizationId={selectedOrgId}
+                                                    groupIds={selectedGroupIds}
+                                                />
+                                            )}
+                                        </>
+                                    )}
+                                    <MonthFilter selected={chartMonths} onChange={setChartMonths} />
+                                    <YearFilter selected={chartYears} onChange={setChartYears} availableYears={allTimeData?.years || [new Date().getFullYear()]} />
+                                </div>
                             </div>
-                        ) : (
-                            <SalesPerformanceLineChart
-                                seriesData={perfData?.seriesData ?? []}
-                                comparisonSeries={perfData?.comparison?.seriesData}
-                                totalSales={perfData?.totalSales ?? 0}
-                                avgSales={perfData?.avgSales ?? 0}
-                                totalOrders={perfData?.totalOrders ?? 0}
-                                peakPeriod={perfData?.peakPeriod ?? null}
-                                granularity={perfData?.granularity ?? "daily"}
-                                dateRange={dateRange}
-                            />
-                        )}
-                    </CardContent>
-                </Card>
+                            <CardContent className="p-8">
+                                {(isChartLoading || !normalizedTrend.length) ? (
+                                    <div className="h-[450px] flex flex-col items-center justify-center gap-4 animate-pulse">
+                                        <div className="h-10 w-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+                                        <p className="text-[10px] font-black uppercase text-slate-400">Syncing Analytics...</p>
+                                    </div>
+                                ) : (
+                                    <div className="h-[450px] w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <ComposedChart data={normalizedTrend} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.3} />
+                                                <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} dy={10} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} tickFormatter={(v) => `₨${v >= 1000 ? (v/1000).toFixed(0)+'K' : v}`} />
+                                                <Tooltip content={(props) => <CustomTooltip {...props} compare={compare} />} />
+                                                <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 30, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }} />
+                                                <Bar dataKey="revenue" name="Net Revenue" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
+                                                {compare && <Bar dataKey="prevRevenue" name="Prior Period" fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />}
+                                            </ComposedChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
 
-                {/* ━━━ REFINED TABLE ━━━ */}
-                <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/50 backdrop-blur-xl">
-                    <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-4">
-                        <div className="flex items-center gap-3">
-                            <h3 className="font-bold text-slate-900 dark:text-white text-sm uppercase tracking-wider">Performance Rankings</h3>
-                            <div className="relative">
-                                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                <Input
-                                    placeholder="Search branches..."
-                                    className="pl-9 h-10 w-64 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                />
+                    <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <div className="flex flex-wrap items-center gap-2.5 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
+                             <div className="relative flex-1 min-w-[240px]">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                <Input placeholder="Search branches..." value={reportSearch} onChange={(e) => setReportSearch(e.target.value)} className="pl-9 h-10 bg-slate-100/50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold font-mono" />
                             </div>
+                            {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                <>
+                                    <OrgFilter 
+                                        selectedIds={selectedOrgId ? [selectedOrgId] : []} 
+                                        onChange={(ids: string[]) => { 
+                                            setSelectedOrgId(ids[0] || ""); 
+                                            setSelectedGroupIds([]); 
+                                            setSelectedBranchIds([]); 
+                                        }} 
+                                        maxSelect={1} 
+                                    />
+                                    {selectedOrgId && (
+                                        <GroupFilter 
+                                            selectedIds={selectedGroupIds} 
+                                            onChange={(ids) => {
+                                                setSelectedGroupIds(ids);
+                                                setSelectedBranchIds([]);
+                                            }} 
+                                            organizationId={parseInt(selectedOrgId)} 
+                                        />
+                                    )}
+                                    {selectedOrgId && (
+                                        <BranchFilter 
+                                            selectedIds={selectedBranchIds} 
+                                            onChange={setSelectedBranchIds} 
+                                            organizationId={selectedOrgId}
+                                            groupIds={selectedGroupIds}
+                                        />
+                                    )}
+                                </>
+                            )}
+                            <MonthFilter selected={reportMonths} onChange={setReportMonths} />
+                            <YearFilter selected={reportYears} onChange={setReportYears} availableYears={allTimeData?.years || [new Date().getFullYear()]} />
+                            <Button variant="outline" size="sm" onClick={() => mutateReport()} className="h-10 w-10 p-0 rounded-xl">
+                                <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isReportLoading && "animate-spin")} />
+                            </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" className="h-10 rounded-xl font-black text-[10px] tracking-widest uppercase">
+                                        <Download className="h-3.5 w-3.5 mr-2" /> Export
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="rounded-xl border-slate-200">
+                                    <DropdownMenuItem onClick={() => handleExport('csv')} className="text-[10px] font-black uppercase">CSV</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleExport('excel')} className="text-[10px] font-black uppercase">Excel</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-[10px] font-black uppercase">PDF</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
 
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="h-10 text-xs font-bold gap-2 rounded-lg border-slate-200 dark:border-slate-800">
-                                    <Download className="h-4 w-4" />
-                                    EXPORT
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48 rounded-xl">
-                                <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2.5 cursor-pointer">
-                                    <FileText className="mr-2 h-4 w-4" /> CSV
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2.5 cursor-pointer">
-                                    <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2.5 cursor-pointer">
-                                    <FilePdf className="mr-2 h-4 w-4 text-rose-500" /> PDF
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-slate-50/50 dark:bg-slate-800/30">
-                                    <TableHead className="pl-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">Unit Name</TableHead>
-                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Orders (A/B)" : "Orders"}</TableHead>
-                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Fulfilled (A/B)" : "Fulfilled"}</TableHead>
-                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Rejected (A/B)" : "Rejected"}</TableHead>
-                                    <TableHead className="h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500 text-right">{compare ? "Refunded (A/B)" : "Refunded"}</TableHead>
-                                    <TableHead className="text-right pr-6 h-12 text-[10px] font-bold uppercase tracking-widest text-slate-500">{compare ? "Net Rev (A/B)" : "Net Revenue"}</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                    <TableRow><TableCell colSpan={6} className="h-40 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-emerald-500/50" /></TableCell></TableRow>
-                                ) : filteredBranches.length === 0 ? (
-                                    <TableRow><TableCell colSpan={6} className="h-40 text-center text-slate-500">No matching branches found.</TableCell></TableRow>
-                                ) : (
-                                    filteredBranches.map((p: any, index: number) => {
-                                        const marketShare = summary.totalSales > 0 ? (p.sales / summary.totalSales) * 100 : 0
-                                        return (
-                                            <TableRow key={p.branchId} className="group hover:bg-emerald-50/20 transition-colors">
-                                                <TableCell className="pl-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={cn(
-                                                            "h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold border",
-                                                            index === 0 ? "bg-amber-100 border-amber-200 text-amber-700 shadow-sm" :
-                                                                index === 1 ? "bg-slate-100 border-slate-200 text-slate-700" :
-                                                                    index === 2 ? "bg-orange-100 border-orange-200 text-orange-700" :
-                                                                        "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400"
-                                                        )}>
-                                                            {index === 0 ? <Crown className="h-3.5 w-3.5" /> : index + 1}
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold text-xs text-slate-900 dark:text-white">{p.branchName}</span>
-                                                            <span className="text-[10px] text-slate-400 font-medium lowercase tracking-tighter">{p.groupName || "no category"}</span>
-                                                        </div>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right font-mono text-xs font-medium text-slate-500 py-4">
-                                                    <div className="flex flex-col items-end">
-                                                        <span>{p.orderCount.toLocaleString()}</span>
-                                                        {compare && <span className="text-[10px] text-slate-400 mt-0.5">{p.compareOrderCount || 0}</span>}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right py-4">
-                                                    <div className="flex flex-col items-end">
-                                                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-100 text-[10px] font-bold h-5">
-                                                            {p.fulfilledCount || 0}
-                                                        </Badge>
-                                                        {compare && <span className="text-[9px] text-slate-400 mt-0.5">{p.compareFulfilledCount || 0}</span>}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right py-4">
-                                                    <div className="flex flex-col items-end">
-                                                        <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-100 text-[10px] font-bold h-5">
-                                                            {p.rejectedCount || 0}
-                                                        </Badge>
-                                                        {compare && <span className="text-[9px] text-slate-400 mt-0.5">{p.compareRejectedCount || 0}</span>}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right py-4">
-                                                    <div className="flex flex-col items-end">
-                                                        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-100 text-[10px] font-bold h-5">
-                                                            {p.refundedCount || 0}
-                                                        </Badge>
-                                                        {compare && <span className="text-[9px] text-slate-400 mt-0.5">{p.compareRefundedCount || 0}</span>}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right pr-6 font-mono font-bold text-xs text-slate-900 dark:text-white py-4">
-                                                    <div className="flex flex-col items-end">
-                                                        <div className="flex flex-col items-end">
-                                                            <span>{formatPKR(p.sales / 100)}</span>
-                                                            {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 pt-0.5">{formatPKR(p.compareSales / 100)}</span>}
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 mt-1">
-                                                            <div className="w-12 h-1 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                                                                <div className="h-full bg-emerald-500" style={{ width: `${marketShare}%` }} />
+                        <Card className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-2xl overflow-hidden min-h-[600px]">
+                            <CardHeader className="px-8 pt-8 pb-4 border-b border-slate-100 dark:border-slate-800">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-slate-900 dark:text-white font-black tracking-tight flex items-center gap-3">
+                                        <div className="p-2 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl text-emerald-600">
+                                            <Trophy className="w-5 h-5" />
+                                        </div>
+                                        Branch Performance Rankings
+                                    </CardTitle>
+                                    <Badge variant="outline" className="h-8 rounded-lg px-3 text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-50 dark:bg-slate-900">
+                                        {filteredBranches.length} ENTRIES
+                                    </Badge>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+                                            <TableHead className="pl-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Rank & Branch</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Cluster / Group</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Revenue (PKR)</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
+                                            <TableHead className="px-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Fulfillment</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isReportLoading ? (
+                                            Array(6).fill(0).map((_, i) => (
+                                                <TableRow key={i} className="h-20 animate-pulse"><TableCell colSpan={7}><div className="h-10 bg-slate-50 dark:bg-slate-900/50 rounded-xl mx-4" /></TableCell></TableRow>
+                                            ))
+                                        ) : filteredBranches.length === 0 ? (
+                                            <TableRow><TableCell colSpan={7} className="h-60 text-center text-slate-400 text-xs font-black uppercase tracking-widest">No branch records found</TableCell></TableRow>
+                                        ) : (
+                                            filteredBranches.map((branch: any, idx: number) => (
+                                                <TableRow key={branch.id} className="group hover:bg-slate-50/80 dark:hover:bg-slate-900/40 border-b border-slate-50 dark:border-slate-900 transition-all h-20">
+                                                    <TableCell className="pl-8">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={cn("h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold border", idx === 0 ? "bg-amber-100 border-amber-200 text-amber-700 shadow-sm" : idx === 1 ? "bg-slate-100 border-slate-200 text-slate-700" : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-400")}>
+                                                                {idx === 0 ? <Crown className="h-3.5 w-3.5" /> : idx + 1}
                                                             </div>
-                                                            <span className="text-[9px] text-slate-400 uppercase font-black">{marketShare.toFixed(1)}%</span>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-emerald-600 transition-colors uppercase">{branch.name}</span>
+                                                                <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase italic">{branch.organizationName}</span>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        )
-                                    })
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                    <div className="p-4 bg-slate-50/50 dark:bg-slate-900/20 text-center border-t border-slate-100 dark:border-slate-800">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">Ledger State Finalized at {generatedDate}</p>
-                    </div>
-                </Card>
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-black">
+                                                        <Badge variant="outline" className={cn("text-[10px] font-black uppercase tracking-widest", branch.status === "active" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : branch.status === "deleted" ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-amber-50 text-amber-600 border-amber-200")}>
+                                                            {branch.status || "Unknown"}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-[10px] font-bold border-none uppercase tracking-tighter">
+                                                            {branch.groupName || "UNGROUPED"}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">{formatPKR(branch.revenue / 100)}</span>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <span className="text-sm font-bold text-rose-500 tracking-tight">{formatPKR(branch.refunds / 100)}</span>
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-black text-sm text-slate-900 dark:text-white tracking-tight">
+                                                        {branch.totalOrders.toLocaleString()}
+                                                    </TableCell>
+                                                    <TableCell className="px-8 text-center font-black">
+                                                        <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 dark:bg-emerald-500/10 rounded-full text-[10px] text-emerald-600">
+                                                            {branch.fulfilledOrders} / {branch.totalOrders}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                            <div className="px-8 py-5 border-t border-slate-100 dark:border-slate-900 bg-slate-50/50 dark:bg-slate-900/40 flex items-center justify-between">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{filteredBranches.length} units listed</p>
+                                <p className="text-[10px] font-bold text-slate-300 dark:text-slate-700 font-mono italic" suppressHydrationWarning>GEN_TS: {generatedDate}</p>
+                            </div>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </div>
         </div>
     )
+}
+
+function CustomTooltip({ active, payload, label, compare }: any) {
+    if (active && payload && payload.length) {
+        const d = payload[0].payload
+        return (
+            <div className="bg-white dark:bg-slate-900/95 p-4 border border-slate-200 dark:border-slate-800 shadow-2xl rounded-2xl backdrop-blur-xl">
+                <p className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-[0.2em]">{label}</p>
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-10">
+                        <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-emerald-500" /> Net Revenue
+                        </span>
+                        <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{formatPKR(payload[0].value)}</span>
+                    </div>
+                    {compare && (
+                        <div className="flex items-center justify-between gap-10">
+                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
+                                <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" /> Prior Revenue
+                            </span>
+                            <span className="text-xs font-black text-slate-500">{formatPKR(d.prevRevenue)}</span>
+                        </div>
+                    )}
+                    <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <span className="text-[10px] font-black text-slate-400 uppercase">Orders</span>
+                        <span className="text-xs font-black text-emerald-600">{d.orders}</span>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+    return null
+}
+
+function KPICard({ label, value, icon, iconBg, trend, trendColor, subtitle, compare, compareValue }: any) {
+    return (
+        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/40 dark:shadow-none bg-white/80 dark:bg-slate-900/50 backdrop-blur-3xl rounded-[2rem] relative group transition-all duration-500 hover:shadow-emerald-500/10 hover:translate-y-[-4px]">
+            <div className="p-7">
+                <div className="flex items-center justify-between mb-6">
+                    <div className={cn("p-2.5 rounded-2xl shadow-lg transition-transform group-hover:scale-110 duration-500", iconBg)}>{icon}</div>
+                    {trend && (
+                        <div className={cn("px-3 py-1 rounded-full text-[10px] font-black tracking-widest flex items-center gap-1 shadow-sm", trendColor === "emerald" ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400")}>
+                            {trend.isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                            {trend.value}%
+                        </div>
+                    )}
+                </div>
+                <div className="space-y-1">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{label}</p>
+                    <h4 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{value}</h4>
+                    {compare && <p className="text-[10px] font-bold text-slate-400 italic">Prior: <span className="font-mono">{compareValue}</span></p>}
+                    <p className="text-[10px] font-bold text-slate-400 italic opacity-0 group-hover:opacity-100 transition-opacity duration-500">{subtitle}</p>
+                </div>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gradient-to-r from-transparent via-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        </Card>
+    )
+}
+
+
+
+function MonthFilter({ selected, onChange }: { selected: number[], onChange: (v: number[]) => void }) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const items = months.map((m, i) => ({ id: i + 1, label: m }))
+    return <MultiSelectFilter title="Months" items={items} selectedIds={selected} onChange={(ids) => onChange(ids.sort((a, b) => a - b))} icon={<Calendar className="h-3.5 w-3.5 mr-2 text-emerald-500" />} placeholder="Months" showSearch={false} />
+}
+
+function YearFilter({ selected, onChange, availableYears }: { selected: number[], onChange: (v: number[]) => void, availableYears: number[] }) {
+    const items = availableYears.map(y => ({ id: y, label: String(y) }))
+    return <MultiSelectFilter title="Years" items={items} selectedIds={selected} onChange={(ids) => onChange(ids.sort((a, b) => a - b))} icon={<Layers className="h-3.5 w-3.5 mr-2 text-emerald-500" />} placeholder="Years" showSearch={false} />
 }

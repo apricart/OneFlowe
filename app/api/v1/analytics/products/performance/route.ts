@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, branches, globalProducts, categories, refundItems, refunds } from "@/db/schema"
+import { orders, orderItems, branches, globalProducts, categories, refundItems, refunds, organizationInventory } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, isNull, sql } from "drizzle-orm"
 import { aliasedTable } from "drizzle-orm"
 
@@ -33,15 +33,33 @@ export async function GET(req: NextRequest) {
         const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
         const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
 
+        const groupIdsRaw = url.searchParams.get("groupIds")
+        const parsedGroupIds = groupIdsRaw ? groupIdsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 0) : []
+
         // RBAC Context Parsing
         let branchIds: number[] = []
+        let branchQuery = db.select({ id: branches.id }).from(branches)
+
+        if (userOrgId) {
+            branchQuery = branchQuery.where(eq(branches.organizationId, userOrgId)) as any
+        }
+
         if (branchIdsParam) {
             branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {
             branchIds = [userBranchId]
         } else {
-            const b = await db.select({ id: branches.id }).from(branches).where(userOrgId ? eq(branches.organizationId, userOrgId) : undefined)
+            const b = await branchQuery
             branchIds = b.map(br => br.id)
+        }
+
+        // Apply group filter if present
+        if (parsedGroupIds.length > 0) {
+            const groupBranches = await db.select({ id: branches.id })
+                .from(branches)
+                .where(inArray(branches.groupId, parsedGroupIds));
+            const groupBranchIds = new Set(groupBranches.map(b => b.id));
+            branchIds = branchIds.filter(id => groupBranchIds.has(id));
         }
 
         if (branchIds.length === 0) {
@@ -75,6 +93,7 @@ export async function GET(req: NextRequest) {
             .select({
                 orderId: orders.id,
                 status: orders.status,
+                createdAt: orders.createdAt,
                 globalProductId: orderItems.globalProductId,
                 itemCode: globalProducts.productCode,
                 itemName: globalProducts.name,
@@ -90,7 +109,7 @@ export async function GET(req: NextRequest) {
             .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
             .where(and(...baseConditions))
 
-        const results = await q
+        const results = await q as any[]
 
         // Get refund data for calculating exact refunded quantities
         const validOrderItemIds = results.map(r => r.orderItemId)
@@ -127,13 +146,18 @@ export async function GET(req: NextRequest) {
                 name: globalProducts.name,
                 unit: globalProducts.unit,
                 status: globalProducts.status,
+                deletedAt: globalProducts.deletedAt,
+                orgIsActive: organizationInventory.isActive,
                 categoryName: sql<string>`COALESCE(${parentCategories.name}, ${categories.name})`,
                 subCategoryName: sql<string>`CASE WHEN ${parentCategories.id} IS NOT NULL THEN ${categories.name} ELSE NULL END`
             })
             .from(globalProducts)
             .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
             .leftJoin(parentCategories, eq(categories.parentId, parentCategories.id))
-            .where(isNull(globalProducts.deletedAt)) // Exclude deleted products
+            .leftJoin(organizationInventory, and(
+                eq(organizationInventory.globalProductId, globalProducts.id),
+                userOrgId ? eq(organizationInventory.organizationId, userOrgId) : undefined
+            ))
             
         // 2. Initialize the product map with ALL products
         const productMap: Record<number, any> = {}
@@ -145,7 +169,7 @@ export async function GET(req: NextRequest) {
                 unit: p.unit,
                 category: p.categoryName || 'Uncategorized',
                 subCategory: p.subCategoryName || '-',
-                status: p.status, // Add exact status exactly for matching Global Products
+                status: p.deletedAt ? 'deleted' : (p.orgIsActive === false ? 'inactive' : p.status), // Add exact status exactly for matching Global Products
                 totalOrders: new Set(),
                 qtyOrdered: 0,
                 qtyFulfilled: 0,
@@ -213,6 +237,7 @@ export async function GET(req: NextRequest) {
                 .select({
                     globalProductId: orderItems.globalProductId,
                     status: orders.status,
+                    createdAt: orders.createdAt,
                     qtyOrdered: orderItems.quantity,
                     priceCents: orderItems.priceCents,
                     orderItemId: orderItems.id
@@ -311,8 +336,50 @@ export async function GET(req: NextRequest) {
             })
         }
 
+        // TREND AGGREGATION for chart
+        const trend: Record<string, { 
+            date: string, 
+            revenue: number, 
+            compareRevenue: number,
+            qtyOrdered: number,
+            qtyFulfilled: number,
+            qtyRefunded: number
+        }> = {}
+        
+        results.forEach(row => {
+            const d = new Date(row.createdAt)
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+            if (!trend[key]) {
+                trend[key] = { 
+                    date: key, 
+                    revenue: 0, 
+                    compareRevenue: 0,
+                    qtyOrdered: 0,
+                    qtyFulfilled: 0,
+                    qtyRefunded: 0
+                }
+            }
+            
+            trend[key].qtyOrdered += row.qtyOrdered
+            const s = (row.status || "").toUpperCase()
+            if (s === 'FULFILLED' || s === 'APPROVED' || s === 'PARTIAL' || s === 'PARTIALLY_FULFILLED' || s === 'REFUNDED') {
+                const refQ = refundQuantities[row.orderItemId] || 0
+                const fulfilledCount = Math.max(0, row.qtyOrdered - refQ)
+                
+                trend[key].qtyRefunded += refQ
+                trend[key].qtyFulfilled += fulfilledCount
+                trend[key].revenue += (fulfilledCount * row.priceCents)
+            }
+        })
+        
+        // If comparison results exist, we need to map them to the same "months" relatively 
+        // to show them on the same X-axis if comparing same months across years.
+        // For simplicity, we just return the trend of the current period.
+        // If the user wants specific comparison bars, we'd need to align Jan 2025 with Jan 2026.
+
         return NextResponse.json({
             data: aggregated,
+            trend: Object.values(trend).sort((a,b) => a.date.localeCompare(b.date)),
             comparison: comparisonSummary
         })
     } catch (error: any) {

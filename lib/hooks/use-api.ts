@@ -24,8 +24,19 @@ export function useOrganizations() {
   return useAPI<{ items: any[] }>('/api/v1/organizations')
 }
 
-export function useBranches(organizationId?: string) {
-  const url = organizationId ? `/api/v1/branches?organizationId=${organizationId}` : '/api/v1/branches'
+export function useBranches(organizationId?: string, groupIds?: string) {
+  const qs = new URLSearchParams()
+  if (organizationId) qs.set('organizationId', organizationId)
+  if (groupIds) qs.set('groupIds', groupIds)
+  const url = `/api/v1/branches${qs.toString() ? `?${qs.toString()}` : ''}`
+  return useAPI<{ items: any[] }>(url)
+}
+
+export function useGlobalProducts(organizationId?: string, groupIds?: string) {
+  const qs = new URLSearchParams()
+  if (organizationId) qs.set('organizationId', organizationId)
+  if (groupIds) qs.set('groupIds', groupIds)
+  const url = `/api/v1/inventory/organization-products${qs.toString() ? `?${qs.toString()}` : ''}`
   return useAPI<{ items: any[] }>(url)
 }
 

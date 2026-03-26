@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Loader2, ShoppingBag, TrendingUp, Calculator, Upload,
   Crown, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf,
-  Package, BarChart3, ListOrdered, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, ChevronDown, CheckSquare
+  Package, BarChart3, ListOrdered, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, ChevronDown, CheckSquare,
+  LineChart, Layers, Store, Hash, Calendar, Download
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -35,10 +36,12 @@ import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expa
 import { GlobalDateFilter, type FilterPreset, getPresetRange } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
+import { OrganizationFilter } from "@/components/reports/organization-filter"
+import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 
 import {
   ResponsiveContainer,
-  BarChart,
+  ComposedChart,
   Bar,
   XAxis,
   YAxis,
@@ -119,14 +122,28 @@ export default function SalesSummaryPage() {
 
   const monthsFromUrl = searchParams.get("months")?.split(',').map(Number) || []
   const yearsFromUrl = searchParams.get("years")?.split(',').map(Number) || []
-  const compareMonthsFromUrl = searchParams.get("compareMonths")?.split(',').map(Number) || []
-  const compareYearsFromUrl = searchParams.get("compareYears")?.split(',').map(Number) || []
 
-  // Advanced State Arrays
+  // Global State (from URL)
   const [selectedMonths, setSelectedMonths] = useState<number[]>(monthsFromUrl)
   const [selectedYears, setSelectedYears] = useState<number[]>(yearsFromUrl)
-  const [compareMonths, setCompareMonths] = useState<number[]>(compareMonthsFromUrl)
-  const [compareYears, setCompareYears] = useState<number[]>(compareYearsFromUrl)
+  const [compareMonths, setCompareMonths] = useState<number[]>(searchParams.get("compareMonths")?.split(',').map(Number) || [])
+  const [compareYears, setCompareYears] = useState<number[]>(searchParams.get("compareYears")?.split(',').map(Number) || [])
+
+  // ━━━ LOCAL FILTER STATES ━━━
+  // Analytics Filters
+  const [chartMonths, setChartMonths] = useState<number[]>(monthsFromUrl.length > 0 ? monthsFromUrl : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+  const [chartYears, setChartYears] = useState<number[]>(yearsFromUrl)
+  const [chartOrgIds, setChartOrgIds] = useState<string[]>([])
+  const [chartBranchIds, setChartBranchIds] = useState<string[]>([])
+  const [chartGroupIds, setChartGroupIds] = useState<string[]>([])
+
+  // Report Filters
+  const [reportMonths, setReportMonths] = useState<number[]>(monthsFromUrl.length > 0 ? monthsFromUrl : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+  const [reportYears, setReportYears] = useState<number[]>(yearsFromUrl)
+  const [reportOrgIds, setReportOrgIds] = useState<string[]>([])
+  const [reportBranchIds, setReportBranchIds] = useState<string[]>([])
+  const [reportGroupIds, setReportGroupIds] = useState<string[]>([])
+  const [reportSearchTerm, setReportSearchTerm] = useState("")
 
   const dateRange = useMemo(() => {
     if (startFromUrl && endFromUrl) {
@@ -181,47 +198,48 @@ export default function SalesSummaryPage() {
     setContextBranchIds(ids)
   }, [setContextBranchIds])
 
-  // Build query strings
-  const queryParams = new URLSearchParams()
-  if (organizationId) queryParams.set("organizationId", organizationId.toString())
-  
-  // Advanced DB Arrays (Postgres logic in route.ts converts 0-indexed JS month arrays to 1-indexed)
-  if (selectedMonths.length > 0) {
-    queryParams.set("months", selectedMonths.map(m => m + 1).join(",")) 
-  }
-  if (selectedYears.length > 0) {
-    queryParams.set("years", selectedYears.join(","))
-  }
-  if (compareMonths.length > 0) {
-    queryParams.set("compareMonths", compareMonths.map(m => m + 1).join(","))
-  }
-  if (compareYears.length > 0) {
-    queryParams.set("compareYears", compareYears.join(","))
-  }
-  
-  // Date ranges
-  if (startFromUrl && selectedMonths.length === 0 && selectedYears.length === 0) queryParams.set("startDate", startFromUrl)
-  if (endFromUrl && selectedMonths.length === 0 && selectedYears.length === 0) queryParams.set("endDate", endFromUrl)
-  
-  if (groupId) queryParams.set("groupId", groupId)
-  if (contextBranchIds.length > 0) {
-    queryParams.set("branchIds", contextBranchIds.join(","))
-  } else if (contextBranchId) {
-    queryParams.set("branchId", contextBranchId)
-  }
-  
-  if (compare) {
-    queryParams.set("compare", "true")
-    if (compareRange) {
-      queryParams.set("compareStartDate", compareRange.startDate.toISOString())
-      queryParams.set("compareEndDate", compareRange.endDate.toISOString())
-    }
-  }
+  // ━━━ CHART DATA (Local Filtered) ━━━
+  const chartQueryParams = new URLSearchParams()
+  if (chartOrgIds.length > 0) chartQueryParams.set("organizationIds", chartOrgIds.join(","))
+  else if (organizationId) chartQueryParams.set("organizationId", organizationId.toString())
 
-  // Orders summary (aggregated)
-  const ordersParams = new URLSearchParams(queryParams.toString())
-  ordersParams.set("limit", "10000")
-  const { data, isLoading, mutate } = useSWR(`/api/v1/analytics/summary?${ordersParams.toString()}`, fetcher)
+  if (chartBranchIds.length > 0) chartQueryParams.set("branchIds", chartBranchIds.join(","))
+  if (chartGroupIds.length > 0) chartQueryParams.set("groupIds", chartGroupIds.join(","))
+  if (chartMonths.length > 0) chartQueryParams.set("months", chartMonths.join(","))
+  if (chartYears.length > 0) chartQueryParams.set("years", chartYears.join(","))
+  if (compare) chartQueryParams.set("compare", "true")
+
+  const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR<any>(`/api/v1/analytics/summary?${chartQueryParams.toString()}`, fetcher)
+
+  // ━━━ REPORT DATA (Local Filtered) ━━━
+  const reportQueryParams = new URLSearchParams()
+  if (reportOrgIds.length > 0) reportQueryParams.set("organizationIds", reportOrgIds.join(","))
+  else if (organizationId) reportQueryParams.set("organizationId", organizationId.toString())
+
+  if (reportBranchIds.length > 0) reportQueryParams.set("branchIds", reportBranchIds.join(","))
+  if (reportGroupIds.length > 0) reportQueryParams.set("groupIds", reportGroupIds.join(","))
+  if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
+  if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
+  if (reportSearchTerm) reportQueryParams.set("searchTerm", reportSearchTerm)
+  reportQueryParams.set("limit", "1000")
+
+  const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR<any>(`/api/v1/analytics/summary?${reportQueryParams.toString()}`, fetcher)
+  
+  // ━━━ DATA FOR DYNAMIC FILTERS (All-Time) ━━━
+  const allTimeQueryParams = new URLSearchParams()
+  if (organizationId) allTimeQueryParams.set("organizationId", organizationId.toString())
+  allTimeQueryParams.set("preset", "all")
+  const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/summary?${allTimeQueryParams.toString()}`, fetcher)
+
+  // ━━━ GLOBAL DATA (For Header/KPIs) ━━━
+  const globalQueryParams = new URLSearchParams()
+  if (organizationId) globalQueryParams.set("organizationId", organizationId.toString())
+  if (contextBranchIds.length > 0) globalQueryParams.set("branchIds", contextBranchIds.join(","))
+  if (selectedMonths.length > 0) globalQueryParams.set("months", selectedMonths.join(","))
+  if (selectedYears.length > 0) globalQueryParams.set("years", selectedYears.join(","))
+  if (compare) globalQueryParams.set("compare", "true")
+
+  const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR<any>(`/api/v1/analytics/summary?${globalQueryParams.toString()}`, fetcher)
 
   useEffect(() => {
     setHasMounted(true)
@@ -233,9 +251,29 @@ export default function SalesSummaryPage() {
     }
   }, [startFromUrl, endFromUrl, searchParams, handleDateChange, selectedMonths.length, selectedYears.length])
 
-  const summary = data?.summary || { totalSales: 0, totalTax: 0, totalSubtotal: 0, orderCount: 0, totalItemsSold: 0 }
-  const orders = data?.orders || []
-  const topPerformers = data?.topPerformers || []
+  const summary = globalData?.summary || { totalSales: 0, totalTax: 0, totalSubtotal: 0, orderCount: 0, totalItemsSold: 0 }
+  const orders = reportData?.orders || []
+  const topPerformers = chartData?.topPerformers || []
+  const isLoading = isGlobalLoading || isChartLoading || isReportLoading
+
+  const totalRevenue = summary.totalSales || 0
+  const orderCount = summary.orderCount || 0
+  const totalItemsSold = summary.totalItemsSold || 0
+  const avgOrderValue = orderCount > 0 ? (totalRevenue / orderCount) : 0
+
+  // Dynamic Year Ranges for Local Filters
+  const allYears = useMemo(() => {
+    if (!allTimeData?.orders) return []
+    const years = new Set<number>()
+    allTimeData.orders.forEach((o: any) => {
+        const d = new Date(o.createdAt)
+        if (!isNaN(d.getTime())) years.add(d.getFullYear())
+    })
+    return Array.from(years).sort((a, b) => b - a)
+  }, [allTimeData])
+
+  const chartYearsAvailable = allYears
+  const reportYearsAvailable = allYears
 
   // Filtered data
   const filteredOrders = orders.filter((order: any) =>
@@ -244,72 +282,73 @@ export default function SalesSummaryPage() {
     (order.branchName && order.branchName.toLowerCase().includes(orderSearch.toLowerCase()))
   )
 
-  // KPIs (real values from API)
-  const totalRevenue = summary.totalSales || 0
-  const orderCount = summary.orderCount || 0
-  const avgOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0
-  const totalItemsSold = Number(summary.totalItemsSold) || 0
-  const totalTax = Number(summary.totalTax) || 0
+  // ━━━ COMPARISON LOGIC (Global) ━━━
+  const comparison = globalData?.comparison
 
-  // Comparison logic calculations
-  const comparison = summary.comparison
-  const getTrend = (current: number, prev: number) => {
-    if (!prev || prev === 0) return null
-    const diff = ((current - prev) / prev) * 100
-    return {
-      value: Math.abs(diff).toFixed(1),
-      isUp: diff > 0,
-      isDown: diff < 0
-    }
-  }
+  const revenueTrend = useMemo(() => {
+    if (!comparison) return null
+    const current = globalData?.summary?.totalSales || 0
+    const prev = comparison.totalSales || 0
+    if (prev === 0) return { value: "0.0", isUp: false, isDown: false }
+    const pct = ((current - prev) / prev) * 100
+    return { value: Math.abs(pct).toFixed(1), isUp: pct > 0, isDown: pct < 0 }
+  }, [globalData, comparison])
 
-  const revenueTrend = getTrend(totalRevenue, comparison?.totalSales || 0)
-  const orderTrend = getTrend(orderCount, comparison?.orderCount || 0)
+  const orderTrend = useMemo(() => {
+    if (!comparison) return null
+    const current = globalData?.summary?.orderCount || 0
+    const prev = comparison.orderCount || 0
+    if (prev === 0) return { value: "0.0", isUp: false, isDown: false }
+    const pct = ((current - prev) / prev) * 100
+    return { value: Math.abs(pct).toFixed(1), isUp: pct > 0, isDown: pct < 0 }
+  }, [globalData, comparison])
 
-  // Daily revenue chart data
-  const chartData = useMemo(() => {
-    if (!filteredOrders.length) return []
-    const groups: Record<string, { revenue: number; orders: number }> = {}
-    
-    // Determine local granularity (match backend logic roughly)
-    let localGranularity: "daily" | "monthly" | "yearly" = "daily"
-    if (activePreset === "all") {
-      localGranularity = "yearly"
-    } else if (dateRange) {
-      const diffDays = (dateRange.endDate.getTime() - dateRange.startDate.getTime()) / (1000 * 60 * 60 * 24)
-      if (diffDays > 400) localGranularity = "yearly"
-      else if (diffDays > 32) localGranularity = "monthly"
-    }
+  // ━━━ ANALYTICS DATA PROCESSING (Local) ━━━
+  // ━━━ CHART TREND DATA: Normalized X-Axis ━━━
+  const normalizedTrend = useMemo(() => {
+    const orders = chartData?.orders || []
+    const currentYear = new Date().getFullYear()
 
-    const sorted = [...filteredOrders].sort((a: any, b: any) =>
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    )
-
-    sorted.forEach((o: any) => {
-      if ((o.status || "").toUpperCase() === "FULFILLED") {
-        let label = ""
-        const d = new Date(o.createdAt)
-        if (localGranularity === "yearly") {
-          label = d.getFullYear().toString()
-        } else if (localGranularity === "monthly") {
-          label = d.toLocaleDateString("en-US", { month: "short", year: "numeric" })
-        } else {
-          label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-        }
+    // Case A: Multiple years -> Show Years on X-Axis
+    if (chartYears.length > 1) {
+      return chartYears.sort((a,b) => a-b).map(year => {
+        const yearOrders = orders.filter((o: any) => new Date(o.createdAt).getFullYear() === year)
+        const compOrders = chartData?.comparisonOrders?.filter((o: any) => new Date(o.createdAt).getFullYear() === year) || []
         
-        if (!groups[label]) groups[label] = { revenue: 0, orders: 0 }
-        groups[label].revenue += (o.totalCents || 0) / 100
-        groups[label].orders += 1
+        return {
+          period: String(year),
+          revenue: yearOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0),
+          orders: yearOrders.length,
+          compareRevenue: compOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0)
+        }
+      })
+    }
+
+    // Case B: Single year -> Show Months on X-Axis
+    const activeYear = chartYears.length === 1 ? chartYears[0] : currentYear
+    const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12 
+        ? [...chartMonths].sort((a,b) => a-b) 
+        : [1,2,3,4,5,6,7,8,9,10,11,12]
+
+    return monthsToShow.map(m => {
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+      const monthData = orders.filter((o: any) => {
+          const d = new Date(o.createdAt)
+          return d.getFullYear() === activeYear && (d.getMonth() + 1) === m
+      })
+      const compData = chartData?.comparisonOrders?.filter((o: any) => {
+          const d = new Date(o.createdAt)
+          return d.getFullYear() === activeYear && (d.getMonth() + 1) === m
+      }) || []
+
+      return {
+        period: monthNames[m-1],
+        revenue: monthData.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0),
+        orders: monthData.length,
+        compareRevenue: compData.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0)
       }
     })
-    
-    // Convert to array and ensure it's still sorted by date (the object keys might not be in order)
-    return Object.entries(groups).map(([date, d]) => ({ date, revenue: d.revenue, orders: d.orders }))
-  }, [filteredOrders, activePreset, dateRange])
-
-  // Keep old name for JSX compatibility if needed, or update JSX. 
-  // Checking JSX below... let's use 'chartData' and update JSX call if it was dailyChartData.
-  const dailyChartData = chartData;
+  }, [chartData, chartMonths, chartYears])
 
   // Status breakdown for donut chart
   const statusChartData = useMemo(() => {
@@ -480,28 +519,99 @@ export default function SalesSummaryPage() {
     XLSX.writeFile(wb, `sales-orders-${Date.now()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
   }
 
-  // Custom tooltip for bar chart
-  const BarTooltip = ({ active, payload, label }: any) => {
-    if (active && payload?.length) {
-      return (
-        <div className="bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-2xl text-xs space-y-1.5 min-w-[160px]">
-          <p className="text-slate-300 font-semibold mb-2">{label}</p>
-          {payload.map((entry: any, i: number) => (
-            <div key={i} className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.fill || entry.color }} />
-                <span className="text-slate-400">{entry.name}</span>
-              </div>
-              <span className="text-white font-bold font-mono">
-                {entry.name === "Revenue (PKR)" ? formatPKR(entry.value) : entry.value}
-              </span>
+// ━━━ PREMIUM SUB-COMPONENTS ━━━
+
+function KPICard({ label, value, icon, iconBg, trend, trendColor, subtitle, compare, compareValue }: any) {
+    return (
+        <Card className="relative overflow-hidden group bg-white dark:bg-slate-950 border-slate-200/60 dark:border-slate-800 shadow-xl shadow-slate-200/20 dark:shadow-none hover:shadow-indigo-500/10 hover:border-indigo-500/30 transition-all duration-700 rounded-3xl p-6">
+            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-24 h-24 bg-gradient-to-br from-indigo-500/5 to-transparent rounded-full blur-2xl group-hover:scale-150 transition-transform duration-1000" />
+            
+            <div className="flex items-center justify-between mb-5 relative">
+                <div className={cn("p-2.5 rounded-2xl ring-1 ring-inset ring-white/10 shadow-lg", iconBg)}>
+                    {icon}
+                </div>
+                {trend && (
+                    <Badge variant="outline" className={cn(
+                        "font-black text-[9px] border-none px-2 py-0.5 rounded-full tracking-tighter",
+                        trend.isUp ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                    )}>
+                        {trend.isUp ? "↑" : "↓"} {trend.value}%
+                    </Badge>
+                )}
             </div>
-          ))}
-        </div>
-      )
+            
+            <div className="space-y-1 relative">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
+                <div className="flex items-baseline gap-2">
+                    <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white font-mono leading-none">{value}</h3>
+                    {compare && compareValue && (
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-600 line-through opacity-40">{compareValue}</span>
+                    )}
+                </div>
+                <p className="text-[10px] font-bold text-slate-400/80 pt-1 italic">{subtitle}</p>
+            </div>
+        </Card>
+    )
+}
+
+function MonthFilter({ selected, onChange }: any) {
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    const items = months.map((m, i) => ({ id: i + 1, label: m }))
+    return (
+        <MultiSelectFilter
+            title="Months"
+            items={items}
+            selectedIds={selected}
+      onChange={(ids: any[]) => onChange(ids.sort((a, b) => a - b))}
+            icon={<Calendar className="h-3.5 w-3.5 text-indigo-500" />}
+            placeholder="Months"
+            showSearch={false}
+        />
+    )
+}
+
+function YearFilter({ selected, onChange, availableYears }: any) {
+    const items = availableYears.map((y: number) => ({ id: y, label: String(y) }))
+    return (
+        <MultiSelectFilter
+            title="Years"
+            items={items}
+            selectedIds={selected}
+      onChange={(ids: any[]) => onChange(ids.sort((a, b) => b - a))}
+            icon={<Layers className="h-3.5 w-3.5 text-blue-500" />}
+            placeholder="Years"
+            showSearch={false}
+        />
+    )
+}
+
+function BarTooltip({ active, payload }: any) {
+    if (active && payload && payload.length) {
+        return ( active && payload && payload.length) && (
+            <div className="bg-slate-900/95 backdrop-blur-3xl border border-slate-800 p-5 rounded-2xl shadow-2xl ring-1 ring-white/10 animate-in zoom-in-95 duration-200">
+                <div className="space-y-3">
+                    <div className="flex items-center gap-3 border-b border-slate-800 pb-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{payload[0].payload.period}</p>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-8">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Revenue</span>
+                            <span className="text-sm font-black text-white font-mono">{formatPKR(payload[0].value)}</span>
+                        </div>
+                        {payload[1] && (
+                            <div className="flex items-center justify-between gap-8 bg-slate-800/30 p-2 rounded-lg">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Prior Period</span>
+                                <span className="text-sm font-black text-slate-400 font-mono">{formatPKR(payload[1].value)}</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )
     }
     return null
-  }
+}
 
   // Donut custom label
   const renderDonutLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: any) => {
@@ -553,7 +663,7 @@ export default function SalesSummaryPage() {
           {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
             <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
               <BranchFilter selectedIds={contextBranchIds} onChange={handleBranchChange} organizationId={organizationId || undefined} />
-              <GroupFilter value={groupId} onChange={setGroupId} organizationId={organizationId || undefined} />
+              <GroupFilter selectedIds={groupId ? [groupId] : []} onChange={(ids) => setGroupId(ids[0] || "")} organizationId={organizationId || undefined} />
             </div>
           )}
         </div>
@@ -567,278 +677,291 @@ export default function SalesSummaryPage() {
 
       <div className="px-4 md:px-6 pt-6 space-y-6">
 
-        <div className="px-6 py-8 space-y-8 max-w-[1600px] mx-auto">
-
-          {/* ── Page Header (Refined) ── */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500/80 mb-2">
-                <div className="w-8 h-[1px] bg-indigo-500/30" />
-                Records & Reports
-              </div>
-              <h1 className="text-4xl font-black tracking-tighter text-slate-900 dark:text-white flex items-center gap-3">
-                Sales Summary
-                <Badge variant="outline" className="h-5 text-[9px] font-black uppercase tracking-widest border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">Live</Badge>
-              </h1>
-              <p className="text-sm font-medium text-slate-400 dark:text-slate-500 max-w-xl">
-                Consolidated financial oversight across all branches and groups.
-              </p>
-            </div>
-          </div>
-
-          {/* ── KPI Grid (2-Column Focused) ── */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-
-            {/* Revenue */}
-            <Card className="relative overflow-hidden group bg-white dark:bg-slate-900/50 border-slate-100 dark:border-slate-800/50 shadow-xl shadow-slate-200/50 dark:shadow-none hover:shadow-indigo-500/10 transition-all duration-500 rounded-3xl pt-2">
-              <CardContent className="p-8">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="p-4 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                    <TrendingUp className="h-6 w-6" />
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none font-black text-[10px] px-2.5 py-1 tracking-tighter uppercase">Fulfilled</Badge>
-                    {revenueTrend && revenueTrend.value !== "0.0" && (
-                      <div className={cn(
-                        "flex items-center gap-1 text-[10px] font-black tracking-tighter",
-                        revenueTrend.isUp ? "text-emerald-500" : revenueTrend.isDown ? "text-rose-500" : "text-slate-400"
-                      )}>
-                        {revenueTrend.isUp ? "↑" : revenueTrend.isDown ? "↓" : "•"} {revenueTrend.value}%
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <p className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Total Revenue</p>
-                <div className="flex items-baseline gap-3">
-                  <h3 className="text-4xl font-black tracking-tight text-slate-900 dark:text-white font-mono leading-none">
-                    {isLoading ? <Loader2 className="h-8 w-8 animate-spin text-slate-200" /> : formatPKR(totalRevenue / 100)}
-                  </h3>
-                  {compare && comparison && (
-                    <span className="text-xs font-bold text-slate-400 dark:text-slate-600 line-through opacity-50">
-                      {formatPKR(comparison.totalSales / 100)}
-                    </span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Orders */}
-            <Card className="relative overflow-hidden group bg-white dark:bg-slate-900/50 border-slate-100 dark:border-slate-800/50 shadow-xl shadow-slate-200/50 dark:shadow-none hover:shadow-blue-500/10 transition-all duration-500 rounded-3xl pt-2">
-              <CardContent className="p-8">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                    <ShoppingBag className="h-6 w-6" />
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30">
-                      <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                      <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter">Live Monitor</span>
-                    </div>
-                    {orderTrend && orderTrend.value !== "0.0" && (
-                      <div className={cn(
-                        "flex items-center gap-1 text-[10px] font-black tracking-tighter",
-                        orderTrend.isUp ? "text-emerald-500" : orderTrend.isDown ? "text-rose-500" : "text-slate-400"
-                      )}>
-                        {orderTrend.isUp ? "↑" : orderTrend.isDown ? "↓" : "•"} {orderTrend.value}%
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <p className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Total Order Volume</p>
-                <div className="flex items-baseline gap-3">
-                  <h3 className="text-5xl font-black tracking-tight text-slate-900 dark:text-white leading-none">
-                    {isLoading ? <Loader2 className="h-8 w-8 animate-spin text-slate-200" /> : orderCount.toLocaleString()}
-                  </h3>
-                  {compare && comparison && (
-                    <span className="text-xs font-bold text-slate-400 dark:text-slate-600 line-through opacity-50">
-                      {comparison.orderCount.toLocaleString()}
-                    </span>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* ── Tabs Navigation ── */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-            <TabsList className="bg-slate-100 dark:bg-slate-800/50 p-1 rounded-2xl border border-slate-200 dark:border-slate-800">
-              <TabsTrigger value="analytics" className="rounded-xl px-8 py-2.5 text-xs font-black uppercase tracking-widest data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-lg data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 transition-all duration-300">
-                <LayoutDashboard className="h-3.5 w-3.5 mr-2" />
-                Sales Analytics
-              </TabsTrigger>
-              <TabsTrigger value="reports" className="rounded-xl px-8 py-2.5 text-xs font-black uppercase tracking-widest data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 data-[state=active]:shadow-lg data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 transition-all duration-300">
-                <Database className="h-3.5 w-3.5 mr-2" />
-                Order Reports
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="analytics" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                {/* Enormously Centered Pie Chart */}
-                <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-xl overflow-hidden group">
-                  <CardHeader className="px-8 pt-8 pb-4 border-b border-slate-100 dark:border-slate-800/50">
-                    <CardTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500">
-                        <ShoppingBag className="h-5 w-5" />
-                      </div>
-                      Order Status Breakdown
-                    </CardTitle>
-                    <p className="text-xs font-bold text-slate-400 tracking-wide mt-1">Status distribution for the selected period</p>
-                  </CardHeader>
-                  <CardContent className="p-8">
-                    {isLoading ? (
-                      <div className="h-[400px] flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-500/20" /></div>
-                    ) : statusChartData.length > 0 ? (
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="h-[400px] w-full max-w-[500px] relative">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={statusChartData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={100}
-                                outerRadius={160}
-                                paddingAngle={4}
-                                dataKey="value"
-                                labelLine={false}
-                                label={renderDonutLabel}
-                              >
-                                {statusChartData.map((entry, index) => (
-                                  <Cell
-                                    key={`cell-${index}`}
-                                    fill={STATUS_COLORS[entry.name] || "#94a3b8"}
-                                    stroke="none"
-                                    className="hover:opacity-80 transition-opacity cursor-pointer delay-75"
-                                  />
-                                ))}
-                              </Pie>
-                              <Tooltip
-                                content={({ active, payload }: any) => {
-                                  if (active && payload && payload.length) {
-                                    return (
-                                      <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700/50 p-4 rounded-2xl shadow-2xl">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">{payload[0].name}</p>
-                                        <p className="text-2xl font-black text-white">{payload[0].value.toLocaleString()} <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Orders</span></p>
-                                        <div className="mt-2 text-[10px] font-bold text-indigo-400">{(payload[0].payload.percent * 100).toFixed(1)}% of total</div>
-                                      </div>
-                                    );
-                                  }
-                                  return null;
-                                }}
-                              />
-                            </PieChart>
-                          </ResponsiveContainer>
-                          {/* Center overlay icon */}
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <div className="flex flex-col items-center gap-1">
-                              <ShoppingBag className="h-10 w-10 text-slate-200 dark:text-slate-800" />
-                              <span className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tighter">{orderCount.toLocaleString()}</span>
-                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total</span>
-                            </div>
+      {/* ━━━ LUXURY INTELLIGENCE HEADER ━━━ */}
+      <div className="relative overflow-hidden bg-slate-900 border-b border-slate-800 shadow-2xl">
+          {/* Ambient Background Elements */}
+          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-indigo-600/20 blur-[120px] rounded-full animate-pulse" />
+          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-600/10 blur-[100px] rounded-full" />
+          
+          <div className="px-6 py-8 relative">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 max-w-7xl mx-auto">
+                  <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                          <div className="p-2.5 rounded-2xl bg-indigo-600/20 text-indigo-400 ring-1 ring-indigo-500/30 shadow-lg shadow-indigo-500/10">
+                              <TrendingUp className="h-5 w-5" />
                           </div>
-                        </div>
-                        {/* Legend */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12 w-full max-w-2xl px-4">
-                          {statusChartData.map((entry) => (
-                            <div key={entry.name} className="flex flex-col gap-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800/50">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[entry.name] || '#94a3b8' }} />
-                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-black uppercase tracking-tighter">{entry.name}</span>
-                              </div>
-                              <span className="text-xl font-black text-slate-900 dark:text-white leading-none">{entry.value.toLocaleString()}</span>
-                            </div>
-                          ))}
-                        </div>
+                          <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-[10px] font-black uppercase tracking-widest px-3 py-1 animate-in slide-in-from-left-4 duration-700">
+                              Intelligence Engine
+                          </Badge>
                       </div>
-                    ) : (
-                      <div className="h-[400px] flex items-center justify-center text-slate-400 text-sm">No status data recorded</div>
-                    )}
-                  </CardContent>
-                </Card>
+                      <h1 className="text-4xl font-black text-white tracking-tight sm:text-5xl">
+                          Sales <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-400 to-emerald-400">Intelligence</span>
+                      </h1>
+                      <p className="text-slate-400 font-medium text-sm flex items-center gap-2 max-w-md">
+                          <Calculator className="h-4 w-4 opacity-50" />
+                          Consolidated financial oversight across all branches and groups.
+                      </p>
+                  </div>
 
-                {/* Branch Leaderboard */}
-                <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 shadow-xl overflow-hidden">
-                  <CardHeader className="px-8 pt-8 pb-4 border-b border-slate-100 dark:border-slate-800/50">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
-                          <Crown className="h-5 w-5" />
-                        </div>
-                        Branch Leaderboard
-                      </CardTitle>
-                      <Badge variant="secondary" className="text-[10px] font-black tracking-[0.1em] bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-none uppercase px-3 py-1">BY REVENUE</Badge>
+                  <div className="flex flex-wrap items-center gap-3">
+                      <Button 
+                          variant="outline" 
+                          onClick={() => mutateGlobal()}
+                          className="h-10 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl px-4 gap-2 transition-all duration-300 group"
+                      >
+                          <RefreshCw className={cn("h-4 w-4 transition-transform duration-500 group-hover:rotate-180", isGlobalLoading && "animate-spin")} />
+                          Synchronize
+                      </Button>
+                      <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                              <Button className="h-10 bg-indigo-600 hover:bg-indigo-500 text-white border-none rounded-xl px-4 gap-2 shadow-lg shadow-indigo-600/20 transition-all duration-300">
+                                  <Download className="h-4 w-4" /> Export Report
+                              </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-800 text-slate-300 rounded-xl p-1">
+                              <DropdownMenuItem onClick={() => handleExport('csv')} className="gap-2 rounded-lg hover:bg-slate-800 focus:bg-slate-800 cursor-pointer">
+                                  <FileSpreadsheet className="h-4 w-4 text-emerald-500" /> Export CSV
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-2 rounded-lg hover:bg-slate-800 focus:bg-slate-800 cursor-pointer">
+                                  <FileText className="h-4 w-4 text-blue-500" /> Export Excel
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-2 rounded-lg hover:bg-slate-800 focus:bg-slate-800 cursor-pointer">
+                                  <FilePdf className="h-4 w-4 text-rose-500" /> Export PDF
+                              </DropdownMenuItem>
+                          </DropdownMenuContent>
+                      </DropdownMenu>
+                  </div>
+              </div>
+          </div>
+      </div>
+
+      <div className="px-4 md:px-6 space-y-5">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
+                    <TabsList className="bg-slate-100 dark:bg-slate-900/50 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 w-full sm:w-auto h-auto">
+                        <TabsTrigger value="analytics" className="rounded-xl px-6 py-2.5 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-lg data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 transition-all duration-300">
+                            <LayoutDashboard className="h-3.5 w-3.5 mr-2" /> Analytics
+                        </TabsTrigger>
+                        <TabsTrigger value="reports" className="rounded-xl px-6 py-2.5 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-lg data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 transition-all duration-300">
+                            <Database className="h-3.5 w-3.5 mr-2" /> Reports
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
+
+                <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                    {/* ━━━ KPI BENTO GRID ━━━ */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <KPICard
+                            label="Total Revenue"
+                            value={formatPKR(totalRevenue / 100)}
+                            icon={<TrendingUp className="h-4 w-4" />}
+                            iconBg="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
+                            trend={revenueTrend}
+                            trendColor="emerald"
+                            subtitle="From fulfilled orders"
+                            compare={compare}
+                            compareValue={comparison ? formatPKR(comparison.totalSales / 100) : undefined}
+                        />
+                        <KPICard
+                            label="Order Volume"
+                            value={orderCount.toLocaleString()}
+                            icon={<ShoppingBag className="h-4 w-4" />}
+                            iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                            trend={orderTrend}
+                            trendColor="emerald"
+                            subtitle="Fulfilled transactions"
+                            compare={compare}
+                            compareValue={comparison ? comparison.orderCount.toLocaleString() : undefined}
+                        />
+                        <KPICard
+                            label="Avg Order Value"
+                            value={formatPKR(avgOrderValue / 100)}
+                            icon={<Calculator className="h-4 w-4" />}
+                            iconBg="bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400"
+                            trend={null}
+                            trendColor="emerald"
+                            subtitle="Per fulfilled order"
+                            compare={compare}
+                            compareValue={comparison ? formatPKR((comparison.totalSales / comparison.orderCount) / 100) : undefined}
+                        />
+                        <KPICard
+                            label="Items Fulfilled"
+                            value={totalItemsSold.toLocaleString()}
+                            icon={<Package className="h-4 w-4" />}
+                            iconBg="bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400"
+                            trend={null}
+                            trendColor="emerald"
+                            subtitle="Total units sold"
+                        />
                     </div>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                      {topPerformers.length > 0 ? topPerformers.slice(0, 10).map((p: any, i: number) => {
-                        const share = totalRevenueAllBranches > 0 ? (p.sales / totalRevenueAllBranches) * 100 : 0
-                        return (
-                          <div key={p.branchId} className="flex items-center justify-between px-8 py-4 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-all duration-300">
-                            <div className="flex items-center gap-5">
-                              <div className={cn(
-                                "w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-black text-white shrink-0 shadow-lg transition-transform hover:scale-110",
-                                i === 0 ? "bg-amber-500 shadow-amber-500/20" :
-                                  i === 1 ? "bg-slate-400 shadow-slate-400/20" :
-                                    i === 2 ? "bg-orange-600 shadow-orange-600/20" :
-                                      "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 shadow-none border border-slate-200 dark:border-slate-700"
-                              )}>
-                                {i + 1}
-                              </div>
-                              <div>
-                                <p className="text-sm font-black text-slate-900 dark:text-white">
-                                  {p.branchName || `Branch #${p.branchId}`}
-                                </p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{p.orderCount} fulfilled orders</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-black font-mono text-slate-900 dark:text-white">{formatPKR(p.sales / 100)}</p>
-                              {/* Revenue share bar */}
-                              <div className="flex items-center gap-2.5 mt-2 justify-end">
-                                <div className="w-24 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                                  <div
-                                    className={cn(
-                                      "h-full rounded-full transition-all duration-1000 ease-out",
-                                      i === 0 ? "bg-indigo-500" : "bg-slate-300 dark:bg-slate-700"
-                                    )}
-                                    style={{ width: `${Math.max(2, share)}%` }}
-                                  />
+                    {/* ━━━ REVENUE TREND CHART WITH FILTERS ━━━ */}
+                    <Card className="overflow-hidden border border-slate-200/80 dark:border-slate-800 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl rounded-[2rem] relative group transition-all duration-700 hover:shadow-indigo-500/10 hover:border-indigo-400/40">
+                        <div className="px-8 py-7 border-b border-slate-100 dark:border-slate-800 space-y-5">
+                            <div className="flex items-center justify-between">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
+                                            <LineChart className="h-4 w-4" />
+                                        </div>
+                                        <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
+                                            Revenue Analytics
+                                        </h3>
+                                    </div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11">Comparison vs Prior Period</p>
                                 </div>
-                                <span className="text-[10px] text-slate-900 dark:text-slate-300 font-black font-mono min-w-[32px]">
-                                  {share.toFixed(0)}%
-                                </span>
-                              </div>
+                                <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="sm" onClick={() => mutateChart()} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300">
+                                        <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isChartLoading && "animate-spin")} />
+                                    </Button>
+                                </div>
                             </div>
-                          </div>
-                        )
-                      }) : (
-                        <div className="p-12 text-center text-slate-400 italic text-[13px] font-medium">No branch performance data available for this range</div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
 
-            <TabsContent value="reports" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              {(!organizationId && role !== "SUPER_ADMIN") ? (
-                <Card className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/30 p-20 text-center">
-                  <div className="flex flex-col items-center gap-6 max-w-sm mx-auto">
-                    <div className="w-20 h-20 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
-                      <Database className="h-10 w-10 text-indigo-500" />
+                            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                                <MonthFilter selected={chartMonths} onChange={setChartMonths} />
+                                <YearFilter selected={chartYears} onChange={setChartYears} availableYears={chartYearsAvailable} />
+                                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                    <>
+                                        <OrganizationFilter selectedIds={chartOrgIds} onChange={setChartOrgIds} />
+                                        {(chartOrgIds.length > 0 || (role !== "SUPER_ADMIN" && organizationId)) && (
+                                            <>
+                                                <GroupFilter 
+                                                    selectedIds={chartGroupIds} 
+                                                    onChange={setChartGroupIds} 
+                                                    organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [String(organizationId)] : [])}
+                                                    disabled={chartBranchIds.length > 0}
+                                                />
+                                                <BranchFilter 
+                                                    selectedIds={chartBranchIds} 
+                                                    onChange={setChartBranchIds} 
+                                                    organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [organizationId] : [])} 
+                                                    groupIds={chartGroupIds}
+                                                />
+                                            </>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="p-8">
+                            {isChartLoading ? (
+                                <div className="h-[420px] flex flex-col items-center justify-center gap-4">
+                                    <div className="relative">
+                                        <div className="h-12 w-12 rounded-full border-4 border-indigo-500/20 border-t-indigo-500 animate-spin" />
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <div className="h-4 w-4 bg-indigo-500 rounded-full animate-pulse" />
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 animate-pulse">Refining Data Stream...</p>
+                                </div>
+                            ) : chartData?.orders && chartData.orders.length > 0 ? (
+                                <div className="h-[420px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <ComposedChart data={normalizedTrend} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                                            <defs>
+                                                <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#6366f1" stopOpacity={1} />
+                                                    <stop offset="100%" stopColor="#4338ca" stopOpacity={1} />
+                                                </linearGradient>
+                                                <linearGradient id="compareGradient" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor="#94a3b8" stopOpacity={0.4} />
+                                                    <stop offset="100%" stopColor="#64748b" stopOpacity={0.1} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.4} />
+                                            <XAxis 
+                                                dataKey="period" 
+                                                axisLine={false} 
+                                                tickLine={false} 
+                                                tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
+                                                dy={10}
+                                            />
+                                            <YAxis 
+                                                axisLine={false} 
+                                                tickLine={false} 
+                                                tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
+                                                tickFormatter={(value) => `₨${value >= 1000 ? (value/1000).toFixed(1)+'k' : value}`}
+                                            />
+                                            <Tooltip content={<BarTooltip />} cursor={{ fill: '#f1f5f9', opacity: 0.5 }} />
+                                            <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: '30px', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }} />
+                                            
+                                            <Bar 
+                                                name="Revenue (PKR)" 
+                                                dataKey="revenue" 
+                                                fill="url(#revenueGradient)" 
+                                                radius={[6, 6, 0, 0]} 
+                                                barSize={compare ? 25 : 40}
+                                            />
+                                            {compare && (
+                                                <Bar 
+                                                    name="Prior Period" 
+                                                    dataKey="compareRevenue" 
+                                                    fill="url(#compareGradient)" 
+                                                    radius={[6, 6, 0, 0]} 
+                                                    barSize={25}
+                                                />
+                                            )}
+                                        </ComposedChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            ) : (
+                                <div className="h-[420px] flex flex-col items-center justify-center text-slate-400 bg-slate-50/50 dark:bg-slate-900/50 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
+                                    <BarChart3 className="h-12 w-12 opacity-10 mb-4" />
+                                    <p className="text-xs font-bold uppercase tracking-widest italic opacity-40">No analytical data available</p>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                    {/* ━━━ LOCAL REPORT FILTERS ━━━ */}
+                    <div className="flex flex-wrap items-center gap-2.5 p-4 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                        <MonthFilter selected={reportMonths} onChange={setReportMonths} />
+                        <YearFilter selected={reportYears} onChange={setReportYears} availableYears={reportYearsAvailable} />
+                        {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                            <>
+                                <OrganizationFilter selectedIds={reportOrgIds} onChange={setReportOrgIds} />
+                                {(reportOrgIds.length > 0 || (role !== "SUPER_ADMIN" && organizationId)) && (
+                                    <>
+                                        <GroupFilter 
+                                            selectedIds={reportGroupIds} 
+                                            onChange={setReportGroupIds} 
+                                            organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [String(organizationId)] : [])}
+                                            disabled={reportBranchIds.length > 0}
+                                        />
+                                        <BranchFilter 
+                                            selectedIds={reportBranchIds} 
+                                            onChange={setReportBranchIds} 
+                                            organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [organizationId] : [])} 
+                                            groupIds={reportGroupIds}
+                                        />
+                                    </>
+                                )}
+                            </>
+                        )}
+                        <div className="flex-1" />
+                        <Button variant="outline" size="sm" onClick={() => mutateReport()} className="h-9 w-9 p-0 rounded-xl border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300">
+                            <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isReportLoading && "animate-spin")} />
+                        </Button>
                     </div>
-                    <div className="space-y-2">
-                      <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Organization Required</h3>
-                      <p className="text-sm font-medium text-slate-500">Please select an organization from the menu above to generate the order reports.</p>
-                    </div>
-                  </div>
-                </Card>
-              ) : (
-                <Card className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-                  {/* Tab header */}
-                  <div className="px-5 pt-4 border-b border-slate-100 dark:border-slate-800">
+
+                    {(!organizationId && role !== "SUPER_ADMIN") ? (
+                        <Card className="rounded-3xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/30 p-20 text-center">
+                            <div className="flex flex-col items-center gap-6 max-w-sm mx-auto">
+                                <div className="w-20 h-20 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
+                                    <Database className="h-10 w-10 text-indigo-500" />
+                                </div>
+                                <div className="space-y-2">
+                                    <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Organization Required</h3>
+                                    <p className="text-sm font-medium text-slate-500">Please select an organization from the menu above to generate the order reports.</p>
+                                </div>
+                            </div>
+                        </Card>
+                    ) : (
+                        <Card className="rounded-[2rem] border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-2xl overflow-hidden min-h-[600px] flex flex-col">
+                            {/* Tab header */}
+                            <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800">
                     <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
                       <div className="flex items-center gap-2">
                         <ListOrdered className="h-4 w-4 text-indigo-500" />
