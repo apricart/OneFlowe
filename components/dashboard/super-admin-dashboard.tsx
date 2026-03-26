@@ -31,8 +31,8 @@ import { startOfDay, endOfDay } from "date-fns"
 export function SuperAdminDashboard() {
   const { organizationId, branchId } = useAppContext()
 
-  // When viewing the global overview (no specific org selected), default to 'This Year' rather than 'Today'.
-  const defaultPreset = !organizationId ? "yearly" : "today"
+  // When viewing the global overview (no specific org selected), default to 'All Time' for Super Admin.
+  const defaultPreset = !organizationId ? "all" : "today"
   
   const [dateRange, setDateRange] = useState<DateRange | null>(getPresetRange(defaultPreset))
   const [activePreset, setActivePreset] = useState<FilterPreset>(defaultPreset)
@@ -69,10 +69,14 @@ export function SuperAdminDashboard() {
   
   const initialChartQuickFilter = defaultPreset === "today" ? "today" : null;
   const [chartQuickFilter, setChartQuickFilter] = useState<ChartQuickFilter>(initialChartQuickFilter)
-  const [chartMonths, setChartMonths] = useState<number[]>([])
+  const [chartMonths, setChartMonths] = useState<number[]>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
   const [chartYears, setChartYears] = useState<number[]>([])
   const [chartSelectedOrgIds, setChartSelectedOrgIds] = useState<string[]>([])
   const [chartSelectedBranchIds, setChartSelectedBranchIds] = useState<string[]>([])
+
+  const isInitialLoad = useMemo(() => {
+    return { months: true, years: true, orgs: true }
+  }, [])
 
   // Quick filter fallback to global dateRange
   const chartDateRange = useMemo(() => {
@@ -108,8 +112,9 @@ export function SuperAdminDashboard() {
     else if (activePreset === "7d") setChartQuickFilter("7d")
     else setChartQuickFilter(null)
 
-    setChartMonths(months || [])
-    setChartYears(years || [])
+    // Only sync if global filters are actually provided (not just defaults on mount)
+    if (months.length > 0) setChartMonths(months)
+    if (years.length > 0) setChartYears(years)
   }, [activePreset, months, years])
 
   useEffect(() => {
@@ -139,6 +144,23 @@ export function SuperAdminDashboard() {
   const usersInScope = branchId ? usersRaw.filter(u => u.branchId?.toString() === branchId) : usersRaw
   const usersCount = usersInScope.length
   const branchesCount = branchesInScope.length
+
+  // Initialize chartYears with all available years on first load
+  useEffect(() => {
+    if (isInitialLoad.years && chartYearsAvailable.length > 0) {
+      setChartYears(chartYearsAvailable)
+      isInitialLoad.years = false
+    }
+  }, [chartYearsAvailable, isInitialLoad])
+
+  // Initialize chartSelectedOrgIds with all organizations on first load
+  useEffect(() => {
+    const orgIds = orgs.map(o => String(o.id))
+    if (isInitialLoad.orgs && orgIds.length > 0) {
+      setChartSelectedOrgIds(orgIds)
+      isInitialLoad.orgs = false
+    }
+  }, [orgs, isInitialLoad])
 
   const { data: perfData, isLoading: isLoadingPerf } = useSalesPerformance(
     organizationId, branchId,

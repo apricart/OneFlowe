@@ -288,7 +288,7 @@ export default function BudgetSummaryPage() {
         if (!chartApiData?.chartData?.length) return []
         return chartApiData.chartData.map((d: any) => {
             const item: any = {
-                date: format(new Date(d.date + "-01"), granularity === "yearly" ? "yyyy" : (chartYears.length <= 1 ? "MMM" : "MMM yyyy")),
+                date: format(new Date(d.date + "-01"), chartYears.length <= 1 ? "MMM" : "MMM yyyy"),
                 rawDate: d.date,
                 totalSpent: 0,
                 totalBaseline: 0,

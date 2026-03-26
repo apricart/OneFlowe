@@ -298,7 +298,7 @@ export async function GET(req: NextRequest) {
                 
                 const record = budgetLookup[branch.id]?.[period]
                 const baselineSetting = branch.baselineBudgetCents || 0
-                const allocated = record ? (record.amountAllocatedCents || 0) : 0
+                const allocated = record ? (record.amountAllocatedCents || 0) : baselineSetting
                 const credited = record ? (record.amountCreditedCents || 0) : 0
                 
                 // For the chart, we split into baseline vs addon:

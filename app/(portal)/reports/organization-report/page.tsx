@@ -104,9 +104,9 @@ export default function OrganizationReportPage() {
     const [dateRange, setDateRange] = useState<DateRange | null>(
         startFromUrl && endFromUrl 
             ? { startDate: new Date(startFromUrl), endDate: new Date(endFromUrl) }
-            : getDefaultDateRange()
+            : null
     )
-    const [activePreset, setActivePreset] = useState<FilterPreset>((searchParams.get("preset") as FilterPreset) || "thisMonth")
+    const [activePreset, setActivePreset] = useState<FilterPreset>((searchParams.get("preset") as FilterPreset) || "all")
     const [compare, setCompare] = useState(searchParams.get("compare") === "true")
     const [compareRange, setCompareRange] = useState<DateRange | null>(null)
     
@@ -167,6 +167,8 @@ export default function OrganizationReportPage() {
     // ━━━ TIER 4: ALL-TIME (FOR YEAR SELECTION) ━━━
     const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/organization-stats?allTime=true`, fetcher)
 
+    const isInitialLoad = useRef(true)
+
     useEffect(() => {
         setHasMounted(true)
         setGeneratedDate(new Date().toLocaleString())
@@ -223,8 +225,21 @@ export default function OrganizationReportPage() {
             if (!isNaN(y)) years.add(y)
         })
         if (years.size === 0) years.add(new Date().getFullYear())
-        return Array.from(years).sort((a, b) => b - a)
+        return Array.from(years).sort((a, b = a) => b - a)
     }, [allTimeData])
+
+    useEffect(() => {
+        if (hasMounted && isInitialLoad.current && allYears.length > 0) {
+            if (activePreset === "all") {
+                const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+                setChartMonths(months)
+                setChartYears(allYears)
+                setReportMonths(months)
+                setReportYears(allYears)
+            }
+            isInitialLoad.current = false
+        }
+    }, [hasMounted, allYears, activePreset])
 
     const chartYearsAvailable = allYears
     const reportYearsAvailable = allYears

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo, Fragment } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import useSWR from "swr"
 import { fetcher } from "@/lib/fetcher"
@@ -57,9 +57,9 @@ export default function GroupsReportPage() {
     const [dateRange, setDateRange] = useState<DateRange | null>(
         startFromUrl && endFromUrl 
             ? { startDate: new Date(startFromUrl), endDate: new Date(endFromUrl) }
-            : { startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1), endDate: new Date() }
+            : null
     )
-    const [activePreset, setActivePreset] = useState<FilterPreset>((searchParams.get("preset") as FilterPreset) || "thisMonth")
+    const [activePreset, setActivePreset] = useState<FilterPreset>((searchParams.get("preset") as FilterPreset) || "all")
     const [compare, setCompare] = useState(searchParams.get("compare") === "true")
     const [compareRange, setCompareRange] = useState<DateRange | null>(null)
     
@@ -117,10 +117,31 @@ export default function GroupsReportPage() {
     // ━━━ TIER 4: ALL-TIME (YEAR SELECTION) ━━━
     const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/groups?allTime=true&${globalQueryParams.toString()}`, fetcher)
 
+    const isInitialLoad = useRef(true)
+
     useEffect(() => {
         setHasMounted(true)
         setGeneratedDate(new Date().toLocaleString())
     }, [])
+
+    const allYears = useMemo(() => {
+        const years = allTimeData?.years || []
+        if (years.length === 0) return [new Date().getFullYear()]
+        return years.sort((a: number, b: number) => b - a)
+    }, [allTimeData])
+
+    useEffect(() => {
+        if (hasMounted && isInitialLoad.current && allYears.length > 0) {
+            if (activePreset === "all") {
+                const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+                setChartMonths(months)
+                setChartYears(allYears)
+                setReportMonths(months)
+                setReportYears(allYears)
+            }
+            isInitialLoad.current = false
+        }
+    }, [hasMounted, allYears, activePreset])
 
     const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, c?: boolean, cr?: DateRange | null, m?: number[], y?: number[], cm?: number[], cy?: number[]) => {
         setDateRange(range)
@@ -364,7 +385,7 @@ export default function GroupsReportPage() {
                                         </>
                                     )}
                                     <MonthFilter selected={chartMonths} onChange={setChartMonths} />
-                                    <YearFilter selected={chartYears} onChange={setChartYears} availableYears={allTimeData?.years || [new Date().getFullYear()]} />
+                                    <YearFilter selected={chartYears} onChange={setChartYears} availableYears={allYears} />
                                 </div>
                             </div>
                             <CardContent className="p-8">
@@ -430,7 +451,7 @@ export default function GroupsReportPage() {
                                 </>
                             )}
                             <MonthFilter selected={reportMonths} onChange={setReportMonths} />
-                            <YearFilter selected={reportYears} onChange={setReportYears} availableYears={allTimeData?.years || [new Date().getFullYear()]} />
+                            <YearFilter selected={reportYears} onChange={setReportYears} availableYears={allYears} />
                             <Button variant="outline" size="sm" onClick={() => mutateReport()} className="h-10 w-10 p-0 rounded-xl">
                                 <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isReportLoading && "animate-spin")} />
                             </Button>
