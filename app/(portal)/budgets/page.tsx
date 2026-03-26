@@ -141,6 +141,24 @@ export default function BudgetsPage() {
       return toast({ title: "Invalid amount", variant: "destructive" })
     }
 
+    // Client-side validation: Total Proposed Budget >= Current Total Spent
+    const currentSpentCents = (editingBudget.amountSpentCents || 0) + (editingBudget.amountHeldCents || 0)
+    let proposedTotalCents = 0
+    if (allocationType === "monthly") {
+      proposedTotalCents = amountCents + (editingBudget.amountCreditedCents || 0)
+    } else {
+      // Add-on type: adding to the current credits
+      proposedTotalCents = (editingBudget.amountAllocatedCents || 0) + (editingBudget.amountCreditedCents || 0) + amountCents
+    }
+
+    if (proposedTotalCents < currentSpentCents) {
+      return toast({
+        title: "Allocation Blocked",
+        description: `Total budget (₨${(proposedTotalCents / 100).toFixed(2)}) cannot be lower than current spending (₨${(currentSpentCents / 100).toFixed(2)}).`,
+        variant: "destructive"
+      })
+    }
+
     try {
       const res = await fetch("/api/v1/budgets", {
         method: "PUT",
@@ -180,6 +198,16 @@ export default function BudgetsPage() {
 
   const handleConfirmEmptyBudget = async () => {
     if (!emptyingBudget) return
+
+    // Client-side validation: Cannot empty budget if there is spending
+    const currentSpentCents = (emptyingBudget.amountSpentCents || 0) + (emptyingBudget.amountHeldCents || 0)
+    if (currentSpentCents > 0) {
+      return toast({
+        title: "Cannot Reset Budget",
+        description: `This branch has already spent ₨${(currentSpentCents / 100).toFixed(2)}. You must maintain at least enough budget to cover existing spending.`,
+        variant: "destructive"
+      })
+    }
 
     try {
       const res = await fetch("/api/v1/budgets", {
@@ -677,9 +705,30 @@ export default function BudgetsPage() {
               <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 font-medium">
                 {allocationType === "monthly"
                   ? `Branch baseline will be updated to ${formatPKR(parseFloat(newAmount || "0"))}`
-                  : `New total budget will be: ${formatPKR((editingBudget?.amountAllocatedCents || 0) / 100 + parseFloat(newAmount || "0"))}`
+                  : `New total budget will be: ${formatPKR((editingBudget?.amountAllocatedCents || 0) / 100 + (editingBudget?.amountCreditedCents || 0) / 100 + parseFloat(newAmount || "0"))}`
                 }
               </p>
+              {(() => {
+                const amt = parseFloat(newAmount || "0")
+                const amtCents = Math.round(amt * 100)
+                const currentSpentCents = (editingBudget?.amountSpentCents || 0) + (editingBudget?.amountHeldCents || 0)
+                let proposedTotalCents = 0
+                if (allocationType === "monthly") {
+                  proposedTotalCents = amtCents + (editingBudget?.amountCreditedCents || 0)
+                } else {
+                  proposedTotalCents = (editingBudget?.amountAllocatedCents || 0) + (editingBudget?.amountCreditedCents || 0) + amtCents
+                }
+                
+                if (proposedTotalCents < currentSpentCents && newAmount) {
+                  return (
+                    <div className="mt-2 p-2 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 rounded-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                      <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
+                      <p className="text-[10px] font-black uppercase text-rose-600">Insufficient to cover ₨{(currentSpentCents/100).toFixed(2)} spent</p>
+                    </div>
+                  )
+                }
+                return null
+              })()}
               <p className="text-xs text-muted-foreground mt-1">
                 {allocationType === "monthly"
                   ? "Changes will affect future months automatically."
