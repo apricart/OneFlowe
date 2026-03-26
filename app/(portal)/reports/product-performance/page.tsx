@@ -121,6 +121,7 @@ export default function ProductPerformancePage() {
     const [chartBranchIds, setChartBranchIds] = useState<string[]>([])
     const [chartGroupIds, setChartGroupIds] = useState<string[]>([])
     const [chartOrgIds, setChartOrgIds] = useState<string[]>([])
+    const [chartProductIds, setChartProductIds] = useState<string[]>([])
     const [globalGroupId, setGlobalGroupId] = useState<string>("")
     const hasInitializedChartDefaults = useRef(false)
 
@@ -132,12 +133,36 @@ export default function ProductPerformancePage() {
     const [reportProductIds, setReportProductIds] = useState<string[]>([])
     const [reportOrganizationIds, setReportOrganizationIds] = useState<string[]>([])
 
-    // Auto-clear branch selection if a group is selected (Group Inventory mode)
+    // ━━━ CASCADING SELECTION CLEARING ━━━
     useEffect(() => {
-        if (reportGroupIds.length > 0) {
-            setReportBranchIds([])
-        }
+        setChartProductIds([])
+        setChartBranchIds([])
+        setChartGroupIds([])
+    }, [chartOrgIds])
+
+    useEffect(() => {
+        setChartProductIds([])
+        setChartBranchIds([])
+    }, [chartGroupIds])
+
+    useEffect(() => {
+        setChartProductIds([])
+    }, [chartBranchIds])
+
+    useEffect(() => {
+        setReportProductIds([])
+        setReportBranchIds([])
+        setReportGroupIds([])
+    }, [reportOrganizationIds])
+
+    useEffect(() => {
+        setReportProductIds([])
+        setReportBranchIds([])
     }, [reportGroupIds])
+
+    useEffect(() => {
+        setReportProductIds([])
+    }, [reportBranchIds])
 
     const CHART_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -288,11 +313,13 @@ export default function ProductPerformancePage() {
     const { data: globalPerfData, isLoading: isGlobalPerfLoading, mutate: mutateGlobalPerf } = useSWR<any>(`/api/v1/analytics/products/performance?${globalQueryParams.toString()}`, fetcher)
 
     // ━━━ CHART DATA (Local Filtered) ━━━
+    const isChartProductView = chartProductIds.length > 1
     const chartQueryParams = new URLSearchParams()
     if (chartOrgIds.length > 0) chartQueryParams.set("organizationIds", chartOrgIds.join(","))
-    else if (organizationId) chartQueryParams.set("organizationId", organizationId.toString())
+    else if (organizationId) chartQueryParams.set("organizationIds", organizationId.toString())
     if (chartBranchIds.length > 0) chartQueryParams.set("branchIds", chartBranchIds.join(","))
     if (chartGroupIds.length > 0) chartQueryParams.set("groupIds", chartGroupIds.join(","))
+    if (chartProductIds.length > 0) chartQueryParams.set("productIds", chartProductIds.join(","))
     if (chartMonths.length > 0) chartQueryParams.set("months", chartMonths.join(","))
     if (chartYears.length > 0) chartQueryParams.set("years", chartYears.join(","))
     if (compare) chartQueryParams.set("compare", "true")
@@ -375,6 +402,20 @@ export default function ProductPerformancePage() {
 
     // ━━━ CHART DATA: Normalized trends ━━━
     const chartData = useMemo(() => {
+        if (isChartProductView) {
+            const productsData = chartPerfData?.data || []
+            return productsData.map((p: any) => ({
+                name: p.productName || p.productCode || "N/A",
+                revenue: Math.round((p.revenueGeneratedCents || 0) / 100),
+                compareRevenue: Math.round((p.compareRevenue || 0) / 100),
+                ordered: p.qtyOrdered || 0,
+                fulfilled: p.qtyFulfilled || 0,
+                refunded: p.qtyRefunded || 0,
+                fulfillRate: (p.qtyOrdered || 0) > 0 ? ((p.qtyFulfilled / p.qtyOrdered) * 100).toFixed(1) : "0.0",
+                fullName: p.productName
+            }))
+        }
+
         const trend = chartPerfData?.trend || []
         
         // If multiple years selected, show years on X-axis
@@ -776,6 +817,14 @@ export default function ProductPerformancePage() {
                                                         groupIds={chartGroupIds}
                                                         placeholder="Branches"
                                                     />
+                                                    <ProductFilter
+                                                        selectedIds={chartProductIds}
+                                                        onChange={setChartProductIds}
+                                                        organizationId={organizationId || undefined}
+                                                        organizationIds={chartOrgIds.length > 0 ? chartOrgIds : undefined}
+                                                        groupIds={chartGroupIds}
+                                                        placeholder="Products"
+                                                    />
                                                 </>
                                             )}
                                         </>
@@ -1065,6 +1114,14 @@ export default function ProductPerformancePage() {
                                                         organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
                                                         groupIds={reportGroupIds}
                                                         placeholder="Branches"
+                                                    />
+                                                    <ProductFilter
+                                                        selectedIds={reportProductIds}
+                                                        onChange={setReportProductIds}
+                                                        organizationId={organizationId || undefined}
+                                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
+                                                        groupIds={reportGroupIds}
+                                                        placeholder="Products"
                                                     />
                                                 </>
                                             )}

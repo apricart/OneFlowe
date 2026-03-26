@@ -254,6 +254,31 @@ export default function BudgetSummaryPage() {
         }
     }, [startFromUrl, endFromUrl, searchParams, handleDateChange])
 
+    // ━━━ GLOBAL TO LOCAL FILTER SYNC ━━━
+    useEffect(() => {
+        if (selectedMonths.length > 0) {
+            setChartMonths([...selectedMonths])
+            setReportMonths([...selectedMonths])
+        } else {
+            setChartMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+            setReportMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+        }
+    }, [selectedMonths])
+
+    useEffect(() => {
+        if (selectedYears.length > 0) {
+            setChartYears([...selectedYears])
+            setReportYears([...selectedYears])
+        } else {
+            setChartYears([])
+            setReportYears([])
+        }
+    }, [selectedYears])
+
+    useEffect(() => {
+        setChartBranchIds([...contextBranchIds])
+        setReportBranchIds([...contextBranchIds])
+    }, [contextBranchIds])
     const MONTHS = [
         "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"

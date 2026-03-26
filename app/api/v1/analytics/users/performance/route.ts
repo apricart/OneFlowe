@@ -29,11 +29,15 @@ export async function GET(req: NextRequest) {
 
         const monthsRaw = url.searchParams.get("months")
         const yearsRaw = url.searchParams.get("years")
+        const userIdsRaw = url.searchParams.get("userIds")
+        const groupIdsRaw = url.searchParams.get("groupIds")
         const compareMonthsRaw = url.searchParams.get("compareMonths")
         const compareYearsRaw = url.searchParams.get("compareYears")
 
         const parsedMonths = monthsRaw ? monthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
         const parsedYears = yearsRaw ? yearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
+        const userIds = userIdsRaw ? userIdsRaw.split(',').filter(id => id.length > 5) : [] 
+        const groupIds = groupIdsRaw ? groupIdsRaw.split(',').map(Number).filter(n => !isNaN(n)) : []
         const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
         const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
 
@@ -48,6 +52,9 @@ export async function GET(req: NextRequest) {
         let branchIds: number[] = []
         if (branchIdsParam) {
             branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
+        } else if (groupIds.length > 0) {
+            const b = await db.select({ id: branches.id }).from(branches).where(inArray(branches.groupId, groupIds))
+            branchIds = b.map(br => br.id)
         } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {
             branchIds = [userBranchId]
         } else if (organizationIds.length > 0) {
@@ -73,6 +80,9 @@ export async function GET(req: NextRequest) {
 
         const baseConditions: any[] = [inArray(orders.branchId, branchIds)]
         
+        if (userIds.length > 0) {
+            baseConditions.push(inArray(orders.createdByUserId, userIds))
+        }
         if (parsedMonths.length > 0) {
             baseConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
         }
@@ -146,8 +156,10 @@ export async function GET(req: NextRequest) {
                                 if (parsedCompMonths.length > 0) compCond.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
                                 if (parsedCompYears.length > 0) compCond.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
                             } else {
-                                if (prevStart) compCond.push(gte(orders.createdAt, prevStart))
                                 if (prevEnd) compCond.push(lte(orders.createdAt, prevEnd))
+                            }
+                            if (userIds.length > 0) {
+                                compCond.push(inArray(orders.createdByUserId, userIds))
                             }
                             return and(...compCond)
                         })()
@@ -226,8 +238,10 @@ export async function GET(req: NextRequest) {
                                     const cEnd = new Date(compareEndDateParam!)
                                     cStart.setHours(0,0,0,0)
                                     cEnd.setHours(23,59,59,999)
-                                    compCond.push(gte(orders.createdAt, cStart))
                                     compCond.push(lte(orders.createdAt, cEnd))
+                                }
+                                if (userIds.length > 0) {
+                                    compCond.push(inArray(orders.createdByUserId, userIds))
                                 }
                                 return and(...compCond)
                             })()

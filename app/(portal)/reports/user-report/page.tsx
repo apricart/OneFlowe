@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import useSWR from "swr"
 import { useAppContext } from "@/components/context/app-context"
@@ -43,6 +43,9 @@ import { OrganizationFilter } from "@/components/reports/organization-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
+import { GroupFilter } from "@/components/reports/group-filter"
+import { UserFilter } from "@/components/reports/user-filter"
+import { AlertCircle } from "lucide-react"
 
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -77,6 +80,9 @@ export default function UserReportPage() {
     const [selectedMonths, setSelectedMonths] = useState<number[]>([])
     const [selectedYears, setSelectedYears] = useState<number[]>([])
     const [globalOrganizationIds, setGlobalOrganizationIds] = useState<string[]>([])
+    const [globalGroupIds, setGlobalGroupIds] = useState<string[]>([])
+    const [globalBranchIds, setGlobalBranchIds] = useState<string[]>([])
+    const [globalUserIds, setGlobalUserIds] = useState<string[]>([])
     const [compareMonths, setCompareMonths] = useState<number[]>([])
     const [compareYears, setCompareYears] = useState<number[]>([])
 
@@ -84,13 +90,17 @@ export default function UserReportPage() {
     const [chartYears, setChartYears] = useState<number[]>([])
     const [chartMonths, setChartMonths] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     const [chartBranchIds, setChartBranchIds] = useState<string[]>([])
+    const [chartGroupIds, setChartGroupIds] = useState<string[]>([])
     const [chartOrganizationIds, setChartOrganizationIds] = useState<string[]>([])
+    const [chartUserIds, setChartUserIds] = useState<string[]>([])
 
     // ━━━ 3. REPORTS LOCAL STATE ━━━
     const [reportMonths, setReportMonths] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     const [reportYears, setReportYears] = useState<number[]>([])
     const [reportBranchIds, setReportBranchIds] = useState<string[]>([])
+    const [reportGroupIds, setReportGroupIds] = useState<string[]>([])
     const [reportOrganizationIds, setReportOrganizationIds] = useState<string[]>([])
+    const [reportUserIds, setReportUserIds] = useState<string[]>([])
 
     // ━━━ DATA FETCHING (3-TIER) ━━━
     const organizationId = userOrgId || contextOrgId
@@ -99,6 +109,9 @@ export default function UserReportPage() {
     const globalParams = new URLSearchParams()
     if (globalOrganizationIds.length) globalParams.set("organizationIds", globalOrganizationIds.join(","))
     else if (organizationId) globalParams.set("organizationIds", organizationId.toString())
+    if (globalGroupIds.length) globalParams.set("groupIds", globalGroupIds.join(","))
+    if (globalBranchIds.length) globalParams.set("branchIds", globalBranchIds.join(","))
+    if (globalUserIds.length) globalParams.set("userIds", globalUserIds.join(","))
     
     if (dateRange?.startDate) globalParams.set("startDate", dateRange.startDate.toISOString())
     if (dateRange?.endDate) globalParams.set("endDate", dateRange.endDate.toISOString())
@@ -116,16 +129,19 @@ export default function UserReportPage() {
     )
 
     // Tier 2: Chart/Trend Data
+    const isChartUserView = chartUserIds.length > 1
     const chartParams = new URLSearchParams()
     if (chartOrganizationIds.length) chartParams.set("organizationIds", chartOrganizationIds.join(","))
     else if (organizationId) chartParams.set("organizationIds", organizationId.toString())
     
+    if (chartGroupIds.length) chartParams.set("groupIds", chartGroupIds.join(","))
     if (chartBranchIds.length) chartParams.set("branchIds", chartBranchIds.join(","))
+    if (chartUserIds.length) chartParams.set("userIds", chartUserIds.join(","))
     if (chartMonths.length) chartParams.set("months", chartMonths.join(","))
     if (chartYears.length) chartParams.set("years", chartYears.join(","))
     if (compare) chartParams.set("compare", "true")
     const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR(
-        `/api/v1/analytics/users/performance?${chartParams.toString()}&trendOnly=true`, fetcher
+        `/api/v1/analytics/users/performance?${chartParams.toString()}${isChartUserView ? "" : "&trendOnly=true"}`, fetcher
     )
 
     // Tier 3: Report Table Data
@@ -133,7 +149,9 @@ export default function UserReportPage() {
     if (reportOrganizationIds.length) reportParams.set("organizationIds", reportOrganizationIds.join(","))
     else if (organizationId) reportParams.set("organizationIds", organizationId.toString())
     
+    if (reportGroupIds.length) reportParams.set("groupIds", reportGroupIds.join(","))
     if (reportBranchIds.length) reportParams.set("branchIds", reportBranchIds.join(","))
+    if (reportUserIds.length) reportParams.set("userIds", reportUserIds.join(","))
     if (reportMonths.length) reportParams.set("months", reportMonths.join(","))
     if (reportYears.length) reportParams.set("years", reportYears.join(","))
     const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR(
@@ -148,10 +166,79 @@ export default function UserReportPage() {
     // All-time Data (for year ranges)
     const { data: allTimeData } = useSWR(organizationId ? `/api/v1/analytics/users/performance?organizationId=${organizationId}&allTime=true` : null, fetcher)
 
+    const isInitialLoad = useRef(true)
+
     useEffect(() => {
         setHasMounted(true)
         setGeneratedDate(new Date().toLocaleString())
     }, [])
+
+    // ━━━ INITIALIZATION (ALL TIME) ━━━
+    const allYears = useMemo(() => {
+        const years = new Set<number>()
+        const trendData = allTimeData?.trend || []
+        trendData.forEach((t: any) => {
+            const y = parseInt(t.date.split('-')[0])
+            if (!isNaN(y)) years.add(y)
+        })
+        if (years.size === 0) years.add(new Date().getFullYear())
+        return Array.from(years).sort((a, b) => b - a)
+    }, [allTimeData])
+
+    useEffect(() => {
+        if (hasMounted && isInitialLoad.current && allYears.length > 0) {
+            setSelectedYears(allYears)
+            setChartYears(allYears)
+            setReportYears(allYears)
+            isInitialLoad.current = false
+        }
+    }, [hasMounted, allYears])
+
+    // ━━━ CASCADING SELECTION CLEARING ━━━
+    useEffect(() => {
+        setGlobalGroupIds([])
+        setGlobalBranchIds([])
+        setGlobalUserIds([])
+    }, [globalOrganizationIds])
+
+    useEffect(() => {
+        setGlobalBranchIds([])
+        setGlobalUserIds([])
+    }, [globalGroupIds])
+
+    useEffect(() => {
+        setGlobalUserIds([])
+    }, [globalBranchIds])
+
+    useEffect(() => {
+        setChartGroupIds([])
+        setChartBranchIds([])
+        setChartUserIds([])
+    }, [chartOrganizationIds])
+
+    useEffect(() => {
+        setChartBranchIds([])
+        setChartUserIds([])
+    }, [chartGroupIds])
+
+    useEffect(() => {
+        setChartUserIds([])
+    }, [chartBranchIds])
+
+    useEffect(() => {
+        setReportGroupIds([])
+        setReportBranchIds([])
+        setReportUserIds([])
+    }, [reportOrganizationIds])
+
+    useEffect(() => {
+        setReportBranchIds([])
+        setReportUserIds([])
+    }, [reportGroupIds])
+
+    useEffect(() => {
+        setReportUserIds([])
+    }, [reportBranchIds])
 
     const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, c?: boolean, cr?: DateRange | null, m?: number[], y?: number[], cm?: number[], cy?: number[]) => {
         setDateRange(range)
@@ -199,8 +286,22 @@ export default function UserReportPage() {
     const prevSuccess = (comparison?.totalOrders || 0) > 0 ? (comparison.totalFulfilled / comparison.totalOrders) * 100 : 0
     const successTrend = getTrend(currentSuccess, prevSuccess)
 
-    // Processed Chart Data (Monthly performance)
+    // Processed Chart Data (Monthly performance or User performance)
     const processedChartData = useMemo(() => {
+        if (isChartUserView) {
+            const usersData = chartData?.data || []
+            return usersData.map((u: any) => ({
+                name: u.userName || "N/A",
+                orders: u.totalOrders || 0,
+                fulfilled: u.fulfilledOrders || 0,
+                refunded: u.refundedOrders || 0,
+                spent: Math.round((u.totalSpentCents || 0) / 100),
+                compOrders: u.comparison?.totalOrders || 0,
+                compSpent: Math.round((u.comparison?.totalSpentCents || 0) / 100),
+                fullName: u.userName
+            }))
+        }
+
         // If multiple years selected, show years on X-axis (optional, but keep monthly for now as requested)
         // One year selected (or default to current year) -> show months
         const activeYear = chartYears.length === 1 ? chartYears[0] : new Date().getFullYear();
@@ -218,13 +319,14 @@ export default function UserReportPage() {
                 name: CHART_MONTH_NAMES[m - 1],
                 orders: dataPoint?.qtyOrdered || 0,
                 fulfilled: dataPoint?.qtyFulfilled || 0,
+                refunded: 0, // monthly trend doesn't return refunds currently
                 spent: Math.round((dataPoint?.revenue || 0) / 100),
                 compOrders: compPoint?.qtyOrdered || 0,
                 compSpent: Math.round((compPoint?.revenue || 0) / 100),
                 fullName: `${CHART_MONTH_NAMES[m - 1]} ${activeYear}`
             }
         });
-    }, [trend, compareTrend, chartYears, chartMonths])
+    }, [trend, compareTrend, chartYears, chartMonths, chartData, isChartUserView])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
         const headers = ["Employee ID", "Name", "Email", "Status", "Organization", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
@@ -273,12 +375,27 @@ export default function UserReportPage() {
                     />
                 )}
                 {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-                    <BranchFilter
-                        selectedIds={contextBranchIds}
-                        onChange={(ids: string[]) => {}} // This context branch filter is global if needed
-                        organizationId={organizationId || undefined}
+                    <GroupFilter
+                        selectedIds={globalGroupIds}
+                        onChange={setGlobalGroupIds}
+                        organizationIds={globalOrganizationIds.length > 0 ? globalOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
                     />
                 )}
+                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE" || role === "BRANCH_ADMIN") && (
+                    <BranchFilter
+                        selectedIds={globalBranchIds}
+                        onChange={setGlobalBranchIds}
+                        organizationIds={globalOrganizationIds.length > 0 ? globalOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                        groupIds={globalGroupIds}
+                    />
+                )}
+                <UserFilter
+                    selectedIds={globalUserIds}
+                    onChange={setGlobalUserIds}
+                    organizationIds={globalOrganizationIds.length > 0 ? globalOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                    groupIds={globalGroupIds}
+                    branchIds={globalBranchIds}
+                />
                 <div className="flex-1" />
                 <Button
                     variant="ghost"
@@ -334,11 +451,37 @@ export default function UserReportPage() {
                                 <div className="flex flex-wrap items-center gap-2">
                                     <MonthFilter selected={chartMonths} onChange={setChartMonths} />
                                     <YearFilter selected={chartYears} onChange={setChartYears} availableYears={allTimeData?.years || []} />
-                                    <OrganizationFilter selectedIds={chartOrganizationIds} onChange={setChartOrganizationIds} />
-                                    {(chartOrganizationIds.length > 0 || role !== "SUPER_ADMIN") && (
-                                        <BranchFilter selectedIds={chartBranchIds} onChange={setChartBranchIds} organizationId={organizationId || undefined} />
+                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                        <OrganizationFilter selectedIds={chartOrganizationIds} onChange={setChartOrganizationIds} />
                                     )}
-                                    <Button variant="ghost" size="icon" onClick={() => { setChartMonths([1,2,3,4,5,6,7,8,9,10,11,12]); setChartYears([]); setChartBranchIds([]); setChartOrganizationIds([]); }} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all"><RefreshCw className="h-4 w-4" /></Button>
+                                    <GroupFilter 
+                                        selectedIds={chartGroupIds} 
+                                        onChange={setChartGroupIds} 
+                                        organizationIds={chartOrganizationIds.length > 0 ? chartOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                                    />
+                                    <BranchFilter 
+                                        selectedIds={chartBranchIds} 
+                                        onChange={setChartBranchIds} 
+                                        organizationIds={chartOrganizationIds.length > 0 ? chartOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                                        groupIds={chartGroupIds}
+                                    />
+                                    <UserFilter
+                                        selectedIds={chartUserIds}
+                                        onChange={setChartUserIds}
+                                        organizationIds={chartOrganizationIds.length > 0 ? chartOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                                        groupIds={chartGroupIds}
+                                        branchIds={chartBranchIds}
+                                    />
+                                    <Button variant="ghost" size="icon" onClick={() => { 
+                                        setChartMonths([1,2,3,4,5,6,7,8,9,10,11,12]); 
+                                        setChartYears([]); 
+                                        setChartBranchIds([]); 
+                                        setChartOrganizationIds([]); 
+                                        setChartGroupIds([]);
+                                        setChartUserIds([]);
+                                    }} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all">
+                                        <RefreshCw className="h-4 w-4" />
+                                    </Button>
                                 </div>
                             </div>
                             <CardContent className="p-8 pt-4">
@@ -378,6 +521,22 @@ export default function UserReportPage() {
                                                                                 {(payload[0]?.value || 0).toLocaleString()} {compare ? `/ ${(payload[1]?.value || 0).toLocaleString()}` : ''}
                                                                             </span>
                                                                         </div>
+                                                                        {isChartUserView && (
+                                                                            <>
+                                                                                <div className="flex justify-between items-center bg-emerald-500/5 p-2 rounded-xl">
+                                                                                    <span className="text-[10px] font-bold text-emerald-600 uppercase">Fulfilled</span>
+                                                                                    <span className="text-[11px] font-black text-emerald-700">
+                                                                                        {u?.fulfilled?.toLocaleString()}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <div className="flex justify-between items-center bg-rose-500/5 p-2 rounded-xl">
+                                                                                    <span className="text-[10px] font-bold text-rose-600 uppercase">Refunded</span>
+                                                                                    <span className="text-[11px] font-black text-rose-700">
+                                                                                        {u?.refunded?.toLocaleString()}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
                                                                         <div className="flex justify-between items-center bg-indigo-500/5 p-2 rounded-xl">
                                                                             <span className="text-[10px] font-bold text-indigo-600 uppercase">Yield {compare ? '(A/B)' : ''}</span>
                                                                             <span className="text-[11px] font-black text-indigo-700">
@@ -528,10 +687,37 @@ export default function UserReportPage() {
                                     </div>
                                     <MonthFilter selected={reportMonths} onChange={setReportMonths} />
                                     <YearFilter selected={reportYears} onChange={setReportYears} availableYears={allTimeData?.years || []} />
-                                    <OrganizationFilter selectedIds={reportOrganizationIds} onChange={setReportOrganizationIds} />
-                                    {(reportOrganizationIds.length > 0 || role !== "SUPER_ADMIN") && (
-                                        <BranchFilter selectedIds={reportBranchIds} onChange={setReportBranchIds} organizationId={organizationId || undefined} />
+                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                        <OrganizationFilter selectedIds={reportOrganizationIds} onChange={setReportOrganizationIds} />
                                     )}
+                                    <GroupFilter 
+                                        selectedIds={reportGroupIds} 
+                                        onChange={setReportGroupIds} 
+                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                                    />
+                                    <BranchFilter 
+                                        selectedIds={reportBranchIds} 
+                                        onChange={setReportBranchIds} 
+                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                                        groupIds={reportGroupIds}
+                                    />
+                                    <UserFilter
+                                        selectedIds={reportUserIds}
+                                        onChange={setReportUserIds}
+                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                                        groupIds={reportGroupIds}
+                                        branchIds={reportBranchIds}
+                                    />
+                                    <Button variant="ghost" size="icon" onClick={() => { 
+                                        setReportMonths([1,2,3,4,5,6,7,8,9,10,11,12]); 
+                                        setReportYears([]); 
+                                        setReportBranchIds([]); 
+                                        setReportOrganizationIds([]); 
+                                        setReportGroupIds([]);
+                                        setReportUserIds([]);
+                                    }} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all">
+                                        <RefreshCw className="h-4 w-4" />
+                                    </Button>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                             <Button variant="outline" size="sm" className="h-10 text-[11px] font-black underline decoration-slate-200 gap-2 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm px-5">

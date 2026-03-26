@@ -36,11 +36,20 @@ export async function GET(req: NextRequest) {
         const groupIdsRaw = url.searchParams.get("groupIds")
         const parsedGroupIds = groupIdsRaw ? groupIdsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 0) : []
 
+        const productIdsRaw = url.searchParams.get("productIds")
+        const parsedProductIds = productIdsRaw ? productIdsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 0) : []
+
+        const organizationIdsRaw = url.searchParams.get("organizationIds")
+        const parsedOrgIds = organizationIdsRaw ? organizationIdsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 0) : []
+
         // RBAC Context Parsing
         let branchIds: number[] = []
         let branchQuery = db.select({ id: branches.id }).from(branches)
 
-        if (userOrgId) {
+        // Filter branches by organization if provided, or fallback to user's org
+        if (parsedOrgIds.length > 0) {
+            branchQuery = branchQuery.where(inArray(branches.organizationId, parsedOrgIds)) as any
+        } else if (userOrgId) {
             branchQuery = branchQuery.where(eq(branches.organizationId, userOrgId)) as any
         }
 
@@ -57,7 +66,10 @@ export async function GET(req: NextRequest) {
         if (parsedGroupIds.length > 0) {
             const groupBranches = await db.select({ id: branches.id })
                 .from(branches)
-                .where(inArray(branches.groupId, parsedGroupIds));
+                .where(and(
+                    inArray(branches.groupId, parsedGroupIds),
+                    parsedOrgIds.length > 0 ? inArray(branches.organizationId, parsedOrgIds) : (userOrgId ? eq(branches.organizationId, userOrgId) : undefined)
+                ));
             const groupBranchIds = new Set(groupBranches.map(b => b.id));
             branchIds = branchIds.filter(id => groupBranchIds.has(id));
         }
@@ -75,6 +87,10 @@ export async function GET(req: NextRequest) {
             inArray(orders.branchId, branchIds),
             sql`UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED')`
         ]
+
+        if (parsedProductIds.length > 0) {
+            baseConditions.push(inArray(globalProducts.id, parsedProductIds))
+        }
 
         if (parsedMonths.length > 0) {
             baseConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
@@ -248,6 +264,7 @@ export async function GET(req: NextRequest) {
                     and(
                         inArray(orders.branchId, branchIds),
                         sql`UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED')`,
+                        parsedProductIds.length > 0 ? inArray(globalProducts.id, parsedProductIds) : undefined,
                         (() => {
                             const compCond: any[] = []
                             if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {

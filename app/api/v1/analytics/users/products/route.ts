@@ -22,9 +22,13 @@ export async function GET(req: NextRequest) {
 
         const monthsRaw = url.searchParams.get("months")
         const yearsRaw = url.searchParams.get("years")
+        const userIdsRaw = url.searchParams.get("userIds")
+        const groupIdsRaw = url.searchParams.get("groupIds")
 
         const parsedMonths = monthsRaw ? monthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
         const parsedYears = yearsRaw ? yearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
+        const userIds = userIdsRaw ? userIdsRaw.split(',').filter(id => id.length > 5) : []
+        const groupIds = groupIdsRaw ? groupIdsRaw.split(',').map(Number).filter(n => !isNaN(n)) : []
 
         // RBAC & Filter Context Parsing
         let organizationIds: number[] = []
@@ -37,6 +41,9 @@ export async function GET(req: NextRequest) {
         let branchIds: number[] = []
         if (branchIdsParam) {
             branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
+        } else if (groupIds.length > 0) {
+            const b = await db.select({ id: branches.id }).from(branches).where(inArray(branches.groupId, groupIds))
+            branchIds = b.map(br => br.id)
         } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {
             branchIds = [userBranchId]
         } else if (organizationIds.length > 0) {
@@ -64,6 +71,10 @@ export async function GET(req: NextRequest) {
             // Only count products that actually generated revenue / were successfully ordered
             sql`UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED')`
         ]
+        
+        if (userIds.length > 0) {
+            baseConditions.push(inArray(orders.createdByUserId, userIds))
+        }
         
         if (parsedMonths.length > 0) {
             baseConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
