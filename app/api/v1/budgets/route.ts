@@ -349,6 +349,37 @@ export async function PUT(req: NextRequest) {
       .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
       .limit(1)
 
+    // Retrieve current spending for validation
+    const currentSpent = (budget?.amountSpentCents || 0) + (budget?.amountHeldCents || 0)
+    
+    // Default 'addon' or 'adjustment' logic
+    let newAllocated: number
+    let newCredited: number
+    const oldAmount = budget?.amountAllocatedCents ?? branch.baselineBudgetCents ?? 0
+    const oldCredited = budget?.amountCreditedCents ?? 0
+
+    if (type === "monthly") {
+      newAllocated = amountAllocatedCents
+      newCredited = oldCredited
+    } else if (type === "addon") {
+      newAllocated = oldAmount
+      newCredited = resetAddons ? 0 : oldCredited + amountAllocatedCents
+    } else if (setAbsolute) {
+      newAllocated = amountAllocatedCents
+      newCredited = resetAddons ? 0 : oldCredited
+    } else {
+      newAllocated = oldAmount + amountAllocatedCents
+      newCredited = resetAddons ? 0 : oldCredited
+    }
+
+    // VALIDATION: Total budget (Base + Credits) must be >= Total Spent (Spent + Held)
+    const proposedTotal = newAllocated + newCredited
+    if (proposedTotal < currentSpent) {
+      return NextResponse.json({
+        error: `Validation Failed: Total budget (₨${(proposedTotal / 100).toFixed(2)}) cannot be less than current total spent (₨${(currentSpent / 100).toFixed(2)}). Please increase the allocation.`
+      }, { status: 400 })
+    }
+
     if (type === "monthly") {
       // Update baseline on the branch record
       await db.update(branches)
@@ -402,23 +433,6 @@ export async function PUT(req: NextRequest) {
         message: "Baseline budget updated successfully",
         baseline: amountAllocatedCents / 100
       })
-    }
-
-    // Default 'addon' or 'adjustment' logic
-    let newAllocated: number
-    let newCredited: number
-    const oldAmount = budget?.amountAllocatedCents ?? branch.baselineBudgetCents ?? 0
-    const oldCredited = budget?.amountCreditedCents ?? 0
-
-    if (type === "addon") {
-      newAllocated = oldAmount
-      newCredited = resetAddons ? 0 : oldCredited + amountAllocatedCents
-    } else if (setAbsolute) {
-      newAllocated = amountAllocatedCents
-      newCredited = resetAddons ? 0 : oldCredited
-    } else {
-      newAllocated = oldAmount + amountAllocatedCents
-      newCredited = resetAddons ? 0 : oldCredited
     }
 
     // SYNC: Also update the permanent branch baseline if we are setting an absolute value (e.g. Emptying/Wiping)
