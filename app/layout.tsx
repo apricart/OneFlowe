@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
-import { Outfit, JetBrains_Mono } from 'next/font/google'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 
-const outfit = Outfit({
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-outfit',
+  variable: '--font-inter',
 })
 
 const jetbrainsMono = JetBrains_Mono({
@@ -60,7 +60,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`font-sans ${outfit.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
+      <body className={`font-sans ${inter.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
         <ThemeProvider>
           <AuthSessionProvider>
             <SWRProvider>

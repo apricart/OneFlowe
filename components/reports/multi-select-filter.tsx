@@ -106,8 +106,13 @@ export function MultiSelectFilter({
                     {!disabled && <ChevronDown className={cn("h-3 w-3 opacity-50 transition-transform duration-200", open && "rotate-180")} />}
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className={cn("w-64 p-0 rounded-2xl border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden", className)} align="start">
-                <div className="flex flex-col max-h-[400px]">
+            <PopoverContent 
+                className={cn("w-64 p-0 rounded-2xl border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden", className)} 
+                align="start"
+                side="bottom"
+                avoidCollisions={false}
+            >
+                <div className="flex flex-col max-h-[300px]">
                     <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
                         <div className="flex items-center justify-between">
                             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{title}</span>

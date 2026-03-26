@@ -1,19 +1,18 @@
 "use client"
-import { useState, ReactNode } from "react"
+import { ReactNode } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { HeadOfficeUsersTable } from "@/components/users/head-office-users-table"
 import { CreateUserDialog } from "@/components/users/create-user-dialog"
 import { useAppContext } from "@/components/context/app-context"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Users, UserPlus, Building2, ShieldCheck, Sparkles } from "lucide-react"
+import { RefreshCw, Users, UserPlus, Building2, UserCircle } from "lucide-react"
 import useSWR from "swr"
-import { jsonFetcher } from "@/lib/fetcher"
+import { cn } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function UsersPage() {
   const { organizationId, branchId, userRole } = useAppContext()
-  const [mfaView, setMfaView] = useState<"enabled" | "disabled">("enabled")
 
   const { data: usersData, mutate: mutateUsers } = useSWR(
     "/api/v1/users",
@@ -59,144 +58,96 @@ export default function UsersPage() {
     total: filteredUsers.length,
     headOffice: filteredUsers.filter((u: any) => u.role === "HEAD_OFFICE").length,
     branchAdmin: filteredUsers.filter((u: any) => u.role === "BRANCH_ADMIN").length,
-    mfaEnabled: filteredUsers.filter((u: any) => u.mfaEnabled).length,
-    mfaDisabled: filteredUsers.filter((u: any) => !u.mfaEnabled).length,
   }
-  const mfaLabel = mfaView === "enabled" ? "MFA Enabled" : "MFA Disabled"
-  const mfaValue = mfaView === "enabled" ? stats.mfaEnabled : stats.mfaDisabled
-  const mfaColorClass = mfaView === "enabled" ? "text-purple-600" : "text-orange-500"
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 space-y-8">
-      <Card className="relative overflow-hidden border-none bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-700 text-white shadow-xl">
-        <div className="pointer-events-none absolute inset-0 opacity-30">
-          <div className="absolute -top-16 right-0 h-48 w-48 rounded-full bg-white/30 blur-3xl" />
-          <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full bg-indigo-400/40 blur-3xl" />
+    <main className="min-h-[calc(100vh-4rem)] bg-slate-50/50 dark:bg-slate-950 p-4 md:p-8 space-y-6">
+      {/* Compact Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 md:p-5 rounded-2xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-tr from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 flex items-center justify-center border border-indigo-50/50 dark:border-indigo-800/50 shadow-inner">
+            <UserCircle className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">User Management</h1>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Global workforce directory & permissions</p>
+          </div>
         </div>
-        <CardHeader className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-3">
-            <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-white/70">
-              <Sparkles className="h-4 w-4" />
-              Workforce Control
-            </p>
-            <CardTitle className="text-3xl font-semibold text-white">User management</CardTitle>
-            <p className="text-sm text-white/80">
-              Curate every Head Office and Branch Admin seat across your network with instant context and security status.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="secondary" size="sm" className="gap-2" onClick={() => mutateUsers()}>
-              <RefreshCw className="h-4 w-4" />
-              Refresh data
-            </Button>
-            <CreateUserDialog onSuccess={() => mutateUsers()} />
-          </div>
-        </CardHeader>
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          label="Total users"
-          value={stats.total}
-          helper="All active seats"
-          accent="from-indigo-500 to-sky-500"
-          icon={<Users className="h-5 w-5 text-white" />}
-        />
-        <SummaryCard
-          label="Head office"
-          value={stats.headOffice}
-          helper={`${stats.branchAdmin} branch admins`}
-          accent="from-blue-500 to-cyan-500"
-          icon={<Building2 className="h-5 w-5 text-white" />}
-        />
-        <SummaryCard
-          label="MFA coverage"
-          value={`${stats.mfaEnabled}/${stats.total}`}
-          helper={`${Math.round((stats.mfaEnabled / (stats.total || 1)) * 100)}% enabled`}
-          accent="from-emerald-500 to-lime-500"
-          icon={<ShieldCheck className="h-5 w-5 text-white" />}
-        />
-        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">{mfaLabel}</p>
-              <p className={`text-3xl font-semibold ${mfaColorClass}`}>{mfaValue}</p>
-            </div>
-            <div className="flex overflow-hidden rounded-md border bg-muted/40">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`rounded-none px-3 text-xs ${mfaView === "enabled" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
-                onClick={() => setMfaView("enabled")}
-              >
-                Enabled
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`rounded-none px-3 text-xs ${mfaView === "disabled" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
-                onClick={() => setMfaView("disabled")}
-              >
-                Disabled
-              </Button>
-            </div>
-          </div>
-          <p className="mt-3 text-xs text-muted-foreground">Toggle to see where action is needed.</p>
-        </Card>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-9 gap-2 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 shadow-sm" onClick={() => mutateUsers()}>
+            <RefreshCw className="h-4 w-4" />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
+          <CreateUserDialog onSuccess={() => mutateUsers()} />
+        </div>
       </div>
 
-      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Users className="h-5 w-5" />
-              Directory
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {userRole === "HEAD_OFFICE" ? "Head Office view • scoped to your organization" : "Global visibility"}
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <HeadOfficeUsersTable
-            users={filteredUsers}
-            branches={branches}
-            organizations={organizations}
-            userRole={userRole ?? undefined}
-            onUserUpdate={() => mutateUsers()}
-          />
-        </CardContent>
-      </Card>
+      {/* Ultra-compact Colorful Light Stats */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <CompactStatCard
+          label="Total Active Users"
+          value={stats.total}
+          icon={<Users className="h-5 w-5" />}
+          gradient="bg-gradient-to-br from-indigo-50/80 to-blue-50/80 border-indigo-100/50 text-indigo-700 dark:from-indigo-900/20 dark:to-blue-900/20 dark:border-indigo-800/30 dark:text-indigo-400"
+          iconBadge="bg-white/80 text-indigo-600 shadow-sm border border-indigo-100 dark:bg-slate-800 dark:border-indigo-800"
+        />
+        <CompactStatCard
+          label="Head Office"
+          value={stats.headOffice}
+          icon={<Building2 className="h-5 w-5" />}
+          gradient="bg-gradient-to-br from-teal-50/80 to-emerald-50/80 border-teal-100/50 text-teal-700 dark:from-teal-900/20 dark:to-emerald-900/20 dark:border-teal-800/30 dark:text-teal-400"
+          iconBadge="bg-white/80 text-teal-600 shadow-sm border border-teal-100 dark:bg-slate-800 dark:border-teal-800"
+        />
+        <CompactStatCard
+          label="Branch Admins"
+          value={stats.branchAdmin}
+          icon={<UserPlus className="h-5 w-5" />}
+          gradient="bg-gradient-to-br from-fuchsia-50/80 to-purple-50/80 border-fuchsia-100/50 text-fuchsia-700 dark:from-fuchsia-900/20 dark:to-purple-900/20 dark:border-fuchsia-800/30 dark:text-fuchsia-400"
+          iconBadge="bg-white/80 text-fuchsia-600 shadow-sm border border-fuchsia-100 dark:bg-slate-800 dark:border-fuchsia-800"
+        />
+      </div>
+
+      {/* Main Directory Area */}
+      <div className="flex flex-col pt-2">
+        <HeadOfficeUsersTable
+          users={filteredUsers}
+          branches={branches}
+          organizations={organizations}
+          userRole={userRole ?? undefined}
+          onUserUpdate={() => mutateUsers()}
+        />
+      </div>
     </main>
   )
 }
 
-function SummaryCard({
+function CompactStatCard({
   label,
   value,
-  helper,
   icon,
-  accent,
+  gradient,
+  iconBadge,
 }: {
   label: string
   value: string | number
-  helper: string
   icon: ReactNode
-  accent: string
+  gradient: string
+  iconBadge: string
 }) {
   return (
-    <Card className="border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-      <CardContent className="p-5 space-y-3">
-        <div className="flex items-center gap-3">
-          <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-r ${accent}`}>
-            {icon}
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-            <p className="text-2xl font-semibold">{value}</p>
-          </div>
+    <Card className={cn("border rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5", gradient)}>
+      <CardContent className="p-5 flex items-center justify-between">
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">
+            {label}
+          </p>
+          <p className="text-4xl font-black tracking-tight">
+            {value}
+          </p>
         </div>
-        <p className="text-xs text-muted-foreground">{helper}</p>
+        <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl", iconBadge)}>
+           {icon}
+        </div>
       </CardContent>
     </Card>
   )

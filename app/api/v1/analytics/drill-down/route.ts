@@ -95,17 +95,23 @@ export async function GET(req: NextRequest) {
     }
 
     // Apply type-specific filters
-    if (type === "REVENUE" || type === "FULFILLED") {
-        conditions.push(sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`)
+    if (type === "REVENUE") {
+        // Revenue Drill-down: must match REVENUE_ELIGIBLE_FILTER
+        conditions.push(sql`UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED')`)
+    } else if (type === "FULFILLED") {
+        conditions.push(
+            and(
+                eq(sql`UPPER(${orders.status})`, "FULFILLED"),
+                eq(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0)
+            )
+        )
     } else if (type === "REJECTED") {
         conditions.push(or(eq(sql`UPPER(${orders.status})`, "REJECTED"), eq(sql`UPPER(${orders.status})`, "CANCELLED")))
     } else if (type === "ORDERS") {
-        conditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED', 'REFUNDED', 'REJECTED', 'CANCELLED')`)
+        conditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED', 'REFUNDED', 'REJECTED', 'CANCELLED', 'PARTIAL', 'PARTIALLY_FULFILLED')`)
     } else if (type === "REFUNDED") {
-        // REFUNDED Drill-down now only shows orders with 'REFUNDED' status (Fully Refunded)
         conditions.push(eq(sql`UPPER(${orders.status})`, "REFUNDED"))
     } else if (type === "PARTIAL") {
-        // PARTIAL Drill-down shows FULFILLED orders with refunds OR orders with PARTIAL status
         conditions.push(
             or(
                 and(eq(sql`UPPER(${orders.status})`, "FULFILLED"), gt(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0)),
@@ -191,14 +197,14 @@ export async function GET(req: NextRequest) {
         if (orderIds.length > 0) {
             const counts = await db.select({
                 orderId: orderItems.orderId,
-                count: sql<number>`count(${orderItems.id})`
+                totalQty: sql<number>`CAST(sum(COALESCE(${orderItems.quantity}, 0)) AS INTEGER)`.mapWith(Number)
             })
                 .from(orderItems)
                 .where(inArray(orderItems.orderId, orderIds))
                 .groupBy(orderItems.orderId)
 
             itemCounts = counts.reduce((acc, curr) => {
-                if (curr.orderId) acc[curr.orderId] = Number(curr.count)
+                if (curr.orderId) acc[curr.orderId] = curr.totalQty || 0
                 return acc
             }, {} as Record<number, number>)
         }
@@ -214,6 +220,8 @@ export async function GET(req: NextRequest) {
         const hourlyDistribution: Record<number, number> = {}
 
         let totalItems = 0
+        let fulfilledOrderCount = 0
+        let refundedOrdersCount = 0
         rawData.forEach(order => {
             totalItems += (itemCounts[order.id] || 0)
             const total = (order.totalCents || 0) / 100
@@ -221,11 +229,22 @@ export async function GET(req: NextRequest) {
             const status = (order.status || "").toUpperCase()
             const disc = (order.receiptData?.discount || 0)
 
-            // For summary cards, compute net revenue
-            if (status === 'FULFILLED' || status === 'REFUNDED') {
+            // ALIGNED WITH metric-utils.ts: net revenue only comes from THESE statuses
+            if (['FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes(status)) {
                 grossTotal += total
                 refundTotal += refund
+                
+                // Fulfilled Orders in dashboard: FULFILLED + PARTIAL
+                if (['FULFILLED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes(status)) {
+                    fulfilledOrderCount++
+                }
             }
+
+            // Refunded Orders in dashboard: strictly completely REFUNDED status
+            if (status === 'REFUNDED') {
+                refundedOrdersCount++
+            }
+
             if (status === "REJECTED" || status === "CANCELLED") {
                 rejectedTotal += total
             }
@@ -279,6 +298,8 @@ export async function GET(req: NextRequest) {
             discountImpact: discountTotal,
             avgProcessingTime: processingCount > 0 ? Math.round(totalProcessingSeconds / processingCount / 60) : 0,
             totalItems,
+            fulfilledOrderCount,
+            refundedOrdersCount,
             peakPeriod: peakHourRange,
             topBranch,
             problematicBranch
@@ -360,20 +381,19 @@ export async function GET(req: NextRequest) {
             })()
 
             // Re-apply type-specific filters
-            if (type === "REVENUE" || type === "FULFILLED") {
-                compConditions.push(sql`UPPER(${orders.status}) IN ('FULFILLED', 'REFUNDED')`)
+            if (type === "REVENUE") {
+                compConditions.push(sql`UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED')`)
+            } else if (type === "FULFILLED") {
+                compConditions.push(eq(sql`UPPER(${orders.status})`, "FULFILLED"))
             } else if (type === "REJECTED") {
                 compConditions.push(sql`UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED')`)
             } else if (type === "ORDERS") {
-                compConditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED', 'REFUNDED', 'REJECTED', 'CANCELLED')`)
+                compConditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED', 'REFUNDED', 'REJECTED', 'CANCELLED', 'PARTIAL', 'PARTIALLY_FULFILLED')`)
             } else if (type === "REFUNDED") {
-                if (refundType === "full") {
-                    compConditions.push(sql`(${orders.refundAmountCents} >= ${orders.totalCents} AND ${orders.refundAmountCents} > 0)`)
-                } else if (refundType === "partial") {
-                    compConditions.push(sql`(${orders.refundAmountCents} < ${orders.totalCents} AND ${orders.refundAmountCents} > 0)`)
-                } else {
-                    compConditions.push(sql`(UPPER(${orders.status}) = 'REFUNDED' OR ${orders.refundAmountCents} > 0)`)
-                }
+                compConditions.push(or(
+                    eq(sql`UPPER(${orders.status})`, "REFUNDED"),
+                    gt(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0)
+                ))
             }
 
             const compWhere = and(...compConditions)
@@ -405,8 +425,13 @@ export async function GET(req: NextRequest) {
                 const g = (o.totalCents || 0) / 100
                 const r = (o.refundAmountCents || 0) / 100
                 const s = (o.status || "").toUpperCase()
-                if (s === 'FULFILLED' || s === 'REFUNDED') { compGross += g; compRefund += r }
-                else if (s === "REJECTED" || s === "CANCELLED") compRejected += g
+                if (['FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes(s)) { 
+                    compGross += g; compRefund += r 
+                } else if (s === 'REFUNDED') {
+                    compRefund += r
+                } else if (s === "REJECTED" || s === "CANCELLED") {
+                    compRejected += g
+                }
                 compDisc += (o.receiptData?.discount || 0)
             })
 

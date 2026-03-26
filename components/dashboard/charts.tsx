@@ -19,7 +19,13 @@ import {
   ReferenceArea,
   ReferenceLine
 } from "recharts"
-import { TrendingUp, BarChart3, DollarSign, Activity, Award, Trophy, Zap, MousePointerClick, Info } from "lucide-react"
+import {
+  TrendingUp, BarChart3, DollarSign, Activity,
+  Award, Trophy, Zap, MousePointerClick, Info,
+  Package, CheckCircle2, RotateCcw, XCircle, Calendar, Layers, Clock
+} from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { cn, formatPKR } from "@/lib/utils"
 import type { SalesSeriesPoint, BranchSalesPoint, DateRange } from "@/lib/hooks/use-sales-performance"
 import {
   format,
@@ -46,28 +52,34 @@ type Props = {
 }
 
 const barColors = [
-  "#1e40af", "#1d4ed8", "#2563eb", "#3b82f6",
-  "#60a5fa", "#93c5fd", "#1e3a8a", "#1e40af",
-  "#2563eb", "#3b82f6", "#60a5fa", "#93c5fd"
+  "oklch(0.6 0.25 260)", // Vibrant Blue
+  "oklch(0.65 0.2 180)",  // Teal
+  "oklch(0.7 0.2 80)",   // Gold/Amber
+  "oklch(0.6 0.22 300)",  // Purple
+  "oklch(0.65 0.22 20)",  // Rose
+  "oklch(0.5 0.2 260)",   // Deep Blue
 ]
 
 const barColorsDark = [
-  "#60a5fa", "#3b82f6", "#2563eb", "#1d4ed8",
-  "#1e40af", "#1e3a8a", "#60a5fa", "#3b82f6",
-  "#2563eb", "#1d4ed8", "#1e40af", "#1e3a8a"
+  "oklch(0.75 0.22 260)", // Fluorescent Blue
+  "oklch(0.75 0.2 180)",  // Fluorescent Teal
+  "oklch(0.85 0.18 80)",  // Fluorescent Gold
+  "oklch(0.75 0.2 300)",  // Fluorescent Purple
+  "oklch(0.75 0.2 20)",   // Fluorescent Rose
+  "oklch(0.7 0.22 260)",  // Lighter Blue
 ]
 
 const CustomTooltip = ({ active, payload, labelText = "Purchase" }: any) => {
   if (!active || !payload?.length) return null
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl">
-      <div className="bg-slate-50 dark:bg-slate-900 px-4 py-2 border-b border-slate-200 dark:border-slate-700">
-        <p className="font-semibold text-slate-700 dark:text-slate-300 text-xs">{payload[0].payload.month}</p>
+    <div className="glass-card rounded-[1.25rem] shadow-2xl overflow-hidden min-w-[200px]">
+      <div className="bg-slate-50/50 dark:bg-slate-800/50 px-4 py-2.5 border-b border-slate-200/50 dark:border-slate-700/50">
+        <p className="font-bold text-slate-800 dark:text-slate-200 text-xs tracking-wider uppercase">{payload[0].payload.month || payload[0].payload.label}</p>
       </div>
-      <div className="px-4 py-3">
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{labelText}</p>
-        <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+      <div className="px-5 py-4">
+        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1.5">{labelText}</p>
+        <p className="text-xl font-bold text-slate-900 dark:text-white">
           ₨{payload[0].value.toLocaleString()}
         </p>
       </div>
@@ -323,7 +335,7 @@ export function ChartTooltip({
   const isDark = theme === 'dark'
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden">
+    <div className="relative glass-card rounded-[2.5rem] p-8 shadow-2xl overflow-hidden min-h-[440px]">
       <div className="bg-slate-50 dark:bg-slate-900 px-4 py-2 border-b border-slate-200 dark:border-slate-700">
         <p className="font-semibold text-slate-700 dark:text-slate-300 text-xs">{label}</p>
       </div>
@@ -502,7 +514,7 @@ export function ComparisonBarChart({
 
   return (
     <div className={className}>
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm dark:shadow-slate-900/50 overflow-hidden">
+      <div className="relative glass-card rounded-[2.5rem] p-8 shadow-2xl overflow-hidden min-h-[440px]">
         {title && (
           <div className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4">
             <div className="flex items-center gap-3">
@@ -748,7 +760,7 @@ const SalesPerfTooltip = ({ active, payload, label: tooltipLabel, activeMetric, 
   const currentVal = isRevenue ? sales : orders
   const prevVal = isRevenue ? compSales : compOrders
   const metricLabel = isRevenue ? 'Revenue' : 'Orders'
-  const formatVal = (v: number) => isRevenue ? `Rs ${v.toLocaleString()}` : v.toLocaleString()
+  const formatVal = (v: number) => isRevenue ? `₨ ${v.toLocaleString()}` : v.toLocaleString()
 
   // Calculate change if comparison
   let changePercent = 0
@@ -759,55 +771,64 @@ const SalesPerfTooltip = ({ active, payload, label: tooltipLabel, activeMetric, 
   }
 
   return (
-    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.15)] border border-slate-100 dark:border-slate-800 min-w-[260px] ring-1 ring-black/5 dark:ring-white/5">
-      <p className="font-bold text-slate-800 dark:text-slate-200 text-base mb-3 pb-2 border-b border-slate-100 dark:border-slate-800">
+    <div className="glass shadow-[0_20px_60px_rgba(0,0,0,0.2)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.4)] p-5 rounded-[1.5rem] border border-white/20 dark:border-slate-700/30 min-w-[280px]">
+      <p className="font-black text-slate-900 dark:text-white text-lg mb-4 tracking-tight border-b border-slate-200/50 dark:border-slate-800/50 pb-2">
         {tooltipLabel}
       </p>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {/* Current Period */}
-        <div className={`p-2.5 rounded-lg ${isRevenue ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-blue-50 dark:bg-blue-900/20'}`}>
-          <div className="flex items-center gap-2 mb-1">
-            <div className={`h-3 w-3 rounded-full ${isRevenue ? 'bg-emerald-500' : 'bg-blue-500'}`} />
-            <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Current Period</span>
+        <div className={cn(
+          "p-4 rounded-2xl ring-1 ring-inset",
+          isRevenue 
+            ? 'bg-emerald-500/10 ring-emerald-500/20' 
+            : 'bg-blue-500/10 ring-blue-500/20'
+        )}>
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`h-2 w-2 rounded-full ${isRevenue ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]'}`} />
+            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Current {metricLabel}</span>
           </div>
-          <span className={`text-lg font-black ${isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
+          <span className={cn(
+            "text-2xl font-black tracking-tighter",
+            isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'
+          )}>
             {formatVal(currentVal)}
           </span>
         </div>
 
-        {/* Previous Period - only in comparison mode */}
-        {hasComparison && (
-          <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="h-3 w-3 rounded-full bg-amber-500" />
-              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Previous Period</span>
+        {/* Comparison Period */}
+        {hasComparison && prevVal > 0 && (
+          <div className="p-4 rounded-2xl bg-amber-500/10 ring-1 ring-inset ring-amber-500/20">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Previous {metricLabel}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-lg font-black text-amber-600 dark:text-amber-400">
+              <span className="text-xl font-bold text-amber-600 dark:text-amber-400 tracking-tight">
                 {formatVal(prevVal)}
               </span>
-              <span className={`text-xs font-black px-2 py-0.5 rounded-full ${
+              <div className={cn(
+                "flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black",
                 changeDir === 'up'
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                  : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-              }`}>
+                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-red-500/20 text-red-600 dark:text-red-400'
+              )}>
                 {changeDir === 'up' ? '▲' : '▼'} {Math.abs(changePercent).toFixed(1)}%
-              </span>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Secondary metric (only when NOT comparing) */}
         {!hasComparison && (
-          <div className={`p-2.5 rounded-lg ${!isRevenue ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-blue-50 dark:bg-blue-900/20'}`}>
-            <div className="flex items-center gap-2 mb-1">
-              <div className={`h-3 w-3 rounded-full ${!isRevenue ? 'bg-emerald-500' : 'bg-blue-500'}`} />
-              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">{isRevenue ? 'Orders' : 'Revenue'}</span>
-            </div>
-            <span className={`text-lg font-black ${!isRevenue ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
-              {isRevenue ? orders.toLocaleString() : `Rs ${sales.toLocaleString()}`}
-            </span>
+          <div className="grid grid-cols-2 gap-3">
+             <div className="p-3 rounded-xl bg-slate-500/5 ring-1 ring-inset ring-slate-500/10">
+               <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">Orders</span>
+               <span className="text-sm font-bold text-slate-900 dark:text-white">{orders.toLocaleString()}</span>
+             </div>
+             <div className="p-3 rounded-xl bg-slate-500/5 ring-1 ring-inset ring-slate-500/10">
+               <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase block mb-1">Avg Value</span>
+               <span className="text-sm font-bold text-slate-900 dark:text-white">₨{orders > 0 ? Math.round(sales/orders).toLocaleString() : 0}</span>
+             </div>
           </div>
         )}
       </div>
@@ -896,14 +917,22 @@ export function SalesPerformanceLineChart({
   const isEmpty = useMemo(() => !seriesData || seriesData.length === 0 || totalSales === 0, [seriesData, totalSales])
 
   return (
-    <div className="space-y-6">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6 }}
+      className="space-y-6"
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
-            Sales Performance
+          <h3 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3 tracking-tighter">
+            <div className="p-2 rounded-xl bg-primary/10 text-primary">
+               <TrendingUp className="w-6 h-6" />
+            </div>
+            Overview
           </h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Analyze trends and volume over the selected period
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-widest opacity-70">
+            Real-time performance analytics
           </p>
         </div>
 
@@ -936,7 +965,7 @@ export function SalesPerformanceLineChart({
         </div>
       </div>
 
-      <div className="relative bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-6 shadow-sm overflow-hidden min-h-[440px]">
+      <div className="relative glass-card rounded-[2.5rem] p-8 shadow-2xl overflow-hidden min-h-[440px]">
         {isEmpty && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/40 dark:bg-slate-950/40 backdrop-blur-[2px]">
             <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 shadow-inner">
@@ -979,7 +1008,7 @@ export function SalesPerformanceLineChart({
                 tickFormatter={(val) => {
                   const realVal = Math.pow(val, 2)
                   return activeMetric === 'revenue'
-                    ? `Rs ${formatCurrency(realVal).replace('₨', '')}`
+                    ? `₨ ${formatCurrency(realVal).replace('₨', '')}`
                     : Math.round(realVal).toLocaleString()
                 }}
                 width={activeMetric === 'revenue' ? 100 : 55}
@@ -991,7 +1020,7 @@ export function SalesPerformanceLineChart({
                 cursor={{ stroke: isDark ? "#475569" : "#cbd5e1", strokeWidth: 1.5, strokeDasharray: "4 4" }}
               />
 
-              {/* Comparison Line (Solid, same style as current but amber color) */}
+              {/* Comparison Line */}
               {hasComparison && (
                 <Area
                   type="monotone"
@@ -1015,7 +1044,7 @@ export function SalesPerformanceLineChart({
                 />
               )}
 
-              {/* Secondary Metric Line (Subtle dashed) - only if not comparing */}
+              {/* Secondary Metric Line */}
               {!hasComparison && (
                 <Line
                   type="monotone"
@@ -1073,7 +1102,7 @@ export function SalesPerformanceLineChart({
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -1144,11 +1173,15 @@ export function SalesPerformanceBarChart({
   const isEmpty = useMemo(() => !seriesData || seriesData.length === 0 || totalSales === 0, [seriesData, totalSales])
 
   return (
-    <div className="space-y-6">
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.98 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="space-y-6"
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
-            {activeMetric === 'revenue' ? 'Revenue Distribution' : 'Order Volume'}
+          <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em]">
+            {activeMetric === 'revenue' ? 'Revenue Distribution' : 'Order Volume Metrics'}
           </p>
         </div>
 
@@ -1181,7 +1214,7 @@ export function SalesPerformanceBarChart({
         </div>
       </div>
 
-      <div className="relative bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm border border-slate-200/60 dark:border-slate-800/60 rounded-2xl p-6 shadow-sm overflow-hidden min-h-[440px]">
+      <div className="relative glass-card rounded-[2.5rem] p-8 shadow-2xl overflow-hidden min-h-[440px]">
         {isEmpty && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/40 dark:bg-slate-950/40 backdrop-blur-[2px]">
             <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 shadow-inner">
@@ -1270,7 +1303,7 @@ export function SalesPerformanceBarChart({
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -1286,11 +1319,11 @@ const HorizontalBranchTooltip = ({ active, payload }: any) => {
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-4">
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Sales</span>
-          <span className="text-sm font-black text-slate-900 dark:text-white">₨{d.sales.toLocaleString()}</span>
+          <span className="text-sm font-semibold text-slate-900 dark:text-white">₨{d.sales.toLocaleString()}</span>
         </div>
         <div className="flex items-center justify-between gap-4">
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Orders</span>
-          <span className="text-sm font-black text-slate-900 dark:text-white">{d.orders.toLocaleString()}</span>
+          <span className="text-sm font-semibold text-slate-900 dark:text-white">{d.orders.toLocaleString()}</span>
         </div>
       </div>
     </div>
@@ -1428,11 +1461,11 @@ const HorizontalOrgTooltip = ({ active, payload }: any) => {
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-4">
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Total Sales</span>
-          <span className="text-sm font-black text-slate-900 dark:text-white">₨{d.sales.toLocaleString()}</span>
+          <span className="text-sm font-semibold text-slate-900 dark:text-white">₨{d.sales.toLocaleString()}</span>
         </div>
         <div className="flex items-center justify-between gap-4">
           <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Orders</span>
-          <span className="text-sm font-black text-slate-900 dark:text-white">{d.orders.toLocaleString()}</span>
+          <span className="text-sm font-semibold text-slate-900 dark:text-white">{d.orders.toLocaleString()}</span>
         </div>
       </div>
     </div>

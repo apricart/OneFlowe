@@ -80,7 +80,7 @@ export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange 
             </button>
 
             {open && (
-                <div className="absolute top-full left-0 mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200 min-w-[220px]">
+                <div className="absolute top-full right-0 mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200 min-w-[220px]">
                     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden">
                         <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
                             <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Select Branches</span>

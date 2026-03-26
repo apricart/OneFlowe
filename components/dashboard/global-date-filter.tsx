@@ -292,7 +292,12 @@ export function GlobalDateFilter({
                                     <CalendarIcon className="w-3 h-3 opacity-60" /> {months.length > 0 ? `${months.length} Months` : 'Months'}
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-48 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" align="start">
+                            <PopoverContent 
+                                className="w-48 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" 
+                                align="start"
+                                side="bottom"
+                                avoidCollisions={false}
+                            >
                                 <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
                                     {monthPresets.map((m, i) => (
                                         <div 
@@ -326,8 +331,13 @@ export function GlobalDateFilter({
                                     <Calculator className="w-3 h-3 opacity-60" /> {years.length > 0 ? `${years.length} Years` : 'Years'}
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-32 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" align="start">
-                                <div className="space-y-1">
+                            <PopoverContent 
+                                className="w-32 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" 
+                                align="start"
+                                side="bottom"
+                                avoidCollisions={false}
+                            >
+                                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                                     {dynamicYears.map((y: number) => (
                                         <div 
                                             key={y} 
@@ -401,7 +411,12 @@ export function GlobalDateFilter({
                                                             <CalendarIcon className="w-3 h-3 opacity-60" /> {compareMonths.length > 0 ? `${compareMonths.length} Months` : 'Months'}
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="w-48 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" align="start">
+                                                    <PopoverContent 
+                                                        className="w-48 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" 
+                                                        align="start"
+                                                        side="bottom"
+                                                        avoidCollisions={false}
+                                                    >
                                                         <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
                                                             {monthPresets.map((m, i) => (
                                                                 <div 
@@ -435,8 +450,13 @@ export function GlobalDateFilter({
                                                             <Calculator className="w-3 h-3 opacity-60" /> {compareYears.length > 0 ? `${compareYears.length} Years` : 'Years'}
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="w-32 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" align="start">
-                                                        <div className="space-y-1">
+                                                    <PopoverContent 
+                                                        className="w-32 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" 
+                                                        align="start"
+                                                        side="bottom"
+                                                        avoidCollisions={false}
+                                                    >
+                                                        <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                                                             {dynamicYears.map((y) => (
                                                                 <div 
                                                                     key={y} 

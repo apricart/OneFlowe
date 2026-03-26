@@ -10,10 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
-import { Edit, Trash2, Search, User, Mail, Phone, Shield, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff, Upload, FileText, Table as TableIcon, FileJson } from "lucide-react"
+import { Edit, Trash2, Search, User, Mail, Phone, Shield, ShieldCheck, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff, Upload, FileText, Table as TableIcon, FileJson, Info, MoreHorizontal, ShieldAlert, KeyRound, UserMinus, UserCheck, Calendar, LayoutGrid, List } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { motion, AnimatePresence } from "framer-motion"
 import { Switch } from "@/components/ui/switch"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "@/components/ui/sheet"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
@@ -47,10 +50,12 @@ type HeadOfficeUsersTableProps = {
 
 export function HeadOfficeUsersTable({ users, branches, organizations, userRole, onUserUpdate }: HeadOfficeUsersTableProps) {
   const PAGE_SIZE = 20
+  const [viewMode, setViewMode] = useState<"grid" | "table">("table")
   const [searchQuery, setSearchQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState("all")
   const [page, setPage] = useState(1)
   const [editingUser, setEditingUser] = useState<UserRow | null>(null)
+  const [viewingUser, setViewingUser] = useState<UserRow | null>(null)
   const [submittingUserId, setSubmittingUserId] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<UserRow | null>(null)
 
@@ -412,6 +417,27 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
           </SelectContent>
         </Select>
 
+        <div className="flex bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-1 shadow-sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setViewMode("table")}
+            className={cn("h-8 px-3 rounded-md transition-all", viewMode === "table" ? "bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-semibold shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-300")}
+          >
+            <List className="h-4 w-4 mr-2" />
+            Table
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setViewMode("grid")}
+            className={cn("h-8 px-3 rounded-md transition-all", viewMode === "grid" ? "bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 font-semibold shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-slate-300")}
+          >
+            <LayoutGrid className="h-4 w-4 mr-2" />
+            Grid
+          </Button>
+        </div>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="gap-2 h-10 border-slate-200 bg-white dark:bg-slate-900 shadow-sm">
@@ -438,210 +464,424 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
         </DropdownMenu>
       </div>
 
-      {/* Users Table */}
-      <div className="border rounded-lg overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead className="w-[200px]">User</TableHead>
-              <TableHead className="w-[100px]">Employee #</TableHead>
-              <TableHead className="w-[150px]">Contact</TableHead>
-              <TableHead className="w-[100px]">Role</TableHead>
-              <TableHead className="w-[150px]">Assignment</TableHead>
-              <TableHead className="w-[100px]">Imprest</TableHead>
-              <TableHead className="w-[100px]">Contact Person</TableHead>
-              <TableHead className="w-[150px]">Address</TableHead>
-              <TableHead className="w-[120px]">Company Status</TableHead>
-              <TableHead className="w-[120px]">User Status</TableHead>
-              <TableHead className="w-[100px]">Security</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+      <AnimatePresence mode="wait">
+        {viewMode === "grid" ? (
+          <motion.div
+            key="grid-view"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+          >
             {filteredUsers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={12} className="text-center py-12">
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    <User className="h-12 w-12 opacity-20" />
-                    <p className="text-sm font-medium">No users found</p>
-                    <p className="text-xs">Try adjusting your search or filters</p>
-                  </div>
-                </TableCell>
-              </TableRow>
+              <div className="col-span-full border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl p-16 flex flex-col items-center justify-center text-center bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+                <div className="h-20 w-20 rounded-full bg-white dark:bg-slate-950 shadow-sm flex items-center justify-center mb-5 ring-1 ring-slate-200 dark:ring-slate-800">
+                   <User className="h-8 w-8 text-slate-400" />
+                </div>
+                <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">No users found</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-sm">We couldn't find any users matching your current search or role filters. Try adjusting them to see more results.</p>
+              </div>
             ) : (
-              paginatedUsers.map((user) => (
-                <TableRow key={user.id} className="hover:bg-muted/30">
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
-                        <User className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <div className="font-medium">{user.fullName || `${user.firstName} ${user.lastName}`}</div>
-                        <div className="text-xs text-muted-foreground">
-                          ID: {user.id.slice(0, 8)}...
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm">{user.employeeId || "—"}</span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Mail className="h-3 w-3 text-muted-foreground" />
-                        {user.email}
-                      </div>
-                      {user.phone && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Phone className="h-3 w-3" />
-                          {user.phone}
-                        </div>
+              paginatedUsers.map((user, idx) => (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2, delay: idx * 0.05 }}
+                  key={user.id}
+                  onClick={() => setViewingUser(user)}
+                  className="group relative flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 hover:border-indigo-500/50 dark:hover:border-indigo-500/50 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 cursor-pointer overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-purple-50/50 dark:from-indigo-900/10 dark:to-purple-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                  {user.isActive && (
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
+                  
+                  <div className="flex justify-between items-start mb-5 relative z-10">
+                    <Avatar className="h-14 w-14 ring-4 ring-slate-50 dark:ring-slate-950 group-hover:ring-white dark:group-hover:ring-slate-900 transition-all shadow-sm">
+                      <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold text-lg">
+                        {user.firstName?.[0]}{user.lastName?.[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "py-1 px-2.5 text-[10px] uppercase font-bold tracking-wider rounded-lg border",
+                        user.isActive
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60"
+                          : "bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800/50 dark:text-slate-400 dark:border-slate-800"
                       )}
+                    >
+                      <span className={cn("mr-1.5 inline-block h-1.5 w-1.5 rounded-full animate-pulse", user.isActive ? "bg-emerald-500" : "bg-slate-400")} />
+                      {user.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-1.5 mb-6 relative z-10">
+                    <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                      {user.fullName || `${user.firstName} ${user.lastName}`}
+                    </h3>
+                    <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                      <Mail className="h-3.5 w-3.5" />
+                      <span className="truncate">{user.email}</span>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    {getRoleBadge(user.role)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      {user.organizationId ? (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Building2 className="h-3 w-3 text-muted-foreground" />
-                          {getOrganizationName(user.organizationId)}
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted-foreground">—</span>
-                      )}
-                      {user.branchId && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <MapPin className="h-3 w-3 text-muted-foreground" />
-                          {getBranchName(user.branchId)}
-                        </div>
-                      )}
+                  </div>
+
+                  <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between relative z-10">
+                    <div>
+                      {getRoleBadge(user.role)}
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm">{user.imprestHolder || "—"}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm">{user.contactPerson || "—"}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm line-clamp-2 max-w-[150px]" title={user.address || ""}>
-                      {user.address || "—"}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {user.organizationId ? (
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          orgStatusMap.get(user.organizationId) === "active"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-slate-100 text-slate-600 border-slate-200"
-                        )}
-                      >
-                        {orgStatusMap.get(user.organizationId) === "active" ? "Active" : "Inactive"}
-                      </Badge>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          user.isActive
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-red-50 text-red-700 border-red-200"
-                        )}
-                      >
-                        {user.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                      {userRole === "SUPER_ADMIN" && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          disabled={submittingUserId === user.id}
-                          onClick={() => toggleUserStatus(user)}
-                          title={user.isActive ? "Deactivate User" : "Activate User"}
-                        >
-                          <RefreshCw className={cn("h-3.5 w-3.5", submittingUserId === user.id && "animate-spin")} />
-                        </Button>
-                      )}
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 dark:bg-slate-800 text-slate-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/50 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-all group-hover:translate-x-1 shadow-sm">
+                      <ChevronRight className="h-4 w-4" />
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {user.mfaEnabled ? (
-                        <Badge variant="outline" className="text-green-600 border-green-200">
-                          <Shield className="mr-1 h-3 w-3" />
-                          MFA
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEditDialog(user)}
-                        title="Edit user"
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setDeleteConfirm(user)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        title="Delete user"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                  </div>
+                </motion.div>
               ))
             )}
-          </TableBody>
-        </Table>
-      </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="table-view"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm"
+          >
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50/50">
+                  <TableHead className="py-4 pl-6">User</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Branch</TableHead>
+                  <TableHead className="text-right pr-6">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-20">
+                      <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                        <div className="h-16 w-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-2">
+                           <User className="h-8 w-8 opacity-20" />
+                        </div>
+                        <p className="text-base font-medium text-slate-600 dark:text-slate-400">No users found</p>
+                        <p className="text-sm opacity-70">Try adjusting your search or role filters</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedUsers.map((user, idx) => (
+                    <motion.tr 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2, delay: idx * 0.03 }}
+                      key={user.id} 
+                      className="group cursor-pointer hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 transition-colors border-b border-slate-100 dark:border-slate-800"
+                      onClick={() => setViewingUser(user)}
+                    >
+                      <TableCell className="py-4 pl-6">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="h-10 w-10 border border-slate-200 dark:border-slate-700 shadow-sm group-hover:scale-105 transition-transform">
+                            <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-semibold">
+                              {user.firstName?.[0]}{user.lastName?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{user.fullName || `${user.firstName} ${user.lastName}`}</div>
+                            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-tight">
+                              #{user.id.slice(0, 8)}
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                          <Mail className="h-3.5 w-3.5 opacity-60" />
+                          {user.email}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getRoleBadge(user.role)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                          <Building2 className="h-3.5 w-3.5 opacity-60 shrink-0" />
+                          <span className="truncate max-w-[140px]" title={branches.find((b: any) => b.id === user.branchId)?.name || 'Head Office'}>
+                            {branches.find((b: any) => b.id === user.branchId)?.name || 'Head Office'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right pr-6">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "py-0.5 px-2 font-medium",
+                            user.isActive
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800/50"
+                              : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800/50"
+                          )}
+                        >
+                          {user.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                    </motion.tr>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between text-sm text-muted-foreground">
-        <span>
-          Showing{" "}
-          <span className="font-medium text-foreground">
-            {filteredUsers.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
-            –
-            {Math.min(filteredUsers.length, page * PAGE_SIZE)}
-          </span>{" "}
-          of <span className="font-medium text-foreground">{filteredUsers.length}</span> users
-        </span>
-        <div className="inline-flex items-center gap-2">
-          <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>
+      {/* Pagination and Info */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between px-2 pt-2">
+        <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
+          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-400">
+            {filteredUsers.length}
+          </span>
+          <span>Users found in directory</span>
+        </div>
+        
+        <div className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1 rounded-lg shadow-sm">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            disabled={page === 1} 
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            className="h-8 w-8 p-0"
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-xs">
-            Page <span className="font-medium text-foreground">{page}</span> / {totalPages}
-          </span>
+          
+          <div className="flex items-center gap-1.5 px-2">
+            <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{page}</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter self-end mb-0.5">of {totalPages}</span>
+          </div>
+
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             disabled={page === totalPages || filteredUsers.length === 0}
             onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            className="h-8 w-8 p-0"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
+
+      {/* User Detail Drawer */}
+      <Sheet open={!!viewingUser} onOpenChange={(open) => !open && setViewingUser(null)}>
+        <SheetContent className="sm:max-w-md border-l border-slate-200 dark:border-slate-800 p-0 overflow-hidden flex flex-col bg-white dark:bg-slate-950">
+          {viewingUser && (
+            <>
+              <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 opacity-10 dark:opacity-20 pointer-events-none" />
+              
+              <SheetHeader className="p-8 pb-4 relative z-10">
+                <div className="flex items-start justify-between">
+                  <Avatar className="h-20 w-20 border-4 border-white dark:border-slate-900 shadow-xl">
+                    <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-2xl font-bold">
+                      {viewingUser.firstName?.[0]}{viewingUser.lastName?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex gap-2">
+                    <Badge variant="outline" className={cn(
+                      "font-semibold",
+                      viewingUser.isActive 
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800"
+                        : "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800"
+                    )}>
+                      {viewingUser.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-1">
+                  <SheetTitle className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                    {viewingUser.fullName || `${viewingUser.firstName} ${viewingUser.lastName}`}
+                  </SheetTitle>
+                  <SheetDescription className="text-sm font-medium text-slate-500 flex items-center gap-2">
+                    <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] tracking-widest uppercase">
+                      ID: {viewingUser.id}
+                    </span>
+                  </SheetDescription>
+                </div>
+              </SheetHeader>
+
+              <div className="flex-1 overflow-y-auto px-8 py-4 space-y-8 pb-48">
+                {/* Status and Primary Roles */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Current Role</p>
+                    <div className="flex items-center gap-2">
+                      {getRoleBadge(viewingUser.role)}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Security Status</p>
+                    <div className="flex items-center gap-2">
+                      {viewingUser.mfaEnabled ? (
+                        <Badge className="bg-indigo-100 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:text-indigo-400 border-transparent">
+                          <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+                          MFA Enabled
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-slate-400 border-slate-200 dark:border-slate-800">
+                           MFA Disabled
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Job Information */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <Building2 className="h-4 w-4 text-indigo-500" />
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 tracking-tight">Assignment Details</h3>
+                  </div>
+                  <div className="grid gap-4">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-0.5">
+                         <p className="text-xs text-muted-foreground">Organization</p>
+                         <p className="text-sm font-semibold">{getOrganizationName(viewingUser.organizationId)}</p>
+                      </div>
+                      <div className="space-y-0.5 text-right">
+                         <p className="text-xs text-muted-foreground">Branch</p>
+                         <p className="text-sm font-semibold">{getBranchName(viewingUser.branchId)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-0.5">
+                         <p className="text-xs text-muted-foreground">Employee #</p>
+                         <p className="text-sm font-semibold">{viewingUser.employeeId || "Not Set"}</p>
+                      </div>
+                      <div className="space-y-0.5 text-right">
+                         <p className="text-xs text-muted-foreground">Imprest Holder</p>
+                         <p className="text-sm font-semibold">{viewingUser.imprestHolder || "Not Applicable"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Information */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <Mail className="h-4 w-4 text-indigo-500" />
+                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 tracking-tight">Contact & Personal</h3>
+                  </div>
+                  <div className="grid gap-4">
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Email Address</p>
+                      <div className="flex items-center gap-2 h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-sm font-medium">
+                        <Mail className="h-3.5 w-3.5 opacity-50 text-indigo-500" />
+                        {viewingUser.email}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Phone Number</p>
+                      <div className="flex items-center gap-2 h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-sm font-medium">
+                        <Phone className="h-3.5 w-3.5 opacity-50 text-indigo-500" />
+                        {viewingUser.phone || "No phone listed"}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Contact Person</p>
+                      <div className="flex items-center gap-2 h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-sm font-medium">
+                        <User className="h-3.5 w-3.5 opacity-50 text-indigo-500" />
+                        {viewingUser.contactPerson || "Not Set"}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Mailing Address</p>
+                      <div className="flex items-start gap-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-sm font-medium min-h-[60px]">
+                        <MapPin className="h-3.5 w-3.5 opacity-50 text-indigo-500 mt-0.5" />
+                        <span className="leading-tight">{viewingUser.address || "No address provided"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Timestamps */}
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Calendar className="h-3 w-3" />
+                    <span>Joined on {new Date(viewingUser.createdAt).toLocaleDateString(undefined, { dateStyle: 'long' })}</span>
+                  </div>
+                </div>
+              </div>
+
+              <SheetFooter className="mt-auto p-6 bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-3 sticky bottom-0 z-20">
+                <div className="grid grid-cols-2 gap-3 w-full">
+                  <Button 
+                    variant="outline" 
+                    className="gap-2 border-slate-200 dark:border-slate-800 h-10 shadow-sm"
+                    onClick={() => {
+                        if (viewingUser) openEditDialog(viewingUser)
+                    }}
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edit Profile
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="gap-2 border-slate-200 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 h-10 shadow-sm"
+                    onClick={() => {
+                        if (viewingUser) toggleUserStatus(viewingUser)
+                    }}
+                  >
+                    <RefreshCw className={cn("h-4 w-4", viewingUser && submittingUserId === viewingUser.id && "animate-spin")} />
+                    {viewingUser.isActive ? "Deactivate" : "Activate"}
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    className="gap-2 h-10 shadow-md"
+                    onClick={() => {
+                        if (viewingUser) setDeleteConfirm(viewingUser)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete User
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                       <Button variant="secondary" className="gap-2 h-10 shadow-sm">
+                          <MoreHorizontal className="h-4 w-4" />
+                          More
+                       </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-[200px]">
+                       <DropdownMenuLabel>Account Security</DropdownMenuLabel>
+                       <DropdownMenuSeparator />
+                       <DropdownMenuItem onClick={() => {
+                           if (viewingUser) {
+                               openEditDialog(viewingUser)
+                               setShowPasswordReset(true)
+                           }
+                       }} className="gap-2 cursor-pointer">
+                          <KeyRound className="h-4 w-4 text-amber-500" />
+                          Reset Password
+                       </DropdownMenuItem>
+                       <DropdownMenuItem className="gap-2 cursor-pointer">
+                          <ShieldAlert className="h-4 w-4 text-red-500" />
+                          Revoke Access
+                       </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  className="w-full text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors h-9 text-xs"
+                  onClick={() => setViewingUser(null)}
+                >
+                  Close Drawer
+                </Button>
+              </SheetFooter>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* Edit User Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && closeEditDialog()}>
