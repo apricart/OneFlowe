@@ -128,24 +128,66 @@ export async function GET(req: NextRequest) {
             organizationId: b.organizationId,
             branchId: b.branchId,
             period: currentMonth,
-            amountAllocatedCents: b.baselineBudgetCents || 0, // Automatically becomes the monthly base
+            amountAllocatedCents: b.baselineBudgetCents || 0,
             amountSpentCents: 0,
             amountHeldCents: 0,
             amountCreditedCents: 0,
           }))
 
           await db.insert(budgets).values(newRecords).onConflictDoNothing()
-          
-          // Instead of recursing, we manually merge the results
-          const newRecordsMap = new Map(newRecords.map(r => [r.branchId, r]))
-          
-          const finalBudgets = allBranches.map(b => {
-            const record = b.amountAllocatedCents !== null ? b : newRecordsMap.get(b.branchId)
-            const allocated = record ? (record.amountAllocatedCents ?? b.baselineBudgetCents ?? 0) : (b.baselineBudgetCents ?? 0)
-            const credited = (record as any)?.amountCreditedCents || 0
-            const spent = (record as any)?.amountSpentCents || 0
-            const held = (record as any)?.amountHeldCents || 0
-            
+        }
+
+        // Detect stale budgets: records where allocated=0 but branch baseline is non-zero
+        // This happens when baselines are updated after budgets were auto-initialized
+        const staleBudgets = allBranches.filter(
+          b => b.amountAllocatedCents !== null 
+            && b.amountAllocatedCents === 0 
+            && (b.baselineBudgetCents || 0) > 0
+            && (b.amountSpentCents || 0) === 0  // Only sync if nothing has been spent yet
+            && (b.amountCreditedCents || 0) === 0 // and no addons applied
+        )
+
+        if (staleBudgets.length > 0) {
+          console.log(`[Budgets] Syncing ${staleBudgets.length} stale budgets with updated baselines for ${currentMonth}`)
+          for (const sb of staleBudgets) {
+            await db.update(budgets)
+              .set({ amountAllocatedCents: sb.baselineBudgetCents || 0, updatedAt: new Date() })
+              .where(and(eq(budgets.branchId, sb.branchId), eq(budgets.period, currentMonth)))
+          }
+        }
+
+        // If we had any missing or stale budgets, re-fetch to get the updated data
+        if (missingBudgets.length > 0 || staleBudgets.length > 0) {
+          const refreshed = await db
+            .select({
+              branchId: branches.id,
+              branchName: branches.name,
+              organizationId: branches.organizationId,
+              groupId: branches.groupId,
+              groupName: groups.name,
+              amountAllocatedCents: budgets.amountAllocatedCents,
+              amountSpentCents: budgets.amountSpentCents,
+              amountHeldCents: budgets.amountHeldCents,
+              amountCreditedCents: budgets.amountCreditedCents,
+              baselineBudgetCents: branches.baselineBudgetCents,
+            })
+            .from(branches)
+            .leftJoin(groups, eq(branches.groupId, groups.id))
+            .leftJoin(budgets, and(eq(budgets.branchId, branches.id), eq(budgets.period, currentMonth)))
+            .where(
+              and(
+                eq(branches.status, 'active'),
+                role === "SUPER_ADMIN" ? (orgId ? eq(branches.organizationId, orgId) : undefined) : eq(branches.organizationId, orgId),
+                parsedGroupIds.length > 0 ? inArray(branches.groupId, parsedGroupIds) : undefined,
+                parsedBranchIds.length > 0 ? inArray(branches.id, parsedBranchIds) : undefined
+              )
+            )
+
+          const finalBudgets = refreshed.map(b => {
+            const allocated = b.amountAllocatedCents ?? (b.baselineBudgetCents || 0)
+            const credited = b.amountCreditedCents || 0
+            const spent = b.amountSpentCents || 0
+            const held = b.amountHeldCents || 0
             return {
               ...b,
               amountAllocatedCents: allocated,

@@ -68,9 +68,20 @@ function parseDatabaseUrl(url: string | undefined) {
 // Parse and validate database configuration
 let dbConfig: any
 try {
-  dbConfig = process.env.DATABASE_URL
-    ? parseDatabaseUrl(process.env.DATABASE_URL)
-    : { connectionString: process.env.DATABASE_URL }
+  if (process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_HOST) {
+    dbConfig = {
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME || 'postgres',
+      ssl: { rejectUnauthorized: false }
+    }
+  } else if (process.env.DATABASE_URL) {
+    dbConfig = parseDatabaseUrl(process.env.DATABASE_URL)
+  } else {
+    throw new Error("No database configuration found (DATABASE_URL or DB_USER/DB_PASSWORD/DB_HOST)")
+  }
 } catch (error) {
   console.error("❌ Database configuration error:", error)
   throw error

@@ -482,120 +482,135 @@ export default function BudgetsPage() {
         </div>
       </div>
 
-      <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
-                <TableHead className="font-semibold text-slate-900 dark:text-slate-200">Branch Identity</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Monthly Base</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Add-on Credit</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Total Budget</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Spent (Month)</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Remaining (Month)</TableHead>
-                <TableHead className="text-center font-semibold text-slate-900 dark:text-slate-200">Usage</TableHead>
-                <TableHead className="text-center font-semibold text-slate-900 dark:text-slate-200">Status</TableHead>
-                <TableHead className="text-right font-semibold text-slate-900 dark:text-slate-200">Action</TableHead>
+      <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900 rounded-2xl">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 border-b border-slate-200 dark:border-slate-700">
+              <TableHead className="font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 pl-5">Branch</TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">Base</TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">Add-on</TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-indigo-500">Total Budget</TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">Spent</TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">Remaining</TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 pr-5">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {budgets.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-16">
+                  <AlertTriangle className="h-8 w-8 text-yellow-500 mx-auto mb-3 opacity-40" />
+                  <p className="text-sm text-muted-foreground">No branches found</p>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {budgets.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12">
-                    <AlertTriangle className="h-8 w-8 text-yellow-500 mx-auto mb-2 opacity-50" />
-                    <p className="text-muted-foreground">No branches found</p>
-                  </TableCell>
-                </TableRow>
-              ) : filteredBudgets.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                    No branches match your search
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredBudgets.map(budget => {
-                  const spendingPercent = getSpendingPercentage(budget)
-                  const isNearLimit = spendingPercent >= 90
-                  const isMedium = spendingPercent >= 70
-                  const isUnderutilized = budget.amountAllocatedCents === 0
+            ) : filteredBudgets.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
+                  No branches match your search
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredBudgets.map(budget => {
+                const spendingPercent = getSpendingPercentage(budget)
+                const isNearLimit = spendingPercent >= 90
+                const isMedium = spendingPercent >= 70
+                const totalBudget = budget.amountAllocatedCents + (budget.amountCreditedCents || 0)
+                const hasNoBudget = totalBudget === 0 && budget.baselineBudgetCents === 0
 
-                  return (
-                    <TableRow key={budget.branchId} className={isUnderutilized ? "bg-gray-50 dark:bg-gray-900" : isNearLimit ? "bg-red-50 dark:bg-red-950/20" : isMedium ? "bg-yellow-50 dark:bg-yellow-950/20" : ""}>
-                      <TableCell className="font-bold text-slate-900 dark:text-white">
-                        <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                return (
+                  <TableRow
+                    key={budget.branchId}
+                    className={cn(
+                      "transition-colors border-b border-slate-100 dark:border-slate-800/50",
+                      hasNoBudget ? "bg-slate-50/50 dark:bg-slate-900/50" : "",
+                      isNearLimit ? "bg-red-50/60 dark:bg-red-950/10" : "",
+                      isMedium && !isNearLimit ? "bg-amber-50/40 dark:bg-amber-950/10" : "",
+                      "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                    )}
+                  >
+                    <TableCell className="pl-5 py-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={cn(
+                          "w-2 h-2 rounded-full shrink-0",
+                          hasNoBudget ? "bg-slate-300" : isNearLimit ? "bg-red-500" : isMedium ? "bg-amber-500" : "bg-emerald-500"
+                        )} />
+                        <span className="font-semibold text-[13px] text-slate-800 dark:text-slate-200 truncate" title={budget.branchName}>
                           {budget.branchName}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right font-medium text-slate-500 dark:text-slate-400">
+                        </span>
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="text-right py-2.5">
+                      <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">
                         {formatAmount(budget.baselineBudgetCents)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {budget.amountCreditedCents > 0 ? (
-                          <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 font-bold">
-                            +{formatAmount(budget.amountCreditedCents)}
-                          </Badge>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-700">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-black">
-                        <span className="text-slate-900 dark:text-white text-base">
-                          {formatAmount(budget.amountAllocatedCents + budget.amountCreditedCents)}
+                      </span>
+                    </TableCell>
+
+                    <TableCell className="text-right py-2.5">
+                      {(budget.amountCreditedCents || 0) > 0 ? (
+                        <span className="text-[13px] font-bold text-amber-600 dark:text-amber-400 tabular-nums">
+                          +{formatAmount(budget.amountCreditedCents)}
                         </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className="text-rose-600 font-semibold" title={`Actual Spent: ${formatAmount(budget.amountSpentCents)}, Pending: ${formatAmount(budget.amountHeldCents)}`}>
-                          {formatAmount(budget.amountSpentCents + budget.amountHeldCents)}
+                      ) : (
+                        <span className="text-[13px] text-slate-300 dark:text-slate-700">—</span>
+                      )}
+                    </TableCell>
+
+                    <TableCell className="text-right py-2.5">
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-[13px] font-black text-slate-900 dark:text-white tabular-nums">
+                          {formatAmount(totalBudget)}
                         </span>
-                      </TableCell>
-                      <TableCell className="text-right font-black tracking-tight">
-                        <span className={budget.remainingCents < 0 ? "text-red-600" : "text-emerald-600"}>{formatAmount(budget.remainingCents)}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1 w-24">
-                          <div className="text-xs font-semibold text-center text-slate-900 dark:text-white">{spendingPercent.toFixed(0)}%</div>
-                          <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                            <div className={`h-full transition-all ${getStatusColor(spendingPercent)}`} style={{ width: `${Math.min(100, spendingPercent)}%` }} />
+                        {totalBudget > 0 && (
+                          <div className="w-12 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                            <div
+                              className={cn("h-full rounded-full transition-all duration-500", getStatusColor(spendingPercent))}
+                              style={{ width: `${Math.min(100, spendingPercent)}%` }}
+                            />
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {isUnderutilized ? (
-                          <Badge className="bg-gray-500 text-xs">Not Set</Badge>
-                        ) : isNearLimit ? (
-                          <Badge className="bg-red-500 text-xs gap-1"><AlertTriangle className="h-2 w-2" />At Limit</Badge>
-                        ) : isMedium ? (
-                          <Badge className="bg-yellow-500 text-xs"><Clock className="h-2 w-2 mr-1" />Medium</Badge>
-                        ) : (
-                          <Badge className="bg-green-500 text-xs"><CheckCircle2 className="h-2 w-2 mr-1" />Good</Badge>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex gap-2 justify-end">
-                          <Button size="sm" onClick={() => handleEditBudget(budget)} className="gap-1 whitespace-nowrap">
-                            <Edit2 className="h-3 w-3" />
-                            <span className="hidden sm:inline">Allocate</span>
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleEmptyBudget(budget)}
-                            className="gap-1 whitespace-nowrap"
-                            title="Reset budget to zero"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            <span className="hidden sm:inline">Empty</span>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="text-right py-2.5">
+                      <span className="text-[13px] font-semibold text-rose-600 dark:text-rose-400 tabular-nums" title={`Spent: ${formatAmount(budget.amountSpentCents)} + Pending: ${formatAmount(budget.amountHeldCents)}`}>
+                        {formatAmount(budget.amountSpentCents + budget.amountHeldCents)}
+                      </span>
+                    </TableCell>
+
+                    <TableCell className="text-right py-2.5">
+                      <span className={cn("text-[13px] font-black tabular-nums", budget.remainingCents < 0 ? "text-red-600" : "text-emerald-600 dark:text-emerald-400")}>
+                        {formatAmount(budget.remainingCents)}
+                      </span>
+                    </TableCell>
+
+                    <TableCell className="text-right pr-5 py-2.5">
+                      <div className="flex gap-1.5 justify-end">
+                        <Button
+                          size="sm"
+                          onClick={() => handleEditBudget(budget)}
+                          className="h-7 px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold uppercase tracking-wide shadow-sm"
+                        >
+                          <Edit2 className="h-3 w-3 mr-1" />
+                          Allocate
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleEmptyBudget(budget)}
+                          className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                          title="Reset budget to zero"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
+          </TableBody>
+        </Table>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
