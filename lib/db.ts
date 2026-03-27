@@ -46,8 +46,8 @@ function parseDatabaseUrl(url: string | undefined) {
       host: urlObj.hostname,
       port,
       database: urlObj.pathname.slice(1), // Remove leading slash
-      user: urlObj.username || 'postgres',
-      password: urlObj.password || '',
+      user: urlObj.username ? decodeURIComponent(urlObj.username) : 'postgres',
+      password: urlObj.password ? decodeURIComponent(urlObj.password) : '',
       // Supabase pooler requires rejectUnauthorized: false
       // For non-Supabase production, enforce certificate verification
       ssl: isSupabase
