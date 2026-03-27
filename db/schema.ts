@@ -92,6 +92,7 @@ export const users = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     email: varchar("email", { length: 255 }).notNull(),
+    username: varchar("username", { length: 255 }),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     roleId: integer("role_id")
       .references(() => roles.id)
@@ -108,6 +109,7 @@ export const users = pgTable(
     branchId: integer("branch_id"),
     imprestHolder: varchar("imprest_holder", { length: 255 }),
     contactPerson: varchar("contact_person", { length: 255 }),
+    location: varchar("location", { length: 255 }),
     address: text("address"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -115,6 +117,7 @@ export const users = pgTable(
     sessionVersion: integer("session_version").notNull().default(1),
   },
   (t) => ({
+    usernameIdx: uniqueIndex("users_username_idx").on(t.username),
     emailIdx: uniqueIndex("users_email_idx").on(t.email),
     roleIdx: index("users_role_idx").on(t.roleId),
     activeIdx: index("users_active_idx").on(t.isActive),
@@ -854,6 +857,7 @@ export const employeeCredentials = pgTable(
     id: serial("id").primaryKey(),
     branchId: integer("branch_id").references(() => branches.id).notNull(),
     organizationId: integer("organization_id").references(() => organizations.id).notNull(),
+    username: varchar("username", { length: 255 }),
     email: varchar("email", { length: 255 }).notNull(),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     firstName: varchar("first_name", { length: 128 }),
@@ -868,6 +872,7 @@ export const employeeCredentials = pgTable(
     sessionVersion: integer("session_version").notNull().default(1),
   },
   (t) => ({
+    usernameUq: uniqueIndex("employee_creds_username_uq").on(t.username),
     emailUq: uniqueIndex("employee_creds_email_uq").on(t.email),
     branchIdx: index("employee_creds_branch_idx").on(t.branchId),
     orgIdx: index("employee_creds_org_idx").on(t.organizationId),

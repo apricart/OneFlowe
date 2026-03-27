@@ -45,7 +45,7 @@ function isUrlConstructorError(err: any): boolean {
 }
 
 export default function ShopLoginPage() {
-  const [email, setEmail] = useState("")
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [otp, setOtp] = useState("")
   const [step, setStep] = useState<"credentials" | "mfa">("credentials")
@@ -70,8 +70,8 @@ export default function ShopLoginPage() {
 
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) {
-      return toast({ title: "Enter email and password", variant: "destructive" })
+    if (!username || !password) {
+      return toast({ title: "Enter username and password", variant: "destructive" })
     }
 
     setIsLoading(true)
@@ -81,7 +81,7 @@ export default function ShopLoginPage() {
 
       // 1. Try Standard User Login (New System - ORDER_PORTAL role)
       let result = await signIn("credentials", {
-        email,
+        username,
         password,
         redirect: false,
       })
@@ -113,7 +113,7 @@ export default function ShopLoginPage() {
         console.log("Standard login failed, trying employee login fallback...")
 
         result = await signIn("employee-credentials", {
-          email,
+          username,
           password,
           redirect: false,
         })
@@ -130,7 +130,7 @@ export default function ShopLoginPage() {
             toast({ title: "Login failed", description: "Your account has been deactivated.", variant: "destructive" })
           } else {
             // Both failed
-            toast({ title: "Login failed", description: "Invalid email or password", variant: "destructive" })
+            toast({ title: "Login failed", description: "Invalid username or password", variant: "destructive" })
           }
         } else {
           // Employee Login Success
@@ -170,7 +170,7 @@ export default function ShopLoginPage() {
       const providerId = providerType === "user" ? "mfa-credentials" : "employee-mfa-credentials"
 
       const result = await signIn(providerId, {
-        email,
+        username,
         password,
         otp,
         redirect: false,
@@ -233,12 +233,12 @@ export default function ShopLoginPage() {
           {step === "credentials" ? (
             <form onSubmit={handleCredentialsSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2 text-slate-700">Email</label>
+                <label className="block text-sm font-medium mb-2 text-slate-700">Username</label>
                 <Input
-                  type="email"
-                  placeholder="employee@branch.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   disabled={isLoading}
                   className="bg-white/80 border-slate-300 focus:border-blue-500 focus:ring-blue-500"
                 />

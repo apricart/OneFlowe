@@ -52,13 +52,13 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
-  const [email, setEmail] = useState("")
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mfaRequired, setMfaRequired] = useState(false)
-  const [pendingUser, setPendingUser] = useState<{ email: string; password: string } | null>(null)
+  const [pendingUser, setPendingUser] = useState<{ username: string; password: string } | null>(null)
   const [isProcessingMFA, setIsProcessingMFA] = useState(false)
 
   // Clear theme, context, stale cookies on mount. Force light mode. Sign out any existing session.
@@ -90,17 +90,17 @@ function LoginForm() {
       // Clear cookies again before sign-in to guarantee a clean state
       clearAuthCookies()
 
-      const result = await signIn("credentials", { redirect: false, email, password })
+      const result = await signIn("credentials", { redirect: false, username, password })
 
       if (result?.error) {
         if (result.error === "MFA_REQUIRED") {
-          console.log("Login: MFA required for", email)
-          setPendingUser({ email, password })
+          console.log("Login: MFA required for", username)
+          setPendingUser({ username, password })
           setMfaRequired(true)
           return
         }
         if (result.error === "CredentialsSignin") {
-          throw new Error("Invalid credentials. Please check your email and password.")
+          throw new Error("Invalid credentials. Please check your username and password.")
         }
         if (result.error === "ORGANIZATION_INACTIVE") {
           throw new Error("Company has been de-activated by the Admin.")
@@ -200,15 +200,16 @@ function LoginForm() {
         <CardContent>
           <form onSubmit={onSubmit} className="grid gap-4" suppressHydrationWarning>
             <div className="grid gap-2">
-              <label htmlFor="email" className="text-sm font-medium text-slate-700">
-                Email
+              <label htmlFor="username" className="text-sm font-medium text-slate-700">
+                Username
               </label>
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
+                placeholder="Enter your username"
                 className="bg-white/80 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500"
                 suppressHydrationWarning
               />
@@ -271,7 +272,7 @@ function LoginForm() {
       {mfaRequired && pendingUser && (
         <MFAVerificationDialog
           open={mfaRequired}
-          userEmail={pendingUser.email}
+          username={pendingUser.username}
           userPassword={pendingUser.password}
           onSuccess={handleMFASuccess}
           onClose={handleMFACancel}

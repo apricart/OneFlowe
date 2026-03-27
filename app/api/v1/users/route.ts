@@ -1,7 +1,7 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { db } from "@/lib/db"
-import { users as usersTable, roles as rolesTable, systemLogs } from "@/db/schema"
-import { and, desc, eq, ne, isNull } from "drizzle-orm"
+import { users as usersTable, roles as rolesTable, systemLogs, employeeCredentials } from "@/db/schema"
+import { and, desc, eq, ne, isNull, or } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 import { headers } from "next/headers"
 type Role = "SUPER_ADMIN" | "HEAD_OFFICE" | "BRANCH_ADMIN" | "ORDER_PORTAL"
@@ -31,6 +31,8 @@ export async function GET(req: Request) {
         email: usersTable.email,
         firstName: usersTable.firstName,
         lastName: usersTable.lastName,
+        username: usersTable.username,
+        location: usersTable.location,
         phone: usersTable.phone,
         mfaEnabled: usersTable.mfaEnabled,
         organizationId: usersTable.organizationId,
@@ -53,6 +55,8 @@ export async function GET(req: Request) {
       email: r.email,
       firstName: r.firstName || "",
       lastName: r.lastName || "",
+      username: r.username || "",
+      location: r.location || null,
       phone: r.phone || null,
       mfaEnabled: !!r.mfaEnabled,
       organizationId: r.organizationId ?? null,
@@ -80,6 +84,8 @@ export async function POST(req: Request) {
   const firstName = String(body.firstName || "")
   const lastName = String(body.lastName || "")
   const email = String(body.email || "")
+  const username = String(body.username || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+  const location = String(body.location || "")
   const password = String(body.password || "")
   const role = String(body.role || "") as Role
   const parseId = (val: any) => {
@@ -91,8 +97,8 @@ export async function POST(req: Request) {
   const organizationId = parseId(body.organizationId)
   const branchId = parseId(body.branchId)
 
-  if (!firstName || !lastName || !email || !password || !role) {
-    return error("firstName, lastName, email, password, role are required", 400)
+  if (!firstName || !lastName || !email || !username || !password || !role) {
+    return error("firstName, lastName, email, username, password, role are required", 400)
   }
   // Get the current user's role to determine what roles they can create
   const scope = await getRequestScope()
@@ -141,21 +147,32 @@ export async function POST(req: Request) {
     const passwordHash = await hashPassword(password)
     console.log("[USERS_API] Password hashed successfully")
 
-    // Pre-emptive check for existing user with the same email
-    const [existingUser] = await db
+    // Pre-emptive check for existing user with the same email or username
+    const [existingEmail] = await db
       .select({ id: usersTable.id })
       .from(usersTable)
       .where(eq(usersTable.email, email))
       .limit(1)
 
-    if (existingUser) {
+    if (existingEmail) {
       return error("Email address already exists. Please use a different email.", 400)
+    }
+
+    const [existingUsername] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(or(eq(usersTable.username, username), eq(employeeCredentials.username, username)))
+      .limit(1)
+
+    if (existingUsername) {
+      return error("Username already exists. Please choose a different username.", 400)
     }
 
     const [item] = await db
       .insert(usersTable)
       .values({
         email,
+        username,
         passwordHash,
         roleId: roleRow.id,
         firstName,
@@ -169,6 +186,7 @@ export async function POST(req: Request) {
         employeeId: body.employeeId ? String(body.employeeId) : null,
         imprestHolder: body.imprestHolder ? String(body.imprestHolder) : null,
         contactPerson: body.contactPerson ? String(body.contactPerson) : null,
+        location: location || null,
         address: body.address ? String(body.address) : null,
       })
       .returning()
@@ -192,6 +210,7 @@ export async function POST(req: Request) {
         resourceId: String(createdUser.id),
         details: {
           createdUserEmail: createdUser.email,
+          createdUserUsername: createdUser.username,
           createdUserRole: role,
           createdUserOrgId: organizationId,
           createdUserBranchId: branchId
@@ -215,7 +234,10 @@ export async function POST(req: Request) {
     const detail = String(err.detail || err.cause?.detail || "").toLowerCase()
 
     if (errorCode === '23505' || errorMsg.includes('unique constraint') || detail.includes('already exists')) {
-      return error("Email address already exists. Please use a different email.", 400)
+      if (detail.includes('email') || errorMsg.includes('email')) {
+        return error("Email address already exists. Please use a different email.", 400)
+      }
+      return error("Username already exists. Please choose a different username.", 400)
     }
 
     // Pass through validation errors as 400

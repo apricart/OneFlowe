@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { UserPlus, Mail, Phone, Shield, Building2, MapPin, AlertCircle, CheckCircle, Plus, Eye, EyeOff } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { UserPlus, Mail, Phone, Shield, Building2, MapPin, AlertCircle, CheckCircle, Plus, Eye, EyeOff, ChevronsUpDown, Check } from "lucide-react"
 import { useAppContext } from "@/components/context/app-context"
 import { useToast } from "@/hooks/use-toast"
 import { handleError } from "@/lib/error-handler"
@@ -29,6 +31,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
   const [submitting, setSubmitting] = useState(false)
   const [step, setStep] = useState(1)
   const [showPassword, setShowPassword] = useState(false)
+  const [branchOpen, setBranchOpen] = useState(false)
+  const [branchSearch, setBranchSearch] = useState("")
   const { organizationId, branchId, userRole, isInitialized } = useAppContext()
   const { toast } = useToast()
 
@@ -36,6 +40,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     firstName: "",
     lastName: "",
     email: "",
+    username: "",
     password: "",
     phone: "",
     role: "",
@@ -46,7 +51,18 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     employeeId: "",
     imprestHolder: "",
     contactPerson: "",
+    location: "",
     address: ""
+  })
+
+  const [usernameStatus, setUsernameStatus] = useState<{
+    available: boolean | null
+    loading: boolean
+    suggestions: string[]
+  }>({
+    available: null,
+    loading: false,
+    suggestions: []
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -82,6 +98,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         firstName: "",
         lastName: "",
         email: "",
+        username: "",
         password: "",
         phone: "",
         role: "",
@@ -92,8 +109,10 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         employeeId: "",
         imprestHolder: "",
         contactPerson: "",
+        location: "",
         address: ""
       })
+      setUsernameStatus({ available: null, loading: false, suggestions: [] })
       setErrors({})
       setStep(1)
     }
@@ -118,7 +137,6 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     }
   }, [open, isInitialized, organizationId, branchId, userRole])
 
-  // Validate specific field
   const validateField = (name: string, value: string) => {
     const newErrors = { ...errors }
 
@@ -129,6 +147,16 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         newErrors.email = "Please enter a valid email"
       } else {
         delete newErrors.email
+      }
+    }
+
+    if (name === "username") {
+      if (!value.trim()) {
+        newErrors.username = "Username is required"
+      } else if (value.length < 3) {
+        newErrors.username = "Username must be at least 3 characters"
+      } else {
+        delete newErrors.username
       }
     }
 
@@ -145,6 +173,33 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     setErrors(newErrors)
   }
 
+  // Real-time username check
+  useEffect(() => {
+    const username = form.username.trim().toLowerCase().replace(/[^a-z0-9]/g, "")
+    if (username.length < 3) {
+      setUsernameStatus({ available: null, loading: false, suggestions: [] })
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setUsernameStatus(prev => ({ ...prev, loading: true }))
+      try {
+        const res = await fetch(`/api/v1/users/check-username?username=${username}`)
+        const data = await res.json()
+        setUsernameStatus({
+          available: data.item?.available ?? false,
+          suggestions: data.item?.suggestions ?? [],
+          loading: false
+        })
+      } catch (err) {
+        console.error("Failed to check username:", err)
+        setUsernameStatus(prev => ({ ...prev, loading: false }))
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [form.username])
+
   // Validate form
   const validateForm = (autoJump = false) => {
     const newErrors: Record<string, string> = {}
@@ -152,6 +207,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
 
     if (!form.firstName.trim()) newErrors.firstName = "First name is required"
     if (!form.lastName.trim()) newErrors.lastName = "Last name is required"
+    if (!form.username.trim()) newErrors.username = "Username is required"
+    if (usernameStatus.available === false) newErrors.username = "This username is already taken"
     if (!form.email.trim()) {
       newErrors.email = "Email is required"
     } else if (!/\S+@\S+\.\S+/.test(form.email)) {
@@ -214,6 +271,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         body: JSON.stringify({
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
+          username: form.username.trim().toLowerCase().replace(/[^a-z0-9]/g, ""),
           email: form.email.trim(),
           password: form.password,
           phone: form.phone.trim() || null,
@@ -225,6 +283,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
           employeeId: form.employeeId.trim() || null,
           imprestHolder: form.imprestHolder.trim() || null,
           contactPerson: form.contactPerson.trim() || null,
+          location: form.location.trim() || null,
           address: form.address.trim() || null
         })
       }) as any
@@ -390,6 +449,60 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   )}
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="username">Username *</Label>
+                  <div className="relative">
+                    <Input
+                      id="username"
+                      name="username"
+                      value={form.username}
+                      onChange={e => {
+                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, "")
+                        setForm({ ...form, username: val })
+                        validateField("username", val)
+                      }}
+                      placeholder="Enter unique username"
+                      className={errors.username ? 'border-red-500 pr-10' : 'pr-10'}
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {usernameStatus.loading ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                      ) : usernameStatus.available === true ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : usernameStatus.available === false ? (
+                        <AlertCircle className="h-4 w-4 text-red-500" />
+                      ) : null}
+                    </div>
+                  </div>
+                  {errors.username && (
+                    <p className="text-xs text-red-600">{errors.username}</p>
+                  )}
+                  {usernameStatus.available === false && usernameStatus.suggestions.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Suggested Lookups:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {usernameStatus.suggestions.map(s => (
+                          <Badge
+                            key={s}
+                            variant="outline"
+                            className="cursor-pointer hover:bg-blue-50 hover:text-blue-700 transition-colors border-blue-200"
+                            onClick={() => {
+                              setForm({ ...form, username: s })
+                              setUsernameStatus(prev => ({ ...prev, available: true, suggestions: [] }))
+                              setErrors(prev => {
+                                const next = { ...prev }
+                                delete next.username
+                                return next
+                              })
+                            }}
+                          >
+                            {s}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
                   <Input
                     id="phone"
@@ -473,15 +586,27 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="imprestHolder">Imprest Holder</Label>
-                  <Input
-                    id="imprestHolder"
-                    name="imprestHolder"
-                    value={form.imprestHolder}
-                    onChange={e => setForm({ ...form, imprestHolder: e.target.value })}
-                    placeholder="Enter imprest holder name"
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="imprestHolder">Imprest Holder</Label>
+                    <Input
+                      id="imprestHolder"
+                      name="imprestHolder"
+                      value={form.imprestHolder}
+                      onChange={e => setForm({ ...form, imprestHolder: e.target.value })}
+                      placeholder="Enter imprest holder name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Location</Label>
+                    <Input
+                      id="location"
+                      name="location"
+                      value={form.location}
+                      onChange={e => setForm({ ...form, location: e.target.value })}
+                      placeholder="Enter location"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="address">Address</Label>
@@ -575,22 +700,59 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                 {(form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && (
                   <div className="space-y-2">
                     <Label htmlFor="branch">Branch Assignment *</Label>
-                    <Select
-                      value={form.branchId}
-                      onValueChange={value => setForm({ ...form, branchId: value })}
-                      disabled={!form.organizationId}
-                    >
-                      <SelectTrigger name="branchId" className={errors.branchId ? 'border-red-500' : ''}>
-                        <SelectValue placeholder={form.organizationId ? "Select branch" : "Select organization first"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches.map((branch: any) => (
-                          <SelectItem key={branch.id} value={String(branch.id)}>
-                            {branch.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={branchOpen} onOpenChange={setBranchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={branchOpen}
+                          disabled={!form.organizationId}
+                          className={cn(
+                            "w-full justify-between font-normal",
+                            !form.branchId && "text-muted-foreground",
+                            errors.branchId && "border-red-500"
+                          )}
+                        >
+                          {form.branchId
+                            ? getSelectedBranchName()
+                            : (form.organizationId ? "Search branches..." : "Select organization first")}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                        <Command>
+                          <CommandInput
+                            placeholder="Search branches..."
+                            value={branchSearch}
+                            onValueChange={setBranchSearch}
+                          />
+                          <CommandList>
+                            <CommandEmpty>No branch found.</CommandEmpty>
+                            <CommandGroup>
+                              {branches.map((branch: any) => (
+                                <CommandItem
+                                  key={branch.id}
+                                  value={branch.name}
+                                  onSelect={() => {
+                                    setForm({ ...form, branchId: String(branch.id) })
+                                    setBranchOpen(false)
+                                    setBranchSearch("")
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      form.branchId === String(branch.id) ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {branch.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     {form.branchId && (
                       <p className="text-xs text-muted-foreground">
                         Selected: {getSelectedBranchName()}
@@ -717,7 +879,9 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                 onClick={() => {
                   if (step === 1) {
                     // Check step 1 fields only
-                    const step1Valid = form.firstName && form.lastName && form.email && form.password && !errors.email && !errors.phone && !errors.password;
+                    const step1Valid = form.firstName && form.lastName && form.username && form.email && form.password && 
+                      usernameStatus.available !== false &&
+                      !errors.email && !errors.phone && !errors.password && !errors.username;
                     if (step1Valid) setStep(2);
                     else validateForm(); // show errors
                   } else if (step === 2) {
@@ -728,7 +892,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   }
                 }}
                 disabled={
-                  (step === 1 && (!form.firstName.trim() || !form.lastName.trim() || !form.email.trim() || !form.password)) ||
+                  (step === 1 && (!form.firstName.trim() || !form.lastName.trim() || !form.username.trim() || !form.email.trim() || !form.password || usernameStatus.available === false)) ||
                   (step === 2 && (!form.role || ((form.role === "BRANCH_ADMIN" || form.role === "ORDER_PORTAL") && !form.branchId)))
                 }
               >

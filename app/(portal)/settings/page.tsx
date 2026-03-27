@@ -12,6 +12,7 @@ import { useAppContext } from "@/components/context/app-context"
 export default function SettingsPage() {
   const { data: session } = useSession()
   const userEmail = (session?.user as any)?.email
+  const username = (session?.user as any)?.username
   const { organizationId: contextOrgId, branchId: contextBranchId } = useAppContext()
 
   // Prefer active context (from header selector); fall back to user's assigned org/branch
@@ -139,6 +140,12 @@ export default function SettingsPage() {
                 </p>
               </div>
               <div>
+                <label className="text-sm font-medium text-slate-900 dark:text-slate-100">Username</label>
+                <p className="text-sm text-muted-foreground font-mono">
+                  {username || "N/A"}
+                </p>
+              </div>
+              <div>
                 <label className="text-sm font-medium text-slate-900 dark:text-slate-100">Email Address</label>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Mail className="h-4 w-4" />
@@ -167,7 +174,7 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <MFASettings userEmail={userEmail} />
+            <MFASettings username={username} />
           </CardContent>
         </Card>
       </div>

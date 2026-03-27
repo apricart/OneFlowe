@@ -7,30 +7,46 @@ export async function POST(req: NextRequest) {
     const body = await readJson<any>(req)
     if (!body) return error("Invalid request body", 400)
 
-    const { email, code, type = 'LOGIN' } = body
-
-    if (!email || !code) {
-      return error("Email and code are required", 400)
+    const { username, code, type = 'LOGIN' } = body
+    if (!username || !code) {
+      return error("Username and code are required", 400)
     }
 
     if (code.length !== 6) {
       return error("Please enter a valid 6-digit OTP code", 400)
     }
 
-    // Get user by email
     const { db } = await import("@/lib/db")
-    const { users } = await import("@/db/schema")
-    const { eq } = await import("drizzle-orm")
+    const { users, employeeCredentials } = await import("@/db/schema")
+    const { eq, and, isNull } = await import("drizzle-orm")
 
-    const [user] = await db
+    // 1. Try Users table
+    let [user] = await db
       .select({
         id: users.id,
         email: users.email,
         mfaEnabled: users.mfaEnabled
       })
       .from(users)
-      .where(eq(users.email, email.toLowerCase()))
+      .where(and(eq(users.username, username.toLowerCase()), isNull(users.deletedAt)))
       .limit(1)
+
+    // 2. Try Employee Credentials table
+    if (!user) {
+      const [emp] = await db
+        .select({
+          id: employeeCredentials.id,
+          email: employeeCredentials.email,
+          mfaEnabled: employeeCredentials.mfaEnabled
+        })
+        .from(employeeCredentials)
+        .where(eq(employeeCredentials.username, username.toLowerCase()))
+        .limit(1)
+      
+      if (emp) {
+        user = emp as any
+      }
+    }
 
     if (!user) {
       return error("User not found", 404)

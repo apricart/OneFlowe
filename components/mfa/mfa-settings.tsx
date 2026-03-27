@@ -11,10 +11,10 @@ import { MFAVerificationDialog } from "./mfa-verification-dialog"
 import { Shield, ShieldCheck, ShieldOff, AlertTriangle, CheckCircle } from "lucide-react"
 
 interface MFASettingsProps {
-  userEmail?: string
+  username?: string
 }
 
-export function MFASettings({ userEmail }: MFASettingsProps) {
+export function MFASettings({ username }: MFASettingsProps) {
   const [mfaEnabled, setMfaEnabled] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isToggling, setIsToggling] = useState(false)
@@ -217,7 +217,7 @@ export function MFASettings({ userEmail }: MFASettingsProps) {
         }}
         onSuccess={handleVerificationSuccess}
         type="LOGIN"
-        userEmail={userEmail}
+        username={username}
       />
     </>
   )

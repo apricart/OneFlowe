@@ -15,7 +15,7 @@ interface MFAVerificationDialogProps {
   onClose: () => void
   onSuccess: (otpCode?: string) => void
   type?: 'LOGIN' | 'VERIFY_EMAIL' | 'RESET_PASSWORD'
-  userEmail?: string
+  username?: string
   userPassword?: string
 }
 
@@ -24,7 +24,7 @@ export function MFAVerificationDialog({
   onClose,
   onSuccess,
   type = 'LOGIN',
-  userEmail,
+  username,
   userPassword
 }: MFAVerificationDialogProps) {
   const [otp, setOtp] = useState("")
@@ -52,11 +52,11 @@ export function MFAVerificationDialog({
   // Send OTP on dialog open (only once)
   useEffect(() => {
     if (open && !hasSentOTP.current) {
-      console.log("MFA Dialog: Sending OTP for", userEmail)
+      console.log("MFA Dialog: Sending OTP for", username)
       hasSentOTP.current = true
       sendOTP()
     }
-  }, [open, userEmail])
+  }, [open, username])
 
   // Reset flags when dialog closes
   useEffect(() => {
@@ -72,7 +72,7 @@ export function MFAVerificationDialog({
       return // Prevent multiple simultaneous sends
     }
 
-    console.log("MFA Dialog: Starting OTP send for", userEmail)
+    console.log("MFA Dialog: Starting OTP send for", username)
     isSendingRef.current = true
     setIsSending(true)
     setError(null)
@@ -81,7 +81,7 @@ export function MFAVerificationDialog({
     try {
       const response = await jsonFetcher("/api/v1/mfa/login/send-otp", {
         method: "POST",
-        body: JSON.stringify({ email: userEmail, type })
+        body: JSON.stringify({ username, type })
       }) as any
 
       if (response.error) {
@@ -118,10 +118,10 @@ export function MFAVerificationDialog({
     setError(null)
 
     try {
-      if (type === 'LOGIN' && userEmail && userPassword) {
+      if (type === 'LOGIN' && username && userPassword) {
         // Use MFA credentials provider for login
         const result = await signIn("mfa-credentials", {
-          email: userEmail,
+          username: username,
           password: userPassword,
           otp: otpCode,
           redirect: false
@@ -155,7 +155,7 @@ export function MFAVerificationDialog({
         // Use API for other MFA types
         const response = await jsonFetcher("/api/v1/mfa/login/verify-otp", {
           method: "POST",
-          body: JSON.stringify({ email: userEmail, code: otpCode, type })
+          body: JSON.stringify({ username: username, code: otpCode, type })
         }) as any
 
         if (response.error) {
@@ -255,11 +255,11 @@ export function MFAVerificationDialog({
         {/* Normal MFA Content */}
         {!isRedirecting && (
           <div className="space-y-6 py-4">
-            {/* Email Display */}
-            {userEmail && (
+            {/* Username Display */}
+            {username && (
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">
-                  Code sent to <span className="font-medium">{userEmail}</span>
+                  Code sent to the email associated with <span className="font-medium">{username}</span>
                 </p>
               </div>
             )}
