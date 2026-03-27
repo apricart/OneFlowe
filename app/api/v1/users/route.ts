@@ -148,13 +148,19 @@ export async function POST(req: Request) {
     console.log("[USERS_API] Password hashed successfully")
 
     // Username uniqueness is enforced by DB unique index and the check-username API
-    const [existingUsername] = await db
+    const [existingUsernameUser] = await db
       .select({ id: usersTable.id })
       .from(usersTable)
-      .where(or(eq(usersTable.username, username), eq(employeeCredentials.username, username)))
+      .where(eq(usersTable.username, username))
       .limit(1)
 
-    if (existingUsername) {
+    const [existingUsernameEmp] = await db
+      .select({ id: employeeCredentials.id })
+      .from(employeeCredentials)
+      .where(eq(employeeCredentials.username, username))
+      .limit(1)
+
+    if (existingUsernameUser || existingUsernameEmp) {
       return error("Username already exists. Please choose a different username.", 400)
     }
 
