@@ -13,8 +13,7 @@ import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTr
 import { formatPKR, cn } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
-import { OrganizationFilter } from "@/components/reports/organization-filter"
-import { GroupFilter } from "@/components/reports/group-filter"
+
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { useCallback } from "react"
 import { type DateRange } from "@/lib/hooks/use-sales-performance"
@@ -39,7 +38,7 @@ export default function BudgetsPage() {
   const { mutate: globalMutate } = useSWRConfig()
   const role = (session?.user as any)?.role
   const isHeadOffice = role === "HEAD_OFFICE" || role === "SUPER_ADMIN"
-  const { organizationId, branchId, isInitialized } = useAppContext()
+  const { organizationId, branchId, branchIds: contextBranchIds, setBranchIds: setContextBranchIds, isInitialized } = useAppContext()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [editingBudget, setEditingBudget] = useState<BudgetAllocation | null>(null)
@@ -53,38 +52,21 @@ export default function BudgetsPage() {
   const [allocationType, setAllocationType] = useState<"monthly" | "addon">("addon")
 
   // ━━━ GLOBAL FILTERS ━━━
-  const [dateRange, setDateRange] = useState<DateRange | null>({
-    startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-    endDate: new Date()
-  })
-  const [activePreset, setActivePreset] = useState<FilterPreset>("thisMonth")
-  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
-  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
-  const [selectedMonths, setSelectedMonths] = useState<number[]>([])
-  const [selectedYears, setSelectedYears] = useState<number[]>([])
-  const [selectedOrgId, setSelectedOrgId] = useState<string>(organizationId ? String(organizationId) : "")
+  const [dateRange, setDateRange] = useState<DateRange | null>(null)
+  const [activePreset, setActivePreset] = useState<FilterPreset>("all")
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, c?: boolean, cr?: DateRange | null, m?: number[], y?: number[]) => {
+  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
     setDateRange(range)
     setActivePreset(preset)
-    if (m !== undefined) setSelectedMonths(m)
-    if (y !== undefined) setSelectedYears(y)
   }, [])
-
-  // Sync selectedOrgId when context changes
-  React.useEffect(() => {
-    if (organizationId && !selectedOrgId) {
-      setSelectedOrgId(String(organizationId))
-    }
-  }, [organizationId])
 
   // Build endpoint respecting context (organization scope)
   const budgetsEndpoint = useMemo(() => {
     if (!isHeadOffice || !isInitialized) return null
     const params = new URLSearchParams()
     params.set("all", "true")
-    if (selectedOrgId) {
-      params.set("organizationId", selectedOrgId)
+    if (organizationId) {
+      params.set("organizationId", String(organizationId))
     }
 
     if (dateRange?.startDate) {
@@ -93,11 +75,10 @@ export default function BudgetsPage() {
       params.set("period", `${year}-${month}`)
     }
 
-    if (selectedGroupIds.length > 0) params.set("groupIds", selectedGroupIds.join(","))
-    if (selectedBranchIds.length > 0) params.set("branchIds", selectedBranchIds.join(","))
+    if (contextBranchIds.length > 0) params.set("branchIds", contextBranchIds.join(","))
 
     return `/api/v1/budgets?${params.toString()}`
-  }, [isHeadOffice, isInitialized, selectedOrgId, dateRange, selectedGroupIds, selectedBranchIds])
+  }, [isHeadOffice, isInitialized, organizationId, dateRange, contextBranchIds])
 
   const { data: budgetsData, mutate } = useSWR<any>(budgetsEndpoint, fetcher)
 
@@ -105,14 +86,14 @@ export default function BudgetsPage() {
 
   const formatAmount = (cents: number) => formatPKR(cents / 100)
 
-  // Filter by organization scope only (not branch) - budgets should show all branches in the org
+  // Filter scoped budgets natively
   const scopedBudgets = useMemo(() => {
     return budgets.filter((b) => {
-      if (selectedOrgId && String(b.organizationId) !== selectedOrgId) return false
-      // Branch-level filtering removed - Head Office needs to see all branches for budget management
+      if (organizationId && String(b.organizationId) !== String(organizationId)) return false
+      if (contextBranchIds.length > 0 && !contextBranchIds.includes(String(b.branchId))) return false
       return true
     })
-  }, [budgets, selectedOrgId])
+  }, [budgets, organizationId, contextBranchIds])
 
   const filteredBudgets = useMemo(() => {
     return scopedBudgets.filter((b) =>
@@ -354,44 +335,17 @@ export default function BudgetsPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden lg:flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
-              <GlobalDateFilter 
-                value={dateRange} 
-                activePreset={activePreset} 
-                onChange={handleDateChange} 
-              />
-              <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
-              {role === "SUPER_ADMIN" && (
-                <OrganizationFilter 
-                  selectedIds={selectedOrgId ? [selectedOrgId] : []} 
-                  onChange={(ids) => {
-                    setSelectedOrgId(ids[0] || "");
-                    setSelectedGroupIds([]);
-                    setSelectedBranchIds([]);
-                  }}
-                  maxSelect={1}
-                />
-              )}
-              {selectedOrgId && (
-                <GroupFilter 
-                  selectedIds={selectedGroupIds} 
-                  onChange={(ids) => {
-                    setSelectedGroupIds(ids);
-                    setSelectedBranchIds([]);
-                  }} 
-                  organizationId={parseInt(selectedOrgId)} 
-                />
-              )}
-              {selectedOrgId && (
-                <BranchFilter 
-                  selectedIds={selectedBranchIds} 
-                  onChange={setSelectedBranchIds} 
-                  organizationId={selectedOrgId}
-                  groupIds={selectedGroupIds}
-                />
-              )}
-            </div>
-            <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => mutate()}>
+            <GlobalDateFilter 
+              value={dateRange} 
+              activePreset={activePreset} 
+              onChange={handleDateChange} 
+            />
+            {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+              <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
+                <BranchFilter selectedIds={contextBranchIds} onChange={setContextBranchIds} organizationId={organizationId || undefined} />
+              </div>
+            )}
+            <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors bg-white dark:bg-slate-900 ml-2 border border-slate-200 dark:border-slate-800" onClick={() => mutate()}>
               <RefreshCw className={cn("h-4 w-4", !budgetsData && "animate-spin")} />
             </Button>
           </div>
@@ -416,48 +370,44 @@ export default function BudgetsPage() {
           </div>
         </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {[
-          { label: "Total Budget Limit", value: formatAmount(totalAllocated), icon: Wallet, gradient: "from-indigo-500 to-purple-500", sub: `Base + Addons for ${currentMonth}` },
-          { label: "Consumed This Month", value: formatAmount(totalSpent + totalHeld), icon: PieChart, gradient: "from-orange-400 to-pink-500", sub: "Includes pending orders" },
-          { label: "Remaining This Month", value: formatAmount(totalRemaining), icon: CheckCircle2, gradient: "from-emerald-400 to-teal-500", sub: `Available for ${currentMonth}` },
-        ].map((metric) => {
-          const Icon = metric.icon
-          return (
-            <Card key={metric.label} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-slate-900/50 bg-white dark:bg-slate-900">
-              <div className={`mb-3 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${metric.gradient} text-white shadow-inner`}>
-                <Icon className="h-5 w-5" />
-              </div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{metric.label}</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">{metric.value}</p>
-              <p className="text-xs text-muted-foreground">{metric.sub}</p>
-            </Card>
-          )
-        })}
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Total Org Budget</p>
-          <p className="text-xl font-black text-slate-900 dark:text-white">{formatAmount(totalAllocated)}</p>
-          <div className="h-1 w-8 bg-blue-500 mt-2" />
+        <Card className="p-5 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden group hover:shadow-md transition-all">
+          <div className="absolute -top-2 -right-2 text-blue-500/5 group-hover:text-blue-500/10 transition-colors transform group-hover:scale-110 duration-500"><Wallet className="h-24 w-24" /></div>
+          <div className="flex items-center gap-2.5 mb-3 relative z-10">
+            <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 shadow-sm"><Wallet className="h-4 w-4" /></div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Total Budget</p>
+          </div>
+          <p className="text-2xl font-black text-slate-900 dark:text-white relative z-10 tabular-nums tracking-tight">{formatAmount(totalAllocated)}</p>
+          <div className="h-1 w-12 bg-blue-500 mt-4 rounded-full" />
         </Card>
-        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Spent This Period</p>
-          <p className="text-xl font-black text-rose-600 dark:text-rose-400">{formatAmount(totalSpent)}</p>
-          <div className="h-1 w-8 bg-rose-500 mt-2" />
+        <Card className="p-5 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden group hover:shadow-md transition-all">
+          <div className="absolute -top-2 -right-2 text-rose-500/5 group-hover:text-rose-500/10 transition-colors transform group-hover:scale-110 duration-500"><PieChart className="h-24 w-24" /></div>
+          <div className="flex items-center gap-2.5 mb-3 relative z-10">
+            <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 shadow-sm"><PieChart className="h-4 w-4" /></div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Spent This Period</p>
+          </div>
+          <p className="text-2xl font-black text-rose-600 dark:text-rose-400 relative z-10 tabular-nums tracking-tight" title="Includes pending holds">{formatAmount(totalSpent + totalHeld)}</p>
+          <div className="h-1 w-12 bg-rose-500 mt-4 rounded-full" />
         </Card>
-        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Credits / Remaining</p>
-          <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">{formatAmount(totalRemaining)}</p>
-          <div className="h-1 w-8 bg-emerald-500 mt-2" />
+        <Card className="p-5 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden group hover:shadow-md transition-all">
+          <div className="absolute -top-2 -right-2 text-emerald-500/5 group-hover:text-emerald-500/10 transition-colors transform group-hover:scale-110 duration-500"><CheckCircle2 className="h-24 w-24" /></div>
+          <div className="flex items-center gap-2.5 mb-3 relative z-10">
+            <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 shadow-sm"><CheckCircle2 className="h-4 w-4" /></div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Credits / Remaining</p>
+          </div>
+          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 relative z-10 tabular-nums tracking-tight">{formatAmount(totalRemaining)}</p>
+          <div className="h-1 w-12 bg-emerald-500 mt-4 rounded-full" />
         </Card>
-        <Card className="p-4 border border-slate-200 dark:border-slate-800 shadow-sm bg-indigo-50 dark:bg-indigo-950/30">
-          <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-1">Avg Utilization</p>
-          <p className="text-xl font-black text-indigo-600 dark:text-indigo-400">
-            {totalAllocated > 0 ? ((totalSpent / totalAllocated) * 100).toFixed(1) : "0.0"}%
+        <Card className="p-5 border border-indigo-200 dark:border-indigo-800/50 shadow-sm bg-indigo-50/40 dark:bg-indigo-950/20 relative overflow-hidden group hover:shadow-md transition-all">
+          <div className="absolute -top-2 -right-2 text-indigo-500/5 group-hover:text-indigo-500/10 transition-colors transform group-hover:scale-110 duration-500"><Zap className="h-24 w-24" /></div>
+          <div className="flex items-center gap-2.5 mb-3 relative z-10">
+            <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 shadow-sm"><Zap className="h-4 w-4" /></div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Avg Utilization</p>
+          </div>
+          <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 relative z-10 tabular-nums tracking-tight">
+            {totalAllocated > 0 ? (((totalSpent + totalHeld) / totalAllocated) * 100).toFixed(1) : "0.0"}%
           </p>
-          <div className="h-1 w-8 bg-indigo-500 mt-2" />
+          <div className="h-1 w-12 bg-indigo-500 mt-4 rounded-full" />
         </Card>
       </div>
 

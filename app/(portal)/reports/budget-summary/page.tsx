@@ -118,7 +118,7 @@ export default function BudgetSummaryPage() {
     const [hasMounted, setHasMounted] = useState(false)
 
     // URL States for filtering
-    const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "thisMonth"
+    const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "all"
     const startFromUrl = searchParams.get("startDate") || ""
     const endFromUrl = searchParams.get("endDate") || ""
     const activeTab = searchParams.get("tab") || "analytics"

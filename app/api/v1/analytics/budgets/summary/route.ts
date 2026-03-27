@@ -174,34 +174,19 @@ export async function GET(req: NextRequest) {
         let totalHeld = 0
         let totalCredited = 0
 
-        const currentMonthPeriod = new Date().toISOString().slice(0, 7)
-        const rangeHasCurrentMonth = periodList.includes(currentMonthPeriod)
-        const relevantPeriod = rangeHasCurrentMonth ? currentMonthPeriod : periodList[periodList.length - 1]
-        const isSingleMonthSelected = periodList.length === 1
-
         // Calculate totals by iterating over all selected branches and selected periods
         activeBranches.forEach(branch => {
             periodList.forEach(period => {
                 const record = budgetLookup[branch.id]?.[period]
                 
-                // Spent and Held are ALWAYS summed across history to reflect total consumption
                 totalSpent += record ? (record.amountSpentCents || 0) : 0
                 totalHeld += record ? (record.amountHeldCents || 0) : 0
 
-                // Allocation and Credits: "One-time" / "Current Month" rule
-                // We only count the budget capacity for the most relevant single period 
-                // in the selection (usually the current month) to avoid "multiplying" the baseline.
-                if (period === relevantPeriod) {
-                    const allocated = record ? (record.amountAllocatedCents || 0) : (branch.baselineBudgetCents || 0)
-                    totalAllocated += allocated
-                    
-                    // User requirement: "add-on should come to zero when i select all-time"
-                    // Credits (add-ons) are only shown if a single month is explicitly selected.
-                    if (isSingleMonthSelected) {
-                        const credited = record ? (record.amountCreditedCents || 0) : 0
-                        totalCredited += credited
-                    }
-                }
+                const allocated = record ? (record.amountAllocatedCents || 0) : (branch.baselineBudgetCents || 0)
+                totalAllocated += allocated
+                
+                const credited = record ? (record.amountCreditedCents || 0) : 0
+                totalCredited += credited
             })
         })
 
@@ -359,18 +344,10 @@ export async function GET(req: NextRequest) {
             periodList.forEach(period => {
                 const record = budgetLookup[branch.id]?.[period]
                 
-                // Spent and Held are always summed
                 spent += record ? (record.amountSpentCents || 0) : 0
                 held += record ? (record.amountHeldCents || 0) : 0
-
-                // Allocated and Credited use the relevant single period (current or latest)
-                if (period === relevantPeriod) {
-                    allocated += record ? (record.amountAllocatedCents || 0) : (branch.baselineBudgetCents || 0)
-                    // Only show credits if looking at a single month (matching KPI logic)
-                    if (isSingleMonthSelected) {
-                        credited += record ? (record.amountCreditedCents || 0) : 0
-                    }
-                }
+                allocated += record ? (record.amountAllocatedCents || 0) : (branch.baselineBudgetCents || 0)
+                credited += record ? (record.amountCreditedCents || 0) : 0
             })
 
             return {
