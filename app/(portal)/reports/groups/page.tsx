@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, FolderTree, ShoppingBag, TrendingUp, ChevronDown, ChevronRight, Layers, LayoutGrid, Building2, Calendar, ShoppingCart, Percent, ArrowUpRight, ArrowDownRight, LayoutDashboard, Table as TableIcon, LineChart as LineChartIcon, RotateCcw
+    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, Download, FolderTree, ShoppingBag, TrendingUp, ChevronDown, ChevronRight, Layers, LayoutGrid, Building2, Calendar, ShoppingCart, Percent, ArrowUpRight, ArrowDownRight, LayoutDashboard, Table as TableIcon, LineChart as LineChartIcon, RotateCcw
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
@@ -32,6 +32,7 @@ import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 import { OrganizationFilter as OrgFilter } from "@/components/reports/organization-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
+import { KPICard } from "@/components/reports/kpi-card"
 
 type DateRange = { startDate: Date; endDate: Date }
 
@@ -158,15 +159,13 @@ export default function GroupsReportPage() {
     const comparison = globalData?.comparison
 
     const revenueTrend = useMemo(() => {
-        if (!compare || !comparison?.totalRevenue) return null
-        const pct = ((summary.totalRevenue - comparison.totalRevenue) / comparison.totalRevenue) * 100
-        return { value: Math.abs(pct).toFixed(1), isUp: pct > 0, isDown: pct < 0 }
+        if (!compare || !comparison?.totalRevenue) return undefined
+        return ((summary.totalRevenue - comparison.totalRevenue) / comparison.totalRevenue) * 100
     }, [summary.totalRevenue, comparison?.totalRevenue, compare])
 
     const orderTrend = useMemo(() => {
-        if (!compare || !comparison?.totalOrders) return null
-        const pct = ((summary.totalOrders - comparison.totalOrders) / comparison.totalOrders) * 100
-        return { value: Math.abs(pct).toFixed(1), isUp: pct > 0, isDown: pct < 0 }
+        if (!compare || !comparison?.totalOrders) return undefined
+        return ((summary.totalOrders - comparison.totalOrders) / comparison.totalOrders) * 100
     }, [summary.totalOrders, comparison?.totalOrders, compare])
 
     const groups = reportData?.groups || []
@@ -284,38 +283,33 @@ export default function GroupsReportPage() {
                 {/* ━━━ BENTO KPI GRID ━━━ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <KPICard 
-                        label="Group Net Revenue"
+                        title="Group Net Revenue"
                         value={formatPKR(summary.totalRevenue / 100)}
-                        icon={<TrendingUp className="h-4 w-4" />}
-                        iconBg="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
+                        icon={TrendingUp}
+                        colorScheme="indigo"
                         trend={revenueTrend}
-                        trendColor="emerald"
                         subtitle="Consolidated cluster sales"
-                        compare={compare}
-                        compareValue={formatPKR((comparison?.totalRevenue || 0) / 100)}
                     />
                     <KPICard 
-                        label="Refund Impact"
+                        title="Refund Impact"
                         value={formatPKR(summary.totalRefunds / 100)}
-                        icon={<RotateCcw className="h-4 w-4" />}
-                        iconBg="bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400"
+                        icon={RotateCcw}
+                        colorScheme="rose"
                         subtitle="Total refunds processed"
-                        trendColor="rose"
                     />
                     <KPICard 
-                        label="Clustered Orders"
+                        title="Clustered Orders"
                         value={summary.totalOrders.toLocaleString()}
-                        icon={<ShoppingBag className="h-4 w-4" />}
-                        iconBg="bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400"
+                        icon={ShoppingBag}
+                        colorScheme="violet"
                         trend={orderTrend}
-                        trendColor="violet"
                         subtitle="Total group transactions"
                     />
                     <KPICard 
-                        label="Active Groups"
+                        title="Active Groups"
                         value={summary.totalGroups.toLocaleString()}
-                        icon={<FolderTree className="h-4 w-4" />}
-                        iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                        icon={FolderTree}
+                        colorScheme="blue"
                         subtitle="Clustered entities"
                     />
                 </div>
@@ -520,8 +514,8 @@ export default function GroupsReportPage() {
                                                                 </div>
                                                             </TableCell>
                                                             <TableCell className="text-center font-black">
-                                                                <Badge variant="outline" className={cn("text-[10px] font-black uppercase tracking-widest", group.status === "active" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : group.status === "deleted" ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-amber-50 text-amber-600 border-amber-200")}>
-                                                                    {group.status || "Unknown"}
+                                                                <Badge variant="outline" className={cn("text-[10px] font-black uppercase tracking-widest", group.status?.toLowerCase() === "active" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : group.status?.toLowerCase() === "deleted" ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-slate-50 text-slate-600 border-slate-200")}>
+                                                                    {group.status?.toLowerCase() === 'active' ? 'Active' : group.status?.toLowerCase() === 'deleted' ? 'Deleted' : 'Inactive'}
                                                                 </Badge>
                                                             </TableCell>
                                                             <TableCell className="text-center font-black">
@@ -611,30 +605,6 @@ function CustomTooltip({ active, payload, label, compare }: any) {
     return null
 }
 
-function KPICard({ label, value, icon, iconBg, trend, trendColor, subtitle, compare, compareValue }: any) {
-    return (
-        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/40 dark:shadow-none bg-white/80 dark:bg-slate-900/50 backdrop-blur-3xl rounded-[2rem] relative group transition-all duration-500 hover:shadow-indigo-500/10 hover:translate-y-[-4px]">
-            <div className="p-7">
-                <div className="flex items-center justify-between mb-6">
-                    <div className={cn("p-2.5 rounded-2xl shadow-lg transition-transform group-hover:scale-110 duration-500", iconBg)}>{icon}</div>
-                    {trend && (
-                        <div className={cn("px-3 py-1 rounded-full text-[10px] font-black tracking-widest flex items-center gap-1 shadow-sm", trendColor === "emerald" ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400")}>
-                            {trend.isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                            {trend.value}%
-                        </div>
-                    )}
-                </div>
-                <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{label}</p>
-                    <h4 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{value}</h4>
-                    {compare && <p className="text-[10px] font-bold text-slate-400 italic">Prior: <span className="font-mono">{compareValue}</span></p>}
-                    <p className="text-[10px] font-bold text-slate-400 italic opacity-0 group-hover:opacity-100 transition-opacity duration-500">{subtitle}</p>
-                </div>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gradient-to-r from-transparent via-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        </Card>
-    )
-}
 
 
 

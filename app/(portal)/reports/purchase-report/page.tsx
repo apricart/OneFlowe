@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import {
   Loader2, TrendingUp, ShoppingBag, 
   BarChart3, RefreshCw, Search, FileText, 
-  FileSpreadsheet, FileIcon as FilePdf, Download,
+  FileSpreadsheet, Download,
   Building2, Package, Calculator, ChevronDown
 } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
@@ -356,7 +356,7 @@ export default function PurchaseReportPage() {
                 <DropdownMenuContent align="end" className="w-40">
                   <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs cursor-pointer"><FileText className="mr-2 h-4 w-4" /> CSV</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs cursor-pointer"><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs cursor-pointer"><FilePdf className="mr-2 h-4 w-4" /> PDF</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs cursor-pointer"><FileText className="mr-2 h-4 w-4" /> PDF</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

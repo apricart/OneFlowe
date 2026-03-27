@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { users, branches } from "@/db/schema"
+import { users, branches, roles } from "@/db/schema"
 import { and, eq, inArray, isNull, sql } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
@@ -67,9 +67,11 @@ export async function GET(req: NextRequest) {
                 organizationId: users.organizationId
             })
             .from(users)
-            .where(and(...conditions))
+            .innerJoin(roles, eq(users.roleId, roles.id))
+            .where(and(...conditions, eq(roles.name, "ORDER_PORTAL")))
+            .groupBy(users.id, users.fullName, users.firstName, users.lastName, users.email, users.employeeId, users.branchId, users.organizationId)
             .orderBy(users.fullName)
-            .limit(1000) // Sanity limit
+            .limit(1000)
 
         return NextResponse.json({ items })
     } catch (error: any) {

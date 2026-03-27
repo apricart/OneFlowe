@@ -18,52 +18,34 @@ interface KPICardProps {
 
 const colorMap = {
     indigo: {
-        bg: "bg-indigo-50 dark:bg-indigo-950/30",
-        iconBg: "bg-indigo-100 dark:bg-indigo-900/40",
-        iconColor: "text-indigo-600 dark:text-indigo-400",
+        gradient: "bg-gradient-to-br from-indigo-50/80 to-blue-50/80 border-indigo-100/50 text-indigo-700 dark:from-indigo-900/20 dark:to-blue-900/20 dark:border-indigo-800/30 dark:text-indigo-400",
+        iconBadge: "bg-white/80 text-indigo-600 shadow-sm border border-indigo-100 dark:bg-slate-800 dark:border-indigo-800",
         sparkline: "#6366f1",
-        border: "border-indigo-100 dark:border-indigo-900/30",
-        accent: "from-indigo-500 to-indigo-600",
     },
     emerald: {
-        bg: "bg-emerald-50 dark:bg-emerald-950/30",
-        iconBg: "bg-emerald-100 dark:bg-emerald-900/40",
-        iconColor: "text-emerald-600 dark:text-emerald-400",
+        gradient: "bg-gradient-to-br from-teal-50/80 to-emerald-50/80 border-teal-100/50 text-teal-700 dark:from-teal-900/20 dark:to-emerald-900/20 dark:border-teal-800/30 dark:text-teal-400",
+        iconBadge: "bg-white/80 text-teal-600 shadow-sm border border-teal-100 dark:bg-slate-800 dark:border-teal-800",
         sparkline: "#10b981",
-        border: "border-emerald-100 dark:border-emerald-900/30",
-        accent: "from-emerald-500 to-emerald-600",
     },
     rose: {
-        bg: "bg-rose-50 dark:bg-rose-950/30",
-        iconBg: "bg-rose-100 dark:bg-rose-900/40",
-        iconColor: "text-rose-600 dark:text-rose-400",
+        gradient: "bg-gradient-to-br from-rose-50/80 to-red-50/80 border-rose-100/50 text-rose-700 dark:from-rose-900/20 dark:to-red-900/20 dark:border-rose-800/30 dark:text-rose-400",
+        iconBadge: "bg-white/80 text-rose-600 shadow-sm border border-rose-100 dark:bg-slate-800 dark:border-rose-800",
         sparkline: "#f43f5e",
-        border: "border-rose-100 dark:border-rose-900/30",
-        accent: "from-rose-500 to-rose-600",
     },
     amber: {
-        bg: "bg-amber-50 dark:bg-amber-950/30",
-        iconBg: "bg-amber-100 dark:bg-amber-900/40",
-        iconColor: "text-amber-600 dark:text-amber-400",
+        gradient: "bg-gradient-to-br from-amber-50/80 to-orange-50/80 border-amber-100/50 text-amber-700 dark:from-amber-900/20 dark:to-orange-900/20 dark:border-amber-800/30 dark:text-amber-400",
+        iconBadge: "bg-white/80 text-amber-600 shadow-sm border border-amber-100 dark:bg-slate-800 dark:border-amber-800",
         sparkline: "#f59e0b",
-        border: "border-amber-100 dark:border-amber-900/30",
-        accent: "from-amber-500 to-amber-600",
     },
     blue: {
-        bg: "bg-blue-50 dark:bg-blue-950/30",
-        iconBg: "bg-blue-100 dark:bg-blue-900/40",
-        iconColor: "text-blue-600 dark:text-blue-400",
+        gradient: "bg-gradient-to-br from-blue-50/80 to-cyan-50/80 border-blue-100/50 text-blue-700 dark:from-blue-900/20 dark:to-cyan-900/20 dark:border-blue-800/30 dark:text-blue-400",
+        iconBadge: "bg-white/80 text-blue-600 shadow-sm border border-blue-100 dark:bg-slate-800 dark:border-blue-800",
         sparkline: "#3b82f6",
-        border: "border-blue-100 dark:border-blue-900/30",
-        accent: "from-blue-500 to-blue-600",
     },
     violet: {
-        bg: "bg-violet-50 dark:bg-violet-950/30",
-        iconBg: "bg-violet-100 dark:bg-violet-900/40",
-        iconColor: "text-violet-600 dark:text-violet-400",
+        gradient: "bg-gradient-to-br from-fuchsia-50/80 to-purple-50/80 border-fuchsia-100/50 text-fuchsia-700 dark:from-fuchsia-900/20 dark:to-purple-900/20 dark:border-fuchsia-800/30 dark:text-fuchsia-400",
+        iconBadge: "bg-white/80 text-fuchsia-600 shadow-sm border border-fuchsia-100 dark:bg-slate-800 dark:border-fuchsia-800",
         sparkline: "#8b5cf6",
-        border: "border-violet-100 dark:border-violet-900/30",
-        accent: "from-violet-500 to-violet-600",
     },
 }
 
@@ -87,74 +69,73 @@ export function KPICard({
 
     return (
         <Card className={cn(
-            "relative overflow-hidden border shadow-sm hover:shadow-md transition-all duration-300 group",
-            colors.border,
-            "bg-white dark:bg-slate-900"
+            "border rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5",
+            colors.gradient
         )}>
-            {/* Accent gradient bar at top */}
-            <div className={cn("absolute top-0 left-0 right-0 h-1 bg-gradient-to-r", colors.accent)} />
-
-            <CardContent className="p-5 pt-6">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center", colors.iconBg)}>
-                                <Icon className={cn("h-4 w-4", colors.iconColor)} />
-                            </div>
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                                {title}
-                            </p>
-                        </div>
-                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{value}</h3>
-
-                        {/* Trend indicator */}
-                        {trend !== undefined && Math.abs(trend).toFixed(1) !== "0.0" && (
-                            <div className="flex items-center gap-1.5 mt-1.5">
-                                <div className={cn(
-                                    "flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold",
-                                    trend > 0 ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" :
-                                        trend < 0 ? "bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400" :
-                                            "bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                                )}>
-                                    {TrendIcon && <TrendIcon className="h-3 w-3" />}
-                                    {Math.abs(trend).toFixed(1)}%
-                                </div>
-                                <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">vs prior</span>
-                            </div>
-                        )}
-
-                        {/* Comparison value */}
-                        {comparisonValue && (
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                                {comparisonLabel}: <span className="font-semibold text-slate-500 dark:text-slate-400">{comparisonValue}</span>
-                            </p>
-                        )}
-                        {subtitle && (
-                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1 italic">
-                                {subtitle}
-                            </p>
-                        )}
+            <CardContent className="p-5 flex items-center justify-between relative overflow-hidden h-full">
+                <div className="space-y-1.5 flex-1 max-w-[calc(100%-3rem)] z-10 flex flex-col justify-between h-full">
+                    <div>
+                        <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest truncate">
+                            {title}
+                        </p>
+                        <h3 className="text-2xl font-black tracking-tight mt-1">
+                            {value}
+                        </h3>
                     </div>
 
-                    {/* Sparkline */}
-                    {chartData.length > 1 && (
-                        <div className="w-24 h-12 opacity-70 group-hover:opacity-100 transition-opacity">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={chartData}>
-                                    <Line
-                                        type="monotone"
-                                        dataKey="value"
-                                        stroke={colors.sparkline}
-                                        strokeWidth={2}
-                                        dot={false}
-                                        isAnimationActive={true}
-                                        animationDuration={1000}
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
+                    {/* Additional Sub info */}
+                    {(trend !== undefined || comparisonValue || subtitle) && (
+                        <div className="pt-3 space-y-1 mt-auto">
+                            {trend !== undefined && Math.abs(trend).toFixed(1) !== "0.0" && (
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                    <div className={cn(
+                                        "flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold shadow-sm",
+                                        trend > 0 ? "bg-emerald-50/90 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400" :
+                                            trend < 0 ? "bg-rose-50/90 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400" :
+                                                "bg-slate-50/90 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400"
+                                    )}>
+                                        {TrendIcon && <TrendIcon className="h-3 w-3" />}
+                                        {Math.abs(trend).toFixed(1)}%
+                                    </div>
+                                    <span className="text-[10px] opacity-70 italic font-medium">vs prior</span>
+                                </div>
+                            )}
+
+                            {comparisonValue && (
+                                <p className="text-[10px] opacity-80 truncate font-medium">
+                                    {comparisonLabel}: <span className="font-bold">{comparisonValue}</span>
+                                </p>
+                            )}
+                            {subtitle && (
+                                <p className="text-[10px] opacity-70 italic truncate">
+                                    {subtitle}
+                                </p>
+                            )}
                         </div>
                     )}
                 </div>
+
+                <div className={cn("flex shrink-0 h-12 w-12 items-center justify-center rounded-xl z-10 self-start", colors.iconBadge)}>
+                    <Icon className="h-5 w-5" />
+                </div>
+
+                {/* Sparkline background */}
+                {chartData.length > 1 && (
+                    <div className="absolute right-0 bottom-0 w-32 h-16 opacity-30 pointer-events-none">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={chartData}>
+                                <Line
+                                    type="monotone"
+                                    dataKey="value"
+                                    stroke={colors.sparkline}
+                                    strokeWidth={3}
+                                    dot={false}
+                                    isAnimationActive={true}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
             </CardContent>
         </Card>
     )

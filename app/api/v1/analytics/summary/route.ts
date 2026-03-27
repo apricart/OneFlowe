@@ -259,6 +259,54 @@ export async function GET(req: NextRequest) {
         totalItemsSold: itemsResult[0]?.totalItemsSold || 0
     }
 
+    // Status Distribution (ALL orders in period, ignoring pagination)
+    const statusDistribution = await db.select({
+        name: sql<string>`UPPER(${orders.status})`,
+        value: count(orders.id)
+    })
+        .from(orders)
+        .leftJoin(branches, eq(orders.branchId, branches.id))
+        .where(whereClause)
+        .groupBy(sql`UPPER(${orders.status})`)
+
+    // Trend Aggregation (ALL orders in period by Month-Year)
+    const trendOnly = url.searchParams.get("trendOnly") === "true"
+    let trendAggregates: any[] = []
+    if (trendOnly) {
+        trendAggregates = await db.select({
+            month: sql<number>`EXTRACT(MONTH FROM ${orders.createdAt})`,
+            year: sql<number>`EXTRACT(YEAR FROM ${orders.createdAt})`,
+            revenue: metricExpressions.revenue,
+            orders: metricExpressions.orderVolume,
+        })
+            .from(orders)
+            .leftJoin(branches, eq(orders.branchId, branches.id))
+            .where(whereClause)
+            .groupBy(sql`EXTRACT(MONTH FROM ${orders.createdAt})`, sql`EXTRACT(YEAR FROM ${orders.createdAt})`)
+            .orderBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`, sql`EXTRACT(MONTH FROM ${orders.createdAt})`)
+    }
+
+    if (url.searchParams.get("summaryOnly") === "true") {
+        return NextResponse.json({
+            summary: {
+                ...summary,
+                comparison: comparisonSummary,
+                statusDistribution
+            }
+        })
+    }
+
+    if (trendOnly) {
+        return NextResponse.json({
+            summary: {
+                ...summary,
+                comparison: comparisonSummary
+            },
+            statusDistribution,
+            trend: trendAggregates
+        })
+    }
+
     // Recent Orders for Table with Branch Name and Pagination
     const recentOrders = await db.select({
         id: orders.id,

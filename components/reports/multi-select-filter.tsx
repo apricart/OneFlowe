@@ -83,9 +83,17 @@ export function MultiSelectFilter({
         setOpen(false)
     }
 
-    const displayText = selectedIds.length === 0 
+    const visibleSelectedCount = React.useMemo(() => 
+        selectedIds.filter(id => items.some(i => i.id === id)).length,
+    [selectedIds, items])
+
+    const draftVisibleCount = React.useMemo(() => 
+        draft.filter(id => items.some(i => i.id === id)).length,
+    [draft, items])
+
+    const displayText = visibleSelectedCount === 0 
         ? placeholder 
-        : `${selectedIds.length} Selected`
+        : `${visibleSelectedCount} Selected`
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -96,7 +104,7 @@ export function MultiSelectFilter({
                     disabled={disabled}
                     className={cn(
                         "h-10 px-4 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 font-bold text-xs shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900 transition-all gap-2",
-                        selectedIds.length > 0 && "border-indigo-500/50 ring-1 ring-indigo-500/10",
+                        visibleSelectedCount > 0 && "border-indigo-500/50 ring-1 ring-indigo-500/10",
                         disabled && "opacity-60 cursor-not-allowed bg-slate-50 dark:bg-slate-900 border-dashed",
                         buttonClassName
                     )}
@@ -170,7 +178,7 @@ export function MultiSelectFilter({
                             className="w-full h-8 text-[11px] font-black uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/20"
                             onClick={handleApply}
                         >
-                            Apply Selection ({draft.length})
+                            Apply Selection ({draftVisibleCount})
                         </Button>
                     </div>
                 </div>

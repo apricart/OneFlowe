@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, branches, globalProducts, categories, refundItems, refunds, organizationInventory } from "@/db/schema"
-import { and, eq, gte, lte, inArray, desc, isNull, sql } from "drizzle-orm"
+import { orders, orderItems, branches, globalProducts, categories, refundItems, refunds, organizationInventory, branchInventory } from "@/db/schema"
+import { and, eq, gte, lte, inArray, desc, isNull, sql, exists } from "drizzle-orm"
 import { aliasedTable } from "drizzle-orm"
 
 export async function GET(req: NextRequest) {
@@ -152,7 +152,49 @@ export async function GET(req: NextRequest) {
             }, {} as Record<number, number>)
         }
 
-        // 1. Fetch ALL active/inactive global products to serve as the baseline map
+        // 1. Fetch relevant global products based on filtering and scoping
+        const productConditions: any[] = []
+        if (parsedProductIds.length > 0) {
+            productConditions.push(inArray(globalProducts.id, parsedProductIds))
+        }
+
+        // Apply scoping (only products assigned to active branches or organization inventory)
+        if (branchIds.length > 0) {
+            productConditions.push(
+                exists(
+                    db.select()
+                    .from(branchInventory)
+                    .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
+                    .where(and(
+                        eq(organizationInventory.globalProductId, globalProducts.id),
+                        inArray(branchInventory.branchId, branchIds)
+                    ))
+                )
+            )
+        } else if (parsedOrgIds.length > 0) {
+            productConditions.push(
+                exists(
+                    db.select()
+                    .from(organizationInventory)
+                    .where(and(
+                        eq(organizationInventory.globalProductId, globalProducts.id),
+                        inArray(organizationInventory.organizationId, parsedOrgIds)
+                    ))
+                )
+            )
+        } else if (userOrgId) {
+            productConditions.push(
+                exists(
+                    db.select()
+                    .from(organizationInventory)
+                    .where(and(
+                        eq(organizationInventory.globalProductId, globalProducts.id),
+                        eq(organizationInventory.organizationId, userOrgId)
+                    ))
+                )
+            )
+        }
+
         const parentCategories = aliasedTable(categories, 'parentCategories')
         
         const allProducts = await db
@@ -172,8 +214,9 @@ export async function GET(req: NextRequest) {
             .leftJoin(parentCategories, eq(categories.parentId, parentCategories.id))
             .leftJoin(organizationInventory, and(
                 eq(organizationInventory.globalProductId, globalProducts.id),
-                userOrgId ? eq(organizationInventory.organizationId, userOrgId) : undefined
+                parsedOrgIds.length > 0 ? inArray(organizationInventory.organizationId, parsedOrgIds) : (userOrgId ? eq(organizationInventory.organizationId, userOrgId) : undefined)
             ))
+            .where(and(...productConditions))
             
         // 2. Initialize the product map with ALL products
         const productMap: Record<number, any> = {}

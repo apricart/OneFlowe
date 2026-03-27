@@ -45,10 +45,24 @@ export function UserFilter({
     )
 
     const users = (data?.items || []) as User[]
-    const items = users.map((u: User) => ({ 
-        id: u.id, 
-        label: u.employeeId ? `${u.name} (${u.employeeId})` : u.name
-    }))
+    
+    // Create map to count occurrences of names to identify duplicates
+    const nameCounts = new Map<string, number>()
+    users.forEach(u => nameCounts.set(u.name, (nameCounts.get(u.name) || 0) + 1))
+
+    const items = users.map((u: User) => {
+        let label = u.name
+        const isDuplicate = nameCounts.get(u.name)! > 1
+
+        if (u.employeeId) {
+            label = `${u.name} (${u.employeeId})`
+        } else if (isDuplicate) {
+            // Append short ID if no employee ID and name is duplicate
+            label = `${u.name} [${u.id.split('-')[0]}]`
+        }
+
+        return { id: u.id, label }
+    })
 
     return (
         <MultiSelectFilter

@@ -105,6 +105,7 @@ export async function GET(req: NextRequest) {
                 branchName: branches.name,
                 organizationName: organizations.name,
                 tids: sql<string>`STRING_AGG(${orders.tid}, ',')`,
+                status: sql<string>`CASE WHEN ${users.deletedAt} IS NOT NULL THEN 'DELETED' WHEN ${users.isActive} = TRUE THEN 'ACTIVE' ELSE 'INACTIVE' END`,
                 totalOrders: sql<number>`count(${orders.id})`,
                 fulfilledOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END)`,
                 refundedOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END)`,
@@ -112,10 +113,11 @@ export async function GET(req: NextRequest) {
             })
             .from(users)
             .innerJoin(orders, eq(orders.createdByUserId, users.id))
+            .innerJoin(roles, eq(users.roleId, roles.id))
             .leftJoin(branches, eq(users.branchId, branches.id))
             .leftJoin(organizations, eq(orders.organizationId, organizations.id))
-            .where(and(...baseConditions))
-            .groupBy(users.id, branches.name, organizations.name)
+            .where(and(...baseConditions, eq(roles.name, "ORDER_PORTAL")))
+            .groupBy(users.id, branches.name, organizations.name, users.deletedAt, users.isActive)
             .orderBy(desc(metricExpressions.revenue))
 
         const results = await q
@@ -147,9 +149,12 @@ export async function GET(req: NextRequest) {
                     compUsers: sql<number>`count(distinct ${orders.createdByUserId})`.mapWith(Number)
                 })
                 .from(orders)
+                .innerJoin(users, eq(orders.createdByUserId, users.id))
+                .innerJoin(roles, eq(users.roleId, roles.id))
                 .where(
                     and(
                         inArray(orders.branchId, branchIds),
+                        eq(roles.name, "ORDER_PORTAL"),
                         (() => {
                             const compCond: any[] = []
                             if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {
@@ -179,7 +184,9 @@ export async function GET(req: NextRequest) {
             const distinctYears = await db
                 .select({ year: sql<number>`EXTRACT(YEAR FROM ${orders.createdAt})::int` })
                 .from(orders)
-                .where(inArray(orders.branchId, branchIds))
+                .innerJoin(users, eq(orders.createdByUserId, users.id))
+                .innerJoin(roles, eq(users.roleId, roles.id))
+                .where(and(inArray(orders.branchId, branchIds), eq(roles.name, "ORDER_PORTAL")))
                 .groupBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`)
                 .orderBy(desc(sql`EXTRACT(YEAR FROM ${orders.createdAt})`))
 
@@ -211,7 +218,9 @@ export async function GET(req: NextRequest) {
                     qtyRefunded: metricExpressions.refundedCount,
                 })
                 .from(orders)
-                .where(and(...baseConditions))
+                .innerJoin(users, eq(orders.createdByUserId, users.id))
+                .innerJoin(roles, eq(users.roleId, roles.id))
+                .where(and(...baseConditions, eq(roles.name, "ORDER_PORTAL")))
                 .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
                 .orderBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
 
@@ -225,9 +234,12 @@ export async function GET(req: NextRequest) {
                         qtyOrdered: metricExpressions.totalOrderCount,
                     })
                     .from(orders)
+                    .innerJoin(users, eq(orders.createdByUserId, users.id))
+                    .innerJoin(roles, eq(users.roleId, roles.id))
                     .where(
                         and(
                             inArray(orders.branchId, branchIds),
+                            eq(roles.name, "ORDER_PORTAL"),
                             (() => {
                                 const compCond: any[] = []
                                 if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {

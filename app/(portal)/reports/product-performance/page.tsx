@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, LineChart, Package, Tags, AlertOctagon, TrendingUp, History, Layers, Calculator, ChevronDown, Check, ArrowUpRight, ArrowDownRight, ChartBar as ChartBarIcon, ShieldCheck, ShieldX, Eye, Building2, Filter, RotateCcw, X, LayoutGrid, LayoutDashboard, Database
+    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, Download, LineChart, Package, Tags, AlertOctagon, TrendingUp, History, Layers, Calculator, ChevronDown, Check, ArrowUpRight, ArrowDownRight, ChartBar as ChartBarIcon, ShieldCheck, ShieldX, Eye, Building2, Filter, RotateCcw, X, LayoutGrid, LayoutDashboard, Database
 } from "lucide-react"
 import {
     ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell
@@ -43,6 +43,7 @@ import { ExpandableRowDrawer, type DetailField } from "@/components/reports/expa
 import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/reports/column-selector"
 import { ProductFilter } from "@/components/reports/product-filter"
 import { OrganizationFilter } from "@/components/reports/organization-filter"
+import { KPICard } from "@/components/reports/kpi-card"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -403,9 +404,8 @@ export default function ProductPerformancePage() {
     // Comparison Trends
     const comparison = globalPerfData?.comparison
     const getTrend = (current: number, prev: number) => {
-        if (!prev || prev === 0) return null
-        const diff = ((current - prev) / prev) * 100
-        return { value: Math.abs(diff).toFixed(1), isUp: diff > 0, isDown: diff < 0 }
+        if (!prev || prev === 0) return undefined
+        return ((current - prev) / prev) * 100
     }
     const revenueTrend = getTrend(totalRevenue, comparison?.totalRevenue || 0)
     const volumeTrend = getTrend(totalVolume, comparison?.totalVolume || 0)
@@ -414,17 +414,33 @@ export default function ProductPerformancePage() {
     // ━━━ CHART DATA: Normalized trends ━━━
     const chartData = useMemo(() => {
         if (isChartProductView) {
-            const productsData = chartPerfData?.data || []
-            return productsData.map((p: any) => ({
-                name: p.productName || p.productCode || "N/A",
-                revenue: Math.round((p.revenueGeneratedCents || 0) / 100),
-                compareRevenue: Math.round((p.compareRevenue || 0) / 100),
-                ordered: p.qtyOrdered || 0,
-                fulfilled: p.qtyFulfilled || 0,
-                refunded: p.qtyRefunded || 0,
-                fulfillRate: (p.qtyOrdered || 0) > 0 ? ((p.qtyFulfilled / p.qtyOrdered) * 100).toFixed(1) : "0.0",
-                fullName: p.productName
-            }))
+            let productsData = chartPerfData?.data || []
+            
+            // Strictly filter by selected product IDs if provided
+            if (chartProductIds.length > 0) {
+                productsData = productsData.filter((p: any) => 
+                    chartProductIds.includes(String(p.productId)) || 
+                    chartProductIds.includes(String(p.id))
+                )
+            } else {
+                // Otherwise only show products with some activity to avoid cluttered bars
+                productsData = productsData.filter((p: any) => (p.qtyOrdered || 0) > 0)
+            }
+
+            // Slice to Top 20 for chart readability
+            return productsData
+                .sort((a: any, b: any) => (b.revenueGeneratedCents || 0) - (a.revenueGeneratedCents || 0))
+                .slice(0, 20)
+                .map((p: any) => ({
+                    name: p.productName || p.productCode || "N/A",
+                    revenue: Math.round((p.revenueGeneratedCents || 0) / 100),
+                    compareRevenue: Math.round((p.compareRevenue || 0) / 100),
+                    ordered: p.qtyOrdered || 0,
+                    fulfilled: p.qtyFulfilled || 0,
+                    refunded: p.qtyRefunded || 0,
+                    fulfillRate: (p.qtyOrdered || 0) > 0 ? ((p.qtyFulfilled / p.qtyOrdered) * 100).toFixed(1) : "0.0",
+                    fullName: p.productName
+                }))
         }
 
         const trend = chartPerfData?.trend || []
@@ -433,7 +449,6 @@ export default function ProductPerformancePage() {
         if (chartYears.length > 1) {
             return chartYears.sort((a, b) => a - b).map(year => {
                 const yearStr = String(year);
-                // Aggregating by year if the trend data is monthly or raw
                 const yearData = trend.filter((d: any) => d.date.startsWith(yearStr));
                 return {
                     name: yearStr,
@@ -450,10 +465,7 @@ export default function ProductPerformancePage() {
             });
         }
 
-        // One year selected (or default to current year) -> show months
         const activeYear = chartYears.length === 1 ? chartYears[0] : new Date().getFullYear();
-        
-        // If specific months are filtered, show only those. Otherwise show all 12.
         const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12 
             ? [...chartMonths].sort((a, b) => a - b) 
             : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -472,7 +484,7 @@ export default function ProductPerformancePage() {
                 fulfillRate: dataPoint?.qtyOrdered > 0 ? ((dataPoint.qtyFulfilled / dataPoint.qtyOrdered) * 100).toFixed(1) : "0.0"
             }
         });
-    }, [chartPerfData, chartYears, chartMonths, CHART_MONTH_NAMES])
+    }, [chartPerfData, chartYears, chartMonths, CHART_MONTH_NAMES, chartProductIds, isChartProductView])
 
     const isPriceCustom = reportGroupIds.length > 0 || reportOrganizationIds.length > 0
     const priceLabel = isPriceCustom ? "Price" : "Base Price"
@@ -683,7 +695,7 @@ export default function ProductPerformancePage() {
                                                     <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500"><FileText className="h-4 w-4" /></div> Excel Workbook
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
-                                                    <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500"><FilePdf className="h-4 w-4" /></div> PDF Document
+                                                    <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500"><FileText className="h-4 w-4" /></div> PDF Document
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
@@ -696,38 +708,35 @@ export default function ProductPerformancePage() {
                     <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
                         {/* ━━━ KPI BENTO GRID ━━━ */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <KPICard
-                                label="Total Revenue"
-                                value={formatPKR(totalRevenue / 100)}
-                                icon={<TrendingUp className="h-4 w-4" />}
-                                iconBg="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
-                                trend={revenueTrend}
-                                trendColor="emerald"
-                                subtitle="From fulfilled products"
-                                compare={compare}
-                                compareValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined}
+                            <KPICard 
+                                title="Total Revenue" 
+                                value={formatPKR(totalRevenue / 100)} 
+                                icon={TrendingUp} 
+                                colorScheme="emerald" 
+                                subtitle="From fulfilled products" 
+                                trend={revenueTrend} 
+                                comparisonLabel="Prior" 
+                                comparisonValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined} 
                             />
-                            <KPICard
-                                label="Qty Fulfilled"
-                                value={totalVolume.toLocaleString()}
-                                icon={<Package className="h-4 w-4" />}
-                                iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
-                                trend={volumeTrend}
-                                trendColor="emerald"
-                                subtitle={`${fulfillmentRate.toFixed(1)}% fulfillment rate`}
-                                compare={compare}
-                                compareValue={comparison ? comparison.totalVolume.toLocaleString() : undefined}
+                            <KPICard 
+                                title="Qty Fulfilled" 
+                                value={totalVolume.toLocaleString()} 
+                                icon={Package} 
+                                colorScheme="blue" 
+                                subtitle={`${fulfillmentRate.toFixed(1)}% fulfillment rate`} 
+                                trend={volumeTrend} 
+                                comparisonLabel="Prior" 
+                                comparisonValue={comparison ? comparison.totalVolume.toLocaleString() : undefined} 
                             />
-                            <KPICard
-                                label="Refund Loss"
-                                value={formatPKR(totalRefundLoss / 100)}
-                                icon={<AlertOctagon className="h-4 w-4" />}
-                                iconBg="bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400"
-                                trend={refundTrend}
-                                trendColor="rose"
-                                subtitle={`${totalRefunds.toLocaleString()} items (${refundRate.toFixed(1)}%)`}
-                                compare={compare}
-                                compareValue={comparison ? `${comparison.totalRefunds.toLocaleString()} items` : undefined}
+                            <KPICard 
+                                title="Refund Loss" 
+                                value={formatPKR(totalRefundLoss / 100)} 
+                                icon={AlertOctagon} 
+                                colorScheme="rose" 
+                                subtitle={`${totalRefunds.toLocaleString()} items (${refundRate.toFixed(1)}%)`} 
+                                trend={refundTrend} 
+                                comparisonLabel="Prior" 
+                                comparisonValue={comparison ? `${comparison.totalRefunds.toLocaleString()} items` : undefined} 
                             />
                             <Card className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 flex flex-col justify-between">
                                 <div className="flex items-center justify-between mb-2">
@@ -970,7 +979,7 @@ export default function ProductPerformancePage() {
                                         <DropdownMenuContent align="end" className="w-40 rounded-xl">
                                             <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2 cursor-pointer font-bold"><FileText className="mr-2 h-4 w-4 text-slate-400" /> CSV</DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2 cursor-pointer font-bold"><FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel</DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer font-bold"><FilePdf className="mr-2 h-4 w-4 text-rose-500" /> PDF</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer font-bold"><FileText className="mr-2 h-4 w-4 text-rose-500" /> PDF</DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </div>
@@ -1279,47 +1288,5 @@ export default function ProductPerformancePage() {
                 fields={selectedRow ? getDrawerFields(selectedRow) : []}
             />
         </div>
-    )
-}
-
-/* ━━━ KPI Card Component ━━━ */
-function KPICard({ label, value, icon, iconBg, trend, trendColor, subtitle, compare, compareValue }: {
-    label: string
-    value: string | number
-    icon: React.ReactNode
-    iconBg: string
-    trend: { value: string; isUp: boolean; isDown: boolean } | null
-    trendColor: 'emerald' | 'rose'
-    subtitle: string
-    compare?: boolean
-    compareValue?: string
-}) {
-    return (
-        <Card className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
-            <div className="flex items-center justify-between mb-2">
-                <div className={cn("p-2 rounded-xl", iconBg)}>{icon}</div>
-                <div className="flex flex-col items-end gap-1">
-                    <Badge variant="outline" className="text-[9px] uppercase font-bold tracking-wider opacity-60">{label}</Badge>
-                    {trend && trend.value !== "0.0" && (
-                        <div className={cn(
-                            "flex items-center gap-0.5 text-[10px] font-bold",
-                            trendColor === 'rose'
-                                ? (trend.isUp ? "text-rose-500" : "text-emerald-500")
-                                : (trend.isUp ? "text-emerald-500" : "text-rose-500")
-                        )}>
-                            {trend.isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                            {trend.value}%
-                        </div>
-                    )}
-                </div>
-            </div>
-            <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
-                {compare && compareValue && (
-                    <span className="text-[10px] font-bold text-slate-400 line-through opacity-50">{compareValue}</span>
-                )}
-            </div>
-            <p className="text-[10px] font-semibold text-slate-400 mt-1.5">{subtitle}</p>
-        </Card>
     )
 }

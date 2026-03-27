@@ -8,9 +8,10 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf, Download, Users, Package, CheckCircle, TrendingUp, Filter, UserCircle, Calculator, ChevronDown, UserPlus,
-    Calendar, Hash, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, BarChart3, Layers
+    Loader2, RefreshCw, Search, FileText, FileSpreadsheet, Download, Users, Package, CheckCircle, TrendingUp, Filter, UserCircle, Calculator, ChevronDown, UserPlus,
+    Calendar, Hash, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, BarChart3, Layers, LayoutGrid, RotateCcw, X, FileSearch, History, ShieldCheck, ShieldX
 } from "lucide-react"
+import { KPICard } from "@/components/reports/kpi-card"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -210,6 +211,12 @@ export default function UserReportPage() {
         setGlobalUserIds([])
     }, [globalBranchIds])
 
+    // Sync global user selection to local filters
+    useEffect(() => {
+        setChartUserIds(globalUserIds)
+        setReportUserIds(globalUserIds)
+    }, [globalUserIds])
+
     useEffect(() => {
         setChartGroupIds([])
         setChartBranchIds([])
@@ -274,9 +281,8 @@ export default function UserReportPage() {
 
     const comparison = globalData?.comparison
     const getTrend = (current: number, prev: number) => {
-        if (!prev || prev === 0) return null
-        const diff = ((current - prev) / prev) * 100
-        return { value: Math.abs(diff).toFixed(1), isUp: diff > 0, isDown: diff < 0 }
+        if (!prev || prev === 0) return undefined
+        return ((current - prev) / prev) * 100
     }
 
     const usersTrend = getTrend(totalUsers, comparison?.totalUsers || 0)
@@ -354,89 +360,135 @@ export default function UserReportPage() {
     }
 
     return (
-        <div className="space-y-5 pb-10 bg-slate-50 dark:bg-slate-950 min-h-screen">
-            <div className="sticky top-0 z-30 flex flex-wrap items-center gap-3 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                <GlobalDateFilter
-                    value={dateRange}
-                    onChange={handleDateChange}
-                    activePreset={activePreset}
-                    hidePresets={false}
-                    compare={compare}
-                    compareRange={compareRange}
-                    months={selectedMonths}
-                    years={selectedYears}
-                    compareMonths={compareMonths}
-                    compareYears={compareYears}
-                />
-                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-                    <OrganizationFilter
-                        selectedIds={globalOrganizationIds}
-                        onChange={setGlobalOrganizationIds}
-                    />
-                )}
-                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-                    <GroupFilter
-                        selectedIds={globalGroupIds}
-                        onChange={setGlobalGroupIds}
-                        organizationIds={globalOrganizationIds.length > 0 ? globalOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
-                    />
-                )}
-                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE" || role === "BRANCH_ADMIN") && (
-                    <BranchFilter
-                        selectedIds={globalBranchIds}
-                        onChange={setGlobalBranchIds}
-                        organizationIds={globalOrganizationIds.length > 0 ? globalOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
-                        groupIds={globalGroupIds}
-                    />
-                )}
-                <UserFilter
-                    selectedIds={globalUserIds}
-                    onChange={setGlobalUserIds}
-                    organizationIds={globalOrganizationIds.length > 0 ? globalOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
-                    groupIds={globalGroupIds}
-                    branchIds={globalBranchIds}
-                />
-                <div className="flex-1" />
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { mutateGlobal(); mutateChart(); mutateReport(); mutateUserProducts(); }}
-                    disabled={isGlobalLoading || isChartLoading || isReportLoading || isUserProductsLoading}
-                    className="h-9 text-[12px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 rounded-full px-4"
-                >
-                    <RefreshCw className={`h-3.5 w-3.5 mr-2 ${(isGlobalLoading || isChartLoading || isReportLoading) ? "animate-spin" : ""}`} />
-                    REFRESH
-                </Button>
+        <div className="space-y-6 pb-12 bg-slate-50 dark:bg-slate-950 min-h-screen">
+            {/* ━━━ GLOBAL STICKY HEADER ━━━ */}
+            <div className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
+                <div className="max-w-[1600px] mx-auto px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="hidden lg:flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
+                            <GlobalDateFilter
+                                value={dateRange}
+                                onChange={handleDateChange}
+                                activePreset={activePreset}
+                                hidePresets={false}
+                                compare={compare}
+                                compareRange={compareRange}
+                                months={selectedMonths}
+                                years={selectedYears}
+                                compareMonths={compareMonths}
+                                compareYears={compareYears}
+                            />
+                        </div>
+                        
+                        {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                            <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
+                                <OrganizationFilter selectedIds={globalOrganizationIds} onChange={setGlobalOrganizationIds} />
+                                <GroupFilter 
+                                    selectedIds={globalGroupIds} 
+                                    onChange={setGlobalGroupIds} 
+                                    organizationIds={globalOrganizationIds.length > 0 ? globalOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)} 
+                                />
+                                <BranchFilter 
+                                    selectedIds={globalBranchIds} 
+                                    onChange={setGlobalBranchIds} 
+                                    organizationIds={globalOrganizationIds.length > 0 ? globalOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)} 
+                                    groupIds={globalGroupIds} 
+                                />
+                            </div>
+                        )}
+                        <UserFilter
+                            selectedIds={globalUserIds}
+                            onChange={setGlobalUserIds}
+                            organizationIds={globalOrganizationIds.length > 0 ? globalOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                            groupIds={globalGroupIds}
+                            branchIds={globalBranchIds}
+                        />
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                        <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => { mutateGlobal(); mutateChart(); mutateReport(); mutateUserProducts(); }}
+                            className="h-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 rounded-xl px-4 gap-2 transition-all group"
+                        >
+                            <RefreshCw className={cn("h-4 w-4 transition-transform duration-500 group-hover:rotate-180", (isGlobalLoading || isChartLoading || isReportLoading || isUserProductsLoading) && "animate-spin")} />
+                            <span className="text-[11px] font-black uppercase tracking-widest">Synchronize</span>
+                        </Button>
+                    </div>
+                </div>
             </div>
 
-            <div className="px-4 md:px-6 space-y-6">
-                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#384e72] px-8 py-10 text-white shadow-2xl ring-1 ring-slate-700/50">
-                    <div className="flex flex-col gap-2 relative z-10">
-                        <p className="text-xs tracking-[0.4em] text-slate-400 font-black uppercase">Consumptive Intelligence</p>
-                        <h1 className="text-5xl font-black tracking-tight drop-shadow-sm">User Performance</h1>
-                        <p className="text-sm text-slate-400 font-bold max-w-xl italic mt-1 leading-relaxed">
-                            Holistic consumption overview for <strong className="text-white underline decoration-indigo-500/50">{totalUsers}</strong> active users across filtered branches.
-                        </p>
-                    </div>
-                    <div className="absolute top-0 right-0 -translate-y-12 translate-x-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none" />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    <KPICard label="Active User" value={totalUsers.toLocaleString()} icon={<Users className="h-6 w-6" />} iconBg="bg-indigo-500/10 text-indigo-500" trend={usersTrend} trendColor="emerald" subtitle="Distinct user profiles found." compare={compare} compareValue={comparison?.totalUsers} />
-                    <KPICard label="Order Volume" value={totalOrders.toLocaleString()} icon={<Package className="h-6 w-6" />} iconBg="bg-blue-500/10 text-blue-500" trend={ordersTrend} trendColor="blue" subtitle="Total orders initiated." compare={compare} compareValue={comparison?.totalOrders} />
-                    <KPICard label="Success Rate" value={`${currentSuccess.toFixed(1)}%`} icon={<CheckCircle className="h-6 w-6" />} iconBg="bg-emerald-500/10 text-emerald-500" trend={successTrend} trendColor="emerald" subtitle={`${totalFulfilled} fulfilled orders.`} compare={compare} compareValue={`${prevSuccess.toFixed(1)}%`} />
-                    <KPICard label="Total Yield" value={formatPKR(totalSpent / 100)} icon={<TrendingUp className="h-6 w-6" />} iconBg="bg-indigo-600 text-white" trend={spentTrend} trendColor="indigo" subtitle="Total net value generated." compare={compare} compareValue={formatPKR(comparison?.totalSpentCents / 100)} />
-                </div>
-
+            <div className="max-w-[1600px] mx-auto px-6 pt-6 space-y-6">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    <div className="flex justify-center">
-                        <TabsList className="bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-1 rounded-2xl h-12 shadow-sm backdrop-blur-sm">
-                            <TabsTrigger value="analytics" className="rounded-xl px-8 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-md font-bold text-xs uppercase tracking-widest transition-all">Analytics</TabsTrigger>
-                            <TabsTrigger value="reports" className="rounded-xl px-8 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-md font-bold text-xs uppercase tracking-widest transition-all">Report</TabsTrigger>
-                        </TabsList>
+                    {/* ━━━ LUXURY INTELLIGENCE HEADER ━━━ */}
+                    <div className="relative overflow-hidden bg-slate-900 rounded-[2.5rem] border border-slate-800 shadow-2xl">
+                        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-indigo-600/20 blur-[120px] rounded-full animate-pulse" />
+                        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-600/10 blur-[100px] rounded-full" />
+                        
+                        <div className="px-8 py-10 relative">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 max-w-7xl mx-auto">
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 rounded-2xl bg-indigo-600/20 text-indigo-400 ring-1 ring-indigo-500/30">
+                                            <Users className="h-5 w-5" />
+                                        </div>
+                                        <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-[10px] font-black uppercase tracking-widest px-3 py-1">
+                                            User Intelligence
+                                        </Badge>
+                                    </div>
+                                    <h1 className="text-4xl font-black text-white tracking-tight sm:text-5xl uppercase">
+                                        Consumption <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-400 to-emerald-400">Analytics</span>
+                                    </h1>
+                                    <p className="text-slate-400 font-medium text-sm flex items-center gap-2 max-w-md">
+                                        <Calculator className="h-4 w-4 opacity-50" />
+                                        Holistic overview for <strong className="text-white underline decoration-indigo-500/50">{totalUsers}</strong> active users across filtered branches.
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-col items-end gap-6">
+                                    <TabsList className="bg-slate-800/50 p-1.5 rounded-2xl border border-slate-700/50 backdrop-blur-md">
+                                        <TabsTrigger value="analytics" className="rounded-xl px-8 py-3 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 transition-all duration-300 gap-2">
+                                            <LayoutDashboard className="h-3.5 w-3.5" /> Analytics
+                                        </TabsTrigger>
+                                        <TabsTrigger value="reports" className="rounded-xl px-8 py-3 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 transition-all duration-300 gap-2">
+                                            <Database className="h-3.5 w-3.5" /> Records
+                                        </TabsTrigger>
+                                    </TabsList>
+
+                                    <div className="flex items-center gap-3">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button className="h-11 bg-indigo-600 hover:bg-indigo-500 text-white border-none rounded-xl px-6 gap-2 shadow-lg shadow-indigo-600/20 transition-all duration-300 font-bold uppercase tracking-widest text-[11px]">
+                                                    <Download className="h-4 w-4" /> Export Report
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-52 bg-slate-900 border-slate-800 text-slate-300 rounded-2xl p-2 shadow-2xl">
+                                                <DropdownMenuItem onClick={() => handleExport('csv')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
+                                                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500"><FileSpreadsheet className="h-4 w-4" /></div> CSV Spreadsheet
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
+                                                    <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500"><FileText className="h-4 w-4" /></div> Excel Workbook
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
+                                                    <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500"><FileText className="h-4 w-4" /></div> PDF Document
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        {/* ━━━ KPI BENTO GRID ━━━ */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <KPICard title="Active Employees" value={totalUsers.toLocaleString()} icon={Users} colorScheme="indigo" trend={usersTrend} subtitle="Distinct transacting profiles." comparisonLabel="Prior" comparisonValue={comparison?.totalUsers} />
+                            <KPICard title="Gross Orders" value={totalOrders.toLocaleString()} icon={Package} colorScheme="blue" trend={ordersTrend} subtitle="Total volume initiated." comparisonLabel="Prior" comparisonValue={comparison?.totalOrders} />
+                            <KPICard title="Order Success" value={`${currentSuccess.toFixed(1)}%`} icon={CheckCircle} colorScheme="emerald" trend={successTrend} subtitle={`${totalFulfilled} fulfilled orders.`} comparisonLabel="Prior" comparisonValue={`${prevSuccess.toFixed(1)}%`} />
+                            <KPICard title="Total spent" value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle="Net value of fulfillment." comparisonLabel="Prior" comparisonValue={formatPKR(comparison?.totalSpentCents / 100)} />
+                        </div>
                         <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl bg-white/40 dark:bg-slate-900/40 backdrop-blur-xl rounded-[2.5rem]">
                             <div className="p-8 border-b border-slate-100/50 dark:border-slate-800/50 flex flex-wrap justify-between items-center gap-6 bg-slate-50/30 dark:bg-slate-900/10">
                                 <div className="flex items-center gap-4">
@@ -523,12 +575,6 @@ export default function UserReportPage() {
                                                                         </div>
                                                                         {isChartUserView && (
                                                                             <>
-                                                                                <div className="flex justify-between items-center bg-emerald-500/5 p-2 rounded-xl">
-                                                                                    <span className="text-[10px] font-bold text-emerald-600 uppercase">Fulfilled</span>
-                                                                                    <span className="text-[11px] font-black text-emerald-700">
-                                                                                        {u?.fulfilled?.toLocaleString()}
-                                                                                    </span>
-                                                                                </div>
                                                                                 <div className="flex justify-between items-center bg-rose-500/5 p-2 rounded-xl">
                                                                                     <span className="text-[10px] font-bold text-rose-600 uppercase">Refunded</span>
                                                                                     <span className="text-[11px] font-black text-rose-700">
@@ -551,8 +597,8 @@ export default function UserReportPage() {
                                                     }}
                                                 />
                                                 <Legend verticalAlign="top" align="right" height={40} iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
-                                                <Bar yAxisId="left" dataKey="orders" name={compare ? "Orders (A)" : "Total Orders"} fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={compare ? 20 : 40} />
-                                                {compare && <Bar yAxisId="left" dataKey="compOrders" name="Orders (B)" fill="#94a3b8" radius={[6, 6, 0, 0]} barSize={20} opacity={0.5} />}
+                                                <Bar yAxisId="left" dataKey="orders" name={compare ? "Orders (A)" : "Total Orders"} fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={compare ? 15 : 30} />
+                                                {compare && <Bar yAxisId="left" dataKey="compOrders" name="Orders (B)" fill="#94a3b8" radius={[6, 6, 0, 0]} barSize={15} opacity={0.5} />}
                                                 <Line yAxisId="right" type="monotone" dataKey="spent" name={compare ? "Spent (A)" : "Yield"} stroke="#6366f1" strokeWidth={4} dot={{ r: 5, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }} />
                                                 {compare && <Line yAxisId="right" type="monotone" dataKey="compSpent" name="Spent (B)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 4 }} />}
                                             </ComposedChart>
@@ -619,10 +665,13 @@ export default function UserReportPage() {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="text-right">
+                                                <div className="text-right flex flex-col items-end gap-1">
                                                     <Badge variant="outline" className="text-[10px] font-black uppercase bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/30">
                                                         {user.totalProductsSold} Items
                                                     </Badge>
+                                                    <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest whitespace-nowrap">
+                                                        {user.totalProductsSold - user.refundedProductsSold} Fulfilled
+                                                    </p>
                                                 </div>
                                             </div>
                                             <CardContent className="p-0">
@@ -641,7 +690,10 @@ export default function UserReportPage() {
                                                             <div className="text-right flex flex-col items-end gap-1">
                                                                 <div className="flex items-center gap-2">
                                                                     <p className="text-[11px] font-black text-slate-700 dark:text-slate-300 tracking-tight">{formatPKR(product.fulfilledRevenueCents / 100)}</p>
-                                                                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded cursor-help" title={`Total Qty: ${product.quantity}`}>Qty: {product.fulfilledQuantity}</p>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded cursor-help" title={`Total Items: ${product.quantity}`}>Qty: {product.quantity}</p>
+                                                                        <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Net Fulfilled (Total - Refunded)">Ful: {product.quantity - product.refundedQuantity}</p>
+                                                                    </div>
                                                                 </div>
                                                                 {product.refundedQuantity > 0 && (
                                                                     <div className="flex items-center gap-2">
@@ -728,7 +780,7 @@ export default function UserReportPage() {
                                         <DropdownMenuContent align="end" className="w-52 rounded-2xl border-slate-200 dark:border-slate-800 p-2 shadow-2xl bg-white dark:bg-slate-900">
                                             <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs font-bold py-3 cursor-pointer rounded-xl"><FileText className="mr-3 h-4 w-4 text-slate-400" /> CSV ARCHIVE</DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs font-bold py-3 cursor-pointer rounded-xl"><FileSpreadsheet className="mr-3 h-4 w-4 text-emerald-500" /> EXCEL WORKBOOK</DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs font-bold py-3 cursor-pointer rounded-xl"><FilePdf className="mr-3 h-4 w-4 text-rose-500" /> PDF DOCUMENT</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs font-bold py-3 cursor-pointer rounded-xl"><FileText className="mr-3 h-4 w-4 text-rose-500" /> PDF DOCUMENT</DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </div>
@@ -766,8 +818,14 @@ export default function UserReportPage() {
                                                         </div>
                                                     </TableCell>
                                                     <TableCell className="text-center py-5">
-                                                        <Badge variant="outline" className={cn("text-[10px] font-black uppercase tracking-widest", u.status === "active" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : u.status === "deleted" ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-amber-50 text-amber-600 border-amber-200")}>
-                                                            {u.status || "Unknown"}
+                                                        <Badge variant="outline" className={cn(
+                                                            "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none", 
+                                                            u.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600" : 
+                                                            u.status === "DELETED" ? "bg-rose-500/10 text-rose-600" : 
+                                                            "bg-slate-500/10 text-slate-600"
+                                                        )}>
+                                                            {u.status === "ACTIVE" ? <ShieldCheck className="h-3 w-3 mr-1" /> : (u.status === "DELETED" ? <ShieldX className="h-3 w-3 mr-1" /> : <ShieldX className="h-3 w-3 mr-1 opacity-50" />)}
+                                                            {u.status || "INACTIVE"}
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell className="py-5">
@@ -825,43 +883,8 @@ export default function UserReportPage() {
     )
 }
 
-// ━━━ PREMIUM HELPER COMPONENTS ━━━
 
-function KPICard({ label, value, icon, iconBg, trend, trendColor, subtitle, compare, compareValue }: any) {
-    return (
-        <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900/40 backdrop-blur-xl rounded-3xl p-6 relative group transition-all duration-500 hover:shadow-indigo-500/10">
-            <div className="flex items-start justify-between relative z-10">
-                <div className={cn("p-3 rounded-2xl shadow-sm transition-transform duration-500 group-hover:scale-110", iconBg)}>
-                    {icon}
-                </div>
-                {trend && (
-                    <div className={cn(
-                        "flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black tracking-tight shadow-sm border animate-in fade-in zoom-in duration-700",
-                        trendColor === "emerald" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
-                        trendColor === "blue" ? "bg-blue-500/10 text-blue-500 border-blue-500/20" :
-                        "bg-slate-500/10 text-slate-500 border-slate-500/20"
-                    )}>
-                        {trend.isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                        {trend.value}%
-                    </div>
-                )}
-            </div>
-            <div className="mt-5 space-y-1 relative z-10">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{label}</p>
-                <div className="flex items-baseline gap-2">
-                    <h4 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{value}</h4>
-                </div>
-                {compare && (
-                    <p className="text-[10px] font-bold text-slate-400 italic">
-                        Prior: <span className="font-mono">{compareValue}</span>
-                    </p>
-                )}
-                <p className="text-[10px] font-bold text-slate-400 italic opacity-0 group-hover:opacity-100 transition-opacity duration-500">{subtitle}</p>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gradient-to-r from-transparent via-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        </Card>
-    )
-}
+// ━━━ PREMIUM HELPER COMPONENTS ━━━
 
 function MonthFilter({ selected, onChange }: any) {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]

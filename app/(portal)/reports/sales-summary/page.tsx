@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Loader2, ShoppingBag, TrendingUp, Calculator, Upload,
-  Crown, RefreshCw, Search, FileText, FileSpreadsheet, FileIcon as FilePdf,
+  Crown, RefreshCw, Search, FileText, FileSpreadsheet,
   Package, BarChart3, ListOrdered, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, ChevronDown, CheckSquare,
   LineChart, Layers, Store, Hash, Calendar, Download
 } from "lucide-react"
+import { KPICard } from "@/components/reports/kpi-card"
 import * as XLSX from "xlsx"
 import { formatPKR, cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -521,39 +522,6 @@ export default function SalesSummaryPage() {
 
 // ━━━ PREMIUM SUB-COMPONENTS ━━━
 
-function KPICard({ label, value, icon, iconBg, trend, trendColor, subtitle, compare, compareValue }: any) {
-    return (
-        <Card className="relative overflow-hidden group bg-white dark:bg-slate-950 border-slate-200/60 dark:border-slate-800 shadow-xl shadow-slate-200/20 dark:shadow-none hover:shadow-indigo-500/10 hover:border-indigo-500/30 transition-all duration-700 rounded-3xl p-6">
-            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-24 h-24 bg-gradient-to-br from-indigo-500/5 to-transparent rounded-full blur-2xl group-hover:scale-150 transition-transform duration-1000" />
-            
-            <div className="flex items-center justify-between mb-5 relative">
-                <div className={cn("p-2.5 rounded-2xl ring-1 ring-inset ring-white/10 shadow-lg", iconBg)}>
-                    {icon}
-                </div>
-                {trend && (
-                    <Badge variant="outline" className={cn(
-                        "font-black text-[9px] border-none px-2 py-0.5 rounded-full tracking-tighter",
-                        trend.isUp ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
-                    )}>
-                        {trend.isUp ? "↑" : "↓"} {trend.value}%
-                    </Badge>
-                )}
-            </div>
-            
-            <div className="space-y-1 relative">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-tight">{label}</p>
-                <div className="flex items-baseline gap-2">
-                    <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white font-mono leading-none">{value}</h3>
-                    {compare && compareValue && (
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-600 line-through opacity-40">{compareValue}</span>
-                    )}
-                </div>
-                <p className="text-[10px] font-bold text-slate-400/80 pt-1 italic">{subtitle}</p>
-            </div>
-        </Card>
-    )
-}
-
 function MonthFilter({ selected, onChange }: any) {
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
     const items = months.map((m, i) => ({ id: i + 1, label: m }))
@@ -644,143 +612,142 @@ function BarTooltip({ active, payload }: any) {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0b0f1a] pb-16">
 
-      {/* ── Banking-Grade Filter Toolbar ── */}
-      <div className="sticky top-0 z-40 bg-white/80 dark:bg-[#0b0f1a]/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-6 h-14 flex items-center shadow-sm">
-        <div className="flex items-center gap-3">
-          <GlobalDateFilter
-            value={dateRange}
-            onChange={handleDateChange}
-            activePreset={activePreset}
-            hidePresets={false}
-            compare={compare}
-            compareRange={compareRange}
-            months={selectedMonths}
-            years={selectedYears}
-            compareMonths={compareMonths}
-            compareYears={compareYears}
-          />
+      {/* ━━━ GLOBAL CONTEXT FILTERS ━━━ */}
+      <div className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
+        <div className="max-w-[1600px] mx-auto px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex-1" />
+          <div className="hidden lg:flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
+            <GlobalDateFilter
+              value={dateRange}
+              onChange={handleDateChange}
+              activePreset={activePreset}
+              hidePresets={false}
+              compare={compare}
+              compareRange={compareRange}
+              months={selectedMonths}
+              years={selectedYears}
+              compareMonths={compareMonths}
+              compareYears={compareYears}
+            />
+          </div>
 
-          {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-            <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
-              <BranchFilter selectedIds={contextBranchIds} onChange={handleBranchChange} organizationId={organizationId || undefined} />
-              <GroupFilter selectedIds={groupId ? [groupId] : []} onChange={(ids) => setGroupId(ids[0] || "")} organizationId={organizationId || undefined} />
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1" />
-
-        <div className="flex items-center gap-4">
-          
+          <div className="flex items-center gap-2 h-6 pl-3">
+            {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+              <>
+                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mr-2" />
+                <GroupFilter selectedIds={groupId ? [groupId] : []} onChange={(ids) => setGroupId(ids[0] || "")} organizationId={organizationId || undefined} />
+                <BranchFilter selectedIds={contextBranchIds} onChange={handleBranchChange} organizationId={organizationId || undefined} />
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="px-4 md:px-6 pt-6 space-y-6">
-
-      {/* ━━━ LUXURY INTELLIGENCE HEADER ━━━ */}
-      <div className="relative overflow-hidden bg-slate-900 border-b border-slate-800 shadow-2xl">
-          {/* Ambient Background Elements */}
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-indigo-600/20 blur-[120px] rounded-full animate-pulse" />
-          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-600/10 blur-[100px] rounded-full" />
+      <div className="max-w-[1600px] mx-auto px-6 pt-6 space-y-6">
+        <Tabs value={activeTab} onValueChange={(val) => {
+            setActiveTab(val as any)
+            const params = new URLSearchParams(searchParams.toString())
+            params.set("tab", val)
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+        }} className="space-y-6">
           
-          <div className="px-6 py-8 relative">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 max-w-7xl mx-auto">
-                  <div className="space-y-2">
-                      <div className="flex items-center gap-3">
-                          <div className="p-2.5 rounded-2xl bg-indigo-600/20 text-indigo-400 ring-1 ring-indigo-500/30 shadow-lg shadow-indigo-500/10">
-                              <TrendingUp className="h-5 w-5" />
+          {/* ━━━ LUXURY INTELLIGENCE HEADER ━━━ */}
+          <div className="relative overflow-hidden bg-slate-900 border-b border-slate-800 shadow-2xl rounded-[2.5rem]">
+              <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-indigo-600/20 blur-[120px] rounded-full animate-pulse" />
+              <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-600/10 blur-[100px] rounded-full" />
+              
+              <div className="px-8 py-10 relative">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 max-w-7xl mx-auto">
+                      <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                              <div className="p-2.5 rounded-2xl bg-indigo-600/20 text-indigo-400 ring-1 ring-indigo-500/30 shadow-lg shadow-indigo-500/10">
+                                  <TrendingUp className="h-5 w-5" />
+                              </div>
+                              <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-[10px] font-black uppercase tracking-widest px-3 py-1 animate-in slide-in-from-left-4 duration-700">
+                                  Centralized Reporting
+                              </Badge>
                           </div>
-                          <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-[10px] font-black uppercase tracking-widest px-3 py-1 animate-in slide-in-from-left-4 duration-700">
-                              Intelligence Engine
-                          </Badge>
+                          <h1 className="text-4xl font-black text-white tracking-tight sm:text-5xl border-none">
+                              Sales <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-400 to-emerald-400">Intelligence</span>
+                          </h1>
+                          <p className="text-slate-400 font-medium text-sm flex items-center gap-2 max-w-md">
+                              <Calculator className="h-4 w-4 opacity-50" />
+                              Consolidated financial oversight across all branches and groups.
+                          </p>
                       </div>
-                      <h1 className="text-4xl font-black text-white tracking-tight sm:text-5xl">
-                          Sales <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-400 to-emerald-400">Intelligence</span>
-                      </h1>
-                      <p className="text-slate-400 font-medium text-sm flex items-center gap-2 max-w-md">
-                          <Calculator className="h-4 w-4 opacity-50" />
-                          Consolidated financial oversight across all branches and groups.
-                      </p>
-                  </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                      <Button 
-                          variant="outline" 
-                          onClick={() => mutateGlobal()}
-                          className="h-10 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl px-4 gap-2 transition-all duration-300 group"
-                      >
-                          <RefreshCw className={cn("h-4 w-4 transition-transform duration-500 group-hover:rotate-180", isGlobalLoading && "animate-spin")} />
-                          Synchronize
-                      </Button>
-                      <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                              <Button className="h-10 bg-indigo-600 hover:bg-indigo-500 text-white border-none rounded-xl px-4 gap-2 shadow-lg shadow-indigo-600/20 transition-all duration-300">
-                                  <Download className="h-4 w-4" /> Export Report
+                      <div className="flex flex-col items-end gap-6">
+                          <TabsList className="bg-slate-800/50 p-1.5 rounded-2xl border border-slate-700/50 backdrop-blur-md">
+                              <TabsTrigger value="analytics" className="rounded-xl px-8 py-3 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 transition-all duration-300 gap-2">
+                                  <LayoutDashboard className="h-3.5 w-3.5" /> Analytics
+                              </TabsTrigger>
+                              <TabsTrigger value="reports" className="rounded-xl px-8 py-3 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 transition-all duration-300 gap-2">
+                                  <Database className="h-3.5 w-3.5" /> Reports
+                              </TabsTrigger>
+                          </TabsList>
+                          
+                          <div className="flex items-center gap-3">
+                              <Button 
+                                  variant="outline" 
+                                  onClick={() => { mutateGlobal(); mutateChart(); mutateReport(); }}
+                                  className="h-11 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl px-5 gap-2 transition-all duration-300 group"
+                              >
+                                  <RefreshCw className={cn("h-4 w-4 transition-transform duration-500 group-hover:rotate-180", (isGlobalLoading || isChartLoading || isReportLoading) && "animate-spin")} />
+                                  Synchronize
                               </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48 bg-slate-900 border-slate-800 text-slate-300 rounded-xl p-1">
-                              <DropdownMenuItem onClick={() => handleExport('csv')} className="gap-2 rounded-lg hover:bg-slate-800 focus:bg-slate-800 cursor-pointer">
-                                  <FileSpreadsheet className="h-4 w-4 text-emerald-500" /> Export CSV
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-2 rounded-lg hover:bg-slate-800 focus:bg-slate-800 cursor-pointer">
-                                  <FileText className="h-4 w-4 text-blue-500" /> Export Excel
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-2 rounded-lg hover:bg-slate-800 focus:bg-slate-800 cursor-pointer">
-                                  <FilePdf className="h-4 w-4 text-rose-500" /> Export PDF
-                              </DropdownMenuItem>
-                          </DropdownMenuContent>
-                      </DropdownMenu>
+                              <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                      <Button className="h-11 bg-indigo-600 hover:bg-indigo-500 text-white border-none rounded-xl px-6 gap-2 shadow-lg shadow-indigo-600/20 transition-all duration-300 font-bold uppercase tracking-widest text-[11px]">
+                                          <Download className="h-4 w-4" /> Export
+                                      </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-52 bg-slate-900 border-slate-800 text-slate-300 rounded-2xl p-2 shadow-2xl">
+                                      <DropdownMenuItem onClick={() => handleExport('csv')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
+                                          <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500"><FileSpreadsheet className="h-4 w-4" /></div> CSV Spreadsheet
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
+                                          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500"><FileText className="h-4 w-4" /></div> Excel Workbook
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
+                                          <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500"><FileText className="h-4 w-4" /></div> PDF Document
+                                      </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                              </DropdownMenu>
+                          </div>
+                      </div>
                   </div>
               </div>
           </div>
-      </div>
 
-      <div className="px-4 md:px-6 space-y-5">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-6">
-                    <TabsList className="bg-slate-100 dark:bg-slate-900/50 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 w-full sm:w-auto h-auto">
-                        <TabsTrigger value="analytics" className="rounded-xl px-6 py-2.5 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-lg data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 transition-all duration-300">
-                            <LayoutDashboard className="h-3.5 w-3.5 mr-2" /> Analytics
-                        </TabsTrigger>
-                        <TabsTrigger value="reports" className="rounded-xl px-6 py-2.5 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-lg data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 transition-all duration-300">
-                            <Database className="h-3.5 w-3.5 mr-2" /> Reports
-                        </TabsTrigger>
-                    </TabsList>
-                </div>
-
-                <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+          <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
                     {/* ━━━ KPI BENTO GRID ━━━ */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <KPICard
-                            label="Total Revenue"
+                            title="Total Revenue"
                             value={formatPKR(totalRevenue / 100)}
-                            icon={<TrendingUp className="h-4 w-4" />}
-                            iconBg="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
-                            trend={revenueTrend}
-                            trendColor="emerald"
+                            icon={TrendingUp}
+                            colorScheme="emerald"
+                            trend={revenueTrend?.value ? Number(revenueTrend.value) * (revenueTrend.isUp ? 1 : -1) : undefined}
                             subtitle="From fulfilled orders"
-                            compare={compare}
-                            compareValue={comparison ? formatPKR(comparison.totalSales / 100) : undefined}
+                            comparisonLabel="Prior Period"
+                            comparisonValue={compare && comparison ? formatPKR(comparison.totalSales / 100) : undefined}
                         />
                         <KPICard
-                            label="Order Volume"
+                            title="Order Volume"
                             value={orderCount.toLocaleString()}
-                            icon={<ShoppingBag className="h-4 w-4" />}
-                            iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
-                            trend={orderTrend}
-                            trendColor="emerald"
+                            icon={ShoppingBag}
+                            colorScheme="blue"
+                            trend={orderTrend?.value ? Number(orderTrend.value) * (orderTrend.isUp ? 1 : -1) : undefined}
                             subtitle="Fulfilled + Approved + Partial Orders"
-                            compare={compare}
-                            compareValue={comparison ? comparison.orderCount.toLocaleString() : undefined}
+                            comparisonLabel="Prior Period"
+                            comparisonValue={compare && comparison ? comparison.orderCount.toLocaleString() : undefined}
                         />
                         <KPICard
-                            label="Items Fulfilled"
+                            title="Items Fulfilled"
                             value={totalItemsSold.toLocaleString()}
-                            icon={<Package className="h-4 w-4" />}
-                            iconBg="bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400"
-                            trend={null}
-                            trendColor="emerald"
-                            subtitle="Total units sold"
+                            icon={Package}
+                            colorScheme="violet"
+                            subtitle="Net product units sold"
                         />
                     </div>
                     {/* ━━━ REVENUE TREND CHART WITH FILTERS ━━━ */}
@@ -985,7 +952,7 @@ function BarTooltip({ active, payload }: any) {
                               <FileSpreadsheet className="mr-2 h-3.5 w-3.5 text-emerald-500" /> Excel
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs font-medium cursor-pointer py-2">
-                              <FilePdf className="mr-2 h-3.5 w-3.5 text-rose-500" /> PDF
+                              <FileText className="mr-2 h-3.5 w-3.5 text-rose-500" /> PDF
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1101,8 +1068,7 @@ function BarTooltip({ active, payload }: any) {
               )}
             </TabsContent>
           </Tabs>
-        </div>
-
+        
         <ExpandableRowDrawer
           open={drawerOpen}
           onClose={() => setDrawerOpen(false)}
