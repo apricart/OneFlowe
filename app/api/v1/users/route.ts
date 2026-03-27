@@ -147,17 +147,7 @@ export async function POST(req: Request) {
     const passwordHash = await hashPassword(password)
     console.log("[USERS_API] Password hashed successfully")
 
-    // Pre-emptive check for existing user with the same email or username
-    const [existingEmail] = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .where(eq(usersTable.email, email))
-      .limit(1)
-
-    if (existingEmail) {
-      return error("Email address already exists. Please use a different email.", 400)
-    }
-
+    // Username uniqueness is enforced by DB unique index and the check-username API
     const [existingUsername] = await db
       .select({ id: usersTable.id })
       .from(usersTable)
