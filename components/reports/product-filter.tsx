@@ -1,13 +1,15 @@
 "use client"
 
 import React from "react"
+import useSWR from "swr"
 import { Package } from "lucide-react"
-import { useGlobalProducts } from "@/lib/hooks/use-api"
-import { cn } from "@/lib/utils"
 import { MultiSelectFilter } from "./multi-select-filter"
+import { cn } from "@/lib/utils"
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 interface Product {
-    id: number
+    id: number | string
     name: string
     productCode?: string
 }
@@ -18,20 +20,38 @@ interface ProductFilterProps {
     organizationId?: string | number
     organizationIds?: string[]
     groupIds?: string[]
+    branchIds?: string[]
     placeholder?: string
+    disabled?: boolean
 }
 
 export function ProductFilter({ 
     selectedIds, 
     onChange, 
-    organizationId, 
+    organizationId,
     organizationIds,
     groupIds,
-    placeholder = "Select Products" 
+    branchIds,
+    placeholder = "Select Products",
+    disabled = false
 }: ProductFilterProps) {
-    const orgsQuery = organizationIds?.length ? organizationIds.join(",") : (organizationId ? String(organizationId) : undefined)
-    const groupsQuery = groupIds?.length ? groupIds.join(",") : undefined
-    const { data, isLoading } = useGlobalProducts(orgsQuery, groupsQuery)
+    const params = new URLSearchParams()
+    
+    // Combine single organizationId and organizationIds array
+    const allOrgIds = new Set<string>()
+    if (organizationId) allOrgIds.add(String(organizationId))
+    if (organizationIds?.length) organizationIds.forEach(id => allOrgIds.add(String(id)))
+    
+    if (allOrgIds.size > 0) params.set("organizationIds", Array.from(allOrgIds).join(","))
+    if (groupIds?.length) params.set("groupIds", groupIds.join(","))
+    if (branchIds?.length) params.set("branchIds", branchIds.join(","))
+
+    const { data, isLoading } = useSWR(
+        `/api/v1/analytics/products/list?${params.toString()}`,
+        fetcher,
+        { revalidateOnFocus: false }
+    )
+
     const products = (data?.items || []) as Product[]
     const items = products.map(p => ({ 
         id: p.id.toString(), 
@@ -44,9 +64,11 @@ export function ProductFilter({
             items={items}
             selectedIds={selectedIds}
             onChange={onChange}
-            icon={<Package className={cn("h-4 w-4 shrink-0", selectedIds.length > 0 ? "text-indigo-600" : "text-slate-400")} />}
-            placeholder={placeholder}
+            disabled={disabled || isLoading}
+            icon={<Package className={cn("h-4 w-4 shrink-0", (selectedIds.length > 0 || disabled) ? "text-indigo-600" : "text-slate-400")} />}
+            placeholder={isLoading ? "Loading..." : placeholder}
             className="w-[300px]"
         />
     )
 }
+

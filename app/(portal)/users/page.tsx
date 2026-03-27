@@ -5,7 +5,7 @@ import { HeadOfficeUsersTable } from "@/components/users/head-office-users-table
 import { CreateUserDialog } from "@/components/users/create-user-dialog"
 import { useAppContext } from "@/components/context/app-context"
 import { Button } from "@/components/ui/button"
-import { RefreshCw, Users, UserPlus, Building2, UserCircle } from "lucide-react"
+import { RefreshCw, Users, UserPlus, Building2, UserCircle, ShoppingCart } from "lucide-react"
 import useSWR from "swr"
 import { cn } from "@/lib/utils"
 
@@ -58,6 +58,7 @@ export default function UsersPage() {
     total: filteredUsers.length,
     headOffice: filteredUsers.filter((u: any) => u.role === "HEAD_OFFICE").length,
     branchAdmin: filteredUsers.filter((u: any) => u.role === "BRANCH_ADMIN").length,
+    orderPortal: filteredUsers.filter((u: any) => u.role === "ORDER_PORTAL").length,
   }
 
   return (
@@ -83,7 +84,7 @@ export default function UsersPage() {
       </div>
 
       {/* Ultra-compact Colorful Light Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <CompactStatCard
           label="Total Active Users"
           value={stats.total}
@@ -104,6 +105,13 @@ export default function UsersPage() {
           icon={<UserPlus className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-fuchsia-50/80 to-purple-50/80 border-fuchsia-100/50 text-fuchsia-700 dark:from-fuchsia-900/20 dark:to-purple-900/20 dark:border-fuchsia-800/30 dark:text-fuchsia-400"
           iconBadge="bg-white/80 text-fuchsia-600 shadow-sm border border-fuchsia-100 dark:bg-slate-800 dark:border-fuchsia-800"
+        />
+        <CompactStatCard
+          label="Order Portal"
+          value={stats.orderPortal}
+          icon={<ShoppingCart className="h-5 w-5" />}
+          gradient="bg-gradient-to-br from-amber-50/80 to-orange-50/80 border-amber-100/50 text-amber-700 dark:from-amber-900/20 dark:to-orange-900/20 dark:border-amber-800/30 dark:text-amber-400"
+          iconBadge="bg-white/80 text-amber-600 shadow-sm border border-amber-100 dark:bg-slate-800 dark:border-amber-800"
         />
       </div>
 

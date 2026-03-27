@@ -422,8 +422,8 @@ export default function UserReportPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                    <KPICard label="Active Transactors" value={totalUsers} icon={<Users className="h-6 w-6" />} iconBg="bg-indigo-500/10 text-indigo-500" trend={usersTrend} trendColor="emerald" subtitle="Distinct user profiles found." compare={compare} compareValue={comparison?.totalUsers} />
-                    <KPICard label="Order Volume" value={totalOrders} icon={<Package className="h-6 w-6" />} iconBg="bg-blue-500/10 text-blue-500" trend={ordersTrend} trendColor="blue" subtitle="Total orders initiated." compare={compare} compareValue={comparison?.totalOrders} />
+                    <KPICard label="Active User" value={totalUsers.toLocaleString()} icon={<Users className="h-6 w-6" />} iconBg="bg-indigo-500/10 text-indigo-500" trend={usersTrend} trendColor="emerald" subtitle="Distinct user profiles found." compare={compare} compareValue={comparison?.totalUsers} />
+                    <KPICard label="Order Volume" value={totalOrders.toLocaleString()} icon={<Package className="h-6 w-6" />} iconBg="bg-blue-500/10 text-blue-500" trend={ordersTrend} trendColor="blue" subtitle="Total orders initiated." compare={compare} compareValue={comparison?.totalOrders} />
                     <KPICard label="Success Rate" value={`${currentSuccess.toFixed(1)}%`} icon={<CheckCircle className="h-6 w-6" />} iconBg="bg-emerald-500/10 text-emerald-500" trend={successTrend} trendColor="emerald" subtitle={`${totalFulfilled} fulfilled orders.`} compare={compare} compareValue={`${prevSuccess.toFixed(1)}%`} />
                     <KPICard label="Total Yield" value={formatPKR(totalSpent / 100)} icon={<TrendingUp className="h-6 w-6" />} iconBg="bg-indigo-600 text-white" trend={spentTrend} trendColor="indigo" subtitle="Total net value generated." compare={compare} compareValue={formatPKR(comparison?.totalSpentCents / 100)} />
                 </div>

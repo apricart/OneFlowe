@@ -146,7 +146,14 @@ export const BankingKPICard = ({
                 )}
             </div>
 
-            {/* Bottom Accent Bar */}
+            {/* Side & Bottom Accent Bars */}
+            <div className="absolute top-0 left-0 bottom-0 w-1 overflow-hidden opacity-40 group-hover:opacity-100 transition-opacity duration-500">
+                <div className={cn(
+                    "h-full w-full bg-gradient-to-b",
+                    gradient
+                )} />
+            </div>
+            
             <div className="absolute bottom-0 left-0 right-0 h-1 overflow-hidden opacity-30 group-hover:opacity-100 transition-opacity duration-500">
                 <div className={cn(
                     "h-full w-full bg-gradient-to-r",

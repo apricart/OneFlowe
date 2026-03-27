@@ -317,9 +317,9 @@ export default function SalesSummaryPage() {
         
         return {
           period: String(year),
-          revenue: yearOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0),
-          orders: yearOrders.length,
-          compareRevenue: compOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0)
+          revenue: yearOrders.filter((o: any) => ['FULFILLED', 'APPROVED'].includes(o.status?.toUpperCase())).reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0),
+          orders: yearOrders.filter((o: any) => ['FULFILLED', 'APPROVED'].includes(o.status?.toUpperCase())).length,
+          compareRevenue: compOrders.filter((o: any) => ['FULFILLED', 'APPROVED'].includes(o.status?.toUpperCase())).reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0)
         }
       })
     }
@@ -343,9 +343,9 @@ export default function SalesSummaryPage() {
 
       return {
         period: monthNames[m-1],
-        revenue: monthData.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0),
-        orders: monthData.length,
-        compareRevenue: compData.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0)
+        revenue: monthData.filter((o: any) => ['FULFILLED', 'APPROVED'].includes(o.status?.toUpperCase())).reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0),
+        orders: monthData.filter((o: any) => ['FULFILLED', 'APPROVED'].includes(o.status?.toUpperCase())).length,
+        compareRevenue: compData.filter((o: any) => ['FULFILLED', 'APPROVED'].includes(o.status?.toUpperCase())).reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0)
       }
     })
   }, [chartData, chartMonths, chartYears])
@@ -750,7 +750,7 @@ function BarTooltip({ active, payload }: any) {
 
                 <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
                     {/* ━━━ KPI BENTO GRID ━━━ */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <KPICard
                             label="Total Revenue"
                             value={formatPKR(totalRevenue / 100)}
@@ -769,20 +769,9 @@ function BarTooltip({ active, payload }: any) {
                             iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
                             trend={orderTrend}
                             trendColor="emerald"
-                            subtitle="Fulfilled transactions"
+                            subtitle="Fulfilled + Approved + Partial Orders"
                             compare={compare}
                             compareValue={comparison ? comparison.orderCount.toLocaleString() : undefined}
-                        />
-                        <KPICard
-                            label="Avg Order Value"
-                            value={formatPKR(avgOrderValue / 100)}
-                            icon={<Calculator className="h-4 w-4" />}
-                            iconBg="bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400"
-                            trend={null}
-                            trendColor="emerald"
-                            subtitle="Per fulfilled order"
-                            compare={compare}
-                            compareValue={comparison ? formatPKR((comparison.totalSales / comparison.orderCount) / 100) : undefined}
                         />
                         <KPICard
                             label="Items Fulfilled"

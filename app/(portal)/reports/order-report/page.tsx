@@ -637,14 +637,6 @@ export default function OrderReportPage() {
                                     </TableBody>
                                 </Table>
                             </div>
-                            <div className="px-8 py-6 bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                <div className="flex items-center gap-6">
-                                    <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Volume</p><p className="text-xl font-black text-slate-900 dark:text-white leading-none">{filteredOrders.length}</p></div>
-                                    <div className="h-8 w-px bg-slate-200 dark:bg-slate-800" />
-                                    <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Net Revenue Pool</p><p className="text-xl font-black text-indigo-500 leading-none">{formatPKR(filteredOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)), 0) / 100)}</p></div>
-                                </div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic" suppressHydrationWarning>Generated locally on {generatedDate}</p>
-                            </div>
                         </Card>
                     </TabsContent>
                 </Tabs>

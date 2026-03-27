@@ -348,6 +348,7 @@ export function HeadOfficeDashboard() {
           value={approvedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={100}
+          onClick={() => handleKPIOpen("APPROVED")}
           comparisonValue={compare && summary?.approvedCount != null ? summary.approvedCount.toLocaleString() : undefined}
           comparisonLabel="Prev"
         />

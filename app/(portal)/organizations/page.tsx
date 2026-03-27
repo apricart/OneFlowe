@@ -246,95 +246,62 @@ export default function OrganizationsPage() {
         isVisible={feedback.visible}
         onClose={() => setFeedback({ ...feedback, visible: false })}
       />
-      <main className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] p-4 md:p-8 space-y-8">
-        {/* --- PREMIUM HEADER SECTION --- */}
-        <section className="shrink-0 animate-in fade-in slide-in-from-top-4 duration-700 ease-out">
-          <div className="relative overflow-hidden rounded-[2.5rem] border border-white/20 dark:border-white/5 shadow-2xl transition-all duration-500 hover:shadow-indigo-500/10 dark:hover:shadow-indigo-500/5">
-            {/* Dynamic Mesh Gradient Background - Midnight Aurora Theme */}
-            <div className="absolute inset-0 bg-[#020617]">
-              {/* Primary Aura */}
-              <div className="absolute top-[-10%] left-[-10%] h-[120%] w-[120%] bg-[radial-gradient(circle_at_20%_30%,_rgba(79,70,229,0.15)_0%,_transparent_50%)]" />
-              <div className="absolute top-[-10%] left-[-10%] h-[120%] w-[120%] bg-[radial-gradient(circle_at_80%_70%,_rgba(16,185,129,0.1)_0%,_transparent_50%)]" />
-
-              {/* Moving Accents */}
-              <div className="absolute top-[10%] right-[10%] h-[40%] w-[40%] bg-indigo-500/10 blur-[120px] rounded-full animate-pulse" />
-              <div className="absolute bottom-[10%] left-[20%] h-[30%] w-[30%] bg-emerald-500/5 blur-[100px] rounded-full animate-pulse [animation-delay:2s]" />
-
-              {/* Darkening Gradients */}
-              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#020617]/40 to-[#020617]" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#020617]/60 via-transparent to-[#020617]/60" />
+      <main className="min-h-[calc(100vh-4rem)] bg-slate-50/50 dark:bg-slate-950 p-4 md:p-8 space-y-6">
+        {/* Compact Page Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 md:p-5 rounded-2xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-tr from-indigo-100 to-emerald-100 dark:from-indigo-900/50 dark:to-emerald-900/50 flex items-center justify-center border border-indigo-50/50 dark:border-indigo-800/50 shadow-inner">
+              <Building2 className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
             </div>
-
-            {/* Premium Glassmorphism Overlay */}
-            <div className="absolute inset-0 backdrop-blur-[120px]" />
-
-            <div className="relative px-8 py-10 lg:py-14 text-white">
-              <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-12">
-                <div className="space-y-6 flex-1">
-                  <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-slate-900/50 dark:bg-indigo-500/10 border border-white/10 dark:border-indigo-500/20 backdrop-blur-md">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
-                    </span>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.4em] text-indigo-400 dark:text-indigo-300">Corporate Infrastructure</p>
-                  </div>
-
-                  <div className="space-y-3">
-                    <h1 className="text-4xl md:text-5xl font-semibold tracking-tighter text-white lg:text-7xl">
-                      Organization <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-white to-emerald-300">Settings</span>
-                    </h1>
-                    <p className="text-lg md:text-xl text-slate-300 max-w-2xl font-medium leading-relaxed">
-                      Scale your enterprise architecture with multi-tenant governance. Manage global corporate logic and operational branches from a high-performance command center.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-5 pt-4">
-                    <CreateOrgDialog
-                      open={openOrg}
-                      onOpenChange={setOpenOrg}
-                      showFeedback={showFeedback}
-                      variant="outline"
-                      className="h-14 px-8 rounded-2xl bg-white/5 text-white hover:bg-white/10 hover:text-white border-white/20 backdrop-blur-xl shadow-2xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] font-medium tracking-tight"
-                      onCreated={async (newOrg) => {
-                        setOpenOrg(false)
-                        await addOrganizationOptimistic(newOrg)
-                      }}
-                    />
-                    <CreateBranchDialog
-                      organizations={orgs?.items || []}
-                      open={openBranch}
-                      onOpenChange={setOpenBranch}
-                      showFeedback={showFeedback}
-                      variant="secondary"
-                      className="h-14 px-8 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-500 shadow-xl shadow-indigo-600/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] font-medium tracking-tight border-none"
-                      onCreated={async (newBranch) => {
-                        setOpenBranch(false)
-                        await addBranchOptimistic(newBranch)
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-8 self-start xl:self-center">
-                  <div className="flex gap-6">
-                    <HeroStat
-                      label="Companies"
-                      value={orgCount}
-                      helper="Enterprise Tenants"
-                      icon={<Building2 className="w-6 h-6 text-indigo-400" />}
-                    />
-                    <HeroStat
-                      label="Branches"
-                      value={branchCount}
-                      helper="Global Network"
-                      icon={<GitBranch className="w-6 h-6 text-emerald-400" />}
-                    />
-                  </div>
-                </div>
-              </div>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Organization Settings</h1>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Manage companies &amp; branches</p>
             </div>
           </div>
-        </section>
+          <div className="flex items-center gap-2">
+            <CreateOrgDialog
+              open={openOrg}
+              onOpenChange={setOpenOrg}
+              showFeedback={showFeedback}
+              variant="outline"
+              className="h-9 gap-2 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 shadow-sm"
+              onCreated={async (newOrg) => {
+                setOpenOrg(false)
+                await addOrganizationOptimistic(newOrg)
+              }}
+            />
+            <CreateBranchDialog
+              organizations={orgs?.items || []}
+              open={openBranch}
+              onOpenChange={setOpenBranch}
+              showFeedback={showFeedback}
+              variant="default"
+              className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+              onCreated={async (newBranch) => {
+                setOpenBranch(false)
+                await addBranchOptimistic(newBranch)
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Compact Colorful Stats */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <CompactStatCard
+            label="Companies"
+            value={orgCount}
+            icon={<Building2 className="h-5 w-5" />}
+            gradient="bg-gradient-to-br from-indigo-50/80 to-blue-50/80 border-indigo-100/50 text-indigo-700 dark:from-indigo-900/20 dark:to-blue-900/20 dark:border-indigo-800/30 dark:text-indigo-400"
+            iconBadge="bg-white/80 text-indigo-600 shadow-sm border border-indigo-100 dark:bg-slate-800 dark:border-indigo-800"
+          />
+          <CompactStatCard
+            label="Branches"
+            value={branchCount}
+            icon={<GitBranch className="h-5 w-5" />}
+            gradient="bg-gradient-to-br from-emerald-50/80 to-teal-50/80 border-emerald-100/50 text-emerald-700 dark:from-emerald-900/20 dark:to-teal-900/20 dark:border-emerald-800/30 dark:text-emerald-400"
+            iconBadge="bg-white/80 text-emerald-600 shadow-sm border border-emerald-100 dark:bg-slate-800 dark:border-emerald-800"
+          />
+        </div>
 
         <section className="grid gap-10 lg:grid-cols-12 shrink-0 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300 fill-mode-both">
           <div className="lg:col-span-6 xl:col-span-5">
@@ -734,6 +701,38 @@ function HeroStat({ label, value, helper, icon }: { label: string; value: string
         </div>
       </div>
     </div>
+  )
+}
+
+function CompactStatCard({
+  label,
+  value,
+  icon,
+  gradient,
+  iconBadge,
+}: {
+  label: string
+  value: string | number
+  icon: ReactNode
+  gradient: string
+  iconBadge: string
+}) {
+  return (
+    <Card className={cn("border rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5", gradient)}>
+      <CardContent className="p-5 flex items-center justify-between">
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">
+            {label}
+          </p>
+          <p className="text-4xl font-black tracking-tight">
+            {value}
+          </p>
+        </div>
+        <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl", iconBadge)}>
+           {icon}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

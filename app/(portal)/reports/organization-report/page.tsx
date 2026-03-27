@@ -368,7 +368,7 @@ export default function OrganizationReportPage() {
                 {/* ━━━ BENTO KPI GRID ━━━ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <KPICard 
-                        label="Total Corporate Revenue"
+                        label="Net Revenue"
                         value={formatPKR(summary.revenue)}
                         icon={<TrendingUp className="h-4 w-4" />}
                         iconBg="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
@@ -379,7 +379,7 @@ export default function OrganizationReportPage() {
                         compareValue={formatPKR(comparisonSummary.revenue)}
                     />
                     <KPICard 
-                        label="Fulfilled Orders"
+                        label="Total Orders"
                         value={summary.orders.toLocaleString()}
                         icon={<ShoppingBag className="h-4 w-4" />}
                         iconBg="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
@@ -390,7 +390,7 @@ export default function OrganizationReportPage() {
                         compareValue={comparisonSummary.orders.toLocaleString()}
                     />
                     <KPICard 
-                        label="Active Managed Users"
+                        label="Total Users"
                         value={summary.users.toLocaleString()}
                         icon={<Users className="h-4 w-4" />}
                         iconBg="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
@@ -399,7 +399,7 @@ export default function OrganizationReportPage() {
                         subtitle="Across all branches"
                     />
                     <KPICard 
-                        label="Registered Companies"
+                        label="Total Companies"
                         value={summary.orgs.toLocaleString()}
                         icon={<Building2 className="h-4 w-4" />}
                         iconBg="bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"

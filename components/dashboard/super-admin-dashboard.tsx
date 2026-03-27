@@ -12,11 +12,11 @@ import { NotificationRail } from "@/components/notifications/notification-center
 import { formatPKR, cn } from "@/lib/utils"
 import {
   Users, Building2, TrendingDown, TrendingUp,
-  BarChart3, Package, RefreshCw, Filter, CheckCircle2, RotateCcw, XCircle, Activity,
+  Package, RefreshCw, Filter, CheckCircle2, RotateCcw, XCircle, Activity,
   Calendar, Layers, Clock
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { SalesPerformanceBarChart, BranchSalesBarChart, OrganizationSalesBarChart } from "@/components/dashboard/charts"
+import { SalesPerformanceBarChart } from "@/components/dashboard/charts"
 import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
 import { GlobalDateFilter, type FilterPreset, getPresetLabel, getPresetRange } from "@/components/dashboard/global-date-filter"
 import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
@@ -31,8 +31,8 @@ import { startOfDay, endOfDay } from "date-fns"
 export function SuperAdminDashboard() {
   const { organizationId, branchId } = useAppContext()
 
-  // When viewing the global overview (no specific org selected), default to 'All Time' for Super Admin.
-  const defaultPreset = !organizationId ? "all" : "today"
+  // Super Admin always defaults to 'All Time'
+  const defaultPreset = "all" as const
   
   const [dateRange, setDateRange] = useState<DateRange | null>(getPresetRange(defaultPreset))
   const [activePreset, setActivePreset] = useState<FilterPreset>(defaultPreset)
@@ -67,8 +67,7 @@ export function SuperAdminDashboard() {
   // ── Local Chart State ──
   type ChartQuickFilter = "today" | "7d" | null
   
-  const initialChartQuickFilter = defaultPreset === "today" ? "today" : null;
-  const [chartQuickFilter, setChartQuickFilter] = useState<ChartQuickFilter>(initialChartQuickFilter)
+  const [chartQuickFilter, setChartQuickFilter] = useState<ChartQuickFilter>(null)
   const [chartMonths, setChartMonths] = useState<number[]>([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
   const [chartYears, setChartYears] = useState<number[]>([])
   const [chartSelectedOrgIds, setChartSelectedOrgIds] = useState<string[]>([])
@@ -431,6 +430,7 @@ export function SuperAdminDashboard() {
           value={approvedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={100}
+          onClick={() => handleKPIOpen("APPROVED")}
           trend={approvedTrend?.type as "up" | "down" | undefined}
           trendValue={approvedTrend?.value}
           comparisonValue={approvedTrend?.label}
@@ -482,12 +482,9 @@ export function SuperAdminDashboard() {
         />
       </div>
 
-      {/* ━━━ Main Layout Grid ━━━ */}
-      <div className="flex flex-col xl:flex-row gap-6">
-        
-        {/* Main Chart Column */}
-        <div className="xl:flex-1 space-y-6 min-w-0">
-          {/* ━━━ Sales Performance Chart ━━━ */}
+      {/* ━━━ Sales Performance Chart ━━━ */}
+      <div className="space-y-6">
+        <div className="min-w-0">
           <Card className="border border-slate-200/80 dark:border-slate-800/60 shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl overflow-hidden glass-card">
             <CardContent className="p-5">
               <div className="flex flex-wrap items-center gap-3 mb-6 p-3 bg-slate-50/50 dark:bg-slate-800/20 rounded-xl border border-slate-100 dark:border-slate-800/50">
@@ -577,38 +574,14 @@ export function SuperAdminDashboard() {
                   label="Sales"
                   dateRange={chartComponentDateRange}
                   comparisonSeries={chartPerfData?.comparison?.seriesData}
+                  organizationSales={chartPerfData?.organizationSales}
+                  branchSales={chartPerfData?.branchSales}
+                  showOrgView={!organizationId}
                 />
               )}
             </CardContent>
           </Card>
         </div>
-
-        {/* Right Column (Optional Org/Branch chart) */}
-        {!branchId && (
-          <div className="xl:w-1/3 min-w-0">
-            <Card className="border border-slate-200/80 dark:border-slate-800/60 shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl overflow-hidden glass-card">
-              <CardContent className="p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
-                    <BarChart3 className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
-                  </div>
-                  <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                    {!organizationId ? "Organization Sales" : "Branch Sales"}
-                  </h3>
-                </div>
-                {isLoadingPerf ? (
-                  <div className="h-56 flex items-center justify-center rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800">
-                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-200 dark:border-slate-700 border-t-indigo-500" />
-                  </div>
-                ) : !organizationId ? (
-                  <OrganizationSalesBarChart organizationSales={perfData?.organizationSales ?? []} label="Sales" />
-                ) : (
-                  <BranchSalesBarChart branchSales={perfData?.branchSales ?? []} label="Sales" />
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
       </div>
 
 

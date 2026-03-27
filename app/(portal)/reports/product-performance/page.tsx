@@ -138,6 +138,17 @@ export default function ProductPerformancePage() {
         setChartProductIds([])
         setChartBranchIds([])
         setChartGroupIds([])
+        setChartOrgIds([])
+        setReportProductIds([])
+        setReportBranchIds([])
+        setReportGroupIds([])
+        setReportOrganizationIds([])
+    }, [organizationId])
+
+    useEffect(() => {
+        setChartProductIds([])
+        setChartBranchIds([])
+        setChartGroupIds([])
     }, [chartOrgIds])
 
     useEffect(() => {
@@ -823,6 +834,7 @@ export default function ProductPerformancePage() {
                                                         organizationId={organizationId || undefined}
                                                         organizationIds={chartOrgIds.length > 0 ? chartOrgIds : undefined}
                                                         groupIds={chartGroupIds}
+                                                        branchIds={chartBranchIds}
                                                         placeholder="Products"
                                                     />
                                                 </>
@@ -1121,6 +1133,7 @@ export default function ProductPerformancePage() {
                                                         organizationId={organizationId || undefined}
                                                         organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
                                                         groupIds={reportGroupIds}
+                                                        branchIds={reportBranchIds}
                                                         placeholder="Products"
                                                     />
                                                 </>
@@ -1133,6 +1146,7 @@ export default function ProductPerformancePage() {
                                         organizationId={organizationId || undefined}
                                         organizationIds={reportOrganizationIds}
                                         groupIds={reportGroupIds}
+                                        branchIds={reportBranchIds}
                                         placeholder="Products"
                                     />
                                 </div>

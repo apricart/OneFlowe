@@ -22,12 +22,19 @@ interface ColumnSelectorProps {
 
 export function useColumnSelector(columns: ColumnDef[], storageKey: string) {
     const defaultVisible = columns.filter(c => c.defaultVisible !== false).map(c => c.key)
+    const validKeys = columns.map(c => c.key)
 
     const [visibleKeys, setVisibleKeys] = useState<string[]>(() => {
         if (typeof window === "undefined") return defaultVisible
         try {
             const saved = localStorage.getItem(`col-selector-${storageKey}`)
-            if (saved) return JSON.parse(saved)
+            if (saved) {
+                const parsed = JSON.parse(saved)
+                if (Array.isArray(parsed)) {
+                    const validSaved = parsed.filter(k => validKeys.includes(k))
+                    if (validSaved.length > 0) return validSaved
+                }
+            }
         } catch { }
         return defaultVisible
     })

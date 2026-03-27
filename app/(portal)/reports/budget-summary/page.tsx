@@ -279,6 +279,12 @@ export default function BudgetSummaryPage() {
         setChartBranchIds([...contextBranchIds])
         setReportBranchIds([...contextBranchIds])
     }, [contextBranchIds])
+
+    // Reset local filters when organization changes
+    useEffect(() => {
+        setChartBranchIds([])
+        setReportBranchIds([])
+    }, [organizationId])
     const MONTHS = [
         "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December"
