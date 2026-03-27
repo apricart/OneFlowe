@@ -187,8 +187,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         const res = await fetch(`/api/v1/users/check-username?username=${username}`)
         const data = await res.json()
         setUsernameStatus({
-          available: data.item?.available ?? false,
-          suggestions: data.item?.suggestions ?? [],
+          available: data.available ?? false,
+          suggestions: data.suggestions ?? [],
           loading: false
         })
       } catch (err) {
