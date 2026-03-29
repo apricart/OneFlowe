@@ -175,7 +175,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
 
   // Real-time username check
   useEffect(() => {
-    const username = form.username.trim().toLowerCase().replace(/[^a-z0-9]/g, "")
+    const username = form.username.trim().toLowerCase()
     if (username.length < 3) {
       setUsernameStatus({ available: null, loading: false, suggestions: [] })
       return
@@ -271,7 +271,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         body: JSON.stringify({
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
-          username: form.username.trim().toLowerCase().replace(/[^a-z0-9]/g, ""),
+          username: form.username.trim().toLowerCase(),
           email: form.email.trim(),
           password: form.password,
           phone: form.phone.trim() || null,
@@ -456,7 +456,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                       name="username"
                       value={form.username}
                       onChange={e => {
-                        const val = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, "")
+                        const val = e.target.value.toLowerCase()
                         setForm({ ...form, username: val })
                         validateField("username", val)
                       }}

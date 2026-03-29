@@ -161,13 +161,13 @@ export function parseError(error: any): ErrorDetails {
     }
   }
 
-  // Duplicate errors
-  if (errorMsg.includes('Email address already exists') || errorMsg.includes('email') || errorMsg.includes('already exists')) {
-    if (errorMsg.includes('email')) {
+  // Duplicate errors (only username is unique)
+  if (errorMsg.includes('Username already exists') || errorMsg.includes('username')) {
+    if (errorMsg.includes('already exists') || errorMsg.includes('unique')) {
       return {
         type: 'DUPLICATE_ERROR',
-        message: ERROR_MESSAGES.DUPLICATE_EMAIL,
-        field: 'email',
+        message: 'This username already exists. Please choose a different username.',
+        field: 'username',
         statusCode: 400
       }
     }

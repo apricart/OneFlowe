@@ -84,7 +84,7 @@ export async function POST(req: Request) {
   const firstName = String(body.firstName || "")
   const lastName = String(body.lastName || "")
   const email = String(body.email || "")
-  const username = String(body.username || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+  const username = String(body.username || "").toLowerCase().trim()
   const location = String(body.location || "")
   const password = String(body.password || "")
   const role = String(body.role || "") as Role
@@ -230,9 +230,6 @@ export async function POST(req: Request) {
     const detail = String(err.detail || err.cause?.detail || "").toLowerCase()
 
     if (errorCode === '23505' || errorMsg.includes('unique constraint') || detail.includes('already exists')) {
-      if (detail.includes('email') || errorMsg.includes('email')) {
-        return error("Email address already exists. Please use a different email.", 400)
-      }
       return error("Username already exists. Please choose a different username.", 400)
     }
 
@@ -243,6 +240,6 @@ export async function POST(req: Request) {
 
     // Only log actual unexpected errors
     console.error("[USERS_API] Unexpected error creating user:", err)
-    return error("Failed to create user", 500)
+    return error(err.message || "Failed to create user", 500)
   }
 }

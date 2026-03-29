@@ -123,7 +123,7 @@ export const users = pgTable(
     activeIdx: index("users_active_idx").on(t.isActive),
     orgIdx: index("users_org_idx").on(t.organizationId),
     branchIdx: index("users_branch_idx").on(t.branchId),
-    employeeIdIdx: uniqueIndex("users_employee_id_idx").on(t.employeeId),
+    employeeIdIdx: index("users_employee_id_idx").on(t.employeeId),
   }),
 )
 

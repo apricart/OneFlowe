@@ -9,7 +9,7 @@ import { eq, or } from "drizzle-orm"
  */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
-  const username = searchParams.get("username")?.toLowerCase().replace(/[^a-z0-9]/g, "")
+  const username = searchParams.get("username")?.toLowerCase().trim()
 
   if (!username || username.length < 3) {
     return ok({ available: false, suggestions: [] })
