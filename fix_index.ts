@@ -2,60 +2,41 @@ import { db } from "./lib/db";
 import { sql } from "drizzle-orm";
 
 async function main() {
-  console.log("Fixing indexes — only username should be unique...");
+  console.log("Dropping unique email indexes to allow duplicate emails...");
+  
   try {
-    const res: any = await db.execute(sql`
-      SELECT indexname, indexdef, tablename
-      FROM pg_indexes 
-      WHERE tablename IN ('users', 'employee_credentials')
-      AND indexdef LIKE '%UNIQUE%';
-    `);
-    const rows = res.rows || res;
-    console.log("Current UNIQUE indexes:");
-    for (const r of rows) {
-      console.log(`  ${r.tablename}.${r.indexname}: ${r.indexdef}`);
-    }
+    // Drop unique email index on employee_credentials
+    await db.execute(sql`DROP INDEX IF EXISTS "employee_creds_email_uq"`);
+    console.log("✅ Dropped employee_creds_email_uq (if existed)");
+  } catch (err: any) {
+    console.error("❌ Error dropping employee_creds_email_uq:", err.message);
+  }
 
-    for (const r of rows) {
-      const name = r.indexname as string;
-      // Keep username unique index — that's the only one we want
-      if (name === "users_username_idx") {
-        console.log(`  KEEPING unique: ${name}`);
-        continue;
-      }
-      // Keep primary keys
-      if (name.includes("pkey")) {
-        console.log(`  KEEPING pkey: ${name}`);
-        continue;
-      }
+  try {
+    // Create non-unique replacement
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "employee_creds_email_idx" ON "employee_credentials" ("email")`);
+    console.log("✅ Created non-unique email index on employee_credentials");
+  } catch (err: any) {
+    console.error("❌ Error creating replacement index:", err.message);
+  }
 
-      // Drop and recreate as non-unique
-      console.log(`  DROPPING unique: ${name}`);
-      try {
-        await db.execute(sql.raw(`DROP INDEX IF EXISTS "${name}"`));
-        const newDef = (r.indexdef as string).replace("CREATE UNIQUE INDEX", "CREATE INDEX");
-        console.log(`  RECREATING as non-unique: ${newDef}`);
-        await db.execute(sql.raw(newDef));
-        console.log(`  ✅ Fixed: ${name}`);
-      } catch (err: any) {
-        console.error(`  ❌ Error fixing ${name}:`, err.message);
-      }
-    }
-
-    console.log("\nDone! Verifying remaining unique indexes on users:");
-    const verify: any = await db.execute(sql`
+  try {
+    // Verify remaining unique indexes
+    const res = await db.execute(sql`
       SELECT indexname, indexdef
       FROM pg_indexes 
-      WHERE tablename = 'users' AND indexdef LIKE '%UNIQUE%';
+      WHERE tablename IN ('users', 'employee_credentials') 
+      AND indexdef LIKE '%UNIQUE%'
     `);
-    const vrows = verify.rows || verify;
-    for (const r of vrows) {
+    const rows = (res as any).rows || res;
+    console.log("\nRemaining UNIQUE indexes:");
+    for (const r of rows) {
       console.log(`  ${r.indexname}: ${r.indexdef}`);
     }
-
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    console.error("❌ Error verifying:", err.message);
   }
+
   process.exit(0);
 }
 
