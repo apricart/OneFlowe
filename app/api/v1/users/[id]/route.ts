@@ -5,6 +5,7 @@ import { eq, or, count } from "drizzle-orm"
 import { hashPassword } from "@/lib/password"
 import { ok, error, requireApiRole, readJson } from "@/lib/api"
 import { getRequestScope } from "@/lib/auth"
+import { invalidateByPrefix } from "@/lib/cache-utils"
 import { headers } from "next/headers"
 
 export async function PATCH(
@@ -29,7 +30,24 @@ export async function PATCH(
     if (!targetUser) return error("User not found", 404)
 
     const hasAccess = await verifyResourceAccess(targetUser.organizationId)
-    if (!hasAccess) return error("Forbidden: You do not have access to this user", 403)
+    if (!hasAccess) return error("Unauthorized to assign user to this resource", 403)
+
+    // Check uniqueness if email or username changed
+    if (body.email || body.username) {
+      const conditions = []
+      if (body.email) conditions.push(eq(users.email, body.email))
+      if (body.username) conditions.push(eq(users.username, body.username))
+
+      const existing = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(...conditions))
+        .limit(1)
+
+      if (existing.length > 0 && existing[0].id !== id) {
+        return error("Email or username already in use by another user", 400)
+      }
+    }
 
     const patch: any = { updatedAt: new Date() }
 
@@ -118,6 +136,9 @@ export async function PATCH(
     } catch (logErr) {
       console.error("[API/Users] Audit Log Error:", logErr)
     }
+
+    // Invalidate users cache so lists refresh immediately in production
+    await invalidateByPrefix('users')
 
     return ok({ success: true })
   } catch (criticalErr: any) {
@@ -298,6 +319,9 @@ export async function DELETE(
       // Then delete the user from the database
       await db.delete(users).where(eq(users.id, id))
     }
+
+    // Invalidate users cache
+    await invalidateByPrefix('users')
 
     // Audit Log
     try {

@@ -118,7 +118,7 @@ export const users = pgTable(
   },
   (t) => ({
     usernameIdx: uniqueIndex("users_username_idx").on(t.username),
-    emailIdx: index("users_email_idx").on(t.email),
+    emailIdx: uniqueIndex("users_email_idx").on(t.email),
     roleIdx: index("users_role_idx").on(t.roleId),
     activeIdx: index("users_active_idx").on(t.isActive),
     orgIdx: index("users_org_idx").on(t.organizationId),

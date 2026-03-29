@@ -75,6 +75,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  console.log("[API/Users] POST /api/v1/users triggered")
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
   if (err) return err
 
