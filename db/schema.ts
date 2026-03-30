@@ -118,7 +118,7 @@ export const users = pgTable(
   },
   (t) => ({
     usernameIdx: uniqueIndex("users_username_idx").on(t.username),
-    emailIdx: uniqueIndex("users_email_idx").on(t.email),
+    emailIdx: index("users_email_idx").on(t.email),
     roleIdx: index("users_role_idx").on(t.roleId),
     activeIdx: index("users_active_idx").on(t.isActive),
     orgIdx: index("users_org_idx").on(t.organizationId),
@@ -873,7 +873,7 @@ export const employeeCredentials = pgTable(
   },
   (t) => ({
     usernameUq: uniqueIndex("employee_creds_username_uq").on(t.username),
-    emailUq: uniqueIndex("employee_creds_email_uq").on(t.email),
+    emailUq: index("employee_creds_email_uq").on(t.email),
     branchIdx: index("employee_creds_branch_idx").on(t.branchId),
     orgIdx: index("employee_creds_org_idx").on(t.organizationId),
     activeIdx: index("employee_creds_active_idx").on(t.isActive),

@@ -231,9 +231,6 @@ export async function POST(req: Request) {
     const detail = String(err.detail || err.cause?.detail || "").toLowerCase()
 
     if (errorCode === '23505' || errorMsg.includes('unique constraint') || detail.includes('already exists')) {
-      if (detail.includes('email') || errorMsg.includes('email')) {
-        return error("Email address already exists. Please use a different email.", 400)
-      }
       return error("Username already exists. Please choose a different username.", 400)
     }
 

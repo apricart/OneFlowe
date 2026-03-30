@@ -163,14 +163,6 @@ export function parseError(error: any): ErrorDetails {
 
   // Duplicate errors (username and email are unique in some parts)
   if (errorMsg.includes('already exists') || errorMsg.includes('unique')) {
-    if (errorMsg.includes('Email') || errorMsg.includes('email')) {
-      return {
-        type: 'DUPLICATE_ERROR',
-        message: 'This email address already exists. Please use a different email.',
-        field: 'email',
-        statusCode: 400
-      }
-    }
     if (errorMsg.includes('Username') || errorMsg.includes('username')) {
       return {
         type: 'DUPLICATE_ERROR',

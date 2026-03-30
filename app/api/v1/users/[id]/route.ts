@@ -33,19 +33,14 @@ export async function PATCH(
     if (!hasAccess) return error("Unauthorized to assign user to this resource", 403)
 
     // Check uniqueness if email or username changed
-    if (body.email || body.username) {
-      const conditions = []
-      if (body.email) conditions.push(eq(users.email, body.email))
-      if (body.username) conditions.push(eq(users.username, body.username))
-
-      const existing = await db
+    if (body.username) {
+      const [existing] = await db
         .select({ id: users.id })
         .from(users)
-        .where(or(...conditions))
+        .where(eq(users.username, body.username))
         .limit(1)
-
-      if (existing.length > 0 && existing[0].id !== id) {
-        return error("Email or username already in use by another user", 400)
+      if (existing && existing.id !== id) {
+        return error("Username already in use by another user", 400)
       }
     }
 
