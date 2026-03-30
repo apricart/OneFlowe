@@ -38,6 +38,7 @@ type UserRow = {
   imprestHolder?: string | null
   contactPerson?: string | null
   address?: string | null
+  username?: string | null
 }
 
 type HeadOfficeUsersTableProps = {
@@ -521,6 +522,9 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                     <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                       {user.fullName || `${user.firstName} ${user.lastName}`}
                     </h3>
+                    <div className="text-[11px] font-bold text-indigo-500/80 uppercase tracking-wider -mt-1">
+                      @{user.username || "unset"}
+                    </div>
                     <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
                       <Mail className="h-3.5 w-3.5" />
                       <span className="truncate">{user.email}</span>
@@ -590,8 +594,10 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                           </Avatar>
                           <div>
                             <div className="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{user.fullName || `${user.firstName} ${user.lastName}`}</div>
-                            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-tight">
-                              #{user.id.slice(0, 8)}
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-tight">@{user.username || "unset"}</span>
+                              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-tight opacity-50">•</span>
+                              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-tight">#{user.id.slice(0, 8)}</span>
                             </div>
                           </div>
                         </div>
@@ -705,6 +711,9 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                     <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] tracking-widest uppercase">
                       ID: {viewingUser.id}
                     </span>
+                    <span className="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 px-2 py-0.5 rounded text-[10px] font-bold tracking-wider">
+                      @{viewingUser.username || "no-username"}
+                    </span>
                   </SheetDescription>
                 </div>
               </SheetHeader>
@@ -758,6 +767,12 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                          <p className="text-sm font-semibold">{viewingUser.employeeId || "Not Set"}</p>
                       </div>
                       <div className="space-y-0.5 text-right">
+                         <p className="text-xs text-muted-foreground">Username</p>
+                         <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">@{viewingUser.username || "Not Set"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-0.5">
                          <p className="text-xs text-muted-foreground">Imprest Holder</p>
                          <p className="text-sm font-semibold">{viewingUser.imprestHolder || "Not Applicable"}</p>
                       </div>

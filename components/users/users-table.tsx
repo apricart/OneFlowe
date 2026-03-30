@@ -13,7 +13,7 @@ import { Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { handleError } from "@/lib/error-handler"
 
-type UserRow = { id: string; firstName: string; lastName: string; email: string; role: string; organizationId?: number | null; branchId?: number | null; phone?: string; mfaEnabled?: boolean; createdAt: string }
+type UserRow = { id: string; firstName: string; lastName: string; email: string; role: string; organizationId?: number | null; branchId?: number | null; phone?: string; mfaEnabled?: boolean; createdAt: string; username?: string | null }
 type UsersResp = { items: UserRow[] }
 
 export function UsersTable() {
@@ -260,7 +260,10 @@ export function UsersTable() {
           ) : (
             rows.map((u) => (
               <TableRow key={u.id}>
-                <TableCell>{u.firstName} {u.lastName}</TableCell>
+                <TableCell>
+                  <div className="font-medium">{u.firstName} {u.lastName}</div>
+                  <div className="text-[10px] text-indigo-500 font-bold">@{u.username || "unset"}</div>
+                </TableCell>
                 <TableCell>{u.email}</TableCell>
                 <TableCell>{u.phone || "-"}</TableCell>
                 <TableCell>{u.role}</TableCell>

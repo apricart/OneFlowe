@@ -135,6 +135,7 @@ export async function PATCH(
     // Invalidate users cache so lists refresh immediately in production
     await invalidateByPrefix('users')
 
+    return ok({ success: true })
   } catch (criticalErr: any) {
     const errorMessage = criticalErr.message || "Failed to update user"
     console.error("[API/Users] ERROR IN PATCH:", criticalErr)
