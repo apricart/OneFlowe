@@ -1,7 +1,0 @@
-[
-  {
-    "table_name": "users",
-    "index_name": "users_username_idx",
-    "column_name": "username"
-  }
-]
