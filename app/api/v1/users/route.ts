@@ -85,7 +85,7 @@ export async function POST(req: Request) {
   const firstName = String(body.firstName || "")
   const lastName = String(body.lastName || "")
   const email = String(body.email || "")
-  const username = String(body.username || "").toLowerCase().trim()
+  const username = String(body.username || "").toLowerCase()
   const location = String(body.location || "")
   const password = String(body.password || "")
   const role = String(body.role || "") as Role
@@ -231,7 +231,11 @@ export async function POST(req: Request) {
     const detail = String(err.detail || err.cause?.detail || "").toLowerCase()
 
     if (errorCode === '23505' || errorMsg.includes('unique constraint') || detail.includes('already exists')) {
-      return error("Username already exists. Please choose a different username.", 400)
+      if (detail.includes('username')) return error("Username already exists. Please choose a different username.", 400)
+      if (detail.includes('employee_id')) return error("Internal ID (Employee ID) already exists.", 400)
+      if (detail.includes('email')) return error("Email address already exists.", 400)
+      if (detail.includes('phone')) return error("Phone number already exists.", 400)
+      return error("Unique field conflict: " + detail, 400)
     }
 
     // Pass through validation errors as 400

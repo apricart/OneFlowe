@@ -163,7 +163,7 @@ export function parseError(error: any): ErrorDetails {
 
   // Duplicate errors (username and email are unique in some parts)
   if (errorMsg.includes('already exists') || errorMsg.includes('unique')) {
-    if (errorMsg.includes('Username') || errorMsg.includes('username')) {
+    if (errorMsg.includes('username') && (errorMsg.includes('taken') || errorMsg.includes('use') || errorMsg.includes('exists') || errorMsg.includes('idx') || errorMsg.includes('uq'))) {
       return {
         type: 'DUPLICATE_ERROR',
         message: 'This username already exists. Please choose a different username.',

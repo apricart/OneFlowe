@@ -135,12 +135,19 @@ export async function PATCH(
     // Invalidate users cache so lists refresh immediately in production
     await invalidateByPrefix('users')
 
-    return ok({ success: true })
   } catch (criticalErr: any) {
-    console.error("[API/Users] ERROR IN PATCH:", criticalErr)
     const errorMessage = criticalErr.message || "Failed to update user"
+    console.error("[API/Users] ERROR IN PATCH:", criticalErr)
 
-    // Use 400 for validation errors so they aren't sanitized by the bank-grade error handler
+    if (criticalErr.code === '23505' || errorMessage.includes('unique constraint') || errorMessage.includes('already exists')) {
+      const detail = String(criticalErr.detail || criticalErr.cause?.detail || "").toLowerCase()
+      if (detail.includes('username')) return error("Username already in use by another user", 400)
+      if (detail.includes('employee_id')) return error("Internal ID (Employee ID) already exists.", 400)
+      if (detail.includes('email')) return error("Email address already exists.", 400)
+      if (detail.includes('phone')) return error("Phone number already exists.", 400)
+      return error("Unique field conflict: " + detail, 400)
+    }
+
     const isValidationError = errorMessage.includes("Invalid password") ||
       errorMessage.includes("already exists") ||
       errorMessage.includes("Password") ||

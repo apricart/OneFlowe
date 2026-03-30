@@ -1,0 +1,612 @@
+[
+  {
+    "conname": "audit_logs_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "branch_inventory_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "branch_products_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "branches_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "budgets_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "categories_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "employee_credentials_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "global_products_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "head_offices_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "inventory_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "inventory_sync_logs_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "mfa_codes_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "modifiers_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "notifications_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "order_items_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "orders_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "orders_tid_unique",
+    "contype": "u",
+    "pg_get_constraintdef": "UNIQUE (tid)"
+  },
+  {
+    "conname": "org_metrics_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "organization_inventory_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "organization_products_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "organization_settings_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "organizations_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "product_assignments_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "product_import_batches_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "product_modifiers_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "products_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "refunds_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "restock_requests_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "role_permissions_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "roles_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "sessions_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "skus_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "suppliers_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "users_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "audit_logs_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "audit_logs_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "audit_logs_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "branch_inventory_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "branch_inventory_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "branch_inventory_organization_inventory_id_organization_invento",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_inventory_id) REFERENCES organization_inventory(id) ON DELETE CASCADE"
+  },
+  {
+    "conname": "branch_inventory_assigned_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (assigned_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "branch_products_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "branch_products_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "branch_products_global_product_id_global_products_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (global_product_id) REFERENCES global_products(id)"
+  },
+  {
+    "conname": "branch_products_organization_product_id_organization_products_i",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_product_id) REFERENCES organization_products(id) ON DELETE CASCADE"
+  },
+  {
+    "conname": "branch_products_updated_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (updated_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "branches_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "budgets_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "budgets_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "categories_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "employee_credentials_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "employee_credentials_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "employee_credentials_created_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (created_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "global_products_category_id_categories_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (category_id) REFERENCES categories(id)"
+  },
+  {
+    "conname": "global_products_created_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (created_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "head_offices_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "inventory_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "inventory_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "inventory_sku_id_skus_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (sku_id) REFERENCES skus(id)"
+  },
+  {
+    "conname": "inventory_sync_logs_performed_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (performed_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "mfa_codes_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "modifiers_created_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (created_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "notifications_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "notifications_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "notifications_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "order_items_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "order_items_order_id_orders_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (order_id) REFERENCES orders(id)"
+  },
+  {
+    "conname": "order_items_global_product_id_global_products_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (global_product_id) REFERENCES global_products(id)"
+  },
+  {
+    "conname": "orders_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "orders_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "orders_created_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (created_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "org_metrics_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "organization_inventory_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "organization_inventory_global_product_id_global_products_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (global_product_id) REFERENCES global_products(id)"
+  },
+  {
+    "conname": "organization_inventory_assigned_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (assigned_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "organization_products_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "organization_products_global_product_id_global_products_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (global_product_id) REFERENCES global_products(id)"
+  },
+  {
+    "conname": "organization_products_updated_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (updated_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "organization_settings_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "product_assignments_global_product_id_global_products_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (global_product_id) REFERENCES global_products(id)"
+  },
+  {
+    "conname": "product_assignments_performed_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (performed_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "product_import_batches_uploaded_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "product_modifiers_product_id_global_products_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (product_id) REFERENCES global_products(id)"
+  },
+  {
+    "conname": "product_modifiers_modifier_id_modifiers_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (modifier_id) REFERENCES modifiers(id)"
+  },
+  {
+    "conname": "products_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "products_category_id_categories_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (category_id) REFERENCES categories(id)"
+  },
+  {
+    "conname": "refunds_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "refunds_order_id_orders_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (order_id) REFERENCES orders(id)"
+  },
+  {
+    "conname": "refunds_processed_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (processed_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "restock_requests_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "restock_requests_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "restock_requests_global_product_id_global_products_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (global_product_id) REFERENCES global_products(id)"
+  },
+  {
+    "conname": "restock_requests_requested_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (requested_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "restock_requests_reviewed_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "role_permissions_role_id_roles_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (role_id) REFERENCES roles(id)"
+  },
+  {
+    "conname": "sessions_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "sessions_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "skus_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "skus_product_id_products_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (product_id) REFERENCES products(id)"
+  },
+  {
+    "conname": "suppliers_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "suppliers_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "users_role_id_roles_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (role_id) REFERENCES roles(id)"
+  },
+  {
+    "conname": "users_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "refunds_requested_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (requested_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "system_logs_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "system_logs_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "system_logs_branch_id_branches_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (branch_id) REFERENCES branches(id)"
+  },
+  {
+    "conname": "orders_approved_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (approved_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "orders_rejected_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (rejected_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "groups_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "groups_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "groups_created_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (created_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "orders_fulfilled_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (fulfilled_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "group_audit_logs_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "group_audit_logs_organization_id_organizations_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (organization_id) REFERENCES organizations(id)"
+  },
+  {
+    "conname": "group_audit_logs_group_id_groups_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (group_id) REFERENCES groups(id)"
+  },
+  {
+    "conname": "group_audit_logs_performed_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (performed_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "refund_items_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  },
+  {
+    "conname": "refund_items_refund_id_refunds_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (refund_id) REFERENCES refunds(id) ON DELETE CASCADE"
+  },
+  {
+    "conname": "refund_items_order_item_id_order_items_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (order_item_id) REFERENCES order_items(id)"
+  },
+  {
+    "conname": "orders_refunded_by_user_id_users_id_fk",
+    "contype": "f",
+    "pg_get_constraintdef": "FOREIGN KEY (refunded_by_user_id) REFERENCES users(id)"
+  },
+  {
+    "conname": "city_pkey",
+    "contype": "p",
+    "pg_get_constraintdef": "PRIMARY KEY (id)"
+  }
+]
