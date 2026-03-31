@@ -702,37 +702,7 @@ function BarTooltip({ active, payload }: any) {
             </TabsList>
           </div>
 
-          <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    {/* ━━━ KPI BENTO GRID ━━━ */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <KPICard
-                            title="Total Revenue"
-                            value={formatPKR(totalRevenue / 100)}
-                            icon={TrendingUp}
-                            colorScheme="emerald"
-                            trend={revenueTrend?.value ? Number(revenueTrend.value) * (revenueTrend.isUp ? 1 : -1) : undefined}
-                            subtitle="From fulfilled orders"
-                            comparisonLabel="Prior Period"
-                            comparisonValue={compare && comparison ? formatPKR(comparison.totalSales / 100) : undefined}
-                        />
-                        <KPICard
-                            title="Order Volume"
-                            value={orderCount.toLocaleString()}
-                            icon={ShoppingBag}
-                            colorScheme="blue"
-                            trend={orderTrend?.value ? Number(orderTrend.value) * (orderTrend.isUp ? 1 : -1) : undefined}
-                            subtitle="Fulfilled + Approved + Partial Orders"
-                            comparisonLabel="Prior Period"
-                            comparisonValue={compare && comparison ? comparison.orderCount.toLocaleString() : undefined}
-                        />
-                        <KPICard
-                            title="Items Fulfilled"
-                            value={totalItemsSold.toLocaleString()}
-                            icon={Package}
-                            colorScheme="violet"
-                            subtitle="Net product units sold"
-                        />
-                    </div>
+          <TabsContent value="analytics" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
                     {/* ━━━ REVENUE TREND CHART WITH FILTERS ━━━ */}
                     <Card className="overflow-hidden border border-slate-200/80 dark:border-slate-800 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl rounded-[2rem] relative group transition-all duration-700 hover:shadow-indigo-500/10 hover:border-indigo-400/40">
                         <div className="px-8 py-7 border-b border-slate-100 dark:border-slate-800 space-y-5">

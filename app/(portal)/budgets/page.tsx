@@ -370,22 +370,6 @@ export default function BudgetsPage() {
       </div>
 
       <div className="space-y-6 p-4 md:p-6 max-w-[1600px] mx-auto">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0A1C92] via-[#2F2CC9] to-[#7C3AED] px-6 py-6 text-white shadow-xl ring-1 ring-indigo-500/30">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-xs tracking-[0.2em] text-white/70">HEAD OFFICE · FINANCE</p>
-              <h2 className="text-3xl font-semibold">Monthly Allocations</h2>
-              <p className="text-sm text-white/80">
-                Manage {currentMonth} spending and baseline budgets for every unit.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="rounded-full bg-white/20 px-4 py-2 text-sm font-semibold">
-                {scopedBudgets.length} units in view
-              </div>
-            </div>
-          </div>
-        </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="p-5 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden group hover:shadow-md transition-all">

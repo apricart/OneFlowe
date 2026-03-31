@@ -747,32 +747,7 @@ export default function BudgetSummaryPage() {
                         </TabsList>
                     </div>
 
-                    <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                        {/* ━━━ KPI BENTO GRID ━━━ */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <KPICard
-                                title="Allocated"
-                                value={formatPKR((summary.totalAllocated + (summary.totalCredited || 0)) / 100)}
-                                icon={Wallet}
-                                colorScheme="emerald"
-                                subtitle={`Base: ${formatPKR(summary.totalAllocated / 100)} | Addon: ${formatPKR(summary.totalCredited / 100)}`}
-                            />
-                            <KPICard
-                                title="Total Spent (Purchases)"
-                                value={formatPKR(summary.totalSpent / 100)}
-                                icon={ReceiptText}
-                                colorScheme="blue"
-                                subtitle="Total purchases processed"
-                            />
-                            <KPICard
-                                title="Remaining"
-                                value={(summary.totalRemaining < 0 ? "-" : "+") + formatPKR(Math.abs(summary.totalRemaining) / 100)}
-                                icon={PiggyBank}
-                                colorScheme={summary.totalRemaining < 0 ? "rose" : "indigo"}
-                                subtitle="Net Liquidity Asset Projection"
-                            />
-                        </div>
-
+                    <TabsContent value="analytics" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
                         {/* ━━━ CENTERPIECE DASHBOARD ━━━ */}
                         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
                             <Card className="xl:col-span-2 overflow-hidden border border-slate-200/80 dark:border-slate-800 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-3xl rounded-[2rem] relative group transition-all duration-700 hover:shadow-indigo-500/10 hover:border-indigo-400/40">
