@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { 
     RefreshCw, Search, Download, FileText, FileSpreadsheet, Package, TrendingUp, Loader2, AlertOctagon, RotateCcw, Calculator, 
-    ChevronDown, BarChart3, ListOrdered, Calendar, Hash, Store, Layers, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, Filter
+    ChevronDown, BarChart3, ListOrdered, Calendar, Hash, Store, Layers, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, Filter, LayoutGrid
 } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
 import jsPDF from "jspdf"
@@ -360,119 +360,74 @@ export default function OrderReportPage() {
     if (!hasMounted) return <div className="flex h-[50vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-400" /></div>
 
     return (
-        <div className="space-y-6 pb-12 bg-slate-50 dark:bg-slate-950 min-h-screen">
-            {/* ━━━ GLOBAL STICKY HEADER ━━━ */}
+        <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] transition-colors duration-500 pb-20">
+            {/* ━━━ STICKY PREMIUM HEADER ━━━ */}
             <div className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
-                <div className="max-w-[1600px] mx-auto px-6 py-3 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex-1" />
-                    <div className="hidden lg:flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
-                        <GlobalDateFilter
-                            value={dateRange}
-                            onChange={handleDateChange}
-                            activePreset={activePreset}
-                            hidePresets={false}
-                            compare={compare}
-                            compareRange={compareRange}
-                            months={selectedMonths}
-                            years={selectedYears}
-                            compareMonths={compareMonths}
-                            compareYears={compareYears}
-                        />
+                <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center shadow-lg shadow-indigo-500/20 rotate-3 group hover:rotate-0 transition-all duration-500">
+                            <TrendingUp className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Order Intelligence</h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                                <LayoutGrid className="h-3 w-3" />
+                                Detailed audit of corporate transactions
+                            </p>
+                        </div>
                     </div>
-                    
-                    <div className="flex items-center gap-2 h-6 pl-3">
-                        {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-                            <>
-                                <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mr-2" />
-                                <BranchFilter selectedIds={contextBranchIds} onChange={handleBranchChange} organizationId={organizationId || undefined} />
-                            </>
-                        )}
+
+                    <div className="flex items-center gap-3">
+                        <div className="hidden lg:flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
+                            <GlobalDateFilter
+                                value={dateRange}
+                                onChange={handleDateChange}
+                                activePreset={activePreset}
+                                hidePresets={false}
+                                compare={compare}
+                                compareRange={compareRange}
+                                months={selectedMonths}
+                                years={selectedYears}
+                                compareMonths={compareMonths}
+                                compareYears={compareYears}
+                            />
+                        </div>
+                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => { mutateGlobal(); mutateChart(); mutateReport(); }}>
+                            <RefreshCw className={cn("h-4 w-4", (isGlobalLoading || isChartLoading || isReportLoading) && "animate-spin")} />
+                        </Button>
                     </div>
                 </div>
             </div>
 
-            <div className="max-w-[1600px] mx-auto px-6 pt-6 space-y-6">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                    {/* ━━━ LUXURY INTELLIGENCE HEADER ━━━ */}
-                    <div className="relative overflow-hidden bg-slate-900 rounded-[2.5rem] border border-slate-800 shadow-2xl">
-                        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-indigo-600/20 blur-[120px] rounded-full animate-pulse" />
-                        <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-72 h-72 bg-blue-600/10 blur-[100px] rounded-full" />
-                        
-                        <div className="px-8 py-10 relative">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 max-w-7xl mx-auto">
-                                <div className="space-y-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2.5 rounded-2xl bg-indigo-600/20 text-indigo-400 ring-1 ring-indigo-500/30">
-                                            <TrendingUp className="h-5 w-5" />
-                                        </div>
-                                        <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/20 text-[10px] font-black uppercase tracking-widest px-3 py-1">
-                                            Intelligence Engine
-                                        </Badge>
-                                    </div>
-                                    <h1 className="text-4xl font-black text-white tracking-tight sm:text-5xl uppercase">
-                                        Order <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-blue-400 to-emerald-400">Intelligence</span>
-                                    </h1>
-                                    <p className="text-slate-400 font-medium text-sm flex items-center gap-2 max-w-md">
-                                        <Calculator className="h-4 w-4 opacity-50" />
-                                        Detailed audit of <strong className="text-white">{summary.totalOrderCount}</strong> transactions across selected domains.
-                                    </p>
-                                </div>
+            <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
+                {/* ━━━ KPI BENTO GRID ━━━ */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <KPICard title="Net Revenue" value={formatPKR(summary.totalSales / 100)} icon={TrendingUp} colorScheme="indigo" subtitle="Gross fulfilled minus refunds." />
+                    <KPICard title="Refund Impact" value={formatPKR(summary.totalRefunds / 100)} icon={RotateCcw} colorScheme="rose" subtitle="Total value returned to users." />
+                    <KPICard title="Total Orders" value={summary.totalOrderCount} icon={Package} colorScheme="blue" subtitle="Gross transaction count." />
+                    <KPICard title="Avg Value" value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={Calculator} colorScheme="amber" subtitle="Net revenue per transacting order." />
+                </div>
 
-                                <div className="flex flex-col items-end gap-6">
-                                    <TabsList className="bg-slate-800/50 p-1.5 rounded-2xl border border-slate-700/50 backdrop-blur-md">
-                                        <TabsTrigger value="analytics" className="rounded-xl px-8 py-3 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 transition-all duration-300 gap-2">
-                                            <LayoutDashboard className="h-3.5 w-3.5" /> Analytics
-                                        </TabsTrigger>
-                                        <TabsTrigger value="reports" className="rounded-xl px-8 py-3 text-[11px] font-black uppercase tracking-widest data-[state=active]:bg-white data-[state=active]:text-indigo-600 transition-all duration-300 gap-2">
-                                            <Database className="h-3.5 w-3.5" /> Reports
-                                        </TabsTrigger>
-                                    </TabsList>
-
-                                    <div className="flex items-center gap-3">
-                                        <Button 
-                                            variant="outline" 
-                                            onClick={() => { mutateGlobal(); mutateChart(); mutateReport(); }}
-                                            className="h-11 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-xl px-5 gap-2 transition-all duration-300 group"
-                                        >
-                                            <RefreshCw className={cn("h-4 w-4 transition-transform duration-500 group-hover:rotate-180", (isGlobalLoading || isChartLoading || isReportLoading) && "animate-spin")} />
-                                            Synchronize
-                                        </Button>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button className="h-11 bg-indigo-600 hover:bg-indigo-500 text-white border-none rounded-xl px-6 gap-2 shadow-lg shadow-indigo-600/20 transition-all duration-300 font-bold uppercase tracking-widest text-[11px]">
-                                                    <Download className="h-4 w-4" /> Export
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-52 bg-slate-900 border-slate-800 text-slate-300 rounded-2xl p-2 shadow-2xl">
-                                                <DropdownMenuItem onClick={() => handleExport('csv')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
-                                                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500"><FileSpreadsheet className="h-4 w-4" /></div> CSV Spreadsheet
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleExport('excel')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
-                                                    <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500"><FileText className="h-4 w-4" /></div> Excel Workbook
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleExport('pdf')} className="gap-3 py-3 rounded-xl hover:bg-slate-800 focus:bg-slate-800 cursor-pointer text-xs font-bold uppercase tracking-wider">
-                                                    <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-500"><FileText className="h-4 w-4" /></div> PDF Document
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+                    
+                    <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-1">
+                        <TabsList className="bg-transparent h-auto p-0 gap-8">
+                            <TabsTrigger value="analytics" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
+                                <LayoutDashboard className="h-4 w-4 mr-2" />
+                                Analytics
+                            </TabsTrigger>
+                            <TabsTrigger value="reports" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
+                                <Database className="h-4 w-4 mr-2" />
+                                Reports
+                            </TabsTrigger>
+                        </TabsList>
                     </div>
 
-                    <TabsContent value="analytics" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                        {/* ━━━ KPI BENTO GRID ━━━ */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <KPICard title="Net Revenue" value={formatPKR(summary.totalSales / 100)} icon={TrendingUp} colorScheme="indigo" subtitle="Gross fulfilled minus refunds." />
-                            <KPICard title="Refund Impact" value={formatPKR(summary.totalRefunds / 100)} icon={RotateCcw} colorScheme="rose" subtitle="Total value returned to users." />
-                            <KPICard title="Total Orders" value={summary.totalOrderCount} icon={Package} colorScheme="blue" subtitle="Gross transaction count." />
-                            <KPICard title="Avg Value" value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={Calculator} colorScheme="amber" subtitle="Net revenue per transacting order." />
-                        </div>
+                    <TabsContent value="analytics" className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             {/* Main Trend Chart */}
                             <Card className="lg:col-span-2 rounded-[2rem] border-slate-200 dark:border-slate-800 shadow-xl bg-white/50 dark:bg-slate-900/40 backdrop-blur-xl overflow-hidden">
-                                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                                <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
                                     <div className="flex items-center gap-3">
                                         <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
                                             <TrendingUp className="h-4 w-4" />
@@ -505,7 +460,7 @@ export default function OrderReportPage() {
                                         )}
                                     </div>
                                 </div>
-                                <div className="p-6 h-[400px]">
+                                <div className="p-8 h-[400px]">
                                     {isChartLoading ? (
                                         <div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-500/20" /></div>
                                     ) : (
@@ -532,13 +487,13 @@ export default function OrderReportPage() {
 
                             {/* Status Distribution */}
                             <Card className="rounded-[2rem] border-slate-200 dark:border-slate-800 shadow-xl bg-white/50 dark:bg-slate-900/40 backdrop-blur-xl overflow-hidden">
-                                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                                <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
                                     <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
                                         <Layers className="h-4 w-4" />
                                     </div>
                                     <h3 className="text-sm font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">Status Mix</h3>
                                 </div>
-                                <div className="p-6 h-[400px] flex flex-col justify-center relative">
+                                <div className="p-8 h-[400px] flex flex-col justify-center relative">
                                     <ResponsiveContainer width="100%" height={250}>
                                         <PieChart>
                                             <Pie
@@ -589,7 +544,7 @@ export default function OrderReportPage() {
                         </div>
                     </TabsContent>
 
-                    <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <TabsContent value="reports" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                         {/* Report Controls */}
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/50 dark:bg-slate-900/40 p-4 rounded-[2rem] border border-slate-200 dark:border-slate-800 backdrop-blur-xl">
                             <div className="flex flex-wrap items-center gap-2">
@@ -632,25 +587,38 @@ export default function OrderReportPage() {
                                     </>
                                 )}
                                 <ColumnSelector columns={ALL_COLUMNS} storageKey="order-report-v2" visibleKeys={visibleKeys} onChange={setVisibleKeys} />
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm" className="h-11 text-[11px] font-black underline decoration-slate-200 gap-2 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm px-5">
+                                            <Download className="h-3.5 w-3.5" />
+                                            EXPORT
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-52 rounded-2xl border-slate-200 dark:border-slate-800 p-2 shadow-2xl bg-white dark:bg-slate-900">
+                                        <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs font-bold py-3 cursor-pointer rounded-xl"><FileText className="mr-3 h-4 w-4 text-slate-400" /> CSV ARCHIVE</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs font-bold py-3 cursor-pointer rounded-xl"><FileSpreadsheet className="mr-3 h-4 w-4 text-emerald-500" /> EXCEL WORKBOOK</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs font-bold py-3 cursor-pointer rounded-xl"><FileText className="mr-3 h-4 w-4 text-rose-500" /> PDF DOCUMENT</DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                         </div>
 
                         {/* Report Table */}
-                        <Card className="rounded-[2.5rem] border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900/40 overflow-hidden">
-                            <div className="overflow-x-auto">
+                        <Card className="rounded-[2.5rem] border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900/40 overflow-hidden min-h-[600px] flex flex-col">
+                            <div className="overflow-x-auto flex-1">
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 hover:bg-transparent">
-                                            {isVisible("orderDate") && <TableHead className="h-14 px-6 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Calendar className="h-3 w-3" /> Date</div></TableHead>}
-                                            {isVisible("userName") && <TableHead className="h-14 px-6 text-[10px] font-black uppercase tracking-widest text-slate-500">User</TableHead>}
-                                            {isVisible("tid") && <TableHead className="h-14 px-6 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Hash className="h-3 w-3" /> TID</div></TableHead>}
-                                            {isVisible("organizationName") && <TableHead className="h-14 px-1 px-6 text-[10px] font-black uppercase tracking-widest text-slate-500">Org</TableHead>}
-                                            {isVisible("group") && <TableHead className="h-14 px-6 text-[10px] font-black uppercase tracking-widest text-slate-500">Group</TableHead>}
-                                            {isVisible("branchName") && <TableHead className="h-14 px-6 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Store className="h-3 w-3" /> Branch</div></TableHead>}
-                                            {isVisible("status") && <TableHead className="h-14 px-6 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Status</TableHead>}
-                                            {isVisible("subtotalValue") && <TableHead className="h-14 px-6 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Subtotal</TableHead>}
-                                            {isVisible("refundValue") && <TableHead className="h-14 px-6 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500">Refund</TableHead>}
-                                            {isVisible("netTotalValue") && <TableHead className="h-14 px-6 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Net Total</TableHead>}
+                                            {isVisible("orderDate") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Calendar className="h-3 w-3" /> Date</div></TableHead>}
+                                            {isVisible("userName") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">User</TableHead>}
+                                            {isVisible("tid") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Hash className="h-3 w-3" /> TID</div></TableHead>}
+                                            {isVisible("organizationName") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Org</TableHead>}
+                                            {isVisible("group") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Group</TableHead>}
+                                            {isVisible("branchName") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Store className="h-3 w-3" /> Branch</div></TableHead>}
+                                            {isVisible("status") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Status</TableHead>}
+                                            {isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Subtotal</TableHead>}
+                                            {isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500">Refund</TableHead>}
+                                            {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Net Total</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -661,27 +629,30 @@ export default function OrderReportPage() {
                                         ) : (
                                             filteredOrders.map((order: any) => (
                                                 <TableRow key={order.id} className="group border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-indigo-500/5 transition-colors duration-200">
-                                                    {isVisible("orderDate") && <TableCell className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-tighter" suppressHydrationWarning>{new Date(order.createdAt).toLocaleDateString()}</TableCell>}
-                                                    {isVisible("userName") && <TableCell className="px-6 py-4"><span className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-tighter">{order.userName || "Guest System"}</span></TableCell>}
-                                                    {isVisible("tid") && <TableCell className="px-6 py-4"><span className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-black text-slate-600 dark:text-slate-400 font-mono italic">{order.tid}</span></TableCell>}
-                                                    {isVisible("organizationName") && <TableCell className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.organizationName || "N/A"}</TableCell>}
-                                                    {isVisible("group") && <TableCell className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.group || "-"}</TableCell>}
-                                                    {isVisible("branchName") && <TableCell className="px-6 py-4 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter">{order.branchName}</TableCell>}
+                                                    {isVisible("orderDate") && <TableCell className="px-8 py-5 text-[11px] font-bold text-slate-500 uppercase tracking-tighter" suppressHydrationWarning>{new Date(order.createdAt).toLocaleDateString()}</TableCell>}
+                                                    {isVisible("userName") && <TableCell className="px-8 py-5"><span className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-tighter">{order.userName || "Guest System"}</span></TableCell>}
+                                                    {isVisible("tid") && <TableCell className="px-8 py-5"><span className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-black text-slate-600 dark:text-slate-400 font-mono italic">{order.tid}</span></TableCell>}
+                                                    {isVisible("organizationName") && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.organizationName || "N/A"}</TableCell>}
+                                                    {isVisible("group") && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.group || "-"}</TableCell>}
+                                                    {isVisible("branchName") && <TableCell className="px-8 py-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter">{order.branchName}</TableCell>}
                                                     {isVisible("status") && (
-                                                        <TableCell className="px-6 py-4 text-center">
+                                                        <TableCell className="px-8 py-5 text-center">
                                                             <Badge variant="outline" style={{ backgroundColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}15`, color: STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8', borderColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}30` }} className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border">
                                                                 {order.status}
                                                             </Badge>
                                                         </TableCell>
                                                     )}
-                                                    {isVisible("subtotalValue") && <TableCell className="px-6 py-4 text-right text-[11px] font-bold font-mono">{formatPKR(order.subtotalCents / 100)}</TableCell>}
-                                                    {isVisible("refundValue") && <TableCell className="px-6 py-4 text-right text-[11px] font-black font-mono text-rose-500">{order.refundAmountCents > 0 ? `-${formatPKR(order.refundAmountCents / 100)}` : "—"}</TableCell>}
-                                                    {isVisible("netTotalValue") && <TableCell className="px-6 py-4 text-right text-xs font-black font-mono text-slate-900 dark:text-white leading-none">{formatPKR((order.totalCents - (order.refundAmountCents || 0)) / 100)}</TableCell>}
+                                                    {isVisible("subtotalValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-bold font-mono">{formatPKR(order.subtotalCents / 100)}</TableCell>}
+                                                    {isVisible("refundValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-rose-500">{order.refundAmountCents > 0 ? `-${formatPKR(order.refundAmountCents / 100)}` : "—"}</TableCell>}
+                                                    {isVisible("netTotalValue") && <TableCell className="px-8 py-5 text-right text-xs font-black font-mono text-slate-900 dark:text-white leading-none">{formatPKR((order.totalCents - (order.refundAmountCents || 0)) / 100)}</TableCell>}
                                                 </TableRow>
                                             ))
                                         )}
                                     </TableBody>
                                 </Table>
+                            </div>
+                            <div className="px-8 py-5 border-t border-slate-100 dark:border-slate-900 bg-slate-50/50 dark:bg-slate-900/40 flex items-center justify-between">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">System Generated Audit • {generatedDate}</p>
                             </div>
                         </Card>
                     </TabsContent>
