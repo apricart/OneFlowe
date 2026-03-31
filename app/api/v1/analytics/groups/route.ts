@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { groups, branches, orders, organizations } from "@/db/schema"
+import { groups, branches, orders, organizations, budgets } from "@/db/schema"
 import { and, eq, sql, isNull, gte, lte, desc, inArray } from "drizzle-orm"
 import { metricExpressions, REVENUE_ELIGIBLE_FILTER } from "@/lib/metric-utils"
 
