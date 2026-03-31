@@ -21,24 +21,48 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     const { data: session, status } = useSession()
     const pathname = usePathname()
     const hasBeenAuthenticated = useRef(false)
+    const lastKnownRole = useRef<string | null>(null)
+    const isLoggingOut = useRef(false)
 
     // Track if user was ever authenticated in this page load
     useEffect(() => {
-        if (status === "authenticated") {
+        if (status === "authenticated" && session?.user) {
             hasBeenAuthenticated.current = true
+            lastKnownRole.current = (session.user as any).role
         }
-    }, [status])
+    }, [status, session])
+
+    // Listen for manual logout events to prevent double-triggering
+    useEffect(() => {
+        const handleManualLogout = () => {
+            isLoggingOut.current = true
+        }
+        window.addEventListener('beforeunload', handleManualLogout)
+        return () => window.removeEventListener('beforeunload', handleManualLogout)
+    }, [])
 
     useEffect(() => {
         // Only act if the user WAS authenticated but now isn't
-        // This prevents redirect loops on public pages
-        if (status === "unauthenticated" && hasBeenAuthenticated.current) {
+        // AND we aren't already in the middle of a manual logout
+        if (status === "unauthenticated" && hasBeenAuthenticated.current && !isLoggingOut.current) {
             console.log("[SessionGuard] Session invalidated, logging out...")
 
-            // Determine correct login page based on current path
-            const loginPath = pathname?.startsWith("/shop") ? "/shop/login" : "/login"
+            // Logic for redirecting to the correct portal login:
+            // 1. If they were an admin (any admin role), they ALWAYS go to /login
+            // 2. If they were an employee/order portal user, they go to /shop/login
+            // 3. Fallback: use pathname logic
+            
+            const isAdmin = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"].includes(lastKnownRole.current || "")
+            const isShopPath = pathname?.startsWith("/shop")
+            
+            let loginPath = "/login"
+            if (!isAdmin && isShopPath) {
+                loginPath = "/shop/login"
+            }
 
-            // Clean up and redirect using standard NextAuth flow to avoid session race conditions
+            isLoggingOut.current = true
+            
+            // Clean up and redirect using standard NextAuth flow
             signOut({ 
                 redirect: true, 
                 callbackUrl: loginPath 
