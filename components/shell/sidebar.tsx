@@ -97,9 +97,10 @@ const getNavigationByRole = (role: string) => {
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { data: session } = useSession()
-  const role = (session?.user as any)?.role || "BRANCH_ADMIN"
-  const nav = getNavigationByRole(role)
+  const { data: session, status } = useSession()
+  const role = (session?.user as any)?.role
+  const isLoading = status === "loading"
+  const nav = getNavigationByRole(role || "")
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
   const toggleExpanded = (href: string) => {
@@ -130,133 +131,146 @@ export function Sidebar() {
         </div>
         <div className="relative z-10 leading-tight">
           <div className="text-lg font-bold tracking-tight text-white drop-shadow-sm">OneFlowe</div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-blue-100/80 group-hover:text-white transition-colors duration-300">
-            {role === "SUPER_ADMIN" ? "Administrator" : role === "HEAD_OFFICE" ? "Head Office" : "Branch Admin"}
+          <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-blue-100/80 group-hover:text-white transition-colors duration-300 min-h-[12px]">
+            {isLoading ? (
+              <div className="h-2 w-16 bg-white/20 rounded animate-pulse mt-1" />
+            ) : (
+              role === "SUPER_ADMIN" ? "Administrator" : role === "HEAD_OFFICE" ? "Head Office" : role === "BRANCH_ADMIN" ? "Branch Admin" : ""
+            )}
           </div>
         </div>
       </div>
 
-      <nav className="p-4 flex flex-col gap-1.5 overflow-y-auto flex-1 min-h-0 bg-transparent custom-scrollbar" aria-busy={!session} aria-live="polite">
-        {nav.map((item) => {
-          const active = isItemActive(item)
-          const hasSubItems = 'subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0;
-          const isExpanded = expandedItems.includes(item.href)
+      <nav className="p-4 flex flex-col gap-1.5 overflow-y-auto flex-1 min-h-0 bg-transparent custom-scrollbar" aria-busy={isLoading} aria-live="polite">
+        {isLoading ? (
+          // Loading Skeleton
+          <div className="space-y-4">
+            {Array(6).fill(0).map((_, i) => (
+              <div key={i} className="h-10 w-full bg-slate-200/50 dark:bg-slate-800/50 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          nav.map((item) => {
+            const active = isItemActive(item)
+            const hasSubItems = 'subItems' in item && Array.isArray(item.subItems) && item.subItems.length > 0;
+            const isExpanded = expandedItems.includes(item.href)
 
-          if (hasSubItems) {
-            return (
-              <div key={item.href} className="space-y-1">
-                <button
-                  onClick={() => toggleExpanded(item.href)}
-                  className={cn(
-                    "w-full rounded-xl px-4 py-2.5 text-sm flex items-center gap-3 text-left transition-all duration-300 relative group",
-                    active
-                      ? "font-bold bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
-                      : "text-slate-600 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-100 hover:shadow-sm"
-                  )}
-                >
-                  {active && <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-blue-600 dark:bg-blue-400 rounded-r-full" />}
-                  {item.icon ? (
-                    <item.icon size={18} className={cn("transition-transform duration-300 group-hover:scale-110", active ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-500 group-hover:text-blue-500")} />
-                  ) : null}
-                  <span className="flex-1">{item.label}</span>
-                  <div className={cn("transition-transform duration-300", isExpanded ? "rotate-180" : "rotate-0")}>
-                    <ChevronDown size={14} className="opacity-50" />
-                  </div>
-                </button>
-                {isExpanded && (
-                  <div className="ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1 mt-1 animate-in fade-in slide-in-from-left-2 duration-300">
-                    {item.subItems.map((subItem: any) => {
-                      const subActive = isSubItemActive(subItem)
-                      const hasNestedItems = 'subItems' in subItem && Array.isArray(subItem.subItems) && subItem.subItems.length > 0
-                      const isNestedExpanded = expandedItems.includes(subItem.href)
+            if (hasSubItems) {
+              return (
+                <div key={item.href} className="space-y-1">
+                  <button
+                    onClick={() => toggleExpanded(item.href)}
+                    className={cn(
+                      "w-full rounded-xl px-4 py-2.5 text-sm flex items-center gap-3 text-left transition-all duration-300 relative group",
+                      active
+                        ? "font-bold bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
+                        : "text-slate-600 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-100 hover:shadow-sm"
+                    )}
+                  >
+                    {active && <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-blue-600 dark:bg-blue-400 rounded-r-full" />}
+                    {item.icon ? (
+                      <item.icon size={18} className={cn("transition-transform duration-300 group-hover:scale-110", active ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-500 group-hover:text-blue-500")} />
+                    ) : null}
+                    <span className="flex-1">{item.label}</span>
+                    <div className={cn("transition-transform duration-300", isExpanded ? "rotate-180" : "rotate-0")}>
+                      <ChevronDown size={14} className="opacity-50" />
+                    </div>
+                  </button>
+                  {isExpanded && (
+                    <div className="ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1 mt-1 animate-in fade-in slide-in-from-left-2 duration-300">
+                      {item.subItems.map((subItem: any) => {
+                        const subActive = isSubItemActive(subItem)
+                        const hasNestedItems = 'subItems' in subItem && Array.isArray(subItem.subItems) && subItem.subItems.length > 0
+                        const isNestedExpanded = expandedItems.includes(subItem.href)
 
-                      if (hasNestedItems) {
-                        return (
-                          <div key={subItem.href} className="space-y-1">
-                            <button
-                              onClick={() => toggleExpanded(subItem.href)}
-                              className={cn(
-                                "w-full rounded-lg px-4 py-2 text-xs font-medium flex items-center gap-2 text-left transition-all duration-300",
-                                subActive
-                                  ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm"
-                                  : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                        if (hasNestedItems) {
+                          return (
+                            <div key={subItem.href} className="space-y-1">
+                              <button
+                                onClick={() => toggleExpanded(subItem.href)}
+                                className={cn(
+                                  "w-full rounded-lg px-4 py-2 text-xs font-medium flex items-center gap-2 text-left transition-all duration-300",
+                                  subActive
+                                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm"
+                                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                                )}
+                              >
+                                <div className="w-1 h-1 rounded-full bg-current opacity-30" />
+                                <span className="flex-1">{subItem.label}</span>
+                                <ChevronDown size={12} className={cn("opacity-50 transition-transform duration-300", isNestedExpanded ? "rotate-180" : "rotate-0")} />
+                              </button>
+                              {isNestedExpanded && (
+                                <div className="ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1">
+                                  {subItem.subItems.map((nestedItem: any) => {
+                                    const nestedActive = pathname === nestedItem.href
+                                    return (
+                                      <Link
+                                        key={nestedItem.href}
+                                        href={nestedItem.href}
+                                        className={cn(
+                                          "block rounded-lg px-4 py-2 text-xs font-medium transition-all duration-300",
+                                          nestedActive
+                                            ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm"
+                                            : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                                        )}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <div className="w-1 h-1 rounded-full bg-current opacity-30" />
+                                          <span>{nestedItem.label}</span>
+                                        </div>
+                                      </Link>
+                                    )
+                                  })}
+                                </div>
                               )}
-                            >
-                              <div className="w-1 h-1 rounded-full bg-current opacity-30" />
-                              <span className="flex-1">{subItem.label}</span>
-                              <ChevronDown size={12} className={cn("opacity-50 transition-transform duration-300", isNestedExpanded ? "rotate-180" : "rotate-0")} />
-                            </button>
-                            {isNestedExpanded && (
-                              <div className="ml-4 pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-1">
-                                {subItem.subItems.map((nestedItem: any) => {
-                                  const nestedActive = pathname === nestedItem.href
-                                  return (
-                                    <Link
-                                      key={nestedItem.href}
-                                      href={nestedItem.href}
-                                      className={cn(
-                                        "block rounded-lg px-4 py-2 text-xs font-medium transition-all duration-300",
-                                        nestedActive
-                                          ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm"
-                                          : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
-                                      )}
-                                    >
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-1 h-1 rounded-full bg-current opacity-30" />
-                                        <span>{nestedItem.label}</span>
-                                      </div>
-                                    </Link>
-                                  )
-                                })}
-                              </div>
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <Link
+                            key={subItem.href}
+                            href={subItem.href}
+                            className={cn(
+                              "block rounded-lg px-4 py-2 text-xs font-medium transition-all duration-300",
+                              subActive
+                                ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm font-bold"
+                                : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
                             )}
-                          </div>
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="w-1 h-1 rounded-full bg-current opacity-30" />
+                              <span>{subItem.label}</span>
+                            </div>
+                          </Link>
                         )
-                      }
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            }
 
-                      return (
-                        <Link
-                          key={subItem.href}
-                          href={subItem.href}
-                          className={cn(
-                            "block rounded-lg px-4 py-2 text-xs font-medium transition-all duration-300",
-                            subActive
-                              ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 shadow-sm"
-                              : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            {subItem.icon ? <subItem.icon size={14} /> : <div className="w-1 h-1 rounded-full bg-current opacity-30" />}
-                            <span>{subItem.label}</span>
-                          </div>
-                        </Link>
-                      )
-                    })}
-                  </div>
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "rounded-xl px-4 py-2.5 text-sm flex items-center gap-3 transition-all duration-300 relative group",
+                  active
+                    ? "font-bold bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-100 hover:shadow-sm"
                 )}
-              </div>
+              >
+                {active && <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-blue-600 dark:bg-blue-400 rounded-r-full" />}
+                {item.icon ? (
+                  <item.icon size={18} className={cn("transition-transform duration-300 group-hover:scale-110", active ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-500 group-hover:text-blue-500")} />
+                ) : null}
+                <span>{item.label}</span>
+              </Link>
             )
-          }
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "rounded-xl px-4 py-2.5 text-sm flex items-center gap-3 transition-all duration-300 relative group",
-                active
-                  ? "font-bold bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-slate-100 hover:shadow-sm"
-              )}
-            >
-              {active && <div className="absolute left-0 top-2.5 bottom-2.5 w-1 bg-blue-600 dark:bg-blue-400 rounded-r-full" />}
-              {item.icon ? (
-                <item.icon size={18} className={cn("transition-transform duration-300 group-hover:scale-110", active ? "text-blue-600 dark:text-blue-400" : "text-slate-400 dark:text-slate-500 group-hover:text-blue-500")} />
-              ) : null}
-              <span>{item.label}</span>
-            </Link>
-          )
-        })}
+          })
+        )}
       </nav>
     </aside>
   )

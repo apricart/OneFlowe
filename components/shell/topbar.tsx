@@ -33,19 +33,18 @@ export function Topbar() {
   async function logout() {
     try {
       localStorage.removeItem('theme')
-      // Clear NextAuth session cookies explicitly for Firefox compatibility
-      document.cookie.split(";").forEach((c) => {
-        const name = c.split("=")[0].trim()
-        if (name.startsWith("next-auth") || name.startsWith("__Secure-next-auth")) {
-          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
-          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;secure`
-        }
+      localStorage.removeItem('ctx.organizationId')
+      localStorage.removeItem('ctx.branchId')
+      
+      // Explicitly sign out and redirect to main login
+      await signOut({ 
+        redirect: true,
+        callbackUrl: "/login"
       })
-      await signOut({ redirect: false })
     } catch (_) {
       // Ensure redirect happens even if signOut fails
+      window.location.replace("/login")
     }
-    window.location.replace("/login")
   }
 
 

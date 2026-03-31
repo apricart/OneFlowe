@@ -488,15 +488,11 @@ export default function OrderPortalPage() {
             {/* Home / Logout Button */}
             <Button
               onClick={async () => {
-                if (isAdmin) {
-                  // Admin going back to dashboard - sign out of shop context and use replace to prevent back nav
-                  await signOut({ redirect: false })
-                  window.location.replace("/login")
-                } else {
-                  // For Order Portal users, "Home" means exiting the portal -> Logout
-                  await signOut({ redirect: false })
-                  window.location.replace("/shop/login")
-                }
+                const targetUrl = isAdmin ? "/login" : "/shop/login"
+                await signOut({ 
+                  redirect: true,
+                  callbackUrl: targetUrl
+                })
               }}
               variant="ghost"
               size="icon"

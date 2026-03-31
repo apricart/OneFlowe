@@ -217,9 +217,14 @@ export default function GroupsReportPage() {
     }
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Group Name", "Status", "Units", "Total Orders", "Total Spent"]
+        const headers = ["Group Name", "Organization", "Budget", "Units", "Total Orders", "Total Spent"]
         const rows = filteredGroups.map((group: any) => [
-            group.name, group.status || "active", group.branchCount, group.totalOrders, (group.totalAmountCents / 100).toFixed(2)
+            group.name, 
+            group.organizationName, 
+            (group.totalBudget / 100).toFixed(2), 
+            group.branchCount, 
+            group.totalOrders, 
+            (group.totalAmountCents / 100).toFixed(2)
         ])
 
         if (format === 'pdf') {
@@ -483,7 +488,7 @@ export default function GroupsReportPage() {
                                         <TableRow className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
                                             <TableHead className="w-10 pl-6"></TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Group Name</TableHead>
-                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Budget</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Managed Units</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Revenue (PKR)</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
@@ -514,9 +519,7 @@ export default function GroupsReportPage() {
                                                                 </div>
                                                             </TableCell>
                                                             <TableCell className="text-center font-black">
-                                                                <Badge variant="outline" className={cn("text-[10px] font-black uppercase tracking-widest", group.status?.toLowerCase() === "active" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : group.status?.toLowerCase() === "deleted" ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-slate-50 text-slate-600 border-slate-200")}>
-                                                                    {group.status?.toLowerCase() === 'active' ? 'Active' : group.status?.toLowerCase() === 'deleted' ? 'Deleted' : 'Inactive'}
-                                                                </Badge>
+                                                                <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">{formatPKR(group.totalBudget / 100)}</span>
                                                             </TableCell>
                                                             <TableCell className="text-center font-black">
                                                                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-500/10 rounded-full text-[10px]">
@@ -543,7 +546,9 @@ export default function GroupsReportPage() {
                                                                         <span className="text-xs font-bold uppercase tracking-tight">{branch.name}</span>
                                                                     </div>
                                                                 </TableCell>
-                                                                <TableCell className="text-center text-[10px] text-slate-400 uppercase font-bold">Branch Component</TableCell>
+                                                                <TableCell className="text-center font-black">
+                                                                    <span className="text-xs font-bold text-slate-400 tracking-tight">{formatPKR(branch.totalBudget / 100)}</span>
+                                                                </TableCell>
                                                                 <TableCell className="text-center font-black">
                                                                     <Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-widest scale-90", branch.status === "active" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : branch.status === "deleted" ? "bg-rose-50 text-rose-600 border-rose-200" : "bg-amber-50 text-amber-600 border-amber-200")}>
                                                                         {branch.status || "Unknown"}

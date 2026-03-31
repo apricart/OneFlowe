@@ -38,15 +38,17 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
             // Determine correct login page based on current path
             const loginPath = pathname?.startsWith("/shop") ? "/shop/login" : "/login"
 
-            // Clean up and redirect
-            signOut({ redirect: false }).then(() => {
+            // Clean up and redirect using standard NextAuth flow to avoid session race conditions
+            signOut({ 
+                redirect: true, 
+                callbackUrl: loginPath 
+            }).then(() => {
                 // Clear any stale local storage
                 try {
                     localStorage.removeItem("theme")
                     localStorage.removeItem("ctx.organizationId")
                     localStorage.removeItem("ctx.branchId")
                 } catch (_) { }
-                window.location.replace(loginPath)
             })
         }
     }, [status, pathname])

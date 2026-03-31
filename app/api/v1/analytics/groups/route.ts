@@ -93,6 +93,26 @@ export async function GET(req: NextRequest) {
 
         const orderWhere = and(...orderConditions)
 
+        // Calculate periods for budget summing
+        const periodList: string[] = []
+        if (parsedMonths.length > 0 && parsedYears.length > 0) {
+            parsedYears.forEach(y => {
+                parsedMonths.forEach(m => {
+                    periodList.push(`${y}-${String(m).padStart(2, '0')}`)
+                })
+            })
+        } else if (startDate && endDate) {
+            let curr = new Date(startDate)
+            const end = new Date(endDate)
+            while (curr <= end) {
+                periodList.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}`)
+                curr.setMonth(curr.getMonth() + 1)
+            }
+        } else {
+            // Default to current month if no filters
+            periodList.push(new Date().toISOString().slice(0, 7))
+        }
+
         // Build group conditions
         const groupConditions = []
         if (orgId) {
@@ -204,7 +224,68 @@ export async function GET(req: NextRequest) {
 
         const groupIdsList = groupStats.map(g => g.id)
         const branchStatsMap: Record<number, any[]> = {}
+        const groupBudgetMap: Record<number, number> = {}
+
         if (groupIdsList.length > 0) {
+            // Calculate group budgets separately to ensure we sum baseline for missing periods correctly
+            // For each branch in each group, we want:
+            // SUM(budget record for period OR baseline)
+            const allBudgets = await db
+                .select({
+                    branchId: branches.id,
+                    groupId: branches.groupId,
+                    baselineBudgetCents: branches.baselineBudgetCents,
+                    period: budgets.period,
+                    amountAllocatedCents: budgets.amountAllocatedCents,
+                    amountCreditedCents: budgets.amountCreditedCents,
+                })
+                .from(branches)
+                .leftJoin(budgets, and(
+                    eq(budgets.branchId, branches.id),
+                    inArray(budgets.period, periodList)
+                ))
+                .where(inArray(branches.groupId, groupIdsList))
+
+            // Map branch -> period -> budget
+            const branchBudgetMatrix: Record<number, Record<string, { allocated: number, credited: number }>> = {}
+            const branchBaselines: Record<number, number> = {}
+            const branchesInGroups: Record<number, Set<number>> = {}
+
+            allBudgets.forEach(b => {
+                if (!b.groupId) return
+                if (!branchesInGroups[b.groupId]) branchesInGroups[b.groupId] = new Set()
+                branchesInGroups[b.groupId].add(b.branchId)
+                branchBaselines[b.branchId] = b.baselineBudgetCents || 0
+                
+                if (b.period) {
+                    if (!branchBudgetMatrix[b.branchId]) branchBudgetMatrix[b.branchId] = {}
+                    branchBudgetMatrix[b.branchId][b.period] = {
+                        allocated: b.amountAllocatedCents || 0,
+                        credited: b.amountCreditedCents || 0
+                    }
+                }
+            })
+
+            // Sum up for each group
+            groupIdsList.forEach(gid => {
+                let totalGroupBudget = 0
+                const branchIds = branchesInGroups[gid] || new Set<number>()
+                
+                branchIds.forEach(bid => {
+                    periodList.forEach(period => {
+                        const record = branchBudgetMatrix[bid]?.[period]
+                        if (record) {
+                            totalGroupBudget += record.allocated + record.credited
+                        } else {
+                            // Fallback to baseline if no record for this period
+                            totalGroupBudget += branchBaselines[bid] || 0
+                        }
+                    })
+                })
+                groupBudgetMap[gid] = totalGroupBudget
+            })
+
+            // Now fetch the branch stats for expansion view
             const allBranchStats = await db
                 .select({
                     id: branches.id,
@@ -222,20 +303,32 @@ export async function GET(req: NextRequest) {
                     orderWhere,
                     parsedBranchIds.length > 0 ? inArray(orders.branchId, parsedBranchIds) : undefined
                 ))
-                .where(sql`${branches.groupId} IN ${groupIdsList}`)
+                .where(inArray(branches.groupId, groupIdsList))
                 .groupBy(branches.id)
                 .orderBy(desc(metricExpressions.revenue))
 
             allBranchStats.forEach(bs => {
                 if (bs.groupId) {
                     if (!branchStatsMap[bs.groupId]) branchStatsMap[bs.groupId] = []
-                    branchStatsMap[bs.groupId].push(bs)
+                    
+                    // Calculate individual branch budget for expansion view
+                    let totalBranchBudget = 0
+                    periodList.forEach(period => {
+                        const record = branchBudgetMatrix[bs.id]?.[period]
+                        totalBranchBudget += record ? (record.allocated + record.credited) : (branchBaselines[bs.id] || 0)
+                    })
+
+                    branchStatsMap[bs.groupId].push({
+                        ...bs,
+                        totalBudget: totalBranchBudget
+                    })
                 }
             })
         }
 
         const groupsWithBranches = groupStats.map(group => ({
             ...group,
+            totalBudget: groupBudgetMap[group.id] || 0,
             branches: branchStatsMap[group.id] || []
         }))
 

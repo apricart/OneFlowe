@@ -15,6 +15,7 @@ import { useAppContext } from "@/components/context/app-context"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 
 import { BranchFilter } from "@/components/reports/branch-filter"
+import { GroupFilter } from "@/components/reports/group-filter"
 import { useCallback } from "react"
 import { type DateRange } from "@/lib/hooks/use-sales-performance"
 
@@ -24,6 +25,8 @@ interface BudgetAllocation {
   branchId: number
   branchName: string
   organizationId: number
+  groupId?: number
+  groupName?: string
   amountAllocatedCents: number
   amountSpentCents: number
   amountHeldCents: number
@@ -54,6 +57,7 @@ export default function BudgetsPage() {
   // ━━━ GLOBAL FILTERS ━━━
   const [dateRange, setDateRange] = useState<DateRange | null>(null)
   const [activePreset, setActivePreset] = useState<FilterPreset>("all")
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
 
   const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
     setDateRange(range)
@@ -75,10 +79,11 @@ export default function BudgetsPage() {
       params.set("period", `${year}-${month}`)
     }
 
+    if (selectedGroupIds.length > 0) params.set("groupIds", selectedGroupIds.join(","))
     if (contextBranchIds.length > 0) params.set("branchIds", contextBranchIds.join(","))
 
     return `/api/v1/budgets?${params.toString()}`
-  }, [isHeadOffice, isInitialized, organizationId, dateRange, contextBranchIds])
+  }, [isHeadOffice, isInitialized, organizationId, dateRange, contextBranchIds, selectedGroupIds])
 
   const { data: budgetsData, mutate } = useSWR<any>(budgetsEndpoint, fetcher)
 
@@ -90,10 +95,11 @@ export default function BudgetsPage() {
   const scopedBudgets = useMemo(() => {
     return budgets.filter((b) => {
       if (organizationId && String(b.organizationId) !== String(organizationId)) return false
+      if (selectedGroupIds.length > 0 && b.groupId && !selectedGroupIds.includes(String(b.groupId))) return false
       if (contextBranchIds.length > 0 && !contextBranchIds.includes(String(b.branchId))) return false
       return true
     })
-  }, [budgets, organizationId, contextBranchIds])
+  }, [budgets, organizationId, contextBranchIds, selectedGroupIds])
 
   const filteredBudgets = useMemo(() => {
     return scopedBudgets.filter((b) =>
@@ -342,7 +348,18 @@ export default function BudgetsPage() {
             />
             {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
               <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
-                <BranchFilter selectedIds={contextBranchIds} onChange={setContextBranchIds} organizationId={organizationId || undefined} />
+                <GroupFilter 
+                  selectedIds={selectedGroupIds} 
+                  onChange={setSelectedGroupIds} 
+                  organizationId={organizationId || undefined}
+                  disabled={contextBranchIds.length > 0}
+                />
+                <BranchFilter 
+                  selectedIds={contextBranchIds} 
+                  onChange={setContextBranchIds} 
+                  organizationId={organizationId || undefined} 
+                  groupIds={selectedGroupIds}
+                />
               </div>
             )}
             <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors bg-white dark:bg-slate-900 ml-2 border border-slate-200 dark:border-slate-800" onClick={() => mutate()}>

@@ -67,6 +67,8 @@ export function OrdersDirectory({
 
   // Modals for actions
   const [actionType, setActionType] = useState<"approve" | "reject" | "fulfill" | null>(null)
+  const [generatedToken, setGeneratedToken] = useState<string | null>(null)
+  const [showTokenDialog, setShowTokenDialog] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [fulfillToken, setFulfillToken] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
@@ -112,13 +114,20 @@ export function OrdersDirectory({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Action failed")
 
+      if (actionType === "approve" && data.approvalToken) {
+        setGeneratedToken(data.approvalToken)
+        setShowTokenDialog(true)
+      }
+
       toast({
         title: "Success",
         description: `Order successfully ${actionType}ed.`,
       })
       
       setActionType(null)
-      setViewingOrder(null)
+      if (actionType !== "approve") {
+        setViewingOrder(null)
+      }
       setRejectReason("")
       setFulfillToken("")
       onUpdate()
@@ -466,6 +475,46 @@ export function OrdersDirectory({
               {isProcessing ? "Processing..." : `Confirm ${actionType}`}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approval Token Display (Shown only once after approval) */}
+      <Dialog open={showTokenDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowTokenDialog(false)
+          setViewingOrder(null)
+          setGeneratedToken(null)
+        }
+      }}>
+        <DialogContent className="max-w-md border-0 shadow-2xl bg-indigo-600 text-white rounded-[2rem] overflow-hidden p-0">
+          <div className="p-8 space-y-6 relative">
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="text-center space-y-2 relative z-10">
+              <div className="h-16 w-16 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/30">
+                <CheckCircle className="h-10 w-10 text-white" />
+              </div>
+              <DialogTitle className="text-2xl font-black tracking-tight text-white">Order Approved!</DialogTitle>
+              <p className="text-indigo-100 font-medium">Please share this token with Head Office for fulfillment.</p>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-6 rounded-3xl space-y-4 text-center relative z-10">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-200">Secure Approval Token</p>
+              <div className="text-4xl font-mono font-black tracking-[0.3em] select-all py-2">{generatedToken}</div>
+              <p className="text-xs font-bold text-indigo-200/80 italic">⚠️ This token will not be shown again. Please copy it now.</p>
+            </div>
+
+            <Button 
+              onClick={() => {
+                setShowTokenDialog(false)
+                setViewingOrder(null)
+                setGeneratedToken(null)
+              }}
+              className="w-full h-14 rounded-2xl bg-white text-indigo-600 hover:bg-indigo-50 font-black text-lg shadow-xl shadow-black/10 transition-all active:scale-95"
+            >
+              Done
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
