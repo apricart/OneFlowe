@@ -60,7 +60,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`font-sans ${inter.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
+      <body className={`font-sans ${inter.variable} ${jetbrainsMono.variable} selection:bg-indigo-100 selection:text-indigo-900`} suppressHydrationWarning>
         <ThemeProvider>
           <AuthSessionProvider>
             <SWRProvider>

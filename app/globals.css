@@ -159,6 +159,17 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Global Font Weight Reduction to "Unbold" the website */
+  .font-black, .font-extrabold {
+    font-weight: 600 !important; /* Black/ExtraBold -> Semibold */
+  }
+  .font-bold {
+    font-weight: 500 !important; /* Bold -> Medium */
+  }
+  .font-semibold {
+    font-weight: 400 !important; /* Semibold -> Normal */
+  }
 }
 
 /* Glassmorphism Utilities */

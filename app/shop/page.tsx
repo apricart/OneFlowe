@@ -84,7 +84,7 @@ export default function OrderPortalPage() {
     }
 
     if (status === "unauthenticated") {
-      window.location.replace("/shop/login")
+      window.location.replace("/login")
       return
     }
 
@@ -488,7 +488,7 @@ export default function OrderPortalPage() {
             {/* Home / Logout Button */}
             <Button
               onClick={async () => {
-                const targetUrl = isAdmin ? "/login" : "/shop/login"
+                const targetUrl = "/login"
                 await signOut({ 
                   redirect: true,
                   callbackUrl: targetUrl

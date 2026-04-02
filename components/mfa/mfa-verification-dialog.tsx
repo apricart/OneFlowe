@@ -17,6 +17,7 @@ interface MFAVerificationDialogProps {
   type?: 'LOGIN' | 'VERIFY_EMAIL' | 'RESET_PASSWORD'
   username?: string
   userPassword?: string
+  isEmployee?: boolean
 }
 
 export function MFAVerificationDialog({
@@ -25,7 +26,8 @@ export function MFAVerificationDialog({
   onSuccess,
   type = 'LOGIN',
   username,
-  userPassword
+  userPassword,
+  isEmployee = false
 }: MFAVerificationDialogProps) {
   const [otp, setOtp] = useState("")
   const [isVerifying, setIsVerifying] = useState(false)
@@ -120,7 +122,8 @@ export function MFAVerificationDialog({
     try {
       if (type === 'LOGIN' && username && userPassword) {
         // Use MFA credentials provider for login
-        const result = await signIn("mfa-credentials", {
+        const providerId = isEmployee ? "employee-mfa-credentials" : "mfa-credentials"
+        const result = await signIn(providerId, {
           username: username,
           password: userPassword,
           otp: otpCode,

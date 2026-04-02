@@ -53,7 +53,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
       if (typeof window !== "undefined") {
         const path = window.location.pathname
         if (!path.includes("/login") && !path.includes("/auth/")) {
-          const loginPath = path.startsWith("/shop") ? "/shop/login" : "/login"
+          const loginPath = "/login"
           window.location.replace(loginPath)
         }
       }

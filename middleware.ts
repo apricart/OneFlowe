@@ -49,7 +49,7 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
   const response = NextResponse.next()
 
-  const isPublicPath = ["/login", "/shop/login"].includes(pathname)
+  const isPublicPath = ["/login"].includes(pathname)
   const needsAuth = protectedPrefixes.some((p) => pathname.startsWith(p)) && !isPublicPath
 
   if (!needsAuth) return withSecurityHeaders(response, pathname)
@@ -57,7 +57,7 @@ export async function middleware(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
   if (!token) {
     logger("middleware", { reason: "no_session", path: pathname })
-    const loginPath = pathname.startsWith("/shop") ? "/shop/login" : "/login"
+    const loginPath = "/login"
     const url = new URL(loginPath, req.url || "http://localhost")
     const redirectRes = NextResponse.redirect(url)
     return withSecurityHeaders(redirectRes, pathname)

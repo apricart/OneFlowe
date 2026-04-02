@@ -63,6 +63,10 @@ export default function SuperAdminOrderDetailsPage() {
   const rawId = Array.isArray(params?.orderId) ? params?.orderId[0] : params?.orderId
   const numericId = rawId && /^\d+$/.test(rawId) ? Number(rawId) : null
 
+  const isSuperAdmin = userRole === "SUPER_ADMIN"
+  const isHeadOffice = userRole === "HEAD_OFFICE"
+  const isBranchAdmin = userRole === "BRANCH_ADMIN"
+
   const { data, error, isLoading, mutate } = useSWR<{ item: OrderDetail & { orderItems: OrderItem[] } }>(
     numericId ? `/api/v1/orders/${numericId}` : null,
     fetcher
@@ -76,12 +80,14 @@ export default function SuperAdminOrderDetailsPage() {
 
   if (isLoading) return <div className="p-8 text-center text-slate-500 font-medium">Loading order details...</div>
 
+  const roleLabel = isSuperAdmin ? "SUPER ADMIN" : isHeadOffice ? "HEAD OFFICE" : "BRANCH ADMIN"
+
   return (
     <div className="space-y-6">
       <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-slate-900 px-6 py-6 shadow-sm border border-slate-200 dark:border-slate-800">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs tracking-[0.2em] text-slate-500 dark:text-slate-400 font-bold mb-1">SUPER ADMIN · ORDERS</p>
+            <p className="text-xs tracking-[0.2em] text-slate-500 dark:text-slate-400 font-bold mb-1">{roleLabel} · ORDERS</p>
             <h1 className="text-3xl font-semibold text-slate-900 dark:text-white">Order overview</h1>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
               Watch approvals, fulfillment, and refund indicators for order #{rawId}.

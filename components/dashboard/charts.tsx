@@ -41,7 +41,9 @@ import {
   endOfMonth,
   eachYearOfInterval,
   startOfYear,
-  endOfYear
+  endOfYear,
+  subDays,
+  addDays
 } from "date-fns"
 
 type Props = {
@@ -864,7 +866,14 @@ export function SalesPerformanceLineChart({
     if (granularity === 'hourly') {
       intervals = eachHourOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
     } else if (granularity === 'daily') {
-      intervals = eachDayOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
+      const start = startOfDay(startDate)
+      const end = endOfDay(endDate)
+      if (isSameDay(start, end)) {
+        // Padding for single day consistency
+        intervals = [subDays(start, 1), start, addDays(start, 1)]
+      } else {
+        intervals = eachDayOfInterval({ start, end })
+      }
     } else if (granularity === 'yearly') {
       intervals = eachYearOfInterval({ start: startOfYear(startDate), end: endOfYear(endDate) })
     } else {
@@ -1143,7 +1152,14 @@ export function SalesPerformanceBarChart({
       if (granularity === 'hourly') {
         intervals = eachHourOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
       } else if (granularity === 'daily') {
-        intervals = eachDayOfInterval({ start: startOfDay(startDate), end: endOfDay(endDate) })
+        const start = startOfDay(startDate)
+        const end = endOfDay(endDate)
+        if (isSameDay(start, end)) {
+          // Add padding for single day to keep the bar small and centered
+          intervals = [subDays(start, 1), start, addDays(start, 1)]
+        } else {
+          intervals = eachDayOfInterval({ start, end })
+        }
       } else if (granularity === 'yearly') {
         intervals = eachYearOfInterval({ start: startOfYear(startDate), end: endOfYear(endDate) })
       } else {

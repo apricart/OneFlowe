@@ -26,7 +26,7 @@ import { DrillDownSheet, type DrillDownType } from "@/components/dashboard/drill
 import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 
 import { useAppContext } from "@/components/context/app-context"
-import { startOfDay, endOfDay } from "date-fns"
+import { startOfDay, endOfDay, format, subDays, addDays } from "date-fns"
 
 export function SuperAdminDashboard() {
   const { organizationId, branchId } = useAppContext()
@@ -107,14 +107,24 @@ export function SuperAdminDashboard() {
 
   // ── Sync Global Filters to Local Chart Filters ──
   useEffect(() => {
-    if (activePreset === "today") setChartQuickFilter("today")
-    else if (activePreset === "7d") setChartQuickFilter("7d")
-    else setChartQuickFilter(null)
-
-    // Only sync if global filters are actually provided (not just defaults on mount)
-    if (months.length > 0) setChartMonths(months)
-    if (years.length > 0) setChartYears(years)
-  }, [activePreset, months, years])
+    if (activePreset === "today") {
+      setChartQuickFilter("today")
+      setChartMonths([])
+      setChartYears([])
+    } else if (activePreset === "7d") {
+      setChartQuickFilter("7d")
+      setChartMonths([])
+      setChartYears([])
+    } else if (activePreset === "all") {
+      setChartQuickFilter(null)
+      setChartMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+      setChartYears(chartYearsAvailable)
+    } else {
+      setChartQuickFilter(null)
+      setChartMonths(months)
+      setChartYears(years)
+    }
+  }, [activePreset, months, years, chartYearsAvailable])
 
   useEffect(() => {
     if (organizationId) setChartSelectedOrgIds([String(organizationId)])
@@ -170,15 +180,17 @@ export function SuperAdminDashboard() {
   )
 
   const hasChartFilters = chartMonths.length > 0 || chartYears.length > 0
-  const chartComponentDateRange = chartQuickFilter === "today" || hasChartFilters ? null : chartDateRange
+  const chartComponentDateRange = chartQuickFilter === "today" ? getPresetRange("today") : (hasChartFilters ? null : chartDateRange)
 
   const isBroadRange = !chartQuickFilter && ["all", "yearly", "monthly", "custom"].includes(activePreset)
 
-  const chartGranularity = (chartYears.length > 1 || (chartYears.length === 0 && years.length > 1 && !chartQuickFilter && chartMonths.length === 0))
-    ? "yearly" as const
-    : (chartMonths.length > 0 || chartYears.length === 1 || (!chartQuickFilter && (months.length > 0 || years.length === 1)) || isBroadRange)
-      ? "monthly" as const
-      : "daily" as const
+  const chartGranularity = (chartQuickFilter === "today" || (activePreset === "today" && !hasChartFilters))
+    ? "daily" as const
+    : (chartYears.length > 1 || (chartYears.length === 0 && years.length > 1 && !chartQuickFilter && chartMonths.length === 0))
+      ? "yearly" as const
+      : (chartMonths.length > 0 || chartYears.length === 1 || (!chartQuickFilter && (months.length > 0 || years.length === 1)) || isBroadRange)
+        ? "monthly" as const
+        : "daily" as const
 
   const { data: chartPerfData, isLoading: isLoadingChart } = useSalesPerformance(
     undefined, undefined,
@@ -193,9 +205,7 @@ export function SuperAdminDashboard() {
     const raw = chartPerfData?.seriesData ?? []
 
     if (chartQuickFilter === "today" || (chartQuickFilter === null && activePreset === "today" && !hasChartFilters)) {
-      const totalSales = raw.reduce((s: number, r: any) => s + (r.sales || 0), 0)
-      const totalOrders = raw.reduce((s: number, r: any) => s + (r.orders || 0), 0)
-      return [{ label: "Today", sales: totalSales, orders: totalOrders }]
+      return raw
     }
 
     if (chartQuickFilter === "7d" || chartQuickFilter === "3d" || (chartQuickFilter === null && (activePreset === "7d" || activePreset === "3d") && !hasChartFilters)) {
@@ -637,4 +647,4 @@ function YearFilter({ selected, onChange, availableYears }: { selected: number[]
       showSearch={false}
     />
   )
-}
+}

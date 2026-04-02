@@ -504,6 +504,7 @@ export default function OrdersManagementPage() {
               userRole={userRole}
               isSuperAdmin={isSuperAdmin}
               isBranchAdmin={isBranchAdmin}
+              isHeadOffice={isHeadOffice}
               onUpdate={() => mutateOrders()}
             />
           </div>

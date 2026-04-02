@@ -48,7 +48,7 @@ const tabs = [
     },
     {
         id: "org-products",
-        title: "Org Products",
+        title: "Organization Products",
         icon: Package,
         color: "border-blue-500 bg-blue-50 dark:bg-blue-950/40",
         activeText: "text-blue-700 dark:text-blue-300",

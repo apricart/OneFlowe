@@ -58,6 +58,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mfaRequired, setMfaRequired] = useState(false)
+  const [isEmployee, setIsEmployee] = useState(false)
   const [pendingUser, setPendingUser] = useState<{ username: string; password: string } | null>(null)
   const [isProcessingMFA, setIsProcessingMFA] = useState(false)
 
@@ -84,41 +85,57 @@ function LoginForm() {
     setLoading(true)
     setError(null)
     setMfaRequired(false)
+    setIsEmployee(false)
     setPendingUser(null)
 
     try {
       // Clear cookies again before sign-in to guarantee a clean state
       clearAuthCookies()
 
-      const result = await signIn("credentials", { redirect: false, username, password })
+      let result = await signIn("credentials", { redirect: false, username, password })
 
       if (result?.error) {
         if (result.error === "MFA_REQUIRED") {
           console.log("Login: MFA required for", username)
           setPendingUser({ username, password })
           setMfaRequired(true)
+          setIsEmployee(false)
           return
         }
-        if (result.error === "CredentialsSignin") {
-          throw new Error("Invalid credentials. Please check your username and password.")
+
+        // Try employee login fallback
+        console.log("Standard login failed, trying employee login fallback...")
+        result = await signIn("employee-credentials", { redirect: false, username, password })
+
+        if (result?.error) {
+          if (result.error === "MFA_REQUIRED") {
+            console.log("Login: MFA required for employee", username)
+            setPendingUser({ username, password })
+            setMfaRequired(true)
+            setIsEmployee(true)
+            return
+          }
+          if (result.error === "CredentialsSignin") {
+            throw new Error("Invalid credentials. Please check your username and password.")
+          }
+          if (result.error === "ORGANIZATION_INACTIVE") {
+            throw new Error("Company has been de-activated by the Admin.")
+          }
+          if (result.error === "BRANCH_INACTIVE") {
+            throw new Error("Branch has been de-activated by the Admin.")
+          }
+          if (result.error === "USER_INACTIVE") {
+            throw new Error("Your account has been deactivated. Please contact support.")
+          }
+          throw new Error(result.error)
         }
-        if (result.error === "ORGANIZATION_INACTIVE") {
-          throw new Error("Company has been de-activated by the Admin.")
-        }
-        if (result.error === "BRANCH_INACTIVE") {
-          throw new Error("Branch has been de-activated by the Admin.")
-        }
-        if (result.error === "USER_INACTIVE") {
-          throw new Error("Your account has been deactivated. Please contact support.")
-        }
-        throw new Error(result.error)
       }
 
       // Fetch session to determine redirect target
       const session = await getSession()
       const userRole = (session?.user as any)?.role
 
-      if (userRole === "ORDER_PORTAL") {
+      if (userRole === "ORDER_PORTAL" || userRole === "EMPLOYEE") {
         window.location.replace("/shop")
       } else {
         const cb = searchParams.get("callbackUrl")
@@ -142,13 +159,14 @@ function LoginForm() {
   const handleMFASuccess = async () => {
     setIsProcessingMFA(true)
     setMfaRequired(false)
+    setIsEmployee(false)
     setPendingUser(null)
 
     try {
       const session = await getSession()
       const userRole = (session?.user as any)?.role
 
-      if (userRole === "ORDER_PORTAL") {
+      if (userRole === "ORDER_PORTAL" || userRole === "EMPLOYEE") {
         window.location.replace("/shop")
       } else {
         const cb = searchParams.get("callbackUrl")
@@ -274,6 +292,7 @@ function LoginForm() {
           open={mfaRequired}
           username={pendingUser.username}
           userPassword={pendingUser.password}
+          isEmployee={isEmployee}
           onSuccess={handleMFASuccess}
           onClose={handleMFACancel}
           type="LOGIN"

@@ -107,7 +107,7 @@ export default function BudgetSummaryPage() {
     const [chartYears, setChartYears] = useState<number[]>([]) // Will be initialized by useEffect
     const [chartMonths, setChartMonths] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     const [chartBranchIds, setChartBranchIds] = useState<string[]>([])
-    const [showBudgetBar, setShowBudgetBar] = useState(true)
+    const [showBudgetBar, setShowBudgetBar] = useState(false)
     const hasInitializedChartDefaults = useRef(false)
 
     // Report-local filters

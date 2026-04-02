@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatPKR } from "@/lib/utils"
-import { Search, Package, Sparkles, Check, Edit, Plus, Building2 } from "lucide-react"
+import { Search, Package, Sparkles, Check, Edit, Plus, Building2, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useAppContext } from "@/components/context/app-context"
+import { cn } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -202,7 +203,44 @@ export default function AssignProductPage() {
     }
 
     return (
-        <div className="space-y-8 p-6">
+        <div className="space-y-6 p-4 md:p-6">
+            {/* Compact Page Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-4 md:p-5 rounded-2xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)]">
+                <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-xl bg-gradient-to-tr from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/50 flex items-center justify-center border border-blue-50/50 dark:border-blue-800/50 shadow-inner">
+                        <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Group Inventory</h1>
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Manage organization product assignments</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="h-9 gap-2 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 shadow-sm" onClick={() => mutateAssignments()}>
+                        <RefreshCw className="h-4 w-4" />
+                        <span className="hidden sm:inline">Refresh</span>
+                    </Button>
+                </div>
+            </div>
+
+            {/* Stat Cards */}
+            {selectedOrgId && (
+                <div className="grid gap-4 md:grid-cols-2">
+                    <StatCard
+                        label="Total Products"
+                        value={allProducts.length}
+                        icon={<Package className="h-5 w-5" />}
+                        variant="blue"
+                    />
+                    <StatCard
+                        label="Assigned Products"
+                        value={assignedProducts.length}
+                        icon={<Check className="h-5 w-5" />}
+                        variant="green"
+                    />
+                </div>
+            )}
+
             {/* Organization Selector - Only shown when no org selected in header */}
             {showOrgSelector && (
                 <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -231,7 +269,7 @@ export default function AssignProductPage() {
                 <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
                     <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                         <div>
-                            <CardTitle className="text-xl">Product Assignments</CardTitle>
+                            <CardTitle className="text-xl text-slate-900 dark:text-white">Product Assignments</CardTitle>
                             <p className="text-sm text-muted-foreground">
                                 Manage product assignments for the selected organization.
                             </p>
@@ -528,6 +566,41 @@ export default function AssignProductPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+        </div>
+    )
+}
+
+function StatCard({ label, value, icon, variant }: { 
+    label: string; 
+    value: string | number; 
+    icon: React.ReactNode;
+    variant: 'blue' | 'green' | 'red' | 'amber' | 'purple'
+}) {
+    const variants = {
+        blue: "bg-gradient-to-br from-blue-50/80 to-indigo-50/80 border-blue-100/50 text-blue-700 dark:from-blue-900/20 dark:to-indigo-900/20 dark:border-blue-800/30 dark:text-blue-400",
+        green: "bg-gradient-to-br from-emerald-50/80 to-teal-50/80 border-emerald-100/50 text-emerald-700 dark:from-emerald-900/20 dark:to-teal-900/20 dark:border-emerald-800/30 dark:text-emerald-400",
+        red: "bg-gradient-to-br from-rose-50/80 to-red-50/80 border-rose-100/50 text-rose-700 dark:from-rose-900/20 dark:to-red-900/20 dark:border-rose-800/30 dark:text-rose-400",
+        amber: "bg-gradient-to-br from-amber-50/80 to-orange-50/80 border-amber-100/50 text-amber-700 dark:from-amber-900/20 dark:to-orange-900/20 dark:border-amber-800/30 dark:text-amber-400",
+        purple: "bg-gradient-to-br from-purple-50/80 to-fuchsia-50/80 border-purple-100/50 text-purple-700 dark:from-purple-900/20 dark:to-fuchsia-900/20 dark:border-purple-800/30 dark:text-purple-400",
+    }
+
+    const iconBadge = {
+        blue: "bg-white/80 text-blue-600 shadow-sm border border-blue-100 dark:bg-slate-800 dark:border-blue-800",
+        green: "bg-white/80 text-emerald-600 shadow-sm border border-emerald-100 dark:bg-slate-800 dark:border-emerald-800",
+        red: "bg-white/80 text-rose-600 shadow-sm border border-rose-100 dark:bg-slate-800 dark:border-rose-800",
+        amber: "bg-white/80 text-amber-600 shadow-sm border border-amber-100 dark:bg-slate-800 dark:border-amber-800",
+        purple: "bg-white/80 text-purple-600 shadow-sm border border-purple-100 dark:bg-slate-800 dark:border-purple-800",
+    }
+
+    return (
+        <div className={cn("flex items-center justify-between p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md", variants[variant])}>
+            <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] opacity-80">{label}</p>
+                <p className="text-2xl font-black tracking-tight">{value}</p>
+            </div>
+            <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", iconBadge[variant])}>
+                {icon}
+            </div>
         </div>
     )
 }

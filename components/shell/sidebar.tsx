@@ -58,7 +58,7 @@ const getNavigationByRole = (role: string) => {
       ...baseNav,
       { href: "/branches", label: "My Branches", icon: Building2 },
       { href: "/users", label: "Users", icon: Users },
-      { href: "/head-office-orders", label: "Orders", icon: Package },
+      { href: "/orders", label: "Orders", icon: Package },
       { href: "/inventory", label: "Inventory", icon: Boxes },
       { href: "/groups", label: "Groups", icon: FolderTree },
       { href: "/budgets", label: "Budgets", icon: Wallet },

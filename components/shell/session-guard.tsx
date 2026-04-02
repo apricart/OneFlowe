@@ -49,16 +49,10 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
 
             // Logic for redirecting to the correct portal login:
             // 1. If they were an admin (any admin role), they ALWAYS go to /login
-            // 2. If they were an employee/order portal user, they go to /shop/login
+            // 2. If they were an employee/order portal user, they go to /login
             // 3. Fallback: use pathname logic
             
-            const isAdmin = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"].includes(lastKnownRole.current || "")
-            const isShopPath = pathname?.startsWith("/shop")
-            
-            let loginPath = "/login"
-            if (!isAdmin && isShopPath) {
-                loginPath = "/shop/login"
-            }
+            const loginPath = "/login"
 
             isLoggingOut.current = true
             

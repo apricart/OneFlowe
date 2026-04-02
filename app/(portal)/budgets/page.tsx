@@ -1,9 +1,9 @@
 "use client"
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, ReactNode } from "react"
 import useSWR, { useSWRConfig } from "swr"
 import { useSession } from "next-auth/react"
 import { useToast } from "@/hooks/use-toast"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw, Trash2, Search } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
-import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { GlobalDateFilter, type FilterPreset, getPresetRange } from "@/components/dashboard/global-date-filter"
 
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
@@ -55,14 +55,15 @@ export default function BudgetsPage() {
   const [allocationType, setAllocationType] = useState<"monthly" | "addon">("addon")
 
   // ━━━ GLOBAL FILTERS ━━━
-  const [dateRange, setDateRange] = useState<DateRange | null>(null)
+  const [dateRange, setDateRange] = useState<DateRange | null>(getPresetRange("all"))
   const [activePreset, setActivePreset] = useState<FilterPreset>("all")
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
-    setDateRange(range)
-    setActivePreset(preset)
-  }, [])
+  useEffect(() => {
+    if (isInitialized) {
+      handleDateChange(getPresetRange("all"), "all")
+    }
+  }, [isInitialized])
 
   // Build endpoint respecting context (organization scope)
   const budgetsEndpoint = useMemo(() => {
@@ -372,44 +373,34 @@ export default function BudgetsPage() {
       <div className="space-y-6 p-4 md:p-6 max-w-[1600px] mx-auto">
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="p-5 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="absolute -top-2 -right-2 text-blue-500/5 group-hover:text-blue-500/10 transition-colors transform group-hover:scale-110 duration-500"><Wallet className="h-24 w-24" /></div>
-          <div className="flex items-center gap-2.5 mb-3 relative z-10">
-            <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 shadow-sm"><Wallet className="h-4 w-4" /></div>
-            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Total Budget</p>
-          </div>
-          <p className="text-2xl font-black text-slate-900 dark:text-white relative z-10 tabular-nums tracking-tight">{formatAmount(totalAllocated)}</p>
-          <div className="h-1 w-12 bg-blue-500 mt-4 rounded-full" />
-        </Card>
-        <Card className="p-5 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="absolute -top-2 -right-2 text-rose-500/5 group-hover:text-rose-500/10 transition-colors transform group-hover:scale-110 duration-500"><PieChart className="h-24 w-24" /></div>
-          <div className="flex items-center gap-2.5 mb-3 relative z-10">
-            <div className="p-1.5 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 shadow-sm"><PieChart className="h-4 w-4" /></div>
-            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Spent This Period</p>
-          </div>
-          <p className="text-2xl font-black text-rose-600 dark:text-rose-400 relative z-10 tabular-nums tracking-tight" title="Includes pending holds">{formatAmount(totalSpent + totalHeld)}</p>
-          <div className="h-1 w-12 bg-rose-500 mt-4 rounded-full" />
-        </Card>
-        <Card className="p-5 border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900 relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="absolute -top-2 -right-2 text-emerald-500/5 group-hover:text-emerald-500/10 transition-colors transform group-hover:scale-110 duration-500"><CheckCircle2 className="h-24 w-24" /></div>
-          <div className="flex items-center gap-2.5 mb-3 relative z-10">
-            <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 shadow-sm"><CheckCircle2 className="h-4 w-4" /></div>
-            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">Credits / Remaining</p>
-          </div>
-          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 relative z-10 tabular-nums tracking-tight">{formatAmount(totalRemaining)}</p>
-          <div className="h-1 w-12 bg-emerald-500 mt-4 rounded-full" />
-        </Card>
-        <Card className="p-5 border border-indigo-200 dark:border-indigo-800/50 shadow-sm bg-indigo-50/40 dark:bg-indigo-950/20 relative overflow-hidden group hover:shadow-md transition-all">
-          <div className="absolute -top-2 -right-2 text-indigo-500/5 group-hover:text-indigo-500/10 transition-colors transform group-hover:scale-110 duration-500"><Zap className="h-24 w-24" /></div>
-          <div className="flex items-center gap-2.5 mb-3 relative z-10">
-            <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 shadow-sm"><Zap className="h-4 w-4" /></div>
-            <p className="text-[11px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">Avg Utilization</p>
-          </div>
-          <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 relative z-10 tabular-nums tracking-tight">
-            {totalAllocated > 0 ? (((totalSpent + totalHeld) / totalAllocated) * 100).toFixed(1) : "0.0"}%
-          </p>
-          <div className="h-1 w-12 bg-indigo-500 mt-4 rounded-full" />
-        </Card>
+        <CompactStatCard
+          label="Total Budget"
+          value={formatAmount(totalAllocated)}
+          icon={<Wallet className="h-5 w-5" />}
+          gradient="bg-gradient-to-br from-indigo-50/80 to-blue-50/80 border-indigo-100/50 text-indigo-700 dark:from-indigo-900/20 dark:to-blue-900/20 dark:border-indigo-800/30 dark:text-indigo-400"
+          iconBadge="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
+        />
+        <CompactStatCard
+          label="Spent This Period"
+          value={formatAmount(totalSpent + totalHeld)}
+          icon={<PieChart className="h-5 w-5" />}
+          gradient="bg-gradient-to-br from-rose-50/80 to-pink-50/80 border-rose-100/50 text-rose-700 dark:from-rose-900/20 dark:to-pink-900/20 dark:border-rose-800/30 dark:text-rose-400"
+          iconBadge="bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400"
+        />
+        <CompactStatCard
+          label="Credits / Remaining"
+          value={formatAmount(totalRemaining)}
+          icon={<CheckCircle2 className="h-5 w-5" />}
+          gradient="bg-gradient-to-br from-teal-50/80 to-emerald-50/80 border-teal-100/50 text-teal-700 dark:from-teal-900/20 dark:to-emerald-900/20 dark:border-teal-800/30 dark:text-teal-400"
+          iconBadge="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
+        />
+        <CompactStatCard
+          label="Avg Utilization"
+          value={`${totalAllocated > 0 ? (((totalSpent + totalHeld) / totalAllocated) * 100).toFixed(1) : "0.0"}%`}
+          icon={<Zap className="h-5 w-5" />}
+          gradient="bg-gradient-to-br from-fuchsia-50/80 to-purple-50/80 border-fuchsia-100/50 text-fuchsia-700 dark:from-fuchsia-900/20 dark:to-purple-900/20 dark:border-fuchsia-800/30 dark:text-fuchsia-400"
+          iconBadge="bg-fuchsia-100 dark:bg-fuchsia-900/40 text-fuchsia-600 dark:text-fuchsia-400"
+        />
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
@@ -807,5 +798,37 @@ export default function BudgetsPage() {
       </Dialog>
       </div>
     </div>
+  )
+}
+
+function CompactStatCard({
+  label,
+  value,
+  icon,
+  gradient,
+  iconBadge,
+}: {
+  label: string
+  value: string | number
+  icon: ReactNode
+  gradient: string
+  iconBadge: string
+}) {
+  return (
+    <Card className={cn("border rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5", gradient)}>
+      <CardContent className="p-5 flex items-center justify-between">
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">
+            {label}
+          </p>
+          <p className="text-2xl font-black tracking-tight">
+            {value}
+          </p>
+        </div>
+        <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl", iconBadge)}>
+           {icon}
+        </div>
+      </CardContent>
+    </Card>
   )
 }

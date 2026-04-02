@@ -52,6 +52,7 @@ type OrdersDirectoryProps = {
   userRole: string | undefined
   isSuperAdmin: boolean
   isBranchAdmin: boolean
+  isHeadOffice?: boolean
   onUpdate: () => void
 }
 
@@ -60,6 +61,7 @@ export function OrdersDirectory({
   userRole,
   isSuperAdmin,
   isBranchAdmin,
+  isHeadOffice,
   onUpdate
 }: OrdersDirectoryProps) {
   const [viewMode, setViewMode] = useState<"grid" | "table">("table")
@@ -391,7 +393,7 @@ export function OrdersDirectory({
                 </div>
                 
                 <div className="flex gap-3">
-                  {viewingOrder.status.toLowerCase() === "pending" && isBranchAdmin && (
+                  {viewingOrder.status.toLowerCase() === "pending" && (isBranchAdmin || isHeadOffice || isSuperAdmin) && (
                     <>
                       <Button onClick={() => setActionType("reject")} variant="outline" className="flex-1 h-12 rounded-xl text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-900/20 dark:border-rose-800">
                         Reject
@@ -402,7 +404,7 @@ export function OrdersDirectory({
                     </>
                   )}
 
-                  {viewingOrder.status.toLowerCase() === "approved" && isSuperAdmin && (
+                  {viewingOrder.status.toLowerCase() === "approved" && (isSuperAdmin || isHeadOffice) && (
                     <Button onClick={() => setActionType("fulfill")} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-600/20">
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Fulfill Order
