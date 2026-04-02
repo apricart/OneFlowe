@@ -288,7 +288,7 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
           onClick={() => handleKPIOpen("REVENUE")}
-          trend={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.type}
+          trend={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.type as "up" | "down" | undefined}
           trendValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.value}
           comparisonValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.label}
           comparisonLabel="VS LAST"
@@ -299,7 +299,7 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-500 to-indigo-600" iconBg="text-blue-600 bg-blue-600" delay={50}
           onClick={() => handleKPIOpen("ORDERS")}
-          trend={buildTrend(totalOrders, perfData?.comparison?.totalOrders)?.type}
+          trend={buildTrend(totalOrders, perfData?.comparison?.totalOrders)?.type as "up" | "down" | undefined}
           trendValue={buildTrend(totalOrders, perfData?.comparison?.totalOrders)?.value}
           comparisonValue={buildTrend(totalOrders, perfData?.comparison?.totalOrders)?.label}
           comparisonLabel="VS LAST"
@@ -310,7 +310,7 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-amber-400 to-orange-500" iconBg="text-amber-600 bg-amber-600" delay={75}
           onClick={() => handleKPIOpen("PENDING" as any)}
-          trend={buildTrend(pendingCount, perfData?.comparison?.pendingCount)?.type}
+          trend={buildTrend(pendingCount, perfData?.comparison?.pendingCount)?.type as "up" | "down" | undefined}
           trendValue={buildTrend(pendingCount, perfData?.comparison?.pendingCount)?.value}
           comparisonValue={buildTrend(pendingCount, perfData?.comparison?.pendingCount)?.label}
           comparisonLabel="VS LAST"
@@ -321,7 +321,7 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={100}
           onClick={() => handleKPIOpen("APPROVED")}
-          trend={buildTrend(approvedCount, perfData?.comparison?.approvedCount)?.type}
+          trend={buildTrend(approvedCount, perfData?.comparison?.approvedCount)?.type as "up" | "down" | undefined}
           trendValue={buildTrend(approvedCount, perfData?.comparison?.approvedCount)?.value}
           comparisonValue={buildTrend(approvedCount, perfData?.comparison?.approvedCount)?.label}
           comparisonLabel="VS LAST"
@@ -332,7 +332,7 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-teal-500 to-cyan-600" iconBg="text-teal-600 bg-teal-600" delay={125}
           onClick={() => handleKPIOpen("FULFILLED")}
-          trend={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.type}
+          trend={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.type as "up" | "down" | undefined}
           trendValue={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.value}
           comparisonValue={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.label}
           comparisonLabel="VS LAST"
@@ -343,7 +343,7 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-indigo-500 to-purple-600" iconBg="text-indigo-600 bg-indigo-600" delay={135}
           onClick={() => handleKPIOpen("PARTIAL" as any)}
-          trend={buildTrend(partialCount, perfData?.comparison?.partialCount)?.type}
+          trend={buildTrend(partialCount, perfData?.comparison?.partialCount)?.type as "up" | "down" | undefined}
           trendValue={buildTrend(partialCount, perfData?.comparison?.partialCount)?.value}
           comparisonValue={buildTrend(partialCount, perfData?.comparison?.partialCount)?.label}
           comparisonLabel="VS LAST"
@@ -354,7 +354,7 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-red-500 to-rose-600" iconBg="text-red-600 bg-red-600" delay={150}
           onClick={() => handleKPIOpen("REFUNDED")}
-          trend={buildTrend(refundedCount, perfData?.comparison?.refundedCount)?.type}
+          trend={buildTrend(refundedCount, perfData?.comparison?.refundedCount)?.type as "up" | "down" | undefined}
           trendValue={buildTrend(refundedCount, perfData?.comparison?.refundedCount)?.value}
           comparisonValue={buildTrend(refundedCount, perfData?.comparison?.refundedCount)?.label}
           comparisonLabel="VS LAST"
@@ -365,7 +365,7 @@ export function HeadOfficeDashboard() {
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-slate-500 to-slate-700" iconBg="text-slate-600 bg-slate-600" delay={175}
           onClick={() => handleKPIOpen("REJECTED")}
-          trend={buildTrend(rejectedCount, perfData?.comparison?.rejectedCount)?.type}
+          trend={buildTrend(rejectedCount, perfData?.comparison?.rejectedCount)?.type as "up" | "down" | undefined}
           trendValue={buildTrend(rejectedCount, perfData?.comparison?.rejectedCount)?.value}
           comparisonValue={buildTrend(rejectedCount, perfData?.comparison?.rejectedCount)?.label}
           comparisonLabel="VS LAST"

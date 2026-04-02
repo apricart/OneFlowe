@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useMemo, ReactNode } from "react"
+import React, { useState, useMemo, ReactNode, useEffect, useCallback } from "react"
 import useSWR, { useSWRConfig } from "swr"
 import { useSession } from "next-auth/react"
 import { useToast } from "@/hooks/use-toast"
@@ -16,7 +16,6 @@ import { GlobalDateFilter, type FilterPreset, getPresetRange } from "@/component
 
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
-import { useCallback } from "react"
 import { type DateRange } from "@/lib/hooks/use-sales-performance"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
@@ -58,6 +57,11 @@ export default function BudgetsPage() {
   const [dateRange, setDateRange] = useState<DateRange | null>(getPresetRange("all"))
   const [activePreset, setActivePreset] = useState<FilterPreset>("all")
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
+
+  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
+    setDateRange(range)
+    setActivePreset(preset)
+  }, [])
 
   useEffect(() => {
     if (isInitialized) {
