@@ -91,7 +91,17 @@ export default function ProductPerformancePage() {
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
+    const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
     const [hasMounted, setHasMounted] = useState(false)
+
+    // Role-based terminology
+    const kpiRevenueLabel = isBuyer ? "Total Purchased" : "Total Revenue"
+    const chartTitleLabel = isBuyer ? "Top Products by Purchase" : "Top Products by Revenue"
+    const tableRevenueHeader = isBuyer ? "Purchased" : "Revenue"
+    const drawerRevenueLabel = isBuyer ? "Amount Purchased" : "Revenue Generated"
+    const exportRevenueHeader = isBuyer ? "Purchased" : "Revenue"
+    const barChartLegendLabel = isBuyer ? "PURCHASED" : "REVENUE"
+    const revenueShortLabel = isBuyer ? "Purchased" : "Revenue"
 
     // URL States for filtering
     const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "all"
@@ -517,7 +527,7 @@ export default function ProductPerformancePage() {
         { key: "s3", label: "Quantities & Revenue", value: "", type: "section" },
         { key: "qtyOrdered", label: "Qty Ordered", value: String(item.qtyOrdered || 0) },
         { key: "qtyFulfilled", label: "Qty Fulfilled", value: String(item.qtyFulfilled || 0) },
-        { key: "revenue", label: "Revenue Generated", value: formatPKR(item.revenueGeneratedCents / 100), type: "currency" },
+        { key: "revenue", label: drawerRevenueLabel, value: formatPKR(item.revenueGeneratedCents / 100), type: "currency" },
     ]
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
@@ -525,26 +535,47 @@ export default function ProductPerformancePage() {
         const exportData = isReports ? filteredLedger : filteredProducts
 
         const headers = isReports 
-            ? ["Organization", "Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"]
-            : ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Qty Fulfilled", "Qty Refunded", "Revenue Generated"]
+            ? (role === "SUPER_ADMIN" 
+                ? ["Organization", "Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"]
+                : ["Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"])
+            : ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Fulfilled", "Refunded", "Base Price", exportRevenueHeader]
         
-        const rows = exportData.map((p: any) => isReports ? [
-            p.organizationName || 'N/A', 
-            p.branchName, 
-            p.orderId || p.tid, 
-            p.tid, 
-            new Date(p.orderCreatedAt).toLocaleDateString(), 
-            p.group || 'N/A', 
-            "0", 
-            `${p.userName || ''} (${p.userEmail || ''})`.trim(), 
-            `${p.itemDetails} (${p.itemCode})`, 
-            p.qtyOrdered, 
-            p.qtyOrdered - p.qtyDelivered, 
-            p.qtyDelivered, 
-            (p.priceCents / 100).toFixed(2), 
-            (p.netTotalCents / 100).toFixed(2)
-        ] : [
+        const rows = exportData.map((p: any) => isReports ? (
+            role === "SUPER_ADMIN" 
+                ? [
+                    p.organizationName || 'N/A', 
+                    p.branchName, 
+                    p.orderId || p.tid, 
+                    p.tid, 
+                    new Date(p.orderCreatedAt).toLocaleDateString(), 
+                    p.group || 'N/A', 
+                    "0", 
+                    `${p.userName || ''} (${p.userEmail || ''})`.trim(), 
+                    `${p.itemDetails} (${p.itemCode})`, 
+                    p.qtyOrdered, 
+                    p.qtyOrdered - p.qtyDelivered, 
+                    p.qtyDelivered, 
+                    (p.priceCents / 100).toFixed(2), 
+                    (p.netTotalCents / 100).toFixed(2)
+                ]
+                : [
+                    p.branchName, 
+                    p.orderId || p.tid, 
+                    p.tid, 
+                    new Date(p.orderCreatedAt).toLocaleDateString(), 
+                    p.group || 'N/A', 
+                    "0", 
+                    `${p.userName || ''} (${p.userEmail || ''})`.trim(), 
+                    `${p.itemDetails} (${p.itemCode})`, 
+                    p.qtyOrdered, 
+                    p.qtyOrdered - p.qtyDelivered, 
+                    p.qtyDelivered, 
+                    (p.priceCents / 100).toFixed(2), 
+                    (p.netTotalCents / 100).toFixed(2)
+                ]
+        ) : [
             p.productCode, p.productName, p.category, p.subCategory, p.status || 'active', p.qtyOrdered, p.qtyFulfilled, p.qtyRefunded,
+            (p.basePriceCents / 100).toFixed(2),
             (p.revenueGeneratedCents / 100).toFixed(2)
         ])
 
@@ -572,7 +603,7 @@ export default function ProductPerformancePage() {
                 <p className="font-bold text-sm text-slate-900 dark:text-white mb-2">{d.fullName}</p>
                 <div className="space-y-1.5">
                     <div className="flex justify-between text-xs">
-                        <span className="text-slate-500">Revenue</span>
+                        <span className="text-slate-500">{revenueShortLabel}</span>
                         <span className="font-bold text-indigo-600">{formatPKR(d.revenue)}</span>
                     </div>
                     <div className="flex justify-between text-xs">
@@ -647,11 +678,10 @@ export default function ProductPerformancePage() {
                 {/* ━━━ KPI BENTO GRID ━━━ */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     <KPICard 
-                        title="Total Revenue" 
+                        title={kpiRevenueLabel} 
                         value={formatPKR(totalRevenue / 100)} 
                         icon={TrendingUp} 
                         colorScheme="emerald" 
-                        subtitle="From fulfilled products" 
                         trend={revenueTrend} 
                         comparisonLabel="Prior" 
                         comparisonValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined} 
@@ -661,7 +691,6 @@ export default function ProductPerformancePage() {
                         value={totalVolume.toLocaleString()} 
                         icon={Package} 
                         colorScheme="blue" 
-                        subtitle={`${fulfillmentRate.toFixed(1)}% fulfillment rate`} 
                         trend={volumeTrend} 
                         comparisonLabel="Prior" 
                         comparisonValue={comparison ? comparison.totalVolume.toLocaleString() : undefined} 
@@ -671,7 +700,6 @@ export default function ProductPerformancePage() {
                         value={formatPKR(totalRefundLoss / 100)} 
                         icon={AlertOctagon} 
                         colorScheme="rose" 
-                        subtitle={`${totalRefunds.toLocaleString()} items (${refundRate.toFixed(1)}%)`} 
                         trend={refundTrend} 
                         comparisonLabel="Prior" 
                         comparisonValue={comparison ? `${comparison.totalRefunds.toLocaleString()} items` : undefined} 
@@ -732,8 +760,7 @@ export default function ProductPerformancePage() {
                                             <div className="p-1.5 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/20">
                                                 <ChartBarIcon className="h-3.5 w-3.5" />
                                             </div>
-                                            Top Products by Revenue
-                                            <Badge variant="outline" className="text-[9px] font-bold tracking-widest border-indigo-200 dark:border-indigo-800 text-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/30 ml-1">Fulfilled Only</Badge>
+                                            {chartTitleLabel}
                                         </CardTitle>
                                     </div>
                                     {(chartYears.length > 0 || chartMonths.length > 0 || chartBranchIds.length > 0 || chartGroupIds.length > 0) && (
@@ -890,7 +917,7 @@ export default function ProductPerformancePage() {
                                                 />
                                                 <Bar 
                                                     dataKey="revenue" 
-                                                    name="REVENUE" 
+                                                    name={barChartLegendLabel} 
                                                     fill="#6366f1" 
                                                     radius={[6, 6, 0, 0]} 
                                                     barSize={24} 
@@ -957,7 +984,8 @@ export default function ProductPerformancePage() {
                                             <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">{compare ? "Qty Ord (A/B)" : "Qty Ordered"}</TableHead>
                                             <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-emerald-600">{compare ? "Fulfilled (A/B)" : "Fulfilled"}</TableHead>
                                             <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-rose-500">{compare ? "Refunded (A/B)" : "Refunded"}</TableHead>
-                                            <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">{compare ? "Revenue (A/B)" : "Revenue"}</TableHead>
+                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Base Price</TableHead>
+                                            <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">{compare ? `${tableRevenueHeader} (A/B)` : tableRevenueHeader}</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -1006,6 +1034,9 @@ export default function ProductPerformancePage() {
                                                             <span>{p.qtyRefunded}</span>
                                                             {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{p.compareQtyRefunded || 0}</span>}
                                                         </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-mono text-xs text-slate-600 dark:text-slate-400">
+                                                        {formatPKR(p.basePriceCents / 100)}
                                                     </TableCell>
                                                     <TableCell className="text-right font-mono font-bold text-xs text-slate-900 dark:text-white">
                                                         <div className="flex flex-col items-end">
@@ -1188,8 +1219,10 @@ export default function ProductPerformancePage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-slate-50/20 dark:bg-slate-800/10">
-                                        <TableHead className="pl-6 h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Organization</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Branch</TableHead>
+                                        {role === "SUPER_ADMIN" && (
+                                            <TableHead className="pl-6 h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Organization</TableHead>
+                                        )}
+                                        <TableHead className={cn("h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap", role !== "SUPER_ADMIN" && "pl-6")}>Branch</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Order ID</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Trans ID</TableHead>
                                         <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Order Date</TableHead>
@@ -1206,17 +1239,19 @@ export default function ProductPerformancePage() {
                                 </TableHeader>
                                 <TableBody>
                                     {isLedgerLoading ? (
-                                        <TableRow><TableCell colSpan={14} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 14 : 13} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
                                     ) : filteredLedger.length === 0 ? (
-                                        <TableRow><TableCell colSpan={14} className="h-32 text-center text-slate-400 text-xs">No itemized orders found.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 14 : 13} className="h-32 text-center text-slate-400 text-xs">No itemized orders found.</TableCell></TableRow>
                                     ) : (
                                         filteredLedger.map((item: any) => {
                                             return (
                                                 <TableRow key={`${item.id}-${item.tid}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                                                    <TableCell className="pl-6 py-3 text-[10px] whitespace-nowrap text-slate-700 dark:text-slate-300 font-bold">
-                                                        {item.organizationName || 'N/A'}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap text-slate-700 dark:text-slate-300 font-bold">
+                                                    {role === "SUPER_ADMIN" && (
+                                                        <TableCell className="pl-6 py-3 text-[10px] whitespace-nowrap text-slate-700 dark:text-slate-300 font-bold">
+                                                            {item.organizationName || 'N/A'}
+                                                        </TableCell>
+                                                    )}
+                                                    <TableCell className={cn("py-3 text-[10px] whitespace-nowrap text-slate-700 dark:text-slate-300 font-bold", role !== "SUPER_ADMIN" && "pl-6")}>
                                                         {item.branchName}
                                                     </TableCell>
                                                     <TableCell className="py-3 text-[10px] whitespace-nowrap font-mono text-slate-500">

@@ -117,6 +117,7 @@ export async function GET(req: NextRequest) {
                 categoryName: categories.name,
                 qtyOrdered: orderItems.quantity,
                 priceCents: orderItems.priceCents,
+                basePriceCents: globalProducts.basePrice,
                 orderItemId: orderItems.id
             })
             .from(orderItems)
@@ -207,7 +208,8 @@ export async function GET(req: NextRequest) {
                 deletedAt: globalProducts.deletedAt,
                 orgIsActive: organizationInventory.isActive,
                 categoryName: sql<string>`COALESCE(${parentCategories.name}, ${categories.name})`,
-                subCategoryName: sql<string>`CASE WHEN ${parentCategories.id} IS NOT NULL THEN ${categories.name} ELSE NULL END`
+                subCategoryName: sql<string>`CASE WHEN ${parentCategories.id} IS NOT NULL THEN ${categories.name} ELSE NULL END`,
+                basePriceCents: globalProducts.basePrice
             })
             .from(globalProducts)
             .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
@@ -234,6 +236,7 @@ export async function GET(req: NextRequest) {
                 qtyFulfilled: 0,
                 qtyRefunded: 0,
                 revenueGeneratedCents: 0,
+                basePriceCents: p.basePriceCents || 0,
                 refundLossCents: 0
             }
         })

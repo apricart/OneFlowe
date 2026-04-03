@@ -49,6 +49,13 @@ export default function BranchReportsPage() {
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
     const userOrgId = (session?.user as any)?.organizationId
+    const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
+
+    // Role-based terminology
+    const revenueLabel = isBuyer ? "Total Purchased" : "Net Revenue"
+    const avgLabel = isBuyer ? "Avg Purchase Value" : "Avg Order Value"
+    const revenueHeader = isBuyer ? "Purchased" : "Revenue"
+    const orderLabel = isBuyer ? "Orders" : "Orders"
     const [hasMounted, setHasMounted] = useState(false)
 
     // ━━━ GLOBAL CONTEXT FILTERS ━━━
@@ -207,7 +214,7 @@ export default function BranchReportsPage() {
     }, [chartData, chartMonths, chartYears])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Branch Name", "Group", "Status", "Orders", "Net Revenue"]
+        const headers = ["Branch Name", "Group", "Status", "Orders", revenueLabel]
         const rows = filteredBranches.map((b: any) => [
             b.name || "-", b.groupName || "-", b.status || "active", b.totalOrders, (b.revenue / 100).toFixed(2)
         ])
@@ -273,19 +280,17 @@ export default function BranchReportsPage() {
                 {/* ━━━ BENTO KPI GRID ━━━ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <KPICard 
-                        title="Branch Net Revenue"
+                        title={revenueLabel}
                         value={formatPKR(summary.totalRevenue / 100)}
                         icon={TrendingUp}
                         colorScheme="emerald"
                         trend={revenueTrend}
-                        subtitle="Consolidated network sales"
                     />
                     <KPICard 
-                        title="Avg Order Value"
+                        title={avgLabel}
                         value={formatPKR(summary.totalOrders > 0 ? (summary.totalRevenue / summary.totalOrders) / 100 : 0)}
                         icon={Calculator}
                         colorScheme="blue"
-                        subtitle="Per-transaction average"
                     />
                     <KPICard 
                         title="Fulfilled Orders"
@@ -293,14 +298,12 @@ export default function BranchReportsPage() {
                         icon={ShoppingBag}
                         colorScheme="indigo"
                         trend={orderTrend}
-                        subtitle="Completed transactions"
                     />
                     <KPICard 
                         title="Active Units"
                         value={summary.activeBranches.toLocaleString()}
                         icon={Building2}
                         colorScheme="amber"
-                        subtitle="Managed branch locations"
                     />
                 </div>
 
@@ -385,10 +388,10 @@ export default function BranchReportsPage() {
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.3} />
                                                 <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} dy={10} />
                                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} tickFormatter={(v) => `₨${v >= 1000 ? (v/1000).toFixed(0)+'K' : v}`} />
-                                                <Tooltip content={(props) => <CustomTooltip {...props} compare={compare} />} />
+                                                <Tooltip content={(props) => <CustomTooltip {...props} compare={compare} revenueLabel={revenueLabel} />} />
                                                 <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 30, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }} />
-                                                <Bar dataKey="revenue" name="Net Revenue" fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
-                                                {compare && <Bar dataKey="prevRevenue" name="Prior Period" fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />}
+                                                <Bar dataKey="revenue" name={revenueLabel} fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
+                                                {compare && <Bar dataKey="prevRevenue" name={`Prior ${revenueLabel.includes("Purchased") ? "Purchase" : "Revenue"}`} fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />}
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -474,7 +477,7 @@ export default function BranchReportsPage() {
                                             <TableHead className="pl-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Rank & Branch</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Cluster / Group</TableHead>
-                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Revenue (PKR)</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{revenueHeader} (PKR)</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
                                             <TableHead className="px-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Fulfillment</TableHead>
@@ -543,7 +546,7 @@ export default function BranchReportsPage() {
     )
 }
 
-function CustomTooltip({ active, payload, label, compare }: any) {
+function CustomTooltip({ active, payload, label, compare, revenueLabel }: any) {
     if (active && payload && payload.length) {
         const d = payload[0].payload
         return (
@@ -552,14 +555,14 @@ function CustomTooltip({ active, payload, label, compare }: any) {
                 <div className="space-y-3">
                     <div className="flex items-center justify-between gap-10">
                         <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full bg-emerald-500" /> Net Revenue
+                            <div className="h-2 w-2 rounded-full bg-emerald-500" /> {revenueLabel}
                         </span>
                         <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{formatPKR(payload[0].value)}</span>
                     </div>
                     {compare && (
                         <div className="flex items-center justify-between gap-10">
                             <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" /> Prior Revenue
+                                <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" /> Prior {revenueLabel.includes("Purchased") ? "Purchase" : "Revenue"}
                             </span>
                             <span className="text-xs font-black text-slate-500">{formatPKR(d.prevRevenue)}</span>
                         </div>

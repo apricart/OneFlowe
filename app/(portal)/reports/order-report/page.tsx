@@ -93,6 +93,14 @@ export default function OrderReportPage() {
     const role = (session?.user as any)?.role as Role
     const userOrgId = (session?.user as any)?.organizationId
     const organizationId = userOrgId || contextOrgId
+    const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
+
+    // Role-based terminology
+    const kpiRevenueLabel = isBuyer ? "Net Purchased" : "Net Revenue"
+    const kpiAvgLabel = isBuyer ? "Avg Purchased Value" : "Avg Value"
+    const chartRevenueLabel = isBuyer ? "Purchased" : "Revenue"
+    const chartOrdersLabel = isBuyer ? "Orders" : "Orders"
+    const exportTitleLabel = isBuyer ? "Order Purchase Report" : "Order Consumption Report"
 
     const [hasMounted, setHasMounted] = useState(false)
     const [activeTab, setActiveTab] = useState("analytics")
@@ -345,7 +353,7 @@ export default function OrderReportPage() {
 
         if (format === 'pdf') {
             const doc = new jsPDF('landscape')
-            doc.setFontSize(20); doc.text("Order Consumption Report", 14, 20)
+            doc.setFontSize(20); doc.text(exportTitleLabel, 14, 20)
             doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
             autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid', styles: { fontSize: 8 } })
             doc.save(`order-report-${Date.now()}.pdf`); return
@@ -402,10 +410,10 @@ export default function OrderReportPage() {
             <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
                 {/* ━━━ KPI BENTO GRID ━━━ */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <KPICard title="Net Revenue" value={formatPKR(summary.totalSales / 100)} icon={TrendingUp} colorScheme="indigo" subtitle="Gross fulfilled minus refunds." />
-                    <KPICard title="Refund Impact" value={formatPKR(summary.totalRefunds / 100)} icon={RotateCcw} colorScheme="rose" subtitle="Total value returned to users." />
-                    <KPICard title="Total Orders" value={summary.totalOrderCount} icon={Package} colorScheme="blue" subtitle="Gross transaction count." />
-                    <KPICard title="Avg Value" value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={Calculator} colorScheme="amber" subtitle="Net revenue per transacting order." />
+                    <KPICard title={kpiRevenueLabel} value={formatPKR(summary.totalSales / 100)} icon={TrendingUp} colorScheme="indigo" />
+                    <KPICard title="Refund Impact" value={formatPKR(summary.totalRefunds / 100)} icon={RotateCcw} colorScheme="rose" />
+                    <KPICard title="Total Orders" value={summary.totalOrderCount} icon={Package} colorScheme="blue" />
+                    <KPICard title={kpiAvgLabel} value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={Calculator} colorScheme="amber" />
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
@@ -475,10 +483,10 @@ export default function OrderReportPage() {
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
                                                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} dy={10} />
                                                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} tickFormatter={(v) => `₨${v/1000}k`} />
-                                                <RechartsTooltip content={<BarTooltip compare={compare} />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
-                                                <Bar dataKey="revenue" fill="url(#revGradient)" radius={[6, 6, 0, 0]} barSize={32} name="Current Revenue" />
-                                                {compare && <Bar dataKey="prevRevenue" fill="#94a3b8" opacity={0.3} radius={[6, 6, 0, 0]} barSize={32} name="Prior Revenue" />}
-                                                <Line type="monotone" dataKey="orders" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} name="Orders" />
+                                                <RechartsTooltip content={<BarTooltip compare={compare} revenueLabel={chartRevenueLabel} />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
+                                                <Bar dataKey="revenue" fill="url(#revGradient)" radius={[6, 6, 0, 0]} barSize={32} name={`Current ${chartRevenueLabel}`} />
+                                                {compare && <Bar dataKey="prevRevenue" fill="#94a3b8" opacity={0.3} radius={[6, 6, 0, 0]} barSize={32} name={`Prior ${chartRevenueLabel}`} />}
+                                                <Line type="monotone" dataKey="orders" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} name={chartOrdersLabel} />
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     )}
@@ -703,7 +711,7 @@ function YearFilter({ selected, onChange, allTimeData }: { selected: number[], o
     )
 }
 
-function BarTooltip({ active, payload, label, compare }: any) {
+function BarTooltip({ active, payload, label, compare, revenueLabel }: any) {
     if (active && payload && payload.length) {
         return (
             <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 min-w-[200px] backdrop-blur-xl bg-white/90 dark:bg-slate-900/90">
@@ -712,17 +720,23 @@ function BarTooltip({ active, payload, label, compare }: any) {
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">{label}</p>
                 </div>
                 <div className="space-y-2">
-                    {payload.map((p: any) => (
-                        <div key={p.name} className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                                <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: p.color }} />
-                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">{p.name}</span>
+                    {payload.map((p: any) => {
+                        let displayName = p.name;
+                        if (displayName.toLowerCase().includes('revenue')) {
+                            displayName = displayName.replace(/revenue/i, revenueLabel);
+                        }
+                        return (
+                            <div key={p.name} className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-2">
+                                    <div className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: p.color }} />
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">{displayName}</span>
+                                </div>
+                                <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">
+                                    {typeof p.value === 'number' && (p.name.toLowerCase().includes('revenue') || p.name.toLowerCase().includes(revenueLabel.toLowerCase())) ? formatPKR(p.value) : p.value}
+                                </span>
                             </div>
-                            <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">
-                                {typeof p.value === 'number' && p.name.toLowerCase().includes('revenue') ? formatPKR(p.value) : p.value}
-                            </span>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         )

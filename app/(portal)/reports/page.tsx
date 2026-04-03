@@ -68,7 +68,7 @@ const reportCards = [
   },
   {
     title: "Groups Report",
-    description: "Group performance, member branches, and revenue breakdowns",
+    description: "Group performance, member branches, and purchase breakdowns",
     href: "/reports/groups",
     icon: FolderTree,
     gradient: "from-fuchsia-500 to-pink-500",
