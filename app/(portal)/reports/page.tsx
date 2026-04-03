@@ -24,13 +24,6 @@ import { useState, useEffect } from "react"
 
 const reportCards = [
   {
-    title: "Sales Report",
-    description: "View complete sales analytics and revenue trends across branches",
-    href: "/reports/sales-Report",
-    icon: TrendingUp,
-    gradient: "from-indigo-500 to-purple-500",
-  },
-  {
     title: "Order Report",
     href: "/reports/order-report",
     description: "Unified view of all orders (Fulfilled, Refunded, Rejected) with advanced filtering.",
@@ -161,11 +154,6 @@ export default function ReportsPage() {
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Sales Reports</p>
-              <p className="text-2xl font-bold text-slate-900 dark:text-white">3</p>
-              <p className="text-xs text-muted-foreground">Analytics types</p>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Stock Reports</p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white">3</p>
               <p className="text-xs text-muted-foreground">Inventory insights</p>
@@ -177,7 +165,7 @@ export default function ReportsPage() {
             </div>
             <div className="p-4 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800">
               <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide mb-1">Total Reports</p>
-              <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">7</p>
+              <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">6</p>
               <p className="text-xs text-muted-foreground">Available types</p>
             </div>
           </div>

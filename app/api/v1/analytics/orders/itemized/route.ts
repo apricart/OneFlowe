@@ -22,6 +22,9 @@ export async function GET(req: NextRequest) {
         const compareStartDateParam = url.searchParams.get("compareStartDate")
         const compareEndDateParam = url.searchParams.get("compareEndDate")
         const status = url.searchParams.get("status")
+        const productIdsParam = url.searchParams.get("productIds")
+        const organizationIdsParam = url.searchParams.get("organizationIds")
+        const groupIdsParam = url.searchParams.get("groupIds")
 
         const monthsRaw = url.searchParams.get("months")
         const yearsRaw = url.searchParams.get("years")
@@ -68,6 +71,19 @@ export async function GET(req: NextRequest) {
         if (parsedMonths.length === 0 && parsedYears.length === 0) {
             if (startDate) baseConditions.push(gte(orders.createdAt, startDate))
             if (endDate) baseConditions.push(lte(orders.createdAt, endDate))
+        }
+
+        if (productIdsParam && productIdsParam.trim() !== "") {
+            const productIds = productIdsParam.split(",").map(Number).filter(id => !isNaN(id) && id > 0)
+            if (productIds.length > 0) baseConditions.push(inArray(orderItems.globalProductId, productIds))
+        }
+        if (groupIdsParam && groupIdsParam.trim() !== "") {
+            const groupIds = groupIdsParam.split(",").map(Number).filter(id => !isNaN(id) && id > 0)
+            if (groupIds.length > 0) baseConditions.push(inArray(branches.groupId, groupIds))
+        }
+        if (organizationIdsParam && organizationIdsParam.trim() !== "") {
+            const organizationIds = organizationIdsParam.split(",").map(Number).filter(id => !isNaN(id) && id > 0)
+            if (organizationIds.length > 0) baseConditions.push(inArray(orders.organizationId, organizationIds))
         }
 
         // Find all order items matching filters
