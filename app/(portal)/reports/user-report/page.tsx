@@ -709,7 +709,7 @@ export default function UserReportPage() {
                                         <DropdownMenuTrigger asChild>
                                             <Button variant="outline" size="sm" className="h-10 text-[11px] font-black underline decoration-slate-200 gap-2 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm px-5">
                                                 <Download className="h-3.5 w-3.5" />
-                                                STASH REPORT
+                                                EXPORT
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-52 rounded-2xl border-slate-200 dark:border-slate-800 p-2 shadow-2xl bg-white dark:bg-slate-900">

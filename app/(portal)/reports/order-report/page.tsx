@@ -334,7 +334,7 @@ export default function OrderReportPage() {
             if (isVisible("userName")) row.push(order.userName || "-")
             if (isVisible("tid")) row.push(order.tid)
             if (isVisible("organizationName")) row.push(order.organizationName || "N/A")
-            if (isVisible("group")) row.push(order.group || "-")
+            if (isVisible("group")) row.push(order.groupName || "-")
             if (isVisible("branchName")) row.push(order.branchName || "-")
             if (isVisible("status")) row.push(order.status)
             if (isVisible("subtotalValue")) row.push(((order.subtotalCents || 0) / 100).toFixed(2))
@@ -633,7 +633,7 @@ export default function OrderReportPage() {
                                                     {isVisible("userName") && <TableCell className="px-8 py-5"><span className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-tighter">{order.userName || "Guest System"}</span></TableCell>}
                                                     {isVisible("tid") && <TableCell className="px-8 py-5"><span className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-black text-slate-600 dark:text-slate-400 font-mono italic">{order.tid}</span></TableCell>}
                                                     {isVisible("organizationName") && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.organizationName || "N/A"}</TableCell>}
-                                                    {isVisible("group") && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.group || "-"}</TableCell>}
+                                                    {isVisible("group") && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.groupName || "-"}</TableCell>}
                                                     {isVisible("branchName") && <TableCell className="px-8 py-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter">{order.branchName}</TableCell>}
                                                     {isVisible("status") && (
                                                         <TableCell className="px-8 py-5 text-center">

@@ -349,7 +349,7 @@ export default function ProductPerformancePage() {
     if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
     if (reportSearchTerm) reportQueryParams.set("searchTerm", reportSearchTerm)
 
-    const { data: catalogData, isLoading: isCatalogLoading, mutate: mutateCatalog } = useSWR<any>(`/api/v1/analytics/products/catalog-performance?${reportQueryParams.toString()}`, fetcher)
+    const { data: ledgerData, isLoading: isLedgerLoading, mutate: mutateLedger } = useSWR<any>(`/api/v1/analytics/orders/itemized?${reportQueryParams.toString()}`, fetcher)
     
     useEffect(() => {
         setHasMounted(true)
@@ -370,19 +370,22 @@ export default function ProductPerformancePage() {
         return [...p].sort((a: any, b: any) => (b.revenueGeneratedCents || 0) - (a.revenueGeneratedCents || 0))
     }, [chartPerfData])
 
-    const catalogItems = useMemo(() => {
-        const items = catalogData?.data || []
-        return [...items].sort((a: any, b: any) => (b.revenueGeneratedCents || 0) - (a.revenueGeneratedCents || 0))
-    }, [catalogData])
+    const ledgerItems = useMemo(() => {
+        const items = ledgerData?.data || []
+        return [...items].sort((a: any, b: any) => new Date(b.orderCreatedAt).getTime() - new Date(a.orderCreatedAt).getTime())
+    }, [ledgerData])
 
-    const filteredCatalog = useMemo(() => {
-        if (!reportSearchTerm) return catalogItems
+    const filteredLedger = useMemo(() => {
+        if (!reportSearchTerm) return ledgerItems
         const term = reportSearchTerm.toLowerCase()
-        return catalogItems.filter((i: any) => 
-            (i.productCode || "").toLowerCase().includes(term) ||
-            (i.productName || "").toLowerCase().includes(term)
+        return ledgerItems.filter((i: any) => 
+            (i.itemCode || "").toLowerCase().includes(term) ||
+            (i.itemDetails || "").toLowerCase().includes(term) ||
+            (i.userName || "").toLowerCase().includes(term) ||
+            (i.userEmail || "").toLowerCase().includes(term) ||
+            (i.tid || "").toLowerCase().includes(term)
         )
-    }, [catalogItems, reportSearchTerm])
+    }, [ledgerItems, reportSearchTerm])
 
     const filteredProducts = products.filter((p: any) =>
         (p.productName || p.productCode || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -519,15 +522,27 @@ export default function ProductPerformancePage() {
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
         const isReports = activeTab === "reports"
-        const exportData = isReports ? filteredCatalog : filteredProducts
+        const exportData = isReports ? filteredLedger : filteredProducts
 
         const headers = isReports 
-            ? ["Product Code", "Product Name", "Category", "Status", "Base Price", "Qty Sold", "Revenue"]
+            ? ["Organization", "Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"]
             : ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Qty Fulfilled", "Qty Refunded", "Revenue Generated"]
         
         const rows = exportData.map((p: any) => isReports ? [
-            p.productCode, p.productName, p.categoryName || "-", p.status, 
-            (p.basePriceCents / 100).toFixed(2), p.qtyFulfilled, (p.revenueGeneratedCents / 100).toFixed(2)
+            p.organizationName || 'N/A', 
+            p.branchName, 
+            p.orderId || p.tid, 
+            p.tid, 
+            new Date(p.orderCreatedAt).toLocaleDateString(), 
+            p.group || 'N/A', 
+            "0", 
+            `${p.userName || ''} (${p.userEmail || ''})`.trim(), 
+            `${p.itemDetails} (${p.itemCode})`, 
+            p.qtyOrdered, 
+            p.qtyOrdered - p.qtyDelivered, 
+            p.qtyDelivered, 
+            (p.priceCents / 100).toFixed(2), 
+            (p.netTotalCents / 100).toFixed(2)
         ] : [
             p.productCode, p.productName, p.category, p.subCategory, p.status || 'active', p.qtyOrdered, p.qtyFulfilled, p.qtyRefunded,
             (p.revenueGeneratedCents / 100).toFixed(2)
@@ -621,8 +636,8 @@ export default function ProductPerformancePage() {
                                 onChange={handleDateChange} 
                             />
                         </div>
-                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => { mutateGlobalPerf(); mutateCatalog(); mutateChart(); }}>
-                            <RefreshCw className={cn("h-4 w-4", (isGlobalPerfLoading || isCatalogLoading || isChartPerfLoading) && "animate-spin")} />
+                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => { mutateGlobalPerf(); mutateLedger(); mutateChart(); }}>
+                            <RefreshCw className={cn("h-4 w-4", (isGlobalPerfLoading || isLedgerLoading || isChartPerfLoading) && "animate-spin")} />
                         </Button>
                     </div>
                 </div>
@@ -1014,7 +1029,7 @@ export default function ProductPerformancePage() {
                                 <div className="flex items-center gap-3">
                                     <History className="h-4 w-4 text-indigo-500" />
                                     <h3 className="font-bold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
-                                        Product Catalog Report
+                                        {role === "SUPER_ADMIN" ? "Product Wise Sale" : "Product Wise Purchase"}
                                     </h3>
                                 </div>
                                 {(reportYears.length > 0 || reportMonths.length > 0 || reportBranchIds.length > 0 || reportGroupIds.length > 0) && (
@@ -1116,6 +1131,18 @@ export default function ProductPerformancePage() {
                                             onChange={(e) => setReportSearchTerm(e.target.value)}
                                         />
                                     </div>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg shadow-lg shadow-indigo-600/20" disabled={isLedgerLoading}>
+                                                <Download className="h-3.5 w-3.5" /> EXPORT
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                                            <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2 cursor-pointer font-bold"><FileText className="mr-2 h-4 w-4 text-slate-400" /> CSV</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2 cursor-pointer font-bold"><FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer font-bold"><FileText className="mr-2 h-4 w-4 text-rose-500" /> PDF</DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </div>
                             </div>
 
@@ -1155,65 +1182,86 @@ export default function ProductPerformancePage() {
                                         </Badge>
                                     )
                                 })}
-                                {reportProductIds.length > 0 && reportProductIds.map(pid => {
-                                    const pr = availableProducts.find((p: any) => String(p.id) === pid)
-                                    return (
-                                        <Badge key={pid} className="text-[10px] font-bold bg-slate-600 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => setReportProductIds(prev => prev.filter(p => p !== pid))}>
-                                            {pr?.name || pid} <X className="h-2.5 w-2.5" />
-                                        </Badge>
-                                    )
-                                })}
                             </div>
                         </div>
                         <div className="overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-slate-50/20 dark:bg-slate-800/10">
-                                        <TableHead className="pl-6 h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Status</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Product Info</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400">Category</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">{priceLabel}</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-center">Qty Sold</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 text-right pr-6">Revenue</TableHead>
+                                        <TableHead className="pl-6 h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Organization</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Branch</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Order ID</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Trans ID</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Order Date</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Group</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Discount</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">User Details</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 min-w-[150px]">Item Details</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Qty Ordered</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center text-rose-500">Refunded</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center text-emerald-600">Net Items</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Unit Price</TableHead>
+                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right pr-6">Grand Total</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {isCatalogLoading ? (
-                                        <TableRow><TableCell colSpan={6} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
-                                    ) : filteredCatalog.length === 0 ? (
-                                        <TableRow><TableCell colSpan={6} className="h-32 text-center text-slate-400 text-xs">No products found in catalog.</TableCell></TableRow>
+                                    {isLedgerLoading ? (
+                                        <TableRow><TableCell colSpan={14} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
+                                    ) : filteredLedger.length === 0 ? (
+                                        <TableRow><TableCell colSpan={14} className="h-32 text-center text-slate-400 text-xs">No itemized orders found.</TableCell></TableRow>
                                     ) : (
-                                        filteredCatalog.map((product: any) => {
+                                        filteredLedger.map((item: any) => {
                                             return (
-                                                <TableRow key={product.globalProductId} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer" onClick={() => handleRowClick(product)}>
-                                                    <TableCell className="pl-6 py-3">
-                                                        {product.status === "active" ? (
-                                                            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">Active</Badge>
-                                                        ) : product.status === "inactive" ? (
-                                                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">Inactive</Badge>
-                                                        ) : (
-                                                            <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-none text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full">Deleted</Badge>
-                                                        )}
+                                                <TableRow key={`${item.id}-${item.tid}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                                    <TableCell className="pl-6 py-3 text-[10px] whitespace-nowrap text-slate-700 dark:text-slate-300 font-bold">
+                                                        {item.organizationName || 'N/A'}
                                                     </TableCell>
-                                                    <TableCell className="py-3">
+                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap text-slate-700 dark:text-slate-300 font-bold">
+                                                        {item.branchName}
+                                                    </TableCell>
+                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap font-mono text-slate-500">
+                                                        {item.orderId || item.tid}
+                                                    </TableCell>
+                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap font-mono text-slate-500">
+                                                        {item.tid}
+                                                    </TableCell>
+                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap text-slate-600 dark:text-slate-400">
+                                                        {new Date(item.orderCreatedAt).toLocaleDateString()}
+                                                    </TableCell>
+                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap text-slate-600 dark:text-slate-400">
+                                                        {item.group || "N/A"}
+                                                    </TableCell>
+                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap text-center text-slate-400 font-mono">
+                                                        0
+                                                    </TableCell>
+                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap">
                                                         <div className="flex flex-col">
-                                                            <span className="font-bold text-[11px] text-slate-900 dark:text-white uppercase truncate max-w-[200px]">
-                                                                {product.productName}
-                                                            </span>
-                                                            <span className="text-[10px] text-slate-400 font-mono">{product.productCode}</span>
+                                                            <span className="font-bold text-slate-900 dark:text-white uppercase truncate max-w-[120px]">{item.userName || "Unknown"}</span>
+                                                            <span className="text-[9px] text-slate-500 truncate max-w-[120px]">{item.userEmail || "No Email"}</span>
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="py-3">
-                                                        <Badge variant="outline" className="text-[10px] font-medium opacity-70 px-2 rounded-full truncate max-w-[120px]">{product.categoryName}</Badge>
+                                                    <TableCell className="py-3 max-w-[200px]">
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-[10px] text-slate-900 dark:text-white uppercase truncate" title={item.itemDetails}>
+                                                                {item.itemDetails}
+                                                            </span>
+                                                            <span className="text-[9px] text-slate-400 font-mono truncate">{item.itemCode}</span>
+                                                        </div>
                                                     </TableCell>
                                                     <TableCell className="text-center font-mono text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                                                        {formatPKR(product.basePriceCents / 100)}
+                                                        {item.qtyOrdered}
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-mono text-[11px] font-bold text-rose-500">
+                                                        {item.qtyOrdered - item.qtyDelivered}
                                                     </TableCell>
                                                     <TableCell className="text-center font-mono text-[11px] font-bold text-emerald-600">
-                                                        {product.qtyFulfilled}
+                                                        {item.qtyDelivered}
+                                                    </TableCell>
+                                                    <TableCell className="text-center font-mono text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                                                        {formatPKR(item.priceCents / 100)}
                                                     </TableCell>
                                                     <TableCell className="text-right pr-6 font-mono text-[11px] font-black text-indigo-600">
-                                                        {formatPKR(product.revenueGeneratedCents / 100)}
+                                                        {formatPKR(item.netTotalCents / 100)}
                                                     </TableCell>
                                                 </TableRow>
                                             )
