@@ -283,7 +283,7 @@ export function HeadOfficeDashboard() {
       {/* ━━━ KPI Cards ━━━ */}
       <div className="relative z-10 grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <BankingKPICard
-          icon={TrendingUp} title="Revenue"
+          icon={TrendingUp} title="Purchased"
           value={formatPKR(totalRevenue, { maximumFractionDigits: 0 })}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
@@ -436,7 +436,7 @@ export function HeadOfficeDashboard() {
                 totalOrders={chartPerfData?.totalOrders ?? 0}
                 peakPeriod={chartPerfData?.peakPeriod ?? null}
                 granularity={chartGranularity}
-                label="Sales"
+                label="Purchases"
                 dateRange={chartComponentDateRange}
                 comparisonSeries={chartPerfData?.comparison?.seriesData}
                 branchSales={chartPerfData?.branchSales}

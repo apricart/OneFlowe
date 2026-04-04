@@ -45,6 +45,7 @@ import {
   subDays,
   addDays
 } from "date-fns"
+import { useAppContext } from "@/components/context/app-context"
 
 type Props = {
   data: {
@@ -742,6 +743,11 @@ export type SalesPerformanceLineChartProps = {
   label?: string
   granularity?: "hourly" | "daily" | "monthly" | "yearly"
   dateRange: DateRange | null
+  metricLabelOverrides?: {
+    revenue?: string
+    orders?: string
+    sales?: string
+  }
 }
 
 const formatCurrency = (value: number) => {
@@ -761,7 +767,13 @@ const SalesPerfTooltip = ({ active, payload, label: tooltipLabel, activeMetric, 
   const isRevenue = activeMetric === 'revenue'
   const currentVal = isRevenue ? sales : orders
   const prevVal = isRevenue ? compSales : compOrders
-  const metricLabel = isRevenue ? 'Revenue' : 'Orders'
+  
+  const { userRole } = useAppContext()
+  const isBuyer = userRole === "HEAD_OFFICE" || userRole === "BRANCH_ADMIN"
+
+  const metricLabel = isRevenue 
+    ? (isBuyer ? 'Purchased' : 'Revenue') 
+    : 'Orders'
   const formatVal = (v: number) => isRevenue ? `₨ ${v.toLocaleString()}` : v.toLocaleString()
 
   // Calculate change if comparison
@@ -1138,6 +1150,9 @@ export function SalesPerformanceBarChart({
 }) {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
+  const { userRole } = useAppContext()
+  const isBuyer = userRole === "HEAD_OFFICE" || userRole === "BRANCH_ADMIN"
+
   const [activeMetric, setActiveMetric] = useState<'revenue' | 'orders' | 'sales'>('revenue')
 
   const hasComparison = !!comparisonSeries && comparisonSeries.length > 0
@@ -1205,7 +1220,9 @@ export function SalesPerformanceBarChart({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em]">
-            {activeMetric === 'revenue' ? 'Revenue Distribution' : 'Order Volume Metrics'}
+            {activeMetric === 'revenue' 
+              ? (isBuyer ? 'Purchase Distribution' : 'Revenue Distribution') 
+              : 'Order Volume Metrics'}
           </p>
         </div>
 
@@ -1221,7 +1238,7 @@ export function SalesPerformanceBarChart({
             `}
           >
             <div className={`w-2 h-2 rounded-full ${activeMetric === 'revenue' ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
-            Revenue
+            {isBuyer ? 'Purchased' : 'Revenue'}
           </button>
           <button
             onClick={() => setActiveMetric('orders')}
@@ -1246,7 +1263,11 @@ export function SalesPerformanceBarChart({
               `}
             >
               <div className={`w-2 h-2 rounded-full ${activeMetric === 'sales' ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-700'}`} />
-              {showOrgView === false ? 'Branch Sales' : (organizationSales && organizationSales.length > 0 ? 'Org Sales' : 'Branch Sales')}
+              {showOrgView === false 
+                ? (isBuyer ? 'Branch Purchased' : 'Branch Sales') 
+                : (organizationSales && organizationSales.length > 0 
+                  ? (isBuyer ? 'Org Purchased' : 'Org Sales') 
+                  : (isBuyer ? 'Branch Purchased' : 'Branch Sales'))}
             </button>
           )}
         </div>

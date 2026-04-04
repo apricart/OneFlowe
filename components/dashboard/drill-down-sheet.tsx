@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge"
 
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import type { DateRange } from "@/lib/hooks/use-sales-performance"
+import { useAppContext } from "@/components/context/app-context"
 
 export type DrillDownType = "REVENUE" | "REJECTED" | "FULFILLED" | "ORDERS" | "REFUNDED" | "PENDING" | "APPROVED" | "PARTIAL"
 
@@ -142,6 +143,9 @@ export function DrillDownSheet({
     compareMonths: parentCompareMonths,
     compareYears: parentCompareYears
 }: DrillDownSheetProps): React.ReactElement | null {
+    const { userRole } = useAppContext()
+    const isBuyer = userRole === "HEAD_OFFICE" || userRole === "BRANCH_ADMIN"
+
     const [localDateRange, setLocalDateRange] = useState<DateRange | null>(null)
     const [localCompareRange, setLocalCompareRange] = useState<DateRange | null>(null)
     const [activePreset, setActivePreset] = useState<FilterPreset>("today")
@@ -247,7 +251,7 @@ export function DrillDownSheet({
                             </div>
                             <div>
                                 <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white">
-                                    {title || config.title}
+                                    {title || (isBuyer && type === "REVENUE" ? "Purchase Insights" : config.title)}
                                     {activePreset === "all" && <span className="text-slate-400 font-normal ml-2">(All Time)</span>}
                                 </h2>
                             </div>
@@ -273,7 +277,7 @@ export function DrillDownSheet({
                             {type === "REVENUE" && (
                                 <>
                                     <BIInsightCard 
-                                        title="Net Revenue" 
+                                        title={isBuyer ? "Net Purchased" : "Net Revenue"} 
                                         value={formatPKR(summary.netRevenue)} 
                                         subvalue={`Gross: ${formatPKR(summary.grossRevenue)}`} 
                                         icon={TrendingUp} 
@@ -311,9 +315,9 @@ export function DrillDownSheet({
                             {(type === "ORDERS" || type === "FULFILLED" || type === "REJECTED" || type === "PARTIAL") && (
                                 <>
                                     <BIInsightCard 
-                                        title="Total Revenue" 
+                                        title={isBuyer ? "Total Purchased" : "Total Revenue"} 
                                         value={formatPKR(summary.netRevenue)} 
-                                        subvalue="Net Net Revenue" 
+                                        subvalue={isBuyer ? "Net Purchased" : "Net Net Revenue"} 
                                         icon={TrendingUp} 
                                     />
                                     <BIInsightCard 
@@ -498,7 +502,7 @@ export function DrillDownSheet({
                                                                                     <span className="font-mono">-{formatPKR(item.refundAmount)}</span>
                                                                                 </div>
                                                                                 <div className="flex items-center justify-between text-[12px] text-emerald-600 font-bold">
-                                                                                    <span>Net Revenue</span>
+                                                                                    <span>{isBuyer ? "Net Purchased" : "Net Revenue"}</span>
                                                                                     <span className="font-mono">{formatPKR(item.netValue)}</span>
                                                                                 </div>
                                                                             </div>

@@ -221,7 +221,7 @@ export default function BranchReportsPage() {
 
         if (format === 'pdf') {
             const doc = new jsPDF()
-            doc.setFontSize(20); doc.text("Branch Performance Ledger", 14, 20)
+            doc.setFontSize(20); doc.text(isBuyer ? "Branch Purchase Ledger" : "Branch Performance Ledger", 14, 20)
             doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
             autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid' })
             doc.save(`branch-report-${new Date().getTime()}.pdf`)
