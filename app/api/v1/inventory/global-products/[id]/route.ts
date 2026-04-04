@@ -25,6 +25,11 @@ export async function GET(
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
+    const userRole = (session.user as any).role
+    if (userRole !== "SUPER_ADMIN") {
+      delete (product as any).basePrice
+    }
+
     return NextResponse.json({ product })
   } catch (error: any) {
     console.error("Error fetching product:", error)

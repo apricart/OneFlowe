@@ -200,6 +200,7 @@ export async function GET(req: NextRequest) {
                 const s = salesMap.get(p.id) || { totalQtyOrdered: 0, totalQtyFulfilled: 0, totalRevenueCents: 0 }
                 const catInfo = categoriesMap.get(p.categoryId)
                 const parentCatInfo = catInfo?.parentId ? categoriesMap.get(catInfo.parentId) : null
+                const isSuperAdmin = userRole === "SUPER_ADMIN"
 
                 return {
                     globalProductId: p.id,
@@ -209,7 +210,8 @@ export async function GET(req: NextRequest) {
                     status: p.deletedAt 
                         ? "deleted" 
                         : (p.organizationIsActive === false ? "inactive" : p.status),
-                    basePriceCents: p.customPrice || p.basePrice,
+                    basePriceCents: isSuperAdmin ? (p.basePrice || 0) : 0,
+                    unitPriceCents: p.customPrice || p.basePrice,
                     stockQuantity: p.stockQuantity,
                     categoryName: catInfo?.name || "Uncategorized",
                     subCategoryName: parentCatInfo ? catInfo?.name : "",

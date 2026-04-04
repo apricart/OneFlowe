@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     })
 
     const items = await getCached(cacheKey, async () => {
-      // Fetch products with organization-specific data for the target organizations
+      const isSuperAdmin = userRole === "SUPER_ADMIN"
       const query = db
         .select({
           id: globalProducts.id,
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
           description: globalProducts.description,
           categoryId: globalProducts.categoryId,
           imageUrl: globalProducts.imageUrl,
-          basePrice: globalProducts.basePrice,
+          basePrice: isSuperAdmin ? globalProducts.basePrice : sql`NULL`,
           unit: globalProducts.unit,
           status: globalProducts.status,
           orgProductId: organizationProducts.id,

@@ -501,7 +501,7 @@ export default function ProductPerformancePage() {
     }, [chartPerfData, chartYears, chartMonths, CHART_MONTH_NAMES, chartProductIds, isChartProductView])
 
     const isPriceCustom = reportGroupIds.length > 0 || reportOrganizationIds.length > 0
-    const priceLabel = isPriceCustom ? "Price" : "Base Price"
+    const priceLabel = isBuyer ? "Unit Price" : (isPriceCustom ? "Price" : "Base Price")
 
     const handleRowClick = (item: any) => {
         setSelectedRow(item)
@@ -523,7 +523,7 @@ export default function ProductPerformancePage() {
         { key: "productCode", label: "Product Code", value: item.productCode || "-", type: "mono" },
         { key: "productName", label: "Product Name", value: item.productName || "-" },
         { key: "category", label: "Category", value: item.categoryName || "-" },
-        { key: "price", label: priceLabel, value: formatPKR(item.basePriceCents / 100), type: "currency" },
+        { key: "price", label: priceLabel, value: formatPKR((item.unitPriceCents || item.basePriceCents) / 100), type: "currency" },
         { key: "unit", label: "Unit", value: item.unit || "unit" },
         { key: "s3", label: "Quantities & Revenue", value: "", type: "section" },
         { key: "qtyOrdered", label: "Qty Ordered", value: String(item.qtyOrdered || 0) },
@@ -539,7 +539,7 @@ export default function ProductPerformancePage() {
             ? (role === "SUPER_ADMIN" 
                 ? ["Organization", "Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"]
                 : ["Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"])
-            : ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Fulfilled", "Refunded", "Base Price", exportRevenueHeader]
+            : ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Fulfilled", "Refunded", isBuyer ? "Unit Price" : "Base Price", exportRevenueHeader]
         
         const rows = exportData.map((p: any) => isReports ? (
             role === "SUPER_ADMIN" 
@@ -576,7 +576,7 @@ export default function ProductPerformancePage() {
                 ]
         ) : [
             p.productCode, p.productName, p.category, p.subCategory, p.status || 'active', p.qtyOrdered, p.qtyFulfilled, p.qtyRefunded,
-            (p.basePriceCents / 100).toFixed(2),
+            ((p.unitPriceCents || p.basePriceCents) / 100).toFixed(2),
             (p.revenueGeneratedCents / 100).toFixed(2)
         ])
 
@@ -986,7 +986,7 @@ export default function ProductPerformancePage() {
                                             <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">{compare ? "Qty Ord (A/B)" : "Qty Ordered"}</TableHead>
                                             <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-emerald-600">{compare ? "Fulfilled (A/B)" : "Fulfilled"}</TableHead>
                                             <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-rose-500">{compare ? "Refunded (A/B)" : "Refunded"}</TableHead>
-                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Base Price</TableHead>
+                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">{priceLabel}</TableHead>
                                             <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">{compare ? `${tableRevenueHeader} (A/B)` : tableRevenueHeader}</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -1038,7 +1038,7 @@ export default function ProductPerformancePage() {
                                                         </div>
                                                     </TableCell>
                                                     <TableCell className="text-center font-mono text-xs text-slate-600 dark:text-slate-400">
-                                                        {formatPKR(p.basePriceCents / 100)}
+                                                        {formatPKR((p.unitPriceCents || p.basePriceCents) / 100)}
                                                     </TableCell>
                                                     <TableCell className="text-right font-mono font-bold text-xs text-slate-900 dark:text-white">
                                                         <div className="flex flex-col items-end">

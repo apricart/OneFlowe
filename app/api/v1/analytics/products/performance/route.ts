@@ -221,6 +221,8 @@ export async function GET(req: NextRequest) {
             .where(and(...productConditions))
             
         // 2. Initialize the product map with ALL products
+        const isSuperAdmin = userRole === "SUPER_ADMIN"
+        
         const productMap: Record<number, any> = {}
         allProducts.forEach(p => {
             productMap[p.id] = {
@@ -230,13 +232,14 @@ export async function GET(req: NextRequest) {
                 unit: p.unit,
                 category: p.categoryName || 'Uncategorized',
                 subCategory: p.subCategoryName || '-',
-                status: p.deletedAt ? 'deleted' : (p.orgIsActive === false ? 'inactive' : p.status), // Add exact status exactly for matching Global Products
+                status: p.deletedAt ? 'deleted' : (p.orgIsActive === false ? 'inactive' : p.status),
                 totalOrders: new Set(),
                 qtyOrdered: 0,
                 qtyFulfilled: 0,
                 qtyRefunded: 0,
                 revenueGeneratedCents: 0,
-                basePriceCents: p.basePriceCents || 0,
+                basePriceCents: isSuperAdmin ? (p.basePriceCents || 0) : 0,
+                unitPriceCents: p.basePriceCents || 0, // Fallback for unit price if no custom price yet
                 refundLossCents: 0
             }
         })

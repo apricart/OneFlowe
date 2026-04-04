@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
     const cacheKey = scopedCacheKey('inv:branch-products', { orgId: organizationId, branchId })
 
     const items = await getCached(cacheKey, async () => {
+      const isSuperAdmin = userRole === "SUPER_ADMIN"
       // Fetch all enabled organization products with branch-specific data
       return db
         .select({
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
           categoryId: globalProducts.categoryId,
           categoryName: categories.name,
           imageUrl: globalProducts.imageUrl,
-          basePrice: globalProducts.basePrice,
+          basePrice: isSuperAdmin ? globalProducts.basePrice : sql`NULL`,
           unit: globalProducts.unit,
           status: globalProducts.status,
           // Organization overrides
