@@ -49,6 +49,7 @@ export default function GroupsReportPage() {
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
+    const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
     const userOrgId = (session?.user as any)?.organizationId
     const [hasMounted, setHasMounted] = useState(false)
 
@@ -217,7 +218,7 @@ export default function GroupsReportPage() {
     }
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Group Name", "Organization", "Budget", "Units", "Total Orders", "Total Spent"]
+        const headers = ["Group Name", "Organization", "Budget", "Units", "Total Orders", isBuyer ? "Total Purchased" : "Total Spent"]
         const rows = filteredGroups.map((group: any) => [
             group.name, 
             group.organizationName, 
@@ -229,7 +230,7 @@ export default function GroupsReportPage() {
 
         if (format === 'pdf') {
             const doc = new jsPDF()
-            doc.setFontSize(20); doc.text("Group Performance Ledger", 14, 20)
+            doc.setFontSize(20); doc.text(isBuyer ? "Group Purchase Ledger" : "Group Performance Ledger", 14, 20)
             doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
             autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid' })
             doc.save(`group-report-${new Date().getTime()}.pdf`)
@@ -288,12 +289,12 @@ export default function GroupsReportPage() {
                 {/* ━━━ BENTO KPI GRID ━━━ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <KPICard 
-                        title="Group Net Revenue"
+                        title={isBuyer ? "Group Total Purchased" : "Group Net Revenue"}
                         value={formatPKR(summary.totalRevenue / 100)}
                         icon={TrendingUp}
                         colorScheme="indigo"
                         trend={revenueTrend}
-                        subtitle="Consolidated cluster sales"
+                        subtitle={isBuyer ? "Consolidated cluster purchases" : "Consolidated cluster sales"}
                     />
                     <KPICard 
                         title="Refund Impact"
@@ -343,9 +344,9 @@ export default function GroupsReportPage() {
                                             <div className="p-2 rounded-xl bg-violet-500/10 text-violet-500">
                                                 <LineChartIcon className="h-4 w-4" />
                                             </div>
-                                            <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">Group Monthly Performance</h3>
+                                            <h3 className="font-black text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">{isBuyer ? "Group Monthly Purchases" : "Group Monthly Performance"}</h3>
                                         </div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11">Consolidated revenue stream</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11">{isBuyer ? "Consolidated purchase stream" : "Consolidated revenue stream"}</p>
                                     </div>
                                     <Button variant="outline" size="sm" onClick={() => mutateChart()} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800">
                                         <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isChartLoading && "animate-spin")} />
@@ -400,9 +401,9 @@ export default function GroupsReportPage() {
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.3} />
                                                 <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} dy={10} />
                                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} tickFormatter={(v) => `₨${v >= 1000 ? (v/1000).toFixed(0)+'K' : v}`} />
-                                                <Tooltip content={(props) => <CustomTooltip {...props} compare={compare} />} />
+                                                <Tooltip content={(props) => <CustomTooltip {...props} compare={compare} isBuyer={isBuyer} />} />
                                                 <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 30, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }} />
-                                                <Bar dataKey="revenue" name="Net Revenue" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={32} />
+                                                <Bar dataKey="revenue" name={isBuyer ? "Total Purchased" : "Net Revenue"} fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={32} />
                                                 {compare && <Bar dataKey="prevRevenue" name="Prior Period" fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />}
                                             </ComposedChart>
                                         </ResponsiveContainer>
@@ -490,7 +491,7 @@ export default function GroupsReportPage() {
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Group Name</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Budget</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Managed Units</TableHead>
-                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Revenue (PKR)</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{isBuyer ? "Purchased (PKR)" : "Revenue (PKR)"}</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
                                         </TableRow>
@@ -578,7 +579,7 @@ export default function GroupsReportPage() {
     )
 }
 
-function CustomTooltip({ active, payload, label, compare }: any) {
+function CustomTooltip({ active, payload, label, compare, isBuyer }: any) {
     if (active && payload && payload.length) {
         const d = payload[0].payload
         return (
@@ -587,14 +588,14 @@ function CustomTooltip({ active, payload, label, compare }: any) {
                 <div className="space-y-3">
                     <div className="flex items-center justify-between gap-10">
                         <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full bg-indigo-500" /> Net Revenue
+                            <div className="h-2 w-2 rounded-full bg-indigo-500" /> {isBuyer ? "Total Purchased" : "Net Revenue"}
                         </span>
                         <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{formatPKR(payload[0].value)}</span>
                     </div>
                     {compare && (
                         <div className="flex items-center justify-between gap-10">
                             <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" /> Prior Revenue
+                                <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" /> {isBuyer ? "Prior Purchase" : "Prior Revenue"}
                             </span>
                             <span className="text-xs font-black text-slate-500">{formatPKR(d.prevRevenue)}</span>
                         </div>

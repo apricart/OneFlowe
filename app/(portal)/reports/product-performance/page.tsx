@@ -102,6 +102,7 @@ export default function ProductPerformancePage() {
     const exportRevenueHeader = isBuyer ? "Purchased" : "Revenue"
     const barChartLegendLabel = isBuyer ? "PURCHASED" : "REVENUE"
     const revenueShortLabel = isBuyer ? "Purchased" : "Revenue"
+    const analyticsSubtitleLabel = isBuyer ? "Consolidated purchase stream" : "Consolidated revenue stream"
 
     // URL States for filtering
     const presetFromUrl = (searchParams.get("preset") as FilterPreset) || "all"
@@ -581,17 +582,18 @@ export default function ProductPerformancePage() {
 
         if (format === 'pdf') {
             const doc = new jsPDF('landscape')
-            doc.setFontSize(20); doc.text("Product Intelligence Report", 14, 20)
+            const reportTitle = isBuyer ? "Product Purchase Intelligence Report" : "Product Intelligence Report"
+            doc.setFontSize(20); doc.text(reportTitle, 14, 20)
             doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()} | Tab: ${activeTab.toUpperCase()}`, 14, 28)
             autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid' })
-            doc.save(`product-intelligence-${activeTab}-${new Date().getTime()}.pdf`)
+            doc.save(`${isBuyer ? 'product-purchase' : 'product-intelligence'}-${activeTab}-${new Date().getTime()}.pdf`)
             return
         }
 
         const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
         const workbook = XLSX.utils.book_new()
         XLSX.utils.book_append_sheet(workbook, worksheet, "Performance")
-        XLSX.writeFile(workbook, `product-intelligence-${activeTab}-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
+        XLSX.writeFile(workbook, `${isBuyer ? 'product-purchase' : 'product-intelligence'}-${activeTab}-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
     }
 
     // Custom tooltip for horizontal bar chart

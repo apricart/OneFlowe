@@ -22,6 +22,8 @@ import {
 
 import { useState, useEffect } from "react"
 
+import { useSession } from "next-auth/react"
+
 const reportCards = [
   {
     title: "Order Report",
@@ -76,11 +78,29 @@ const reportCards = [
 ]
 
 export default function ReportsPage() {
+  const { data: session } = useSession()
+  const role = (session?.user as any)?.role
+  const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
   const [hasMounted, setHasMounted] = useState(false)
 
   useEffect(() => {
     setHasMounted(true)
   }, [])
+
+  const displayReportCards = reportCards.map(card => {
+    if (!isBuyer) return card
+    
+    let description = card.description
+    if (card.title === "Product Report" || card.title === "Product Performance") {
+      description = "Analyze product purchases and category-wise breakdown"
+    } else if (card.title === "Branch Reports") {
+      description = "Branch-level purchase rankings, threshold alerts, and comparisons"
+    } else if (card.title === "Groups Report") {
+      description = "Group performance, member branches, and purchase breakdowns"
+    }
+    
+    return { ...card, description }
+  })
 
   if (!hasMounted) {
     return (
@@ -117,7 +137,7 @@ export default function ReportsPage() {
 
       {/* Report Cards Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {reportCards.map((report) => {
+        {displayReportCards.map((report) => {
           const Icon = report.icon
           return (
             <Link key={report.title} href={report.href} className="group">

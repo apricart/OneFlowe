@@ -64,6 +64,7 @@ export default function UserReportPage() {
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
+    const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
     const userOrgId = (session?.user as any)?.organizationId
 
     const [hasMounted, setHasMounted] = useState(false)
@@ -345,7 +346,7 @@ export default function UserReportPage() {
         if (format === 'pdf') {
             const doc = new jsPDF()
             doc.setFontSize(20)
-            doc.text("User Consumption Report", 14, 20)
+            doc.text(isBuyer ? "User Purchase Report" : "User Consumption Report", 14, 20)
             doc.setFontSize(10)
             doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
             autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid' })
@@ -405,7 +406,7 @@ export default function UserReportPage() {
                     <KPICard title="Active Employees" value={totalUsers.toLocaleString()} icon={Users} colorScheme="indigo" trend={usersTrend} subtitle="Distinct transacting profiles." comparisonLabel="Prior" comparisonValue={comparison?.totalUsers} />
                     <KPICard title="Gross Orders" value={totalOrders.toLocaleString()} icon={Package} colorScheme="blue" trend={ordersTrend} subtitle="Total volume initiated." comparisonLabel="Prior" comparisonValue={comparison?.totalOrders} />
                     <KPICard title="Order Success" value={`${currentSuccess.toFixed(1)}%`} icon={CheckCircle} colorScheme="emerald" trend={successTrend} subtitle={`${totalFulfilled} fulfilled orders.`} comparisonLabel="Prior" comparisonValue={`${prevSuccess.toFixed(1)}%`} />
-                    <KPICard title="Total spent" value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle="Net value of fulfillment." comparisonLabel="Prior" comparisonValue={formatPKR(comparison?.totalSpentCents / 100)} />
+                    <KPICard title={isBuyer ? "Total Purchased" : "Total spent"} value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle={isBuyer ? "Net value of purchases." : "Net value of fulfillment."} comparisonLabel="Prior" comparisonValue={formatPKR(comparison?.totalSpentCents / 100)} />
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
@@ -431,8 +432,8 @@ export default function UserReportPage() {
                                         <BarChart3 className="h-6 w-6" />
                                     </div>
                                     <div className="flex flex-col">
-                                        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white">User Consumption Trends</h3>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Volume & Yield Comparison</p>
+                                        <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-900 dark:text-white">{isBuyer ? "User Purchase Trends" : "User Consumption Trends"}</h3>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{isBuyer ? "Volume & Purchase Comparison" : "Volume & Yield Comparison"}</p>
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
@@ -518,8 +519,8 @@ export default function UserReportPage() {
                                                                                 </div>
                                                                             </>
                                                                         )}
-                                                                        <div className="flex justify-between items-center bg-indigo-500/5 p-2 rounded-xl">
-                                                                            <span className="text-[10px] font-bold text-indigo-600 uppercase">Yield {compare ? '(A/B)' : ''}</span>
+                                                                            <div className="flex justify-between items-center bg-indigo-500/5 p-2 rounded-xl">
+                                                                            <span className="text-[10px] font-bold text-indigo-600 uppercase">{isBuyer ? "Purchased" : "Yield"} {compare ? '(A/B)' : ''}</span>
                                                                             <span className="text-[11px] font-black text-indigo-700">
                                                                                 {formatPKR(Number(payload[compare ? 2 : 1]?.value || 0))} {compare ? `/ ${formatPKR(Number(payload[3]?.value || 0))}` : ''}
                                                                             </span>
@@ -534,8 +535,8 @@ export default function UserReportPage() {
                                                 <Legend verticalAlign="top" align="right" height={40} iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
                                                 <Bar yAxisId="left" dataKey="orders" name={compare ? "Orders (A)" : "Total Orders"} fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={compare ? 15 : 30} />
                                                 {compare && <Bar yAxisId="left" dataKey="compOrders" name="Orders (B)" fill="#94a3b8" radius={[6, 6, 0, 0]} barSize={15} opacity={0.5} />}
-                                                <Line yAxisId="right" type="monotone" dataKey="spent" name={compare ? "Spent (A)" : "Yield"} stroke="#6366f1" strokeWidth={4} dot={{ r: 5, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }} />
-                                                {compare && <Line yAxisId="right" type="monotone" dataKey="compSpent" name="Spent (B)" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 4 }} />}
+                                                <Line yAxisId="right" type="monotone" dataKey="spent" name={compare ? (isBuyer ? "Purchased (A)" : "Spent (A)") : (isBuyer ? "Total Purchased" : "Yield")} stroke="#6366f1" strokeWidth={4} dot={{ r: 5, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }} />
+                                                {compare && <Line yAxisId="right" type="monotone" dataKey="compSpent" name={isBuyer ? "Purchased (B)" : "Spent (B)"} stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 4 }} />}
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     ) : (
@@ -737,7 +738,7 @@ export default function UserReportPage() {
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Orders {compare && "(A/B)"}</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Fulfilled</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Refunded</TableHead>
-                                            <TableHead className="text-right pr-8 h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Yield {compare && "(A/B)"}</TableHead>
+                                            <TableHead className="text-right pr-8 h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{isBuyer ? "Purchased" : "Yield"} {compare && "(A/B)"}</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>

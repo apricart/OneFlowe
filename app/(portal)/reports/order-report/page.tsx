@@ -335,7 +335,10 @@ export default function OrderReportPage() {
     }, [chartData, chartOrders])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ALL_COLUMNS.filter(c => isVisible(c.key)).map(c => c.label)
+        const headers = ALL_COLUMNS.filter(c => isVisible(c.key)).map(c => {
+            if (c.key === "netTotalValue" && isBuyer) return "Net Purchased"
+            return c.label
+        })
         const rows = filteredOrders.map((order: any) => {
             const row: any[] = []
             if (isVisible("orderDate")) row.push(new Date(order.createdAt).toLocaleDateString())
@@ -626,7 +629,7 @@ export default function OrderReportPage() {
                                             {isVisible("status") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Status</TableHead>}
                                             {isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Subtotal</TableHead>}
                                             {isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500">Refund</TableHead>}
-                                            {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Net Total</TableHead>}
+                                            {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">{isBuyer ? "Net Purchased" : "Net Total"}</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
