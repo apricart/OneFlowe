@@ -65,6 +65,9 @@ const ALL_COLUMNS: ColumnDef[] = [
     { key: "totalItems", label: "Total items", defaultVisible: true },
     { key: "deliveredItems", label: "Delivered items", defaultVisible: true },
     { key: "refundedItems", label: "Refunded items", defaultVisible: true },
+    { key: "quantityOrdered", label: "Quantity ordered", defaultVisible: true },
+    { key: "quantityDelivered", label: "Quantity delivered", defaultVisible: true },
+    { key: "quantityRefunded", label: "Quantity refunded", defaultVisible: true },
     { key: "subtotalValue", label: "Subtotal", defaultVisible: true },
     { key: "refundValue", label: "Refund", defaultVisible: true },
     { key: "netTotalValue", label: "Net Total", defaultVisible: true },
@@ -384,6 +387,9 @@ export default function OrderReportPage() {
             if (isVisible("totalItems")) row.push(order.itemCount || 0)
             if (isVisible("deliveredItems")) row.push(order.deliveredItemCount || 0)
             if (isVisible("refundedItems")) row.push(order.refundedItemCount || 0)
+            if (isVisible("quantityOrdered")) row.push(order.quantityOrdered || 0)
+            if (isVisible("quantityDelivered")) row.push(order.quantityDelivered || 0)
+            if (isVisible("quantityRefunded")) row.push(order.quantityRefunded || 0)
             if (isVisible("subtotalValue")) row.push(((order.subtotalCents || 0) / 100).toFixed(2))
             if (isVisible("refundValue")) row.push(((order.refundAmountCents || 0) / 100).toFixed(2))
             if (isVisible("netTotalValue")) row.push((( (order.totalCents || 0) - (order.refundAmountCents || 0)) / 100).toFixed(2))
@@ -601,7 +607,7 @@ export default function OrderReportPage() {
                                 <div className="relative group">
                                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                                     <Input
-                                        placeholder="Scan Ledger (TID, User)..."
+                                        placeholder="Search TID, Employee #, or User..."
                                         className="pl-11 h-11 w-64 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl text-xs font-bold placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-indigo-500/20"
                                         value={reportSearch}
                                         onChange={(e) => setReportSearch(e.target.value)}
@@ -681,6 +687,9 @@ export default function OrderReportPage() {
                                             {isVisible("totalItems") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Total items</TableHead>}
                                             {isVisible("deliveredItems") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Delivered items</TableHead>}
                                             {isVisible("refundedItems") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Refunded items</TableHead>}
+                                            {isVisible("quantityOrdered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Quantity ordered</TableHead>}
+                                            {isVisible("quantityDelivered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Quantity delivered</TableHead>}
+                                            {isVisible("quantityRefunded") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Quantity refunded</TableHead>}
                                             {isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Subtotal</TableHead>}
                                             {isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500">Refund</TableHead>}
                                             {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">{isBuyer ? "Net Purchased" : "Net Total"}</TableHead>}
@@ -717,6 +726,9 @@ export default function OrderReportPage() {
                                                     {isVisible("totalItems") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-slate-600 dark:text-slate-400">{order.itemCount || 0}</TableCell>}
                                                     {isVisible("deliveredItems") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{order.deliveredItemCount || 0}</TableCell>}
                                                     {isVisible("refundedItems") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-rose-600 dark:text-rose-400">{order.refundedItemCount || 0}</TableCell>}
+                                                    {isVisible("quantityOrdered") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-slate-600 dark:text-slate-400">{order.quantityOrdered || 0}</TableCell>}
+                                                    {isVisible("quantityDelivered") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{order.quantityDelivered || 0}</TableCell>}
+                                                    {isVisible("quantityRefunded") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-rose-600 dark:text-rose-400">{order.quantityRefunded || 0}</TableCell>}
                                                     {isVisible("subtotalValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-bold font-mono">{formatPKR(order.subtotalCents / 100)}</TableCell>}
                                                     {isVisible("refundValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-rose-500">{order.refundAmountCents > 0 ? `-${formatPKR(order.refundAmountCents / 100)}` : "—"}</TableCell>}
                                                     {isVisible("netTotalValue") && <TableCell className="px-8 py-5 text-right text-xs font-black font-mono text-slate-900 dark:text-white leading-none">{formatPKR((order.totalCents - (order.refundAmountCents || 0)) / 100)}</TableCell>}

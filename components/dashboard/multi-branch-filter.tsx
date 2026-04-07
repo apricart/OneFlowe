@@ -8,6 +8,7 @@ import { fetcher } from "@/lib/fetcher"
 interface Branch {
     id: number
     name: string
+    groupName?: string
 }
 
 interface MultiBranchFilterProps {
@@ -91,7 +92,7 @@ export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange 
             </button>
 
             {open && (
-                <div className="absolute top-full right-0 mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200 min-w-[220px]">
+                <div className="absolute top-full right-0 mt-2 z-[999] animate-in fade-in slide-in-from-top-2 duration-200 min-w-[220px]">
                     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden">
                         <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
                             <div className="relative">
@@ -117,37 +118,44 @@ export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange 
                         </div>
                         <div className="max-h-60 overflow-y-auto py-2">
                             {filteredBranches.length === 0 ? (
-                                <div className="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">
-                                    {searchQuery.trim() ? "No branches found" : "No branches available"}
+                                <div className="flex flex-col items-center justify-center py-8">
+                                    <GitBranch className="h-8 w-8 text-slate-400" />
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">No branches found</p>
                                 </div>
                             ) : (
-                                filteredBranches.map(branch => {
-                                    const isSelected = selectedBranchIds.includes(String(branch.id))
-                                    return (
-                                        <button
-                                            key={branch.id}
-                                            onClick={() => toggle(String(branch.id))}
-                                            className={`
-                              w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors
-                              ${isSelected
-                                                    ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
-                                                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                                                }
-                        `}
-                                        >
-                                            <div className={`
-                              h-4 w-4 rounded flex items-center justify-center border transition-all flex-shrink-0
-                              ${isSelected
-                                                    ? "bg-blue-600 border-blue-600"
-                                                    : "border-slate-300 dark:border-slate-600"
-                                                }
-                        `}>
-                                                {isSelected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+                                filteredBranches.map((branch) => (
+                                    <div
+                                        key={branch.id}
+                                        className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 ${
+                                            selectedBranchIds.includes(String(branch.id))
+                                                ? "bg-indigo-100 dark:bg-indigo-900 border-indigo-200 dark:border-indigo-700"
+                                                : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900"
+                                        }`}
+                                        onClick={() => {
+                                            if (selectedBranchIds.includes(String(branch.id))) {
+                                                onChange(selectedBranchIds.filter(id => String(id) !== String(branch.id)))
+                                            } else {
+                                                onChange([...selectedBranchIds, String(branch.id)])
+                                            }
+                                            setOpen(false)
+                                        }}
+                                    >
+                                        <span className="flex items-center gap-2 flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                {selectedBranchIds.includes(String(branch.id)) && (
+                                                    <Check className="h-4 w-4 text-indigo-600" />
+                                                )}
+                                                <span className="text-sm font-medium">{branch.name}</span>
                                             </div>
-                                            <span className="truncate font-medium">{branch.name}</span>
-                                        </button>
-                                    )
-                                })
+                                        </span>
+                                        {!selectedBranchIds.includes(String(branch.id)) && (
+                                            <X
+                                                className="h-3 w-3 ml-0.5 opacity-80 hover:opacity-100"
+                                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); clearAll() }}
+                                            />
+                                        )}
+                                    </div>
+                                ))
                             )}
                         </div>
                         {selectedBranchIds.length > 0 && (
