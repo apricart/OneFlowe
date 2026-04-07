@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    Loader2, RefreshCw, ArrowUpRight, ArrowDownRight, Search, FileText, FileSpreadsheet, Wallet, PiggyBank, ReceiptText, ShieldCheck, Download, Building2, PieChart as PieChartIcon, LayoutDashboard, Database, FileText as FileSpreadsheetIcon, Download as DownloadIcon, Calculator, ChevronDown, CheckCircle, RotateCcw, Filter, X, Eye, EyeOff, Calendar, Check, History as HistoryIcon, LayoutGrid
+    Filter, Building2, ChevronDown, RotateCcw, X, ReceiptText, FileText, DownloadIcon, Search, Calendar, Loader2
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import * as XLSX from "xlsx"
@@ -273,29 +273,36 @@ export default function BudgetSummaryPage() {
     }, [startFromUrl, endFromUrl, searchParams, handleDateChange])
 
     // ━━━ GLOBAL TO LOCAL FILTER SYNC ━━━
+    // Use refs to track last synced values to prevent local overrides from being reverted
+    const lastSyncedMonths = useRef([...selectedMonths])
+    const lastSyncedYears = useRef([...selectedYears])
+    const lastSyncedBranches = useRef([...contextBranchIds])
+
     useEffect(() => {
-        if (selectedMonths.length > 0) {
+        const isActuallyChanged = JSON.stringify(selectedMonths) !== JSON.stringify(lastSyncedMonths.current)
+        if (isActuallyChanged) {
             setChartMonths([...selectedMonths])
             setReportMonths([...selectedMonths])
-        } else {
-            setChartMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
-            setReportMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+            lastSyncedMonths.current = [...selectedMonths]
         }
     }, [selectedMonths])
 
     useEffect(() => {
-        if (selectedYears.length > 0) {
+        const isActuallyChanged = JSON.stringify(selectedYears) !== JSON.stringify(lastSyncedYears.current)
+        if (isActuallyChanged) {
             setChartYears([...selectedYears])
             setReportYears([...selectedYears])
-        } else {
-            setChartYears([])
-            setReportYears([])
+            lastSyncedYears.current = [...selectedYears]
         }
     }, [selectedYears])
 
     useEffect(() => {
-        setChartBranchIds([...contextBranchIds])
-        setReportBranchIds([...contextBranchIds])
+        const isActuallyChanged = JSON.stringify(contextBranchIds) !== JSON.stringify(lastSyncedBranches.current)
+        if (isActuallyChanged) {
+            setChartBranchIds([...contextBranchIds])
+            setReportBranchIds([...contextBranchIds])
+            lastSyncedBranches.current = [...contextBranchIds]
+        }
     }, [contextBranchIds])
 
     // Reset local filters when organization changes
@@ -681,7 +688,7 @@ export default function BudgetSummaryPage() {
     return (
         <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] transition-colors duration-500 pb-20">
             {/* ━━━ STICKY PREMIUM HEADER ━━━ */}
-            <div className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
+            <div className="sticky top-0 z-30 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
                 <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center shadow-lg shadow-indigo-500/20 rotate-3 group hover:rotate-0 transition-all duration-500">

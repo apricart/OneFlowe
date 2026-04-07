@@ -35,7 +35,7 @@ interface BudgetAllocation {
 }
 
 export default function BudgetsPage() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const { toast } = useToast()
   const { mutate: globalMutate } = useSWRConfig()
   const role = (session?.user as any)?.role
@@ -78,7 +78,10 @@ export default function BudgetsPage() {
       params.set("organizationId", String(organizationId))
     }
 
-    if (dateRange?.startDate) {
+    if (activePreset === "all" || activePreset === "yearly") {
+      // By omitting period, the backend defaults to the current month.
+      // Budgets are inherently monthly, so 'All Time'/'This Year' showing the current active budget makes more sense than showing Jan 2024.
+    } else if (dateRange?.startDate) {
       const year = dateRange.startDate.getFullYear()
       const month = String(dateRange.startDate.getMonth() + 1).padStart(2, '0')
       params.set("period", `${year}-${month}`)
@@ -88,7 +91,7 @@ export default function BudgetsPage() {
     if (contextBranchIds.length > 0) params.set("branchIds", contextBranchIds.join(","))
 
     return `/api/v1/budgets?${params.toString()}`
-  }, [isHeadOffice, isInitialized, organizationId, dateRange, contextBranchIds, selectedGroupIds])
+  }, [isHeadOffice, isInitialized, organizationId, dateRange, activePreset, contextBranchIds, selectedGroupIds])
 
   const { data: budgetsData, mutate } = useSWR<any>(budgetsEndpoint, fetcher)
 
@@ -314,6 +317,14 @@ export default function BudgetsPage() {
     return "bg-green-500"
   }
 
+  if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    )
+  }
+
   if (!isHeadOffice) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -330,7 +341,7 @@ export default function BudgetsPage() {
   return (
     <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] pb-20">
       {/* ━━━ STICKY PREMIUM HEADER ━━━ */}
-      <div className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
+      <div className="sticky top-0 z-30 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
         <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center shadow-lg shadow-indigo-500/20 rotate-3 group hover:rotate-0 transition-all duration-500">

@@ -169,6 +169,17 @@ export default function UserReportPage() {
     const { data: allTimeData } = useSWR(organizationId ? `/api/v1/analytics/users/performance?organizationId=${organizationId}&allTime=true` : null, fetcher)
 
     const isInitialLoad = useRef(true)
+    const lastSyncedBranchIds = useRef<string[]>([])
+
+    // ━━━ SMART SYNC (Global to Local) ━━━
+    useEffect(() => {
+        const hasGlobalChanged = JSON.stringify(contextBranchIds) !== JSON.stringify(lastSyncedBranchIds.current)
+        if (hasGlobalChanged && contextBranchIds.length > 0) {
+            setChartBranchIds([...contextBranchIds])
+            setReportBranchIds([...contextBranchIds])
+            lastSyncedBranchIds.current = [...contextBranchIds]
+        }
+    }, [contextBranchIds])
 
     useEffect(() => {
         setHasMounted(true)
@@ -369,7 +380,7 @@ export default function UserReportPage() {
     return (
         <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] transition-colors duration-500 pb-20">
             {/* ━━━ STICKY PREMIUM HEADER ━━━ */}
-            <div className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
+            <div className="sticky top-0 z-30 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
                 <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center shadow-lg shadow-indigo-500/20 rotate-3 group hover:rotate-0 transition-all duration-500">
