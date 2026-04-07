@@ -421,6 +421,7 @@ export function DrillDownSheet({
                                                                         <div className="min-w-0">
                                                                             <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{item.buyerName}</p>
                                                                             <p className="text-[10px] text-slate-500 font-medium">{item.buyerPhone}</p>
+                                                                            <p className="text-[9px] font-black text-indigo-500 font-mono mt-1">#{item.creatorEmployeeId || "UNSET"}</p>
                                                                         </div>
                                                                     </div>
                                                                 </div>

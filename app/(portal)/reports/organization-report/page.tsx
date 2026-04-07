@@ -391,13 +391,15 @@ export default function OrganizationReportPage() {
                         colorScheme="violet"
                         subtitle="Across all branches"
                     />
-                    <KPICard 
-                        title="Total Companies"
-                        value={summary.orgs.toLocaleString()}
-                        icon={Building2}
-                        colorScheme="emerald"
-                        subtitle="Active organizations"
-                    />
+                    {role === "SUPER_ADMIN" && (
+                        <KPICard 
+                            title="Total Companies"
+                            value={summary.orgs.toLocaleString()}
+                            icon={Building2}
+                            colorScheme="emerald"
+                            subtitle="Active organizations"
+                        />
+                    )}
                 </div>
 
                 <Tabs value={activeTab} onValueChange={(val) => {
@@ -445,7 +447,7 @@ export default function OrganizationReportPage() {
                                     <MonthFilter selected={chartMonths} onChange={setChartMonths} />
                                     <YearFilter selected={chartYears} onChange={setChartYears} availableYears={chartYearsAvailable} />
                                     <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1" />
-                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                    {role === "SUPER_ADMIN" && (
                                         <div className="flex items-center gap-2.5">
                                             <OrgFilter selectedIds={chartOrgIds} onChange={setChartOrgIds} />
                                             {chartOrgIds.length > 0 && (
@@ -457,6 +459,14 @@ export default function OrganizationReportPage() {
                                                 />
                                             )}
                                         </div>
+                                    )}
+                                    {role !== "SUPER_ADMIN" && userOrgId && (
+                                        <BranchFilter 
+                                            selectedIds={chartBranchIds} 
+                                            onChange={setChartBranchIds} 
+                                            organizationIds={[String(userOrgId)]}
+                                            placeholder="Branches" 
+                                        />
                                     )}
                                 </div>
                             </div>
@@ -672,7 +682,7 @@ export default function OrganizationReportPage() {
                             <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1 lg:block hidden" />
                             <MonthFilter selected={reportMonths} onChange={setReportMonths} />
                             <YearFilter selected={reportYears} onChange={setReportYears} availableYears={reportYearsAvailable} />
-                            {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                            {role === "SUPER_ADMIN" && (
                                 <div className="flex items-center gap-2.5">
                                     <OrgFilter selectedIds={reportOrgIds} onChange={setReportOrgIds} />
                                     {reportOrgIds.length > 0 && (
@@ -684,6 +694,14 @@ export default function OrganizationReportPage() {
                                         />
                                     )}
                                 </div>
+                            )}
+                            {role !== "SUPER_ADMIN" && userOrgId && (
+                                <BranchFilter 
+                                    selectedIds={reportBranchIds} 
+                                    onChange={setReportBranchIds} 
+                                    organizationIds={[String(userOrgId)]}
+                                    placeholder="Branches"
+                                />
                             )}
                             <Button variant="outline" size="sm" onClick={() => mutateReport()} className="h-10 w-10 p-0 rounded-xl border-slate-200 dark:border-slate-800">
                                 <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isReportLoading && "animate-spin")} />
@@ -821,7 +839,7 @@ export default function OrganizationReportPage() {
                             </CardContent>
                             <div className="px-8 py-5 border-t border-slate-100 dark:border-slate-900 bg-slate-50/50 dark:bg-slate-900/40 flex items-center justify-between">
                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                    {filteredStats.length} organization{filteredStats.length !== 1 ? 's' : ''} listed
+                                    {filteredStats.length} {role === "SUPER_ADMIN" ? `organization${filteredStats.length !== 1 ? 's' : ''}` : `record${filteredStats.length !== 1 ? 's' : ''}`} listed
                                 </p>
                                 <p className="text-[10px] font-bold text-slate-300 dark:text-slate-700 font-mono italic" suppressHydrationWarning>
                                     GEN_TS: {generatedDate}

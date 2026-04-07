@@ -87,20 +87,29 @@ export default function ReportsPage() {
     setHasMounted(true)
   }, [])
 
-  const displayReportCards = reportCards.map(card => {
-    if (!isBuyer) return card
-    
-    let description = card.description
-    if (card.title === "Product Report" || card.title === "Product Performance") {
-      description = "Analyze product purchases and category-wise breakdown"
-    } else if (card.title === "Branch Reports") {
-      description = "Branch-level purchase rankings, threshold alerts, and comparisons"
-    } else if (card.title === "Groups Report") {
-      description = "Group performance, member branches, and purchase breakdowns"
-    }
-    
-    return { ...card, description }
-  })
+  const displayReportCards = reportCards
+    .filter(card => {
+      if (role === "BRANCH_ADMIN") {
+        if (card.title === "Groups Report" || card.title === "Corporate Report") {
+          return false
+        }
+      }
+      return true
+    })
+    .map(card => {
+      if (!isBuyer) return card
+      
+      let description = card.description
+      if (card.title === "Product Report" || card.title === "Product Performance") {
+        description = "Analyze product purchases and category-wise breakdown"
+      } else if (card.title === "Branch Reports") {
+        description = "Branch-level purchase rankings, threshold alerts, and comparisons"
+      } else if (card.title === "Groups Report") {
+        description = "Group performance, member branches, and purchase breakdowns"
+      }
+      
+      return { ...card, description }
+    })
 
   if (!hasMounted) {
     return (

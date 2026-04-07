@@ -323,7 +323,8 @@ export async function GET(req: NextRequest) {
         createdAt: orders.createdAt,
         fulfilledAt: orders.fulfilledAt,
         refundedAt: orders.refundedAt,
-        userName: users.fullName
+        userName: users.fullName,
+        employeeId: users.employeeId
     })
         .from(orders)
         .leftJoin(branches, eq(orders.branchId, branches.id))

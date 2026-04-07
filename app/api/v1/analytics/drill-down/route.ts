@@ -142,10 +142,13 @@ export async function GET(req: NextRequest) {
             branchName: branches.name,
             organizationName: organizations.name,
             receiptData: orders.receiptData,
+            creatorName: users.fullName,
+            creatorEmployeeId: users.employeeId
         })
             .from(orders)
             .leftJoin(branches, eq(orders.branchId, branches.id))
             .leftJoin(organizations, eq(orders.organizationId, organizations.id))
+            .leftJoin(users, eq(orders.createdByUserId, users.id))
             .where(whereClause)
             .orderBy(sortBy === "value" ? desc(orders.totalCents) : desc(orders.createdAt))
             .limit(1000) // Increase limit for aggregation accuracy
@@ -334,8 +337,10 @@ export async function GET(req: NextRequest) {
                 skuCount: itemCounts[order.id] || 0,
                 customerLevel: (order.id % 5 === 0) ? "VIP" : "Regular",
                 preparationTime: prepTimeStr,
-                buyerName: order.receiptData?.buyerName || "Walk-in Customer",
+                buyerName: order.receiptData?.buyerName || order.creatorName || "Walk-in Customer",
                 buyerPhone: order.receiptData?.buyerPhone || "N/A",
+                creatorName: order.creatorName,
+                creatorEmployeeId: order.creatorEmployeeId,
                 items: detailedItemsMap[order.id] || []
             }
         })

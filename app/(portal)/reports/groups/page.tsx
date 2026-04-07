@@ -353,7 +353,7 @@ export default function GroupsReportPage() {
                                     </Button>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                    {role === "SUPER_ADMIN" && (
                                         <>
                                             <OrgFilter 
                                                 selectedIds={selectedOrgIds} 
@@ -382,6 +382,24 @@ export default function GroupsReportPage() {
                                                     groupIds={selectedGroupIds}
                                                 />
                                             )}
+                                        </>
+                                    )}
+                                    {role !== "SUPER_ADMIN" && (userOrgId || contextOrgId) && (
+                                        <>
+                                            <GroupFilter 
+                                                selectedIds={selectedGroupIds} 
+                                                onChange={(ids) => {
+                                                    setSelectedGroupIds(ids);
+                                                    setSelectedBranchIds([]);
+                                                }} 
+                                                organizationId={parseInt(String(userOrgId || contextOrgId))} 
+                                            />
+                                            <BranchFilter 
+                                                selectedIds={selectedBranchIds} 
+                                                onChange={setSelectedBranchIds} 
+                                                organizationId={String(userOrgId || contextOrgId)}
+                                                groupIds={selectedGroupIds}
+                                            />
                                         </>
                                     )}
                                     <MonthFilter selected={chartMonths} onChange={setChartMonths} />
@@ -419,7 +437,7 @@ export default function GroupsReportPage() {
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                                 <Input placeholder="Search groups..." value={reportSearch} onChange={(e) => setReportSearch(e.target.value)} className="pl-9 h-10 bg-slate-100/50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold font-mono" />
                             </div>
-                            {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                            {role === "SUPER_ADMIN" && (
                                 <>
                                     <OrgFilter 
                                         selectedIds={selectedOrgIds} 
@@ -448,6 +466,24 @@ export default function GroupsReportPage() {
                                             groupIds={selectedGroupIds}
                                         />
                                     )}
+                                </>
+                            )}
+                            {role !== "SUPER_ADMIN" && (userOrgId || contextOrgId) && (
+                                <>
+                                    <GroupFilter 
+                                        selectedIds={selectedGroupIds} 
+                                        onChange={(ids) => {
+                                            setSelectedGroupIds(ids);
+                                            setSelectedBranchIds([]);
+                                        }} 
+                                        organizationId={parseInt(String(userOrgId || contextOrgId))} 
+                                    />
+                                    <BranchFilter 
+                                        selectedIds={selectedBranchIds} 
+                                        onChange={setSelectedBranchIds} 
+                                        organizationId={String(userOrgId || contextOrgId)}
+                                        groupIds={selectedGroupIds}
+                                    />
                                 </>
                             )}
                             <MonthFilter selected={reportMonths} onChange={setReportMonths} />
@@ -516,7 +552,7 @@ export default function GroupsReportPage() {
                                                             <TableCell>
                                                                 <div className="flex flex-col">
                                                                     <span className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{group.name}</span>
-                                                                    <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase italic">{group.organizationName}</span>
+                                                                    {role === "SUPER_ADMIN" && <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase italic">{group.organizationName}</span>}
                                                                 </div>
                                                             </TableCell>
                                                             <TableCell className="text-center font-black">

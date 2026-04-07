@@ -214,10 +214,14 @@ export default function BranchReportsPage() {
     }, [chartData, chartMonths, chartYears])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Branch Name", "Group", "Status", "Orders", revenueLabel]
-        const rows = filteredBranches.map((b: any) => [
-            b.name || "-", b.groupName || "-", b.status || "active", b.totalOrders, (b.revenue / 100).toFixed(2)
-        ])
+        const headers = role === "BRANCH_ADMIN" 
+            ? ["Branch Name", "Status", "Orders", revenueLabel]
+            : ["Branch Name", "Group", "Status", "Orders", revenueLabel]
+        
+        const rows = filteredBranches.map((b: any) => role === "BRANCH_ADMIN" 
+            ? [b.name || "-", b.status || "active", b.totalOrders, (b.revenue / 100).toFixed(2)]
+            : [b.name || "-", b.groupName || "-", b.status || "active", b.totalOrders, (b.revenue / 100).toFixed(2)]
+        )
 
         if (format === 'pdf') {
             const doc = new jsPDF()
@@ -340,7 +344,7 @@ export default function BranchReportsPage() {
                                     </Button>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                    {role === "SUPER_ADMIN" && (
                                         <>
                                             <OrgFilter 
                                                 selectedIds={selectedOrgId ? [selectedOrgId] : []} 
@@ -369,6 +373,24 @@ export default function BranchReportsPage() {
                                                     groupIds={selectedGroupIds}
                                                 />
                                             )}
+                                        </>
+                                    )}
+                                    {role !== "SUPER_ADMIN" && role !== "BRANCH_ADMIN" && (userOrgId || contextOrgId) && (
+                                        <>
+                                            <GroupFilter 
+                                                selectedIds={selectedGroupIds} 
+                                                onChange={(ids) => {
+                                                    setSelectedGroupIds(ids);
+                                                    setSelectedBranchIds([]);
+                                                }} 
+                                                organizationId={parseInt(String(userOrgId || contextOrgId))} 
+                                            />
+                                            <BranchFilter 
+                                                selectedIds={selectedBranchIds} 
+                                                onChange={setSelectedBranchIds} 
+                                                organizationId={String(userOrgId || contextOrgId)}
+                                                groupIds={selectedGroupIds}
+                                            />
                                         </>
                                     )}
                                     <MonthFilter selected={chartMonths} onChange={setChartMonths} />
@@ -406,7 +428,7 @@ export default function BranchReportsPage() {
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                                 <Input placeholder="Search branches..." value={reportSearch} onChange={(e) => setReportSearch(e.target.value)} className="pl-9 h-10 bg-slate-100/50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold font-mono" />
                             </div>
-                            {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                            {role === "SUPER_ADMIN" && (
                                 <>
                                     <OrgFilter 
                                         selectedIds={selectedOrgId ? [selectedOrgId] : []} 
@@ -435,6 +457,24 @@ export default function BranchReportsPage() {
                                             groupIds={selectedGroupIds}
                                         />
                                     )}
+                                </>
+                            )}
+                            {role !== "SUPER_ADMIN" && role !== "BRANCH_ADMIN" && (userOrgId || contextOrgId) && (
+                                <>
+                                    <GroupFilter 
+                                        selectedIds={selectedGroupIds} 
+                                        onChange={(ids) => {
+                                            setSelectedGroupIds(ids);
+                                            setSelectedBranchIds([]);
+                                        }} 
+                                        organizationId={parseInt(String(userOrgId || contextOrgId))} 
+                                    />
+                                    <BranchFilter 
+                                        selectedIds={selectedBranchIds} 
+                                        onChange={setSelectedBranchIds} 
+                                        organizationId={String(userOrgId || contextOrgId)}
+                                        groupIds={selectedGroupIds}
+                                    />
                                 </>
                             )}
                             <MonthFilter selected={reportMonths} onChange={setReportMonths} />
@@ -476,7 +516,7 @@ export default function BranchReportsPage() {
                                         <TableRow className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
                                             <TableHead className="pl-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Rank & Branch</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
-                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Cluster / Group</TableHead>
+                                            {role !== "BRANCH_ADMIN" && <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Cluster / Group</TableHead>}
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{revenueHeader} (PKR)</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
@@ -486,10 +526,10 @@ export default function BranchReportsPage() {
                                     <TableBody>
                                         {isReportLoading ? (
                                             Array(6).fill(0).map((_, i) => (
-                                                <TableRow key={i} className="h-20 animate-pulse"><TableCell colSpan={7}><div className="h-10 bg-slate-50 dark:bg-slate-900/50 rounded-xl mx-4" /></TableCell></TableRow>
+                                                <TableRow key={i} className="h-20 animate-pulse"><TableCell colSpan={role === "BRANCH_ADMIN" ? 6 : 7}><div className="h-10 bg-slate-50 dark:bg-slate-900/50 rounded-xl mx-4" /></TableCell></TableRow>
                                             ))
                                         ) : filteredBranches.length === 0 ? (
-                                            <TableRow><TableCell colSpan={7} className="h-60 text-center text-slate-400 text-xs font-black uppercase tracking-widest">No branch records found</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={role === "BRANCH_ADMIN" ? 6 : 7} className="h-60 text-center text-slate-400 text-xs font-black uppercase tracking-widest">No branch records found</TableCell></TableRow>
                                         ) : (
                                             filteredBranches.map((branch: any, idx: number) => (
                                                 <TableRow key={branch.id} className="group hover:bg-slate-50/80 dark:hover:bg-slate-900/40 border-b border-slate-50 dark:border-slate-900 transition-all h-20">
@@ -500,7 +540,7 @@ export default function BranchReportsPage() {
                                                             </div>
                                                             <div className="flex flex-col">
                                                                 <span className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-emerald-600 transition-colors uppercase">{branch.name}</span>
-                                                                <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase italic">{branch.organizationName}</span>
+                                                                {role === "SUPER_ADMIN" && <span className="text-[10px] font-bold text-slate-400 tracking-widest uppercase italic">{branch.organizationName}</span>}
                                                             </div>
                                                         </div>
                                                     </TableCell>
@@ -509,11 +549,13 @@ export default function BranchReportsPage() {
                                                             {branch.status?.toLowerCase() === 'active' ? 'Active' : branch.status?.toLowerCase() === 'deleted' ? 'Deleted' : 'Inactive'}
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell>
-                                                        <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-[10px] font-bold border-none uppercase tracking-tighter">
-                                                            {branch.groupName || "UNGROUPED"}
-                                                        </Badge>
-                                                    </TableCell>
+                                                    {role !== "BRANCH_ADMIN" && (
+                                                        <TableCell>
+                                                            <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-[10px] font-bold border-none uppercase tracking-tighter">
+                                                                {branch.groupName || "UNGROUPED"}
+                                                            </Badge>
+                                                        </TableCell>
+                                                    )}
                                                     <TableCell className="text-right">
                                                         <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">{formatPKR(branch.revenue / 100)}</span>
                                                     </TableCell>

@@ -56,6 +56,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 const ALL_COLUMNS: ColumnDef[] = [
     { key: "orderDate", label: "Date", defaultVisible: true },
     { key: "userName", label: "User name", defaultVisible: true },
+    { key: "employeeId", label: "Employee #", defaultVisible: true },
     { key: "tid", label: "Transaction ID", defaultVisible: true },
     { key: "organizationName", label: "Org", defaultVisible: true },
     { key: "group", label: "Group", defaultVisible: true },
@@ -96,7 +97,7 @@ export default function OrderReportPage() {
     const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
 
     // Role-based terminology
-    const kpiRevenueLabel = isBuyer ? "Net Purchased" : "Net Revenue"
+    const kpiRevenueLabel = isBuyer ? "Net Amount" : "Net Revenue"
     const kpiAvgLabel = isBuyer ? "Avg Purchased Value" : "Avg Value"
     const chartRevenueLabel = isBuyer ? "Purchased" : "Revenue"
     const chartOrdersLabel = isBuyer ? "Orders" : "Orders"
@@ -335,7 +336,11 @@ export default function OrderReportPage() {
     }, [chartData, chartOrders])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ALL_COLUMNS.filter(c => isVisible(c.key)).map(c => {
+        const headers = ALL_COLUMNS.filter(c => {
+            if (role === "BRANCH_ADMIN" && (c.key === "group" || c.key === "branchName")) return false;
+            if (role !== "SUPER_ADMIN" && c.key === "organizationName") return false;
+            return isVisible(c.key);
+        }).map(c => {
             if (c.key === "netTotalValue" && isBuyer) return "Net Purchased"
             return c.label
         })
@@ -344,9 +349,9 @@ export default function OrderReportPage() {
             if (isVisible("orderDate")) row.push(new Date(order.createdAt).toLocaleDateString())
             if (isVisible("userName")) row.push(order.userName || "-")
             if (isVisible("tid")) row.push(order.tid)
-            if (isVisible("organizationName")) row.push(order.organizationName || "N/A")
-            if (isVisible("group")) row.push(order.groupName || "-")
-            if (isVisible("branchName")) row.push(order.branchName || "-")
+            if (isVisible("organizationName") && role === "SUPER_ADMIN") row.push(order.organizationName || "N/A")
+            if (isVisible("group") && role !== "BRANCH_ADMIN") row.push(order.groupName || "-")
+            if (isVisible("branchName") && role !== "BRANCH_ADMIN") row.push(order.branchName || "-")
             if (isVisible("status")) row.push(order.status)
             if (isVisible("subtotalValue")) row.push(((order.subtotalCents || 0) / 100).toFixed(2))
             if (isVisible("refundValue")) row.push(((order.refundAmountCents || 0) / 100).toFixed(2))
@@ -448,25 +453,23 @@ export default function OrderReportPage() {
                                     <div className="flex items-center gap-2">
                                         <MonthFilter selected={chartMonths} onChange={setChartMonths} />
                                         <YearFilter selected={chartYears} onChange={setChartYears} allTimeData={allTimeData} />
-                                        {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                        {role === "SUPER_ADMIN" && (
+                                            <OrganizationFilter selectedIds={chartOrgIds} onChange={setChartOrgIds} />
+                                        )}
+                                        {((role === "SUPER_ADMIN" && (chartOrgIds.length > 0 || organizationId)) || (role !== "SUPER_ADMIN" && role !== "BRANCH_ADMIN" && organizationId)) && (
                                             <>
-                                                <OrganizationFilter selectedIds={chartOrgIds} onChange={setChartOrgIds} />
-                                                {(chartOrgIds.length > 0 || (role !== "SUPER_ADMIN" && organizationId)) && (
-                                                    <>
-                                                        <GroupFilter 
-                                                            selectedIds={chartGroupIds} 
-                                                            onChange={setChartGroupIds} 
-                                                            organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [String(organizationId)] : [])}
-                                                            disabled={chartBranchIds.length > 0}
-                                                        />
-                                                        <BranchFilter 
-                                                            selectedIds={chartBranchIds} 
-                                                            onChange={setChartBranchIds} 
-                                                            organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [organizationId] : [])} 
-                                                            groupIds={chartGroupIds}
-                                                        />
-                                                    </>
-                                                )}
+                                                <GroupFilter 
+                                                    selectedIds={chartGroupIds} 
+                                                    onChange={setChartGroupIds} 
+                                                    organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [String(organizationId)] : [])}
+                                                    disabled={chartBranchIds.length > 0}
+                                                />
+                                                <BranchFilter 
+                                                    selectedIds={chartBranchIds} 
+                                                    onChange={setChartBranchIds} 
+                                                    organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [organizationId] : [])} 
+                                                    groupIds={chartGroupIds}
+                                                />
                                             </>
                                         )}
                                     </div>
@@ -576,10 +579,10 @@ export default function OrderReportPage() {
                                 <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
                                 <MonthFilter selected={reportMonths} onChange={setReportMonths} />
                                 <YearFilter selected={reportYears} onChange={setReportYears} allTimeData={allTimeData} />
-                                {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                {role === "SUPER_ADMIN" && (
                                     <>
                                         <OrganizationFilter selectedIds={reportOrgIds} onChange={setReportOrgIds} />
-                                        {(reportOrgIds.length > 0 || (role !== "SUPER_ADMIN" && organizationId)) && (
+                                        {(reportOrgIds.length > 0 || organizationId) && (
                                             <>
                                                 <GroupFilter 
                                                     selectedIds={reportGroupIds} 
@@ -595,6 +598,22 @@ export default function OrderReportPage() {
                                                 />
                                             </>
                                         )}
+                                    </>
+                                )}
+                                {role !== "SUPER_ADMIN" && role !== "BRANCH_ADMIN" && organizationId && (
+                                    <>
+                                        <GroupFilter 
+                                            selectedIds={reportGroupIds} 
+                                            onChange={setReportGroupIds} 
+                                            organizationIds={[String(organizationId)]}
+                                            disabled={reportBranchIds.length > 0}
+                                        />
+                                        <BranchFilter 
+                                            selectedIds={reportBranchIds} 
+                                            onChange={setReportBranchIds} 
+                                            organizationIds={[organizationId]} 
+                                            groupIds={reportGroupIds}
+                                        />
                                     </>
                                 )}
                                 <ColumnSelector columns={ALL_COLUMNS} storageKey="order-report-v2" visibleKeys={visibleKeys} onChange={setVisibleKeys} />
@@ -622,10 +641,11 @@ export default function OrderReportPage() {
                                         <TableRow className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 hover:bg-transparent">
                                             {isVisible("orderDate") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Calendar className="h-3 w-3" /> Date</div></TableHead>}
                                             {isVisible("userName") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">User</TableHead>}
+                                            {isVisible("employeeId") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Employee #</TableHead>}
                                             {isVisible("tid") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Hash className="h-3 w-3" /> TID</div></TableHead>}
-                                            {isVisible("organizationName") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Org</TableHead>}
-                                            {isVisible("group") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Group</TableHead>}
-                                            {isVisible("branchName") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Store className="h-3 w-3" /> Branch</div></TableHead>}
+                                            {isVisible("organizationName") && role === "SUPER_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Org</TableHead>}
+                                            {isVisible("group") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Group</TableHead>}
+                                            {isVisible("branchName") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Store className="h-3 w-3" /> Branch</div></TableHead>}
                                             {isVisible("status") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Status</TableHead>}
                                             {isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Subtotal</TableHead>}
                                             {isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500">Refund</TableHead>}
@@ -642,10 +662,17 @@ export default function OrderReportPage() {
                                                 <TableRow key={order.id} className="group border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-indigo-500/5 transition-colors duration-200">
                                                     {isVisible("orderDate") && <TableCell className="px-8 py-5 text-[11px] font-bold text-slate-500 uppercase tracking-tighter" suppressHydrationWarning>{new Date(order.createdAt).toLocaleDateString()}</TableCell>}
                                                     {isVisible("userName") && <TableCell className="px-8 py-5"><span className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-tighter">{order.userName || "Guest System"}</span></TableCell>}
+                                                    {isVisible("employeeId") && (
+                                                        <TableCell className="px-8 py-5">
+                                                            <span className="px-2 py-1 rounded bg-indigo-50 dark:bg-indigo-500/10 text-[10px] font-black text-indigo-600 dark:text-indigo-400 font-mono">
+                                                                #{order.employeeId || (order.userId ? order.userId.split('-')[0] : 'N/A')}
+                                                            </span>
+                                                        </TableCell>
+                                                    )}
                                                     {isVisible("tid") && <TableCell className="px-8 py-5"><span className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-black text-slate-600 dark:text-slate-400 font-mono italic">{order.tid}</span></TableCell>}
-                                                    {isVisible("organizationName") && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.organizationName || "N/A"}</TableCell>}
-                                                    {isVisible("group") && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.groupName || "-"}</TableCell>}
-                                                    {isVisible("branchName") && <TableCell className="px-8 py-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter">{order.branchName}</TableCell>}
+                                                    {isVisible("organizationName") && role === "SUPER_ADMIN" && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.organizationName || "N/A"}</TableCell>}
+                                                    {isVisible("group") && role !== "BRANCH_ADMIN" && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.groupName || "-"}</TableCell>}
+                                                    {isVisible("branchName") && role !== "BRANCH_ADMIN" && <TableCell className="px-8 py-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter">{order.branchName}</TableCell>}
                                                     {isVisible("status") && (
                                                         <TableCell className="px-8 py-5 text-center">
                                                             <Badge variant="outline" style={{ backgroundColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}15`, color: STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8', borderColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}30` }} className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border">

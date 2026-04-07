@@ -597,7 +597,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                             <div className="flex items-center gap-1.5">
                               <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-tight">@{user.username || "unset"}</span>
                               <span className="text-[10px] font-medium text-slate-400 uppercase tracking-tight opacity-50">•</span>
-                              <span className="text-[10px] font-medium text-slate-400 uppercase tracking-tight">#{user.id.slice(0, 8)}</span>
+                              <span className="font-mono text-[11px] text-slate-400">#{user.employeeId || user.id.slice(0, 8)}</span>
                             </div>
                           </div>
                         </div>

@@ -112,7 +112,7 @@ export default function ProductPerformancePage() {
 
     const [compare, setCompare] = useState(compareFromUrl)
     const [compareRange, setCompareRange] = useState<{ startDate: Date; endDate: Date } | null>(null)
-    
+
     // Multi-select month/year states
     const [selectedMonths, setSelectedMonths] = useState<number[]>(
         searchParams.get("months")?.split(",").map(Number).filter(n => !isNaN(n)) || []
@@ -193,7 +193,7 @@ export default function ProductPerformancePage() {
     const toggleChartMonth = (month: number) => setChartMonths(prev => prev.includes(month) ? prev.filter(m => m !== month) : [...prev, month])
     const toggleChartBranch = (branchId: string) => setChartBranchIds(prev => prev.includes(branchId) ? prev.filter(b => b !== branchId) : [...prev, branchId])
     const toggleChartGroup = (groupId: string) => setChartGroupIds(prev => prev.includes(groupId) ? prev.filter(g => g !== groupId) : [...prev, groupId])
-    
+
     const toggleReportYear = (year: number) => setReportYears(prev => prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year])
     const toggleReportMonth = (month: number) => setReportMonths(prev => prev.includes(month) ? prev.filter(m => m !== month) : [...prev, month])
     const toggleReportBranch = (branchId: string) => setReportBranchIds(prev => prev.includes(branchId) ? prev.filter(b => b !== branchId) : [...prev, branchId])
@@ -204,32 +204,32 @@ export default function ProductPerformancePage() {
     if (organizationId) allTimeQueryParams.set("organizationId", organizationId.toString())
     allTimeQueryParams.set("preset", "all")
     const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/products/performance?${allTimeQueryParams.toString()}`, fetcher)
-    
-    const { data: groupsData } = useSWR( organizationId ? `/api/v1/groups?organizationId=${organizationId}` : "/api/v1/groups", fetcher )
+
+    const { data: groupsData } = useSWR(organizationId ? `/api/v1/groups?organizationId=${organizationId}` : "/api/v1/groups", fetcher)
     const availableGroups = groupsData?.groups || []
-    const { data: branchesData } = useSWR( organizationId ? `/api/v1/branches?organizationId=${organizationId}` : "/api/v1/branches", fetcher )
+    const { data: branchesData } = useSWR(organizationId ? `/api/v1/branches?organizationId=${organizationId}` : "/api/v1/branches", fetcher)
     const availableBranches = branchesData?.items || []
-    
+
     // Organizations for filter display names
     const { data: orgsData } = useOrganizations()
     const availableOrgs = orgsData?.items || []
-    
+
     // Products for filter display names
     const { data: productsData } = useGlobalProducts(organizationId ? String(organizationId) : undefined)
     const availableProducts = productsData?.items || []
-    
-    const validChartBranches = availableGroups.length > 0 && chartGroupIds.length > 0 
-        ? availableBranches.filter((b: any) => chartGroupIds.includes(String(b.groupId))) 
+
+    const validChartBranches = availableGroups.length > 0 && chartGroupIds.length > 0
+        ? availableBranches.filter((b: any) => chartGroupIds.includes(String(b.groupId)))
         : availableBranches;
-        
-    const validReportBranches = availableGroups.length > 0 && reportGroupIds.length > 0 
-        ? availableBranches.filter((b: any) => reportGroupIds.includes(String(b.groupId))) 
+
+    const validReportBranches = availableGroups.length > 0 && reportGroupIds.length > 0
+        ? availableBranches.filter((b: any) => reportGroupIds.includes(String(b.groupId)))
         : availableBranches;
 
     const availableChartYears = useMemo(() => {
         const years = new Set<number>()
         const currentY = new Date().getFullYear();
-        
+
         // Derive from ALL-TIME trend data if available
         if (allTimeData?.trend?.length) {
             allTimeData.trend.forEach((d: any) => {
@@ -237,12 +237,12 @@ export default function ProductPerformancePage() {
                 if (!isNaN(y)) years.add(y);
             });
         }
-        
+
         // Ensure at least current year
         if (years.size === 0) {
             years.add(currentY);
         }
-        
+
         return Array.from(years).sort((a, b) => a - b)
     }, [allTimeData?.trend])
 
@@ -270,9 +270,9 @@ export default function ProductPerformancePage() {
     }, [startFromUrl, endFromUrl])
 
     const handleDateChange = useCallback((
-        range: { startDate: Date; endDate: Date } | null, 
-        preset: FilterPreset, 
-        compareMode?: boolean, 
+        range: { startDate: Date; endDate: Date } | null,
+        preset: FilterPreset,
+        compareMode?: boolean,
         compRange?: { startDate: Date; endDate: Date } | null,
         months: number[] = [],
         years: number[] = [],
@@ -288,7 +288,7 @@ export default function ProductPerformancePage() {
         if (compRange !== undefined) {
             setCompareRange(compRange)
         }
-        
+
         setSelectedMonths(months)
         setSelectedYears(years)
         setCompareMonths(cMonths)
@@ -296,13 +296,13 @@ export default function ProductPerformancePage() {
 
         if (months.length > 0) params.set("months", months.join(","))
         else params.delete("months")
-        
+
         if (years.length > 0) params.set("years", years.join(","))
         else params.delete("years")
-        
+
         if (cMonths.length > 0) params.set("compareMonths", cMonths.join(","))
         else params.delete("compareMonths")
-        
+
         if (cYears.length > 0) params.set("compareYears", cYears.join(","))
         else params.delete("compareYears")
 
@@ -361,7 +361,7 @@ export default function ProductPerformancePage() {
     if (reportSearchTerm) reportQueryParams.set("searchTerm", reportSearchTerm)
 
     const { data: ledgerData, isLoading: isLedgerLoading, mutate: mutateLedger } = useSWR<any>(`/api/v1/analytics/orders/itemized?${reportQueryParams.toString()}`, fetcher)
-    
+
     useEffect(() => {
         setHasMounted(true)
         setGeneratedDate(new Date().toLocaleString())
@@ -375,7 +375,7 @@ export default function ProductPerformancePage() {
         const p = globalPerfData?.data || []
         return [...p].sort((a: any, b: any) => (b.revenueGeneratedCents || 0) - (a.revenueGeneratedCents || 0))
     }, [globalPerfData])
-    
+
     const chartProducts = useMemo(() => {
         const p = chartPerfData?.data || []
         return [...p].sort((a: any, b: any) => (b.revenueGeneratedCents || 0) - (a.revenueGeneratedCents || 0))
@@ -389,7 +389,7 @@ export default function ProductPerformancePage() {
     const filteredLedger = useMemo(() => {
         if (!reportSearchTerm) return ledgerItems
         const term = reportSearchTerm.toLowerCase()
-        return ledgerItems.filter((i: any) => 
+        return ledgerItems.filter((i: any) =>
             (i.itemCode || "").toLowerCase().includes(term) ||
             (i.itemDetails || "").toLowerCase().includes(term) ||
             (i.userName || "").toLowerCase().includes(term) ||
@@ -429,11 +429,11 @@ export default function ProductPerformancePage() {
     const chartData = useMemo(() => {
         if (isChartProductView) {
             let productsData = chartPerfData?.data || []
-            
+
             // Strictly filter by selected product IDs if provided
             if (chartProductIds.length > 0) {
-                productsData = productsData.filter((p: any) => 
-                    chartProductIds.includes(String(p.productId)) || 
+                productsData = productsData.filter((p: any) =>
+                    chartProductIds.includes(String(p.productId)) ||
                     chartProductIds.includes(String(p.id))
                 )
             } else {
@@ -458,7 +458,7 @@ export default function ProductPerformancePage() {
         }
 
         const trend = chartPerfData?.trend || []
-        
+
         // If multiple years selected, show years on X-axis
         if (chartYears.length > 1) {
             return chartYears.sort((a, b) => a - b).map(year => {
@@ -471,7 +471,7 @@ export default function ProductPerformancePage() {
                     ordered: yearData.reduce((sum: number, d: any) => sum + (d.qtyOrdered || 0), 0),
                     fulfilled: yearData.reduce((sum: number, d: any) => sum + (d.qtyFulfilled || 0), 0),
                     refunded: yearData.reduce((sum: number, d: any) => sum + (d.qtyRefunded || 0), 0),
-                    fulfillRate: yearData.reduce((sum: number, d: any) => sum + (d.qtyOrdered || 0), 0) > 0 
+                    fulfillRate: yearData.reduce((sum: number, d: any) => sum + (d.qtyOrdered || 0), 0) > 0
                         ? ((yearData.reduce((sum: number, d: any) => sum + (d.qtyFulfilled || 0), 0) / yearData.reduce((sum: number, d: any) => sum + (d.qtyOrdered || 0), 0)) * 100).toFixed(1)
                         : "0.0",
                     fullName: `${yearStr} Annual Performance`
@@ -480,8 +480,8 @@ export default function ProductPerformancePage() {
         }
 
         const activeYear = chartYears.length === 1 ? chartYears[0] : new Date().getFullYear();
-        const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12 
-            ? [...chartMonths].sort((a, b) => a - b) 
+        const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12
+            ? [...chartMonths].sort((a, b) => a - b)
             : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
         return monthsToShow.map(m => {
@@ -510,16 +510,18 @@ export default function ProductPerformancePage() {
 
     const getDrawerFields = (item: any): DetailField[] => [
         { key: "s2", label: "Product Details", value: "", type: "section" },
-        { key: "status", label: "Status", value: (
-            <Badge className={cn(
-                "border-none text-[10px] uppercase font-black tracking-widest px-2.5 py-0.5",
-                item.status === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
-                item.status === "inactive" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
-                "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-            )}>
-                {item.status}
-            </Badge>
-        )},
+        {
+            key: "status", label: "Status", value: (
+                <Badge className={cn(
+                    "border-none text-[10px] uppercase font-black tracking-widest px-2.5 py-0.5",
+                    item.status === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" :
+                        item.status === "inactive" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                )}>
+                    {item.status}
+                </Badge>
+            )
+        },
         { key: "productCode", label: "Product Code", value: item.productCode || "-", type: "mono" },
         { key: "productName", label: "Product Name", value: item.productName || "-" },
         { key: "category", label: "Category", value: item.categoryName || "-" },
@@ -535,45 +537,61 @@ export default function ProductPerformancePage() {
         const isReports = activeTab === "reports"
         const exportData = isReports ? filteredLedger : filteredProducts
 
-        const headers = isReports 
-            ? (role === "SUPER_ADMIN" 
+        const headers = isReports
+            ? (role === "SUPER_ADMIN"
                 ? ["Organization", "Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"]
-                : ["Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"])
+                : role === "BRANCH_ADMIN"
+                    ? ["Order ID", "Trans ID", "Order Date", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"]
+                    : ["Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"])
             : ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Fulfilled", "Refunded", isBuyer ? "Unit Price" : "Base Price", exportRevenueHeader]
-        
+
         const rows = exportData.map((p: any) => isReports ? (
-            role === "SUPER_ADMIN" 
+            role === "SUPER_ADMIN"
                 ? [
-                    p.organizationName || 'N/A', 
-                    p.branchName, 
-                    p.orderId || p.tid, 
-                    p.tid, 
-                    new Date(p.orderCreatedAt).toLocaleDateString(), 
-                    p.group || 'N/A', 
-                    "0", 
-                    `${p.userName || ''} (${p.userEmail || ''})`.trim(), 
-                    `${p.itemDetails} (${p.itemCode})`, 
-                    p.qtyOrdered, 
-                    p.qtyOrdered - p.qtyDelivered, 
-                    p.qtyDelivered, 
-                    (p.priceCents / 100).toFixed(2), 
+                    p.organizationName || 'N/A',
+                    p.branchName,
+                    p.orderId || p.tid,
+                    p.tid,
+                    new Date(p.orderCreatedAt).toLocaleDateString(),
+                    p.group || 'N/A',
+                    "0",
+                    `${p.userName || ''} (${p.userEmail || ''})`.trim(),
+                    `${p.itemDetails} (${p.itemCode})`,
+                    p.qtyOrdered,
+                    p.qtyOrdered - p.qtyDelivered,
+                    p.qtyDelivered,
+                    (p.priceCents / 100).toFixed(2),
                     (p.netTotalCents / 100).toFixed(2)
                 ]
-                : [
-                    p.branchName, 
-                    p.orderId || p.tid, 
-                    p.tid, 
-                    new Date(p.orderCreatedAt).toLocaleDateString(), 
-                    p.group || 'N/A', 
-                    "0", 
-                    `${p.userName || ''} (${p.userEmail || ''})`.trim(), 
-                    `${p.itemDetails} (${p.itemCode})`, 
-                    p.qtyOrdered, 
-                    p.qtyOrdered - p.qtyDelivered, 
-                    p.qtyDelivered, 
-                    (p.priceCents / 100).toFixed(2), 
-                    (p.netTotalCents / 100).toFixed(2)
-                ]
+                : role === "BRANCH_ADMIN" 
+                    ? [
+                        p.orderId || p.tid,
+                        p.tid,
+                        new Date(p.orderCreatedAt).toLocaleDateString(),
+                        "0",
+                        `${p.userName || ''} (${p.userEmail || ''})`.trim(),
+                        `${p.itemDetails} (${p.itemCode})`,
+                        p.qtyOrdered,
+                        p.qtyOrdered - p.qtyDelivered,
+                        p.qtyDelivered,
+                        (p.priceCents / 100).toFixed(2),
+                        (p.netTotalCents / 100).toFixed(2)
+                    ]
+                    : [
+                        p.branchName,
+                        p.orderId || p.tid,
+                        p.tid,
+                        new Date(p.orderCreatedAt).toLocaleDateString(),
+                        p.group || 'N/A',
+                        "0",
+                        `${p.userName || ''} (${p.userEmail || ''})`.trim(),
+                        `${p.itemDetails} (${p.itemCode})`,
+                        p.qtyOrdered,
+                        p.qtyOrdered - p.qtyDelivered,
+                        p.qtyDelivered,
+                        (p.priceCents / 100).toFixed(2),
+                        (p.netTotalCents / 100).toFixed(2)
+                    ]
         ) : [
             p.productCode, p.productName, p.category, p.subCategory, p.status || 'active', p.qtyOrdered, p.qtyFulfilled, p.qtyRefunded,
             ((p.unitPriceCents || p.basePriceCents) / 100).toFixed(2),
@@ -657,16 +675,16 @@ export default function ProductPerformancePage() {
 
                     <div className="flex items-center gap-3">
                         <div className="hidden lg:flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
-                            <GlobalDateFilter 
-                                value={dateRange} 
-                                activePreset={activePreset} 
+                            <GlobalDateFilter
+                                value={dateRange}
+                                activePreset={activePreset}
                                 compare={compare}
                                 compareRange={compareRange}
                                 months={selectedMonths}
                                 years={selectedYears}
                                 compareMonths={compareMonths}
                                 compareYears={compareYears}
-                                onChange={handleDateChange} 
+                                onChange={handleDateChange}
                             />
                         </div>
                         <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => { mutateGlobalPerf(); mutateLedger(); mutateChart(); }}>
@@ -679,32 +697,32 @@ export default function ProductPerformancePage() {
             <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
                 {/* ━━━ KPI BENTO GRID ━━━ */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <KPICard 
-                        title={kpiRevenueLabel} 
-                        value={formatPKR(totalRevenue / 100)} 
-                        icon={TrendingUp} 
-                        colorScheme="emerald" 
-                        trend={revenueTrend} 
-                        comparisonLabel="Prior" 
-                        comparisonValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined} 
+                    <KPICard
+                        title={kpiRevenueLabel}
+                        value={formatPKR(totalRevenue / 100)}
+                        icon={TrendingUp}
+                        colorScheme="emerald"
+                        trend={revenueTrend}
+                        comparisonLabel="Prior"
+                        comparisonValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined}
                     />
-                    <KPICard 
-                        title="Qty Fulfilled" 
-                        value={totalVolume.toLocaleString()} 
-                        icon={Package} 
-                        colorScheme="blue" 
-                        trend={volumeTrend} 
-                        comparisonLabel="Prior" 
-                        comparisonValue={comparison ? comparison.totalVolume.toLocaleString() : undefined} 
+                    <KPICard
+                        title="Qty Fulfilled"
+                        value={totalVolume.toLocaleString()}
+                        icon={Package}
+                        colorScheme="blue"
+                        trend={volumeTrend}
+                        comparisonLabel="Prior"
+                        comparisonValue={comparison ? comparison.totalVolume.toLocaleString() : undefined}
                     />
-                    <KPICard 
-                        title="Refund Loss" 
-                        value={formatPKR(totalRefundLoss / 100)} 
-                        icon={AlertOctagon} 
-                        colorScheme="rose" 
-                        trend={refundTrend} 
-                        comparisonLabel="Prior" 
-                        comparisonValue={comparison ? `${comparison.totalRefunds.toLocaleString()} items` : undefined} 
+                    <KPICard
+                        title="Refund Loss"
+                        value={formatPKR(totalRefundLoss / 100)}
+                        icon={AlertOctagon}
+                        colorScheme="rose"
+                        trend={refundTrend}
+                        comparisonLabel="Prior"
+                        comparisonValue={comparison ? `${comparison.totalRefunds.toLocaleString()} items` : undefined}
                     />
                     <Card className="p-5 rounded-2xl border border-violet-100/50 dark:border-violet-800/30 shadow-sm bg-gradient-to-br from-violet-50/80 to-indigo-50/80 dark:from-violet-950/20 dark:to-indigo-950/20 flex flex-col justify-between transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 group">
                         <div className="flex items-center justify-between mb-2">
@@ -737,7 +755,7 @@ export default function ProductPerformancePage() {
                     params.set("tab", val)
                     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
                 }} className="space-y-8">
-                    
+
                     <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-1">
                         <TabsList className="bg-transparent h-auto p-0 gap-8">
                             <TabsTrigger value="analytics" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
@@ -802,7 +820,7 @@ export default function ProductPerformancePage() {
                                         placeholder="Years"
                                         showSearch={false}
                                     />
-                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                    {role === "SUPER_ADMIN" && (
                                         <>
                                             <OrganizationFilter
                                                 selectedIds={chartOrgIds}
@@ -827,64 +845,90 @@ export default function ProductPerformancePage() {
                                                         groupIds={chartGroupIds}
                                                         placeholder="Branches"
                                                     />
-                                                    <ProductFilter
-                                                        selectedIds={chartProductIds}
-                                                        onChange={setChartProductIds}
-                                                        organizationId={organizationId || undefined}
-                                                        organizationIds={chartOrgIds.length > 0 ? chartOrgIds : undefined}
-                                                        groupIds={chartGroupIds}
-                                                        branchIds={chartBranchIds}
-                                                        placeholder="Products"
-                                                    />
                                                 </>
                                             )}
+                                            <ProductFilter
+                                                selectedIds={chartProductIds}
+                                                onChange={setChartProductIds}
+                                                organizationId={organizationId || undefined}
+                                                organizationIds={chartOrgIds.length > 0 ? chartOrgIds : undefined}
+                                                groupIds={chartGroupIds}
+                                                branchIds={chartBranchIds}
+                                                placeholder="Products"
+                                            />
+                                        </>
+                                    )}
+                                    {role !== "SUPER_ADMIN" && role !== "BRANCH_ADMIN" && organizationId && (
+                                        <>
+                                            <GroupFilter
+                                                selectedIds={chartGroupIds}
+                                                onChange={setChartGroupIds}
+                                                organizationId={organizationId}
+                                                disabled={chartBranchIds.length > 0}
+                                                placeholder="Groups"
+                                            />
+                                            <BranchFilter
+                                                selectedIds={chartBranchIds}
+                                                onChange={setChartBranchIds}
+                                                organizationId={organizationId}
+                                                groupIds={chartGroupIds}
+                                                placeholder="Branches"
+                                            />
+                                            <ProductFilter
+                                                selectedIds={chartProductIds}
+                                                onChange={setChartProductIds}
+                                                organizationId={organizationId}
+                                                groupIds={chartGroupIds}
+                                                branchIds={chartBranchIds}
+                                                placeholder="Products"
+                                            />
                                         </>
                                     )}
                                 </div>
-                                    
-                                    {/* Active Filters Badges */}
-                                    {chartYears.length > 0 && (
-                                        <div className="flex flex-wrap gap-1.5 ml-1">
-                                            {chartYears.map(y => (
-                                                <Badge key={y} className="text-[10px] font-bold bg-gradient-to-r from-indigo-500 to-violet-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartYear(y)}>
-                                                    {y} <X className="h-2.5 w-2.5" />
+
+                                {/* Active Filters Badges */}
+                                {chartYears.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 ml-1">
+                                        {chartYears.map(y => (
+                                            <Badge key={y} className="text-[10px] font-bold bg-gradient-to-r from-indigo-500 to-violet-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartYear(y)}>
+                                                {y} <X className="h-2.5 w-2.5" />
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                )}
+                                {chartMonths.length > 0 && chartMonths.length < 12 && (
+                                    <div className="flex flex-wrap gap-1.5 ml-1">
+                                        {chartMonths.map(m => (
+                                            <Badge key={m} className="text-[10px] font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartMonth(m)}>
+                                                {CHART_MONTH_NAMES[m - 1]} <X className="h-2.5 w-2.5" />
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                )}
+                                {chartGroupIds.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 ml-1">
+                                        {chartGroupIds.map(gid => {
+                                            const gr = availableGroups.find((g: any) => String(g.id) === gid)
+                                            return (
+                                                <Badge key={gid} className="text-[10px] font-bold bg-gradient-to-r from-sky-500 to-blue-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartGroup(gid)}>
+                                                    {gr?.name || gid} <X className="h-2.5 w-2.5" />
                                                 </Badge>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {chartMonths.length > 0 && chartMonths.length < 12 && (
-                                        <div className="flex flex-wrap gap-1.5 ml-1">
-                                            {chartMonths.map(m => (
-                                                <Badge key={m} className="text-[10px] font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartMonth(m)}>
-                                                    {CHART_MONTH_NAMES[m - 1]} <X className="h-2.5 w-2.5" />
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                                {chartBranchIds.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 ml-1">
+                                        {chartBranchIds.map(bid => {
+                                            const br = availableBranches.find((b: any) => String(b.id) === bid)
+                                            return (
+                                                <Badge key={bid} className="text-[10px] font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartBranch(bid)}>
+                                                    {br?.name || bid} <X className="h-2.5 w-2.5" />
                                                 </Badge>
-                                            ))}
-                                        </div>
-                                    )}
-                                    {chartGroupIds.length > 0 && (
-                                        <div className="flex flex-wrap gap-1.5 ml-1">
-                                            {chartGroupIds.map(gid => {
-                                                const gr = availableGroups.find((g: any) => String(g.id) === gid)
-                                                return (
-                                                    <Badge key={gid} className="text-[10px] font-bold bg-gradient-to-r from-sky-500 to-blue-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartGroup(gid)}>
-                                                        {gr?.name || gid} <X className="h-2.5 w-2.5" />
-                                                    </Badge>
-                                                )
-                                            })}
-                                        </div>
-                                    )}
-                                    {chartBranchIds.length > 0 && (
-                                        <div className="flex flex-wrap gap-1.5 ml-1">
-                                            {chartBranchIds.map(bid => {
-                                                const br = availableBranches.find((b: any) => String(b.id) === bid)
-                                                return (
-                                                    <Badge key={bid} className="text-[10px] font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white border-0 gap-1 cursor-pointer shadow-sm px-2.5 py-0.5 rounded-full" onClick={() => toggleChartBranch(bid)}>
-                                                        {br?.name || bid} <X className="h-2.5 w-2.5" />
-                                                    </Badge>
-                                                )
-                                            })}
-                                        </div>
-                                    )}
+                                            )
+                                        })}
+                                    </div>
+                                )}
                             </CardHeader>
                             <CardContent className="pt-6 pb-6 pr-6 pl-0">
                                 {isChartPerfLoading || isGlobalPerfLoading ? (
@@ -896,46 +940,46 @@ export default function ProductPerformancePage() {
                                         <ResponsiveContainer width="100%" height="100%">
                                             <ComposedChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.3} />
-                                                <XAxis 
-                                                    dataKey="name" 
-                                                    axisLine={false} 
-                                                    tickLine={false} 
+                                                <XAxis
+                                                    dataKey="name"
+                                                    axisLine={false}
+                                                    tickLine={false}
                                                     tick={{ fill: '#475569', fontSize: 11, fontWeight: 600 }}
                                                     dy={10}
                                                 />
-                                                <YAxis 
-                                                    axisLine={false} 
-                                                    tickLine={false} 
-                                                    tick={{ fill: '#94a3b8', fontSize: 10 }} 
-                                                    tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v.toString()}
+                                                <YAxis
+                                                    axisLine={false}
+                                                    tickLine={false}
+                                                    tick={{ fill: '#94a3b8', fontSize: 10 }}
+                                                    tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : v.toString()}
                                                     dx={-10}
                                                 />
                                                 <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
-                                                <Legend 
-                                                    verticalAlign="top" 
-                                                    align="right" 
-                                                    iconType="circle" 
+                                                <Legend
+                                                    verticalAlign="top"
+                                                    align="right"
+                                                    iconType="circle"
                                                     wrapperStyle={{ paddingBottom: 20, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}
                                                 />
-                                                <Bar 
-                                                    dataKey="revenue" 
-                                                    name={barChartLegendLabel} 
-                                                    fill="#6366f1" 
-                                                    radius={[6, 6, 0, 0]} 
-                                                    barSize={24} 
+                                                <Bar
+                                                    dataKey="revenue"
+                                                    name={barChartLegendLabel}
+                                                    fill="#6366f1"
+                                                    radius={[6, 6, 0, 0]}
+                                                    barSize={24}
                                                 />
                                                 {compare && (
-                                                    <Bar 
-                                                        dataKey="compareRevenue" 
-                                                        name="PRIOR PERIOD" 
-                                                        fill="#94a3b8" 
+                                                    <Bar
+                                                        dataKey="compareRevenue"
+                                                        name="PRIOR PERIOD"
+                                                        fill="#94a3b8"
                                                         fillOpacity={0.4}
-                                                        radius={[6, 6, 0, 0]} 
-                                                        barSize={24} 
+                                                        radius={[6, 6, 0, 0]}
+                                                        barSize={24}
                                                     />
                                                 )}
-                                                </ComposedChart>
-                                            </ResponsiveContainer>
+                                            </ComposedChart>
+                                        </ResponsiveContainer>
                                     </div>
                                 )}
                             </CardContent>
@@ -1008,11 +1052,11 @@ export default function ProductPerformancePage() {
                                                     <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.category}</TableCell>
                                                     <TableCell className="text-xs text-slate-600 dark:text-slate-400">{p.subCategory}</TableCell>
                                                     <TableCell className="text-center">
-                                                        <Badge 
+                                                        <Badge
                                                             className={cn(
                                                                 "text-[9px] uppercase px-2 py-0.5 rounded-full border-none font-bold tracking-wider",
-                                                                (p.status === 'active' || !p.status) 
-                                                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" 
+                                                                (p.status === 'active' || !p.status)
+                                                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                                                                     : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
                                                             )}
                                                         >
@@ -1053,264 +1097,280 @@ export default function ProductPerformancePage() {
                                 </Table>
                             </div>
                         </Card>
-                        </TabsContent>
-                        <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                    </TabsContent>
+                    <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
                         {/* ━━━ REPORTS TAB ━━━ */}
                         <Card className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
-                        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <History className="h-4 w-4 text-indigo-500" />
-                                    <h3 className="font-bold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
-                                        {role === "SUPER_ADMIN" ? "Product Wise Sale" : "Product Wise Purchase"}
-                                    </h3>
-                                </div>
-                                {(reportYears.length > 0 || reportMonths.length > 0 || reportBranchIds.length > 0 || reportGroupIds.length > 0) && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            setReportYears([]);
-                                            setReportMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-                                            setReportBranchIds([]);
-                                            setReportGroupIds([]);
-                                            setReportProductIds([]);
-                                            setReportOrganizationIds([]);
-                                        }}
-                                        className="h-7 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full px-3 gap-1 transition-all duration-200 hover:scale-105"
-                                    >
-                                        <RotateCcw className="h-3 w-3" /> Reset Defaults
-                                    </Button>
-                                )}
-                            </div>
-                            
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                {/* ── Report Filters ── */}
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <MultiSelectFilter
-                                        title="Months"
-                                        items={CHART_MONTH_NAMES.map((name, i) => ({ id: i + 1, label: name }))}
-                                        selectedIds={reportMonths}
-                                        onChange={(ids) => setReportMonths(ids.sort((a,b) => a - b))}
-                                        icon={<Filter className="h-3.5 w-3.5 text-emerald-500" />}
-                                        placeholder="Months"
-                                        showSearch={false}
-                                    />
-                                    <MultiSelectFilter
-                                        title="Years"
-                                        items={availableChartYears.map(y => ({ id: y, label: String(y) }))}
-                                        selectedIds={reportYears}
-                                        onChange={(ids) => setReportYears(ids.sort((a, b) => b - a))}
-                                        icon={<History className="h-3.5 w-3.5 text-indigo-500" />}
-                                        placeholder="Years"
-                                        showSearch={false}
-                                    />
-                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-                                        <>
-                                            <OrganizationFilter
-                                                selectedIds={reportOrganizationIds}
-                                                onChange={setReportOrganizationIds}
-                                                placeholder="Organizations"
-                                            />
-                                            {(reportOrganizationIds.length > 0 || organizationId) && (
-                                                <>
-                                                    <GroupFilter
-                                                        selectedIds={reportGroupIds}
-                                                        onChange={setReportGroupIds}
-                                                        organizationId={organizationId || undefined}
-                                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
-                                                        disabled={reportBranchIds.length > 0}
-                                                        placeholder="Groups"
-                                                    />
-                                                    <BranchFilter
-                                                        selectedIds={reportBranchIds}
-                                                        onChange={setReportBranchIds}
-                                                        organizationId={organizationId || undefined}
-                                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
-                                                        groupIds={reportGroupIds}
-                                                        placeholder="Branches"
-                                                    />
-                                                    <ProductFilter
-                                                        selectedIds={reportProductIds}
-                                                        onChange={setReportProductIds}
-                                                        organizationId={organizationId || undefined}
-                                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
-                                                        groupIds={reportGroupIds}
-                                                        branchIds={reportBranchIds}
-                                                        placeholder="Products"
-                                                    />
-                                                </>
-                                            )}
-                                        </>
+                            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <History className="h-4 w-4 text-indigo-500" />
+                                        <h3 className="font-bold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
+                                            {role === "SUPER_ADMIN" ? "Product Wise Sale" : "Product Wise Purchase"}
+                                        </h3>
+                                    </div>
+                                    {(reportYears.length > 0 || reportMonths.length > 0 || reportBranchIds.length > 0 || reportGroupIds.length > 0) && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                setReportYears([]);
+                                                setReportMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+                                                setReportBranchIds([]);
+                                                setReportGroupIds([]);
+                                                setReportProductIds([]);
+                                                setReportOrganizationIds([]);
+                                            }}
+                                            className="h-7 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full px-3 gap-1 transition-all duration-200 hover:scale-105"
+                                        >
+                                            <RotateCcw className="h-3 w-3" /> Reset Defaults
+                                        </Button>
                                     )}
-                                    <ProductFilter
-                                        selectedIds={reportProductIds}
-                                        onChange={setReportProductIds}
-                                        organizationId={organizationId || undefined}
-                                        organizationIds={reportOrganizationIds}
-                                        groupIds={reportGroupIds}
-                                        branchIds={reportBranchIds}
-                                        placeholder="Products"
-                                    />
                                 </div>
-                                
-                                <div className="flex items-center gap-2">
-                                    <div className="relative">
-                                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                        <Input
-                                            placeholder="Search by code, product..."
-                                            className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 rounded-lg"
-                                            value={reportSearchTerm}
-                                            onChange={(e) => setReportSearchTerm(e.target.value)}
+
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                    {/* ── Report Filters ── */}
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <MultiSelectFilter
+                                            title="Months"
+                                            items={CHART_MONTH_NAMES.map((name, i) => ({ id: i + 1, label: name }))}
+                                            selectedIds={reportMonths}
+                                            onChange={(ids) => setReportMonths(ids.sort((a, b) => a - b))}
+                                            icon={<Filter className="h-3.5 w-3.5 text-emerald-500" />}
+                                            placeholder="Months"
+                                            showSearch={false}
+                                        />
+                                        <MultiSelectFilter
+                                            title="Years"
+                                            items={availableChartYears.map(y => ({ id: y, label: String(y) }))}
+                                            selectedIds={reportYears}
+                                            onChange={(ids) => setReportYears(ids.sort((a, b) => b - a))}
+                                            icon={<History className="h-3.5 w-3.5 text-indigo-500" />}
+                                            placeholder="Years"
+                                            showSearch={false}
+                                        />
+                                        {role === "SUPER_ADMIN" && (
+                                            <>
+                                                <OrganizationFilter
+                                                    selectedIds={reportOrganizationIds}
+                                                    onChange={setReportOrganizationIds}
+                                                    placeholder="Organizations"
+                                                />
+                                                {(reportOrganizationIds.length > 0 || organizationId) && (
+                                                    <>
+                                                        <GroupFilter
+                                                            selectedIds={reportGroupIds}
+                                                            onChange={setReportGroupIds}
+                                                            organizationId={organizationId || undefined}
+                                                            organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
+                                                            disabled={reportBranchIds.length > 0}
+                                                            placeholder="Groups"
+                                                        />
+                                                        <BranchFilter
+                                                            selectedIds={reportBranchIds}
+                                                            onChange={setReportBranchIds}
+                                                            organizationId={organizationId || undefined}
+                                                            organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
+                                                            groupIds={reportGroupIds}
+                                                            placeholder="Branches"
+                                                        />
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+                                        {role !== "SUPER_ADMIN" && role !== "BRANCH_ADMIN" && organizationId && (
+                                            <>
+                                                <GroupFilter
+                                                    selectedIds={reportGroupIds}
+                                                    onChange={setReportGroupIds}
+                                                    organizationId={organizationId}
+                                                    disabled={reportBranchIds.length > 0}
+                                                    placeholder="Groups"
+                                                />
+                                                <BranchFilter
+                                                    selectedIds={reportBranchIds}
+                                                    onChange={setReportBranchIds}
+                                                    organizationId={organizationId}
+                                                    groupIds={reportGroupIds}
+                                                    placeholder="Branches"
+                                                />
+                                            </>
+                                        )}
+                                        <ProductFilter
+                                            selectedIds={reportProductIds}
+                                            onChange={setReportProductIds}
+                                            organizationId={organizationId || undefined}
+                                            organizationIds={reportOrganizationIds}
+                                            groupIds={reportGroupIds}
+                                            branchIds={reportBranchIds}
+                                            placeholder="Products"
                                         />
                                     </div>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg shadow-lg shadow-indigo-600/20" disabled={isLedgerLoading}>
-                                                <Download className="h-3.5 w-3.5" /> EXPORT
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="w-40 rounded-xl">
-                                            <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2 cursor-pointer font-bold"><FileText className="mr-2 h-4 w-4 text-slate-400" /> CSV</DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2 cursor-pointer font-bold"><FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel</DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer font-bold"><FileText className="mr-2 h-4 w-4 text-rose-500" /> PDF</DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+
+                                    <div className="flex items-center gap-2">
+                                        <div className="relative">
+                                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                            <Input
+                                                placeholder="Search by code, product..."
+                                                className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 rounded-lg"
+                                                value={reportSearchTerm}
+                                                onChange={(e) => setReportSearchTerm(e.target.value)}
+                                            />
+                                        </div>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg shadow-lg shadow-indigo-600/20" disabled={isLedgerLoading}>
+                                                    <Download className="h-3.5 w-3.5" /> EXPORT
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-40 rounded-xl">
+                                                <DropdownMenuItem onClick={() => handleExport('csv')} className="text-xs py-2 cursor-pointer font-bold"><FileText className="mr-2 h-4 w-4 text-slate-400" /> CSV</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleExport('excel')} className="text-xs py-2 cursor-pointer font-bold"><FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-500" /> Excel</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleExport('pdf')} className="text-xs py-2 cursor-pointer font-bold"><FileText className="mr-2 h-4 w-4 text-rose-500" /> PDF</DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                </div>
+
+                                {/* Active Filters Badges */}
+                                <div className="flex flex-wrap gap-2">
+                                    {reportYears.length > 0 && reportYears.map(y => (
+                                        <Badge key={y} className="text-[10px] font-bold bg-indigo-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportYear(y)}>
+                                            {y} <X className="h-2.5 w-2.5" />
+                                        </Badge>
+                                    ))}
+                                    {reportMonths.length > 0 && reportMonths.length < 12 && reportMonths.map(m => (
+                                        <Badge key={m} className="text-[10px] font-bold bg-emerald-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportMonth(m)}>
+                                            {CHART_MONTH_NAMES[m - 1]} <X className="h-2.5 w-2.5" />
+                                        </Badge>
+                                    ))}
+                                    {reportGroupIds.length > 0 && reportGroupIds.map(gid => {
+                                        const gr = availableGroups.find((g: any) => String(g.id) === gid)
+                                        return (
+                                            <Badge key={gid} className="text-[10px] font-bold bg-sky-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportGroup(gid)}>
+                                                {gr?.name || gid} <X className="h-2.5 w-2.5" />
+                                            </Badge>
+                                        )
+                                    })}
+                                    {reportBranchIds.length > 0 && reportBranchIds.map(bid => {
+                                        const br = availableBranches.find((b: any) => String(b.id) === bid)
+                                        return (
+                                            <Badge key={bid} className="text-[10px] font-bold bg-amber-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportBranch(bid)}>
+                                                {br?.name || bid} <X className="h-2.5 w-2.5" />
+                                            </Badge>
+                                        )
+                                    })}
+                                    {reportOrganizationIds.length > 0 && reportOrganizationIds.map(oid => {
+                                        const org = availableOrgs.find((o: any) => String(o.id) === oid)
+                                        return (
+                                            <Badge key={oid} className="text-[10px] font-bold bg-indigo-600 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => setReportOrganizationIds(prev => prev.filter(p => p !== oid))}>
+                                                Org: {org?.name || oid} <X className="h-2.5 w-2.5" />
+                                            </Badge>
+                                        )
+                                    })}
                                 </div>
                             </div>
-
-                            {/* Active Filters Badges */}
-                            <div className="flex flex-wrap gap-2">
-                                {reportYears.length > 0 && reportYears.map(y => (
-                                    <Badge key={y} className="text-[10px] font-bold bg-indigo-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportYear(y)}>
-                                        {y} <X className="h-2.5 w-2.5" />
-                                    </Badge>
-                                ))}
-                                {reportMonths.length > 0 && reportMonths.length < 12 && reportMonths.map(m => (
-                                    <Badge key={m} className="text-[10px] font-bold bg-emerald-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportMonth(m)}>
-                                        {CHART_MONTH_NAMES[m - 1]} <X className="h-2.5 w-2.5" />
-                                    </Badge>
-                                ))}
-                                {reportGroupIds.length > 0 && reportGroupIds.map(gid => {
-                                    const gr = availableGroups.find((g: any) => String(g.id) === gid)
-                                    return (
-                                        <Badge key={gid} className="text-[10px] font-bold bg-sky-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportGroup(gid)}>
-                                            {gr?.name || gid} <X className="h-2.5 w-2.5" />
-                                        </Badge>
-                                    )
-                                })}
-                                {reportBranchIds.length > 0 && reportBranchIds.map(bid => {
-                                    const br = availableBranches.find((b: any) => String(b.id) === bid)
-                                    return (
-                                        <Badge key={bid} className="text-[10px] font-bold bg-amber-500 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => toggleReportBranch(bid)}>
-                                            {br?.name || bid} <X className="h-2.5 w-2.5" />
-                                        </Badge>
-                                    )
-                                })}
-                                {reportOrganizationIds.length > 0 && reportOrganizationIds.map(oid => {
-                                    const org = availableOrgs.find((o: any) => String(o.id) === oid)
-                                    return (
-                                        <Badge key={oid} className="text-[10px] font-bold bg-indigo-600 text-white gap-1 cursor-pointer rounded-full px-2.5 py-0.5" onClick={() => setReportOrganizationIds(prev => prev.filter(p => p !== oid))}>
-                                            Org: {org?.name || oid} <X className="h-2.5 w-2.5" />
-                                        </Badge>
-                                    )
-                                })}
-                            </div>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-slate-50/20 dark:bg-slate-800/10">
-                                        {role === "SUPER_ADMIN" && (
-                                            <TableHead className="pl-6 h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Organization</TableHead>
-                                        )}
-                                        <TableHead className={cn("h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap", role !== "SUPER_ADMIN" && "pl-6")}>Branch</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Order ID</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Trans ID</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Order Date</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Group</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Discount</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">User Details</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 min-w-[150px]">Item Details</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Qty Ordered</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center text-rose-500">Refunded</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center text-emerald-600">Net Items</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Unit Price</TableHead>
-                                        <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right pr-6">Grand Total</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {isLedgerLoading ? (
-                                        <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 14 : 13} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
-                                    ) : filteredLedger.length === 0 ? (
-                                        <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 14 : 13} className="h-32 text-center text-slate-400 text-xs">No itemized orders found.</TableCell></TableRow>
-                                    ) : (
-                                        filteredLedger.map((item: any) => {
-                                            return (
-                                                <TableRow key={`${item.id}-${item.tid}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                                                    {role === "SUPER_ADMIN" && (
-                                                        <TableCell className="pl-6 py-3 text-[10px] whitespace-nowrap text-slate-700 dark:text-slate-300 font-bold">
-                                                            {item.organizationName || 'N/A'}
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-slate-50/20 dark:bg-slate-800/10">
+                                            {role === "SUPER_ADMIN" && (
+                                                <TableHead className="pl-6 h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Organization</TableHead>
+                                            )}
+                                            {role !== "BRANCH_ADMIN" && <TableHead className={cn("h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap", role !== "SUPER_ADMIN" && "pl-6")}>Branch</TableHead>}
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Order ID</TableHead>
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Trans ID</TableHead>
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Order Date</TableHead>
+                                            {role !== "BRANCH_ADMIN" && <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Group</TableHead>}
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Discount</TableHead>
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">User Details</TableHead>
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 min-w-[150px]">Item Details</TableHead>
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Qty Ordered</TableHead>
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center text-rose-500">Refunded</TableHead>
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center text-emerald-600">Net Items</TableHead>
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Unit Price</TableHead>
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right pr-6">Grand Total</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {isLedgerLoading ? (
+                                            <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 14 : role === "BRANCH_ADMIN" ? 11 : 13} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-indigo-300" /></TableCell></TableRow>
+                                        ) : filteredLedger.length === 0 ? (
+                                            <TableRow><TableCell colSpan={role === "SUPER_ADMIN" ? 14 : role === "BRANCH_ADMIN" ? 11 : 13} className="h-32 text-center text-slate-400 text-xs">No itemized orders found.</TableCell></TableRow>
+                                        ) : (
+                                            filteredLedger.map((item: any) => {
+                                                return (
+                                                    <TableRow key={`${item.id}-${item.tid}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                                                        {role === "SUPER_ADMIN" && (
+                                                            <TableCell className="pl-6 py-3 text-[10px] whitespace-nowrap text-slate-700 dark:text-slate-300 font-bold">
+                                                                {item.organizationName || 'N/A'}
+                                                            </TableCell>
+                                                        )}
+                                                        {role !== "BRANCH_ADMIN" && (
+                                                            <TableCell className={cn("py-3 text-[10px] whitespace-nowrap text-slate-700 dark:text-slate-300 font-bold", role !== "SUPER_ADMIN" && "pl-6")}>
+                                                                {item.branchName}
+                                                            </TableCell>
+                                                        )}
+                                                        <TableCell className="py-3 text-[10px] whitespace-nowrap font-mono text-slate-500">
+                                                            {item.orderId || item.tid}
                                                         </TableCell>
-                                                    )}
-                                                    <TableCell className={cn("py-3 text-[10px] whitespace-nowrap text-slate-700 dark:text-slate-300 font-bold", role !== "SUPER_ADMIN" && "pl-6")}>
-                                                        {item.branchName}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap font-mono text-slate-500">
-                                                        {item.orderId || item.tid}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap font-mono text-slate-500">
-                                                        {item.tid}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap text-slate-600 dark:text-slate-400">
-                                                        {new Date(item.orderCreatedAt).toLocaleDateString()}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap text-slate-600 dark:text-slate-400">
-                                                        {item.group || "N/A"}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap text-center text-slate-400 font-mono">
-                                                        0
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-[10px] whitespace-nowrap">
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold text-slate-900 dark:text-white uppercase truncate max-w-[120px]">{item.userName || "Unknown"}</span>
-                                                            <span className="text-[9px] text-slate-500 truncate max-w-[120px]">{item.userEmail || "No Email"}</span>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="py-3 max-w-[200px]">
-                                                        <div className="flex flex-col">
-                                                            <span className="font-bold text-[10px] text-slate-900 dark:text-white uppercase truncate" title={item.itemDetails}>
-                                                                {item.itemDetails}
-                                                            </span>
-                                                            <span className="text-[9px] text-slate-400 font-mono truncate">{item.itemCode}</span>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-center font-mono text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                                                        {item.qtyOrdered}
-                                                    </TableCell>
-                                                    <TableCell className="text-center font-mono text-[11px] font-bold text-rose-500">
-                                                        {item.qtyOrdered - item.qtyDelivered}
-                                                    </TableCell>
-                                                    <TableCell className="text-center font-mono text-[11px] font-bold text-emerald-600">
-                                                        {item.qtyDelivered}
-                                                    </TableCell>
-                                                    <TableCell className="text-center font-mono text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                                                        {formatPKR(item.priceCents / 100)}
-                                                    </TableCell>
-                                                    <TableCell className="text-right pr-6 font-mono text-[11px] font-black text-indigo-600">
-                                                        {formatPKR(item.netTotalCents / 100)}
-                                                    </TableCell>
-                                                </TableRow>
-                                            )
-                                        })
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    </Card>
-                </TabsContent>
-            </Tabs>
-        </div>
+                                                        <TableCell className="py-3 text-[10px] whitespace-nowrap font-mono text-slate-500">
+                                                            {item.tid}
+                                                        </TableCell>
+                                                        <TableCell className="py-3 text-[10px] whitespace-nowrap text-slate-600 dark:text-slate-400">
+                                                            {new Date(item.orderCreatedAt).toLocaleDateString()}
+                                                        </TableCell>
+                                                        {role !== "BRANCH_ADMIN" && (
+                                                            <TableCell className="py-3 text-[10px] whitespace-nowrap text-slate-600 dark:text-slate-400">
+                                                                {item.group || "N/A"}
+                                                            </TableCell>
+                                                        )}
+                                                        <TableCell className="py-3 text-[10px] whitespace-nowrap text-center text-slate-400 font-mono">
+                                                            0
+                                                        </TableCell>
+                                                        <TableCell className="py-3 text-[10px] whitespace-nowrap">
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="font-black text-indigo-500 font-mono text-[9px]">#{item.employeeId || (item.userId ? item.userId.split('-')[0] : 'N/A')}</span>
+                                                                </div>
+                                                                <span className="font-bold text-slate-900 dark:text-white uppercase truncate max-w-[120px]">{item.userName || "Unknown"}</span>
+                                                                <span className="text-[9px] text-slate-500 truncate max-w-[120px]">{item.userEmail || "No Email"}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="py-3 max-w-[200px]">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-bold text-[10px] text-slate-900 dark:text-white uppercase truncate" title={item.itemDetails}>
+                                                                    {item.itemDetails}
+                                                                </span>
+                                                                <span className="text-[9px] text-slate-400 font-mono truncate">{item.itemCode}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="text-center font-mono text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                                                            {item.qtyOrdered}
+                                                        </TableCell>
+                                                        <TableCell className="text-center font-mono text-[11px] font-bold text-rose-500">
+                                                            {item.qtyOrdered - item.qtyDelivered}
+                                                        </TableCell>
+                                                        <TableCell className="text-center font-mono text-[11px] font-bold text-emerald-600">
+                                                            {item.qtyDelivered}
+                                                        </TableCell>
+                                                        <TableCell className="text-center font-mono text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                                                            {formatPKR(item.priceCents / 100)}
+                                                        </TableCell>
+                                                        <TableCell className="text-right pr-6 font-mono text-[11px] font-black text-indigo-600">
+                                                            {formatPKR(item.netTotalCents / 100)}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )
+                                            })
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
+            </div>
 
             <ExpandableRowDrawer
                 open={drawerOpen} onClose={() => setDrawerOpen(false)}
