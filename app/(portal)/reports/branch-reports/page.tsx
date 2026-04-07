@@ -33,6 +33,7 @@ import { OrganizationFilter as OrgFilter } from "@/components/reports/organizati
 import { GroupFilter } from "@/components/reports/group-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { KPICard } from "@/components/reports/kpi-card"
+import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
 
 type DateRange = { startDate: Date; endDate: Date }
 
@@ -45,7 +46,9 @@ export default function BranchReportsPage() {
     const { 
         organizationId: contextOrgId,
         userBranchId: sessionUserBranchId,
-        branchId: contextBranchId
+        branchId: contextBranchId,
+        branchIds: contextBranchIds,
+        setBranchIds: setContextBranchIds
     } = useAppContext()
 
     const role = (session?.user as any)?.role as Role
@@ -298,6 +301,12 @@ export default function BranchReportsPage() {
                             />
                         </div>
                         {/* Filters moved to local tabs */}
+                        {role !== "BRANCH_ADMIN" && (contextOrgId || userOrgId) && (
+                            <>
+                                <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+                                <MultiBranchFilter organizationId={contextOrgId || userOrgId} selectedBranchIds={contextBranchIds} onChange={setContextBranchIds} />
+                            </>
+                        )}
                         <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-emerald-500 transition-colors" onClick={() => mutateGlobal()}>
                             <RefreshCw className={cn("h-4 w-4", isGlobalLoading && "animate-spin")} />
                         </Button>

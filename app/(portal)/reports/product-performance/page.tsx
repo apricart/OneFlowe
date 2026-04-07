@@ -36,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
+import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
 import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 import { useBranches, useGlobalProducts, useOrganizations } from "@/lib/hooks/use-api"
 
@@ -419,9 +420,13 @@ export default function ProductPerformancePage() {
         return ledgerItems.filter((i: any) =>
             (i.itemCode || "").toLowerCase().includes(term) ||
             (i.itemDetails || "").toLowerCase().includes(term) ||
+            (i.organizationName || "").toLowerCase().includes(term) ||
+            (i.branchName || "").toLowerCase().includes(term) ||
             (i.userName || "").toLowerCase().includes(term) ||
             (i.userEmail || "").toLowerCase().includes(term) ||
-            (i.tid || "").toLowerCase().includes(term)
+            (i.tid || "").toLowerCase().includes(term) ||
+            (i.employeeId && String(i.employeeId).toLowerCase().includes(term)) ||
+            (i.userId && i.userId.toLowerCase().includes(term))
         )
     }, [ledgerItems, reportSearchTerm])
 
@@ -714,6 +719,12 @@ export default function ProductPerformancePage() {
                                 onChange={handleDateChange}
                             />
                         </div>
+                        {role !== "BRANCH_ADMIN" && organizationId && (
+                            <>
+                                <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+                                <MultiBranchFilter organizationId={organizationId} selectedBranchIds={contextBranchIds} onChange={setContextBranchIds} />
+                            </>
+                        )}
                         <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => { mutateGlobalPerf(); mutateLedger(); mutateChart(); }}>
                             <RefreshCw className={cn("h-4 w-4", (isGlobalPerfLoading || isLedgerLoading || isChartPerfLoading) && "animate-spin")} />
                         </Button>
@@ -1237,12 +1248,12 @@ export default function ProductPerformancePage() {
                                     <div className="flex items-center gap-2">
                                         <div className="relative">
                                             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-                                            <Input
-                                                placeholder="Search by code, product..."
-                                                className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 rounded-lg"
-                                                value={reportSearchTerm}
-                                                onChange={(e) => setReportSearchTerm(e.target.value)}
-                                            />
+                                            <Input 
+                                            placeholder="Search by employee #, code, product, user..."
+                                            className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 rounded-lg"
+                                            value={reportSearchTerm}
+                                            onChange={(e) => setReportSearchTerm(e.target.value)}
+                                        />    
                                         </div>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>

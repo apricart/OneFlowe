@@ -48,6 +48,7 @@ import type { DateRange } from "@/lib/hooks/use-sales-performance"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
 import { OrganizationFilter } from "@/components/reports/organization-filter"
+import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
 import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 import { KPICard } from "@/components/reports/kpi-card"
 
@@ -62,12 +63,9 @@ const ALL_COLUMNS: ColumnDef[] = [
     { key: "group", label: "Group", defaultVisible: true },
     { key: "branchName", label: "Branch", defaultVisible: true },
     { key: "status", label: "Status", defaultVisible: true },
-    { key: "totalItems", label: "Total items", defaultVisible: true },
-    { key: "deliveredItems", label: "Delivered items", defaultVisible: true },
-    { key: "refundedItems", label: "Refunded items", defaultVisible: true },
-    { key: "quantityOrdered", label: "Quantity ordered", defaultVisible: true },
-    { key: "quantityDelivered", label: "Quantity delivered", defaultVisible: true },
-    { key: "quantityRefunded", label: "Quantity refunded", defaultVisible: true },
+    { key: "quantityOrdered", label: "Qty Ordered", defaultVisible: true },
+    { key: "quantityDelivered", label: "Qty Delivered", defaultVisible: true },
+    { key: "quantityRefunded", label: "Qty Refunded", defaultVisible: true },
     { key: "subtotalValue", label: "Subtotal", defaultVisible: true },
     { key: "refundValue", label: "Refund", defaultVisible: true },
     { key: "netTotalValue", label: "Net Total", defaultVisible: true },
@@ -248,7 +246,9 @@ export default function OrderReportPage() {
         return reportOrders.filter((order: any) => {
             const matchesSearch = !reportSearch ||
                 (order.tid && order.tid.toLowerCase().includes(reportSearch.toLowerCase())) ||
-                (order.userName && order.userName.toLowerCase().includes(reportSearch.toLowerCase()))
+                (order.userName && order.userName.toLowerCase().includes(reportSearch.toLowerCase())) ||
+                (order.employeeId && String(order.employeeId).toLowerCase().includes(reportSearch.toLowerCase())) ||
+                (order.userId && order.userId.toLowerCase().includes(reportSearch.toLowerCase()))
             const matchesStatus = statusFilter === 'all' || order.status?.toLowerCase() === statusFilter.toLowerCase();
             return matchesSearch && matchesStatus;
         })
@@ -384,11 +384,8 @@ export default function OrderReportPage() {
             if (isVisible("group") && role !== "BRANCH_ADMIN") row.push(order.groupName || "-")
             if (isVisible("branchName") && role !== "BRANCH_ADMIN") row.push(order.branchName || "-")
             if (isVisible("status")) row.push(order.status)
-            if (isVisible("totalItems")) row.push(order.itemCount || 0)
-            if (isVisible("deliveredItems")) row.push(order.deliveredItemCount || 0)
-            if (isVisible("refundedItems")) row.push(order.refundedItemCount || 0)
             if (isVisible("quantityOrdered")) row.push(order.quantityOrdered || 0)
-            if (isVisible("quantityDelivered")) row.push(order.quantityDelivered || 0)
+            if (isVisible("quantityDelivered")) row.push((order.quantityOrdered || 0) - (order.quantityRefunded || 0))
             if (isVisible("quantityRefunded")) row.push(order.quantityRefunded || 0)
             if (isVisible("subtotalValue")) row.push(((order.subtotalCents || 0) / 100).toFixed(2))
             if (isVisible("refundValue")) row.push(((order.refundAmountCents || 0) / 100).toFixed(2))
@@ -445,6 +442,12 @@ export default function OrderReportPage() {
                                 compareYears={compareYears}
                             />
                         </div>
+                        {role !== "BRANCH_ADMIN" && organizationId && (
+                            <>
+                                <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
+                                <MultiBranchFilter organizationId={organizationId} selectedBranchIds={contextBranchIds} onChange={setContextBranchIds} />
+                            </>
+                        )}
                         <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => { mutateGlobal(); mutateChart(); mutateReport(); }}>
                             <RefreshCw className={cn("h-4 w-4", (isGlobalLoading || isChartLoading || isReportLoading) && "animate-spin")} />
                         </Button>
@@ -684,12 +687,9 @@ export default function OrderReportPage() {
                                             {isVisible("group") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Group</TableHead>}
                                             {isVisible("branchName") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Store className="h-3 w-3" /> Branch</div></TableHead>}
                                             {isVisible("status") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Status</TableHead>}
-                                            {isVisible("totalItems") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Total items</TableHead>}
-                                            {isVisible("deliveredItems") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Delivered items</TableHead>}
-                                            {isVisible("refundedItems") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Refunded items</TableHead>}
-                                            {isVisible("quantityOrdered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Quantity ordered</TableHead>}
-                                            {isVisible("quantityDelivered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Quantity delivered</TableHead>}
-                                            {isVisible("quantityRefunded") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Quantity refunded</TableHead>}
+                                            {isVisible("quantityOrdered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Qty Ordered</TableHead>}
+                                            {isVisible("quantityDelivered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-emerald-600">Qty Delivered</TableHead>}
+                                            {isVisible("quantityRefunded") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-rose-500">Qty Refunded</TableHead>}
                                             {isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Subtotal</TableHead>}
                                             {isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500">Refund</TableHead>}
                                             {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">{isBuyer ? "Net Purchased" : "Net Total"}</TableHead>}
@@ -723,12 +723,9 @@ export default function OrderReportPage() {
                                                             </Badge>
                                                         </TableCell>
                                                     )}
-                                                    {isVisible("totalItems") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-slate-600 dark:text-slate-400">{order.itemCount || 0}</TableCell>}
-                                                    {isVisible("deliveredItems") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{order.deliveredItemCount || 0}</TableCell>}
-                                                    {isVisible("refundedItems") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-rose-600 dark:text-rose-400">{order.refundedItemCount || 0}</TableCell>}
-                                                    {isVisible("quantityOrdered") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-slate-600 dark:text-slate-400">{order.quantityOrdered || 0}</TableCell>}
-                                                    {isVisible("quantityDelivered") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{order.quantityDelivered || 0}</TableCell>}
-                                                    {isVisible("quantityRefunded") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-rose-600 dark:text-rose-400">{order.quantityRefunded || 0}</TableCell>}
+                                                    {isVisible("quantityOrdered") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold font-mono text-slate-600 dark:text-slate-400">{order.quantityOrdered || 0}</TableCell>}
+                                                    {isVisible("quantityDelivered") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold font-mono text-emerald-600 dark:text-emerald-400">{(order.quantityOrdered || 0) - (order.quantityRefunded || 0)}</TableCell>}
+                                                    {isVisible("quantityRefunded") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold font-mono text-rose-500 dark:text-rose-400">{order.quantityRefunded || 0}</TableCell>}
                                                     {isVisible("subtotalValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-bold font-mono">{formatPKR(order.subtotalCents / 100)}</TableCell>}
                                                     {isVisible("refundValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-rose-500">{order.refundAmountCents > 0 ? `-${formatPKR(order.refundAmountCents / 100)}` : "—"}</TableCell>}
                                                     {isVisible("netTotalValue") && <TableCell className="px-8 py-5 text-right text-xs font-black font-mono text-slate-900 dark:text-white leading-none">{formatPKR((order.totalCents - (order.refundAmountCents || 0)) / 100)}</TableCell>}
