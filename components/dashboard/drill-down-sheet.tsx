@@ -29,6 +29,7 @@ import {
     User, Clock, Info, Search
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import type { DateRange } from "@/lib/hooks/use-sales-performance"
@@ -155,6 +156,7 @@ export function DrillDownSheet({
     const [compareYears, setCompareYears] = useState<number[]>([])
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
     const [refundType, setRefundType] = useState<"all" | "full" | "partial">("all")
+    const [searchQuery, setSearchQuery] = useState("")
 
     useEffect(() => {
         if (isOpen) {
@@ -203,7 +205,23 @@ export function DrillDownSheet({
         revalidateOnFocus: false
     })
 
-    const items = data?.items || []
+    const items = useMemo(() => {
+        const rawItems = data?.items || []
+        if (!searchQuery.trim()) return rawItems
+        
+        const query = searchQuery.toLowerCase()
+        return rawItems.filter((item: any) => 
+            (item.tid || "").toLowerCase().includes(query) ||
+            (item.branchName || "").toLowerCase().includes(query) ||
+            (item.buyerName || "").toLowerCase().includes(query) ||
+            (item.creatorEmployeeId || "").toLowerCase().includes(query) ||
+            (item.organizationName || "").toLowerCase().includes(query) ||
+            (item.items || []).some((prod: any) => 
+                (prod.name || "").toLowerCase().includes(query) ||
+                (prod.productCode || "").toLowerCase().includes(query)
+            )
+        )
+    }, [data?.items, searchQuery])
     const summary = data?.summary || {}
     const comparison = data?.comparison || null
     const config = type ? TYPE_CONFIG[type] : null
@@ -271,6 +289,20 @@ export function DrillDownSheet({
                             />
                         </div>
                     </div>
+
+                    {!isLoading && items.length > 0 && (
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="relative flex-1 max-w-sm">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                <Input
+                                    placeholder="Search by transaction ID, employee number, product, branch..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-10 h-9 text-sm bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700"
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {!isLoading && items.length > 0 && (
                         <div className="grid grid-cols-2 gap-3 mb-2 animate-in fade-in slide-in-from-top-4 duration-500">
@@ -345,8 +377,15 @@ export function DrillDownSheet({
                                 <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center mb-6">
                                     <Search className="w-10 h-10 text-slate-400" />
                                 </div>
-                                <h3 className="text-lg font-semibold tracking-tight">No Transactions Found</h3>
-                                <p className="text-sm text-slate-500 mt-2 max-w-xs">There are no orders matching your selected filters.</p>
+                                <h3 className="text-lg font-semibold tracking-tight">
+                                    {searchQuery.trim() ? "No Matching Transactions" : "No Transactions Found"}
+                                </h3>
+                                <p className="text-sm text-slate-500 mt-2 max-w-xs">
+                                    {searchQuery.trim() 
+                                        ? `No transactions match your search for "${searchQuery}". Try different keywords.`
+                                        : "There are no orders matching your selected filters."
+                                    }
+                                </p>
                             </div>
                         ) : (
                             <div className="space-y-4">
@@ -420,7 +459,9 @@ export function DrillDownSheet({
                                                                         </div>
                                                                         <div className="min-w-0">
                                                                             <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{item.buyerName}</p>
-                                                                            <p className="text-[10px] text-slate-500 font-medium">{item.buyerPhone}</p>
+                                                                            {item.buyerPhone && (
+                                                                                <p className="text-[10px] text-slate-500 font-medium">{item.buyerPhone}</p>
+                                                                            )}
                                                                             <p className="text-[9px] font-black text-indigo-500 font-mono mt-1">#{item.creatorEmployeeId || "UNSET"}</p>
                                                                         </div>
                                                                     </div>

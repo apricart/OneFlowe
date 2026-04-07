@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAppContext } from "@/components/context/app-context"
+import { useSession } from "next-auth/react"
+import { Role } from "@/lib/rbac"
 import { formatPKR, cn } from "@/lib/utils"
 import { 
   Search, 
@@ -48,6 +50,11 @@ type BranchInventoryItem = {
 }
 
 export default function BranchInventoryPage() {
+  const { data: session } = useSession()
+  const role = (session?.user as any)?.role as Role
+  const userBranchId = (session?.user as any)?.branchId
+  const userOrgId = (session?.user as any)?.organizationId
+
   const { branchId, organizationId } = useAppContext()
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -57,8 +64,15 @@ export default function BranchInventoryPage() {
   params.set("search", searchQuery)
   if (categoryFilter !== "all") params.set("category", categoryFilter)
   if (subCategoryFilter !== "all") params.set("subCategory", subCategoryFilter)
-  if (branchId) params.set("branchId", String(branchId))
-  if (organizationId) params.set("organizationId", String(organizationId))
+  
+  if (role === "BRANCH_ADMIN") {
+    const adminBranchId = userBranchId || branchId
+    if (userOrgId) params.set("organizationId", String(userOrgId))
+    if (adminBranchId) params.set("branchId", String(adminBranchId))
+  } else {
+    if (branchId) params.set("branchId", String(branchId))
+    if (organizationId) params.set("organizationId", String(organizationId))
+  }
 
   const { data, isLoading, mutate } = useSWR<{
     items: BranchInventoryItem[]

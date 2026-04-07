@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, users, roles, branches, organizations, groups, orderItems } from "@/db/schema"
+import { orders, users, roles, branches, organizations, groups, orderItems, refunds, refundItems } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql, sum, count, inArray } from "drizzle-orm"
 import { metricExpressions } from "@/lib/metric-utils"
 
@@ -324,7 +324,24 @@ export async function GET(req: NextRequest) {
         fulfilledAt: orders.fulfilledAt,
         refundedAt: orders.refundedAt,
         userName: users.fullName,
-        employeeId: users.employeeId
+        employeeId: users.employeeId,
+        itemCount: sql<number>`(
+            SELECT COALESCE(SUM(${orderItems.quantity}), 0)
+            FROM ${orderItems}
+            WHERE ${orderItems.orderId} = ${orders.id}
+        )`.mapWith(Number),
+        deliveredItemCount: sql<number>`(
+            SELECT COALESCE(SUM(${orderItems.quantity}), 0)
+            FROM ${orderItems}
+            WHERE ${orderItems.orderId} = ${orders.id}
+        )`.mapWith(Number),
+        refundedItemCount: sql<number>`(
+            SELECT COALESCE(SUM(${refundItems.quantity}), 0)
+            FROM ${refundItems}
+            INNER JOIN ${refunds} ON ${refundItems.refundId} = ${refunds.id}
+            WHERE ${refunds.orderId} = ${orders.id}
+            AND UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED')
+        )`.mapWith(Number)
     })
         .from(orders)
         .leftJoin(branches, eq(orders.branchId, branches.id))

@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Building2, Upload, Eye, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -46,6 +48,16 @@ const tabs = [
 ]
 
 export default function OrganizationInventoryPage() {
+    const { data: session } = useSession()
+    const router = useRouter()
+    const role = (session?.user as any)?.role
+
+    useEffect(() => {
+        if (role === "BRANCH_ADMIN") {
+            router.push("/dashboard")
+        }
+    }, [role, router])
+
     const [activeTab, setActiveTab] = useState("assign")
 
     return (

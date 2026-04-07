@@ -67,7 +67,17 @@ export async function GET(req: NextRequest) {
       // conditions.push(sql`UPPER(${orders.status}) IN ('APPROVED', 'FULFILLED', 'REFUNDED')`)
     } else if (role === "HEAD_OFFICE") {
       if (typeof orgIdNum === "number") conditions.push(eq(orders.organizationId, orgIdNum))
+    } else if (role === "ORDER_PORTAL") {
+      // CRITICAL: ORDER_PORTAL users should only see THEIR OWN orders
+      const currentUserId = (session.user as any).id
+      if (currentUserId) {
+        conditions.push(eq(orders.createdByUserId, currentUserId))
+      }
+      // Also restrict to their organization and branch
+      if (typeof orgIdNum === "number") conditions.push(eq(orders.organizationId, orgIdNum))
+      if (typeof branchIdFromUser === "number") conditions.push(eq(orders.branchId, branchIdFromUser))
     } else {
+      // BRANCH_ADMIN and other roles
       if (typeof orgIdNum === "number") conditions.push(eq(orders.organizationId, orgIdNum))
       if (typeof branchIdFromUser === "number") conditions.push(eq(orders.branchId, branchIdFromUser))
     }

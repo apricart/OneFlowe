@@ -62,6 +62,9 @@ const ALL_COLUMNS: ColumnDef[] = [
     { key: "group", label: "Group", defaultVisible: true },
     { key: "branchName", label: "Branch", defaultVisible: true },
     { key: "status", label: "Status", defaultVisible: true },
+    { key: "totalItems", label: "Total items", defaultVisible: true },
+    { key: "deliveredItems", label: "Delivered items", defaultVisible: true },
+    { key: "refundedItems", label: "Refunded items", defaultVisible: true },
     { key: "subtotalValue", label: "Subtotal", defaultVisible: true },
     { key: "refundValue", label: "Refund", defaultVisible: true },
     { key: "netTotalValue", label: "Net Total", defaultVisible: true },
@@ -98,10 +101,10 @@ export default function OrderReportPage() {
 
     // Role-based terminology
     const kpiRevenueLabel = isBuyer ? "Net Amount" : "Net Revenue"
-    const kpiAvgLabel = isBuyer ? "Avg Purchased Value" : "Avg Value"
-    const chartRevenueLabel = isBuyer ? "Purchased" : "Revenue"
-    const chartOrdersLabel = isBuyer ? "Orders" : "Orders"
-    const exportTitleLabel = isBuyer ? "Order Purchase Report" : "Order Consumption Report"
+    const kpiAvgLabel = "Avg Value"
+    const chartRevenueLabel = "Revenue"
+    const chartOrdersLabel = "Orders"
+    const exportTitleLabel = "Order Consumption Report"
 
     const [hasMounted, setHasMounted] = useState(false)
     const [activeTab, setActiveTab] = useState("analytics")
@@ -141,7 +144,16 @@ export default function OrderReportPage() {
     
     // Tier 1: Global Summary
     const globalParams = new URLSearchParams()
-    if (organizationId) globalParams.set("organizationId", organizationId.toString())
+    
+    // Security Isolation: Force branch/org if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (userOrgId) globalParams.set("organizationId", String(userOrgId))
+        if (adminBranchId) globalParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (organizationId) globalParams.set("organizationId", organizationId.toString())
+    }
+
     if (dateRange?.startDate) globalParams.set("startDate", dateRange.startDate.toISOString())
     if (dateRange?.endDate) globalParams.set("endDate", dateRange.endDate.toISOString())
     if (selectedMonths.length) globalParams.set("months", selectedMonths.join(","))
@@ -159,10 +171,18 @@ export default function OrderReportPage() {
 
     // Tier 2: Chart/Trend Data
     const chartParams = new URLSearchParams()
-    if (chartOrgIds.length > 0) chartParams.set("organizationIds", chartOrgIds.join(","))
-    else if (organizationId) chartParams.set("organizationId", organizationId.toString())
+    
+    // Security Isolation: Force branch/org if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (userOrgId) chartParams.set("organizationId", String(userOrgId))
+        if (adminBranchId) chartParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (chartOrgIds.length > 0) chartParams.set("organizationIds", chartOrgIds.join(","))
+        else if (organizationId) chartParams.set("organizationId", organizationId.toString())
+        if (chartBranchIds.length > 0) chartParams.set("branchIds", chartBranchIds.join(","))
+    }
 
-    if (chartBranchIds.length > 0) chartParams.set("branchIds", chartBranchIds.join(","))
     if (chartGroupIds.length > 0) chartParams.set("groupIds", chartGroupIds.join(","))
     if (chartMonths.length > 0) chartParams.set("months", chartMonths.join(","))
     if (chartYears.length > 0) chartParams.set("years", chartYears.join(","))
@@ -173,10 +193,18 @@ export default function OrderReportPage() {
 
     // Tier 3: Report Table Data
     const reportParams = new URLSearchParams()
-    if (reportOrgIds.length > 0) reportParams.set("organizationIds", reportOrgIds.join(","))
-    else if (organizationId) reportParams.set("organizationId", organizationId.toString())
+    
+    // Security Isolation: Force branch/org if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (userOrgId) reportParams.set("organizationId", String(userOrgId))
+        if (adminBranchId) reportParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (reportOrgIds.length > 0) reportParams.set("organizationIds", reportOrgIds.join(","))
+        else if (organizationId) reportParams.set("organizationId", organizationId.toString())
+        if (reportBranchIds.length > 0) reportParams.set("branchIds", reportBranchIds.join(","))
+    }
 
-    if (reportBranchIds.length > 0) reportParams.set("branchIds", reportBranchIds.join(","))
     if (reportGroupIds.length > 0) reportParams.set("groupIds", reportGroupIds.join(","))
     if (reportMonths.length > 0) reportParams.set("months", reportMonths.join(","))
     if (reportYears.length > 0) reportParams.set("years", reportYears.join(","))
@@ -353,6 +381,9 @@ export default function OrderReportPage() {
             if (isVisible("group") && role !== "BRANCH_ADMIN") row.push(order.groupName || "-")
             if (isVisible("branchName") && role !== "BRANCH_ADMIN") row.push(order.branchName || "-")
             if (isVisible("status")) row.push(order.status)
+            if (isVisible("totalItems")) row.push(order.itemCount || 0)
+            if (isVisible("deliveredItems")) row.push(order.deliveredItemCount || 0)
+            if (isVisible("refundedItems")) row.push(order.refundedItemCount || 0)
             if (isVisible("subtotalValue")) row.push(((order.subtotalCents || 0) / 100).toFixed(2))
             if (isVisible("refundValue")) row.push(((order.refundAmountCents || 0) / 100).toFixed(2))
             if (isVisible("netTotalValue")) row.push((( (order.totalCents || 0) - (order.refundAmountCents || 0)) / 100).toFixed(2))
@@ -647,6 +678,9 @@ export default function OrderReportPage() {
                                             {isVisible("group") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Group</TableHead>}
                                             {isVisible("branchName") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Store className="h-3 w-3" /> Branch</div></TableHead>}
                                             {isVisible("status") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Status</TableHead>}
+                                            {isVisible("totalItems") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Total items</TableHead>}
+                                            {isVisible("deliveredItems") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Delivered items</TableHead>}
+                                            {isVisible("refundedItems") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Refunded items</TableHead>}
                                             {isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Subtotal</TableHead>}
                                             {isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500">Refund</TableHead>}
                                             {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">{isBuyer ? "Net Purchased" : "Net Total"}</TableHead>}
@@ -680,6 +714,9 @@ export default function OrderReportPage() {
                                                             </Badge>
                                                         </TableCell>
                                                     )}
+                                                    {isVisible("totalItems") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-slate-600 dark:text-slate-400">{order.itemCount || 0}</TableCell>}
+                                                    {isVisible("deliveredItems") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-emerald-600 dark:text-emerald-400">{order.deliveredItemCount || 0}</TableCell>}
+                                                    {isVisible("refundedItems") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold text-rose-600 dark:text-rose-400">{order.refundedItemCount || 0}</TableCell>}
                                                     {isVisible("subtotalValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-bold font-mono">{formatPKR(order.subtotalCents / 100)}</TableCell>}
                                                     {isVisible("refundValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-rose-500">{order.refundAmountCents > 0 ? `-${formatPKR(order.refundAmountCents / 100)}` : "—"}</TableCell>}
                                                     {isVisible("netTotalValue") && <TableCell className="px-8 py-5 text-right text-xs font-black font-mono text-slate-900 dark:text-white leading-none">{formatPKR((order.totalCents - (order.refundAmountCents || 0)) / 100)}</TableCell>}

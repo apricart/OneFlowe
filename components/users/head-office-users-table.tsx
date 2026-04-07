@@ -10,7 +10,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
-import { Edit, Trash2, Search, User, Mail, Phone, Shield, ShieldCheck, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff, Upload, FileText, Table as TableIcon, FileJson, Info, MoreHorizontal, ShieldAlert, KeyRound, UserMinus, UserCheck, Calendar, LayoutGrid, List } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command"
+import { Edit, Trash2, Search, User, Mail, Phone, Shield, ShieldCheck, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff, Upload, FileText, Table as TableIcon, FileJson, Info, MoreHorizontal, ShieldAlert, KeyRound, UserMinus, UserCheck, Calendar, LayoutGrid, List, Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { Switch } from "@/components/ui/switch"
@@ -63,6 +65,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   const [showPasswordReset, setShowPasswordReset] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [branchOpen, setBranchOpen] = useState(false)
   const [editForm, setEditForm] = useState({
     firstName: "",
     lastName: "",
@@ -1014,20 +1017,55 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
               {(editForm.role === "BRANCH_ADMIN" || editForm.role === "ORDER_PORTAL") && (
                 <div className="space-y-2">
                   <Label htmlFor="branch">Branch Assignment *</Label>
-                  <Select disabled value={editForm.branchId} onValueChange={value => setEditForm({ ...editForm, branchId: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select branch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches
-                        .filter(branch => !editForm.organizationId || branch.organizationId === parseInt(editForm.organizationId))
-                        .map((branch) => (
-                          <SelectItem key={branch.id} value={String(branch.id)}>
-                            {branch.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={branchOpen} onOpenChange={setBranchOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className={cn(
+                          "w-full justify-between",
+                          !editForm.branchId && "text-muted-foreground"
+                        )}
+                      >
+                        {editForm.branchId
+                          ? branches.find((b) => b.id === parseInt(editForm.branchId))?.name
+                          : "Select branch"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[200px] p-0">
+                      <Command>
+                        <CommandInput placeholder="Search branches..." />
+                        <CommandList>
+                          <CommandEmpty>No branch found.</CommandEmpty>
+                          <CommandGroup>
+                            {branches
+                              .filter(branch => !editForm.organizationId || branch.organizationId === parseInt(editForm.organizationId))
+                              .map((branch) => (
+                                <CommandItem
+                                  key={branch.id}
+                                  value={branch.name}
+                                  onSelect={() => {
+                                    setEditForm({ ...editForm, branchId: String(branch.id) })
+                                    setBranchOpen(false)
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      branch.id === parseInt(editForm.branchId)
+                                        ? "opacity-100"
+                                        : "opacity-0"
+                                    )}
+                                  />
+                                  {branch.name}
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               )}
             </div>

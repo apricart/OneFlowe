@@ -53,6 +53,12 @@ export default function GroupsReportPage() {
     const userOrgId = (session?.user as any)?.organizationId
     const [hasMounted, setHasMounted] = useState(false)
 
+    useEffect(() => {
+        if (hasMounted && role === "BRANCH_ADMIN") {
+            router.push("/reports")
+        }
+    }, [hasMounted, role, router])
+
     // ━━━ GLOBAL CONTEXT FILTERS ━━━
     const startFromUrl = searchParams.get("startDate")
     const endFromUrl = searchParams.get("endDate")

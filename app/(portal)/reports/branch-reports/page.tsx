@@ -41,21 +41,23 @@ export default function BranchReportsPage() {
     const pathname = usePathname()
     const searchParams = useSearchParams()
 
-    const { organizationId: contextOrgId } = useAppContext()
-    const [searchTerm, setSearchTerm] = useState("")
-    const [generatedDate, setGeneratedDate] = useState("")
-    const [activeTab, setActiveTab] = useState("analytics")
-
     const { data: session } = useSession()
+    const { 
+        organizationId: contextOrgId,
+        userBranchId: sessionUserBranchId,
+        branchId: contextBranchId
+    } = useAppContext()
+
     const role = (session?.user as any)?.role as Role
     const userOrgId = (session?.user as any)?.organizationId
+    const userBranchId = sessionUserBranchId || (session?.user as any)?.branchId
     const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
 
     // Role-based terminology
-    const revenueLabel = isBuyer ? "Total Purchased" : "Net Revenue"
-    const avgLabel = isBuyer ? "Avg Purchase Value" : "Avg Order Value"
-    const revenueHeader = isBuyer ? "Purchased" : "Revenue"
-    const orderLabel = isBuyer ? "Orders" : "Orders"
+    const revenueLabel = "Net Revenue"
+    const avgLabel = "Avg Order Value"
+    const revenueHeader = "Revenue"
+    const orderLabel = "Orders"
     const [hasMounted, setHasMounted] = useState(false)
 
     // ━━━ GLOBAL CONTEXT FILTERS ━━━
@@ -75,9 +77,15 @@ export default function BranchReportsPage() {
     const [compareMonths, setCompareMonths] = useState<number[]>([])
     const [compareYears, setCompareYears] = useState<number[]>([])
     
-    const [selectedOrgId, setSelectedOrgId] = useState<string>(contextOrgId ? String(contextOrgId) : "")
+    const [selectedOrgId, setSelectedOrgId] = useState<string>(contextOrgId ? String(contextOrgId) : (userOrgId ? String(userOrgId) : ""))
     const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
-    const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
+    const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>(
+        role === "BRANCH_ADMIN" && userBranchId ? [String(userBranchId)] : []
+    )
+    
+    const [searchTerm, setSearchTerm] = useState("")
+    const [generatedDate, setGeneratedDate] = useState("")
+    const [activeTab, setActiveTab] = useState("analytics")
 
     // ━━━ TIER 1: GLOBAL SUMMARY DATA ━━━
     const globalQueryParams = new URLSearchParams()
@@ -85,9 +93,17 @@ export default function BranchReportsPage() {
         globalQueryParams.set("startDate", dateRange.startDate.toISOString())
         globalQueryParams.set("endDate", dateRange.endDate.toISOString())
     }
-    if (selectedOrgId) globalQueryParams.set("organizationId", selectedOrgId)
-    if (selectedGroupIds.length > 0) globalQueryParams.set("groupIds", selectedGroupIds.join(","))
-    if (selectedBranchIds.length > 0) globalQueryParams.set("branchIds", selectedBranchIds.join(","))
+
+    // Security Isolation: Override all filters if role is BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN" && userBranchId) {
+        if (userOrgId) globalQueryParams.set("organizationId", String(userOrgId))
+        globalQueryParams.set("branchIds", String(userBranchId))
+    } else {
+        if (selectedOrgId) globalQueryParams.set("organizationId", selectedOrgId)
+        if (selectedGroupIds.length > 0) globalQueryParams.set("groupIds", selectedGroupIds.join(","))
+        if (selectedBranchIds.length > 0) globalQueryParams.set("branchIds", selectedBranchIds.join(","))
+    }
+
     if (selectedMonths.length > 0) globalQueryParams.set("months", selectedMonths.join(","))
     if (selectedYears.length > 0) globalQueryParams.set("years", selectedYears.join(","))
     if (compare) globalQueryParams.set("compare", "true")
@@ -176,8 +192,15 @@ export default function BranchReportsPage() {
 
     const branches = reportData?.items || []
     const filteredBranches = useMemo(() => {
-        return branches.filter((b: any) => b.name?.toLowerCase().includes(reportSearch.toLowerCase()) || b.groupName?.toLowerCase().includes(reportSearch.toLowerCase()))
-    }, [branches, reportSearch])
+        let list = branches.filter((b: any) => b.name?.toLowerCase().includes(reportSearch.toLowerCase()) || b.groupName?.toLowerCase().includes(reportSearch.toLowerCase()))
+        
+        // Security Fallback: Client-side filtering to ensure only authorized branch is shown
+        if (role === "BRANCH_ADMIN" && userBranchId) {
+            list = list.filter((b: any) => String(b.id) === String(userBranchId))
+        }
+        
+        return list
+    }, [branches, reportSearch, role, userBranchId])
 
     const normalizedTrend = useMemo(() => {
         const trend = chartData?.trend || []
@@ -250,10 +273,12 @@ export default function BranchReportsPage() {
                             <MapPin className="h-6 w-6 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Branch Intelligence</h1>
+                            <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">
+                                {role === "BRANCH_ADMIN" ? "Branch Performance" : "Branch Intelligence"}
+                            </h1>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
                                 <Building2 className="h-3 w-3" />
-                                Multi-Unit Performance Hub
+                                {role === "BRANCH_ADMIN" ? "Unit Performance Hub" : "Multi-Unit Performance Hub"}
                             </p>
                         </div>
                     </div>
@@ -304,7 +329,7 @@ export default function BranchReportsPage() {
                         trend={orderTrend}
                     />
                     <KPICard 
-                        title="Active Units"
+                        title={role === "BRANCH_ADMIN" ? "Branch Unit" : "Active Units"}
                         value={summary.activeBranches.toLocaleString()}
                         icon={Building2}
                         colorScheme="amber"

@@ -109,10 +109,20 @@ export default function UserReportPage() {
 
     // Tier 1: Global Summary
     const globalParams = new URLSearchParams()
-    if (globalOrganizationIds.length) globalParams.set("organizationIds", globalOrganizationIds.join(","))
-    else if (organizationId) globalParams.set("organizationIds", organizationId.toString())
-    if (globalGroupIds.length) globalParams.set("groupIds", globalGroupIds.join(","))
-    if (globalBranchIds.length) globalParams.set("branchIds", globalBranchIds.join(","))
+    
+    // Security Isolation: Force branch/org if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (userOrgId) globalParams.set("organizationIds", String(userOrgId))
+        if (adminBranchId) globalParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (globalOrganizationIds.length) globalParams.set("organizationIds", globalOrganizationIds.join(","))
+        else if (userOrgId || contextOrgId) globalParams.set("organizationIds", (userOrgId || contextOrgId).toString())
+        
+        if (globalGroupIds.length) globalParams.set("groupIds", globalGroupIds.join(","))
+        if (globalBranchIds.length) globalParams.set("branchIds", globalBranchIds.join(","))
+    }
+    
     if (globalUserIds.length) globalParams.set("userIds", globalUserIds.join(","))
 
     if (dateRange?.startDate) globalParams.set("startDate", dateRange.startDate.toISOString())
@@ -133,11 +143,20 @@ export default function UserReportPage() {
     // Tier 2: Chart/Trend Data
     const isChartUserView = chartUserIds.length > 1
     const chartParams = new URLSearchParams()
-    if (chartOrganizationIds.length) chartParams.set("organizationIds", chartOrganizationIds.join(","))
-    else if (organizationId) chartParams.set("organizationIds", organizationId.toString())
-
-    if (chartGroupIds.length) chartParams.set("groupIds", chartGroupIds.join(","))
-    if (chartBranchIds.length) chartParams.set("branchIds", chartBranchIds.join(","))
+    
+    // Security Isolation: Force branch/org if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (userOrgId) chartParams.set("organizationIds", String(userOrgId))
+        if (adminBranchId) chartParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (chartOrganizationIds.length) chartParams.set("organizationIds", chartOrganizationIds.join(","))
+        else if (userOrgId || contextOrgId) chartParams.set("organizationIds", (userOrgId || contextOrgId).toString())
+        
+        if (chartGroupIds.length) chartParams.set("groupIds", chartGroupIds.join(","))
+        if (chartBranchIds.length) chartParams.set("branchIds", chartBranchIds.join(","))
+    }
+    
     if (chartUserIds.length) chartParams.set("userIds", chartUserIds.join(","))
     if (chartMonths.length) chartParams.set("months", chartMonths.join(","))
     if (chartYears.length) chartParams.set("years", chartYears.join(","))
@@ -148,11 +167,20 @@ export default function UserReportPage() {
 
     // Tier 3: Report Table Data
     const reportParams = new URLSearchParams()
-    if (reportOrganizationIds.length) reportParams.set("organizationIds", reportOrganizationIds.join(","))
-    else if (organizationId) reportParams.set("organizationIds", organizationId.toString())
-
-    if (reportGroupIds.length) reportParams.set("groupIds", reportGroupIds.join(","))
-    if (reportBranchIds.length) reportParams.set("branchIds", reportBranchIds.join(","))
+    
+    // Security Isolation: Force branch/org if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (userOrgId) reportParams.set("organizationIds", String(userOrgId))
+        if (adminBranchId) reportParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (reportOrganizationIds.length) reportParams.set("organizationIds", reportOrganizationIds.join(","))
+        else if (userOrgId || contextOrgId) reportParams.set("organizationIds", (userOrgId || contextOrgId).toString())
+        
+        if (reportGroupIds.length) reportParams.set("groupIds", reportGroupIds.join(","))
+        if (reportBranchIds.length) reportParams.set("branchIds", reportBranchIds.join(","))
+    }
+    
     if (reportUserIds.length) reportParams.set("userIds", reportUserIds.join(","))
     if (reportMonths.length) reportParams.set("months", reportMonths.join(","))
     if (reportYears.length) reportParams.set("years", reportYears.join(","))

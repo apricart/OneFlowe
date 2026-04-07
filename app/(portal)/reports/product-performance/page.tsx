@@ -322,9 +322,18 @@ export default function ProductPerformancePage() {
 
     // ━━━ GLOBAL DATA (Bento Grid) ━━━
     const globalQueryParams = new URLSearchParams()
-    if (organizationId) globalQueryParams.set("organizationId", organizationId.toString())
-    if (contextBranchIds.length > 0) globalQueryParams.set("branchIds", contextBranchIds.join(","))
-    if (globalGroupId) globalQueryParams.set("groupIds", globalGroupId)
+    
+    // Security Isolation: Force branch if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (organizationId) globalQueryParams.set("organizationId", organizationId.toString())
+        if (adminBranchId) globalQueryParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (organizationId) globalQueryParams.set("organizationId", organizationId.toString())
+        if (contextBranchIds.length > 0) globalQueryParams.set("branchIds", contextBranchIds.join(","))
+        if (globalGroupId) globalQueryParams.set("groupIds", globalGroupId)
+    }
+
     if (selectedMonths.length > 0) globalQueryParams.set("months", selectedMonths.join(","))
     if (selectedYears.length > 0) globalQueryParams.set("years", selectedYears.join(","))
     if (dateRange) {
@@ -338,10 +347,19 @@ export default function ProductPerformancePage() {
     // ━━━ CHART DATA (Local Filtered) ━━━
     const isChartProductView = chartProductIds.length > 1
     const chartQueryParams = new URLSearchParams()
-    if (chartOrgIds.length > 0) chartQueryParams.set("organizationIds", chartOrgIds.join(","))
-    else if (organizationId) chartQueryParams.set("organizationIds", organizationId.toString())
-    if (chartBranchIds.length > 0) chartQueryParams.set("branchIds", chartBranchIds.join(","))
-    if (chartGroupIds.length > 0) chartQueryParams.set("groupIds", chartGroupIds.join(","))
+    
+    // Security Isolation: Force branch if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (organizationId) chartQueryParams.set("organizationIds", organizationId.toString())
+        if (adminBranchId) chartQueryParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (chartOrgIds.length > 0) chartQueryParams.set("organizationIds", chartOrgIds.join(","))
+        else if (organizationId) chartQueryParams.set("organizationIds", organizationId.toString())
+        if (chartBranchIds.length > 0) chartQueryParams.set("branchIds", chartBranchIds.join(","))
+        if (chartGroupIds.length > 0) chartQueryParams.set("groupIds", chartGroupIds.join(","))
+    }
+
     if (chartProductIds.length > 0) chartQueryParams.set("productIds", chartProductIds.join(","))
     if (chartMonths.length > 0) chartQueryParams.set("months", chartMonths.join(","))
     if (chartYears.length > 0) chartQueryParams.set("years", chartYears.join(","))
@@ -351,10 +369,19 @@ export default function ProductPerformancePage() {
 
     // ━━━ REPORT DATA (Local Filtered) ━━━
     const reportQueryParams = new URLSearchParams()
-    if (organizationId) reportQueryParams.set("organizationId", organizationId.toString())
-    if (reportBranchIds.length > 0) reportQueryParams.set("branchIds", reportBranchIds.join(","))
-    if (reportGroupIds.length > 0) reportQueryParams.set("groupIds", reportGroupIds.join(","))
-    if (reportOrganizationIds.length > 0) reportQueryParams.set("organizationIds", reportOrganizationIds.join(","))
+    
+    // Security Isolation: Force branch if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (organizationId) reportQueryParams.set("organizationId", organizationId.toString())
+        if (adminBranchId) reportQueryParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (organizationId) reportQueryParams.set("organizationId", organizationId.toString())
+        if (reportBranchIds.length > 0) reportQueryParams.set("branchIds", reportBranchIds.join(","))
+        if (reportGroupIds.length > 0) reportQueryParams.set("groupIds", reportGroupIds.join(","))
+        if (reportOrganizationIds.length > 0) reportQueryParams.set("organizationIds", reportOrganizationIds.join(","))
+    }
+
     if (reportProductIds.length > 0) reportQueryParams.set("productIds", reportProductIds.join(","))
     if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
     if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
@@ -1106,7 +1133,7 @@ export default function ProductPerformancePage() {
                                     <div className="flex items-center gap-3">
                                         <History className="h-4 w-4 text-indigo-500" />
                                         <h3 className="font-bold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
-                                            {role === "SUPER_ADMIN" ? "Product Wise Sale" : "Product Wise Purchase"}
+                                            Product Wise Sale
                                         </h3>
                                     </div>
                                     {(reportYears.length > 0 || reportMonths.length > 0 || reportBranchIds.length > 0 || reportGroupIds.length > 0) && (

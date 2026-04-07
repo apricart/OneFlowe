@@ -205,16 +205,23 @@ export default function BudgetSummaryPage() {
 
     // Build query string
     const queryParams = new URLSearchParams()
-    if (organizationId) queryParams.set("organizationId", organizationId.toString())
-    if (startFromUrl) queryParams.set("startDate", startFromUrl)
-    if (endFromUrl) queryParams.set("endDate", endFromUrl)
-
-    if (contextBranchIds.length > 0) {
-        queryParams.set("branchIds", contextBranchIds.join(","))
-    } else if (contextBranchId) {
-        queryParams.set("branchId", contextBranchId)
+    
+    // Security Isolation: Force branch/org if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (organizationId) queryParams.set("organizationId", organizationId.toString())
+        if (adminBranchId) queryParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (organizationId) queryParams.set("organizationId", organizationId.toString())
+        if (contextBranchIds.length > 0) {
+            queryParams.set("branchIds", contextBranchIds.join(","))
+        } else if (contextBranchId) {
+            queryParams.set("branchId", contextBranchId)
+        }
     }
 
+    if (startFromUrl) queryParams.set("startDate", startFromUrl)
+    if (endFromUrl) queryParams.set("endDate", endFromUrl)
     if (selectedMonths.length > 0) queryParams.set("months", selectedMonths.join(","))
     if (selectedYears.length > 0) queryParams.set("years", selectedYears.join(","))
     if (compareMonths.length > 0) queryParams.set("compareMonths", compareMonths.join(","))
@@ -238,11 +245,20 @@ export default function BudgetSummaryPage() {
 
     // ━━━ CHART DATA (All-Time Independent) ━━━
     const chartQueryParams = new URLSearchParams()
-    if (organizationId) chartQueryParams.set("organizationId", organizationId.toString())
+    
+    // Security Isolation: Force branch/org if BRANCH_ADMIN
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (organizationId) chartQueryParams.set("organizationId", organizationId.toString())
+        if (adminBranchId) chartQueryParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (organizationId) chartQueryParams.set("organizationId", organizationId.toString())
+        if (contextBranchIds.length > 0) chartQueryParams.set("branchIds", contextBranchIds.join(","))
+        else if (contextBranchId) chartQueryParams.set("branchId", contextBranchId)
+    }
+
     chartQueryParams.set("preset", "all")
     chartQueryParams.set("granularity", "monthly")
-    if (contextBranchIds.length > 0) chartQueryParams.set("branchIds", contextBranchIds.join(","))
-    else if (contextBranchId) chartQueryParams.set("branchId", contextBranchId)
 
     const { data: chartApiData, isLoading: isChartLoading } = useSWR<BudgetSummaryResponse>(`/api/v1/analytics/budgets/summary?${chartQueryParams.toString()}`, fetcher)
 

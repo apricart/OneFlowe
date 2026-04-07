@@ -10,6 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatPKR } from "@/lib/utils"
 import { Search, Package, Eye, Building2, GitBranch, Loader2 } from "lucide-react"
 import { useAppContext } from "@/components/context/app-context"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { useEffect } from "react"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -36,6 +39,16 @@ type BranchProduct = {
 }
 
 export default function ViewBranchProductsPage() {
+    const { data: session } = useSession()
+    const router = useRouter()
+    const role = (session?.user as any)?.role
+
+    useEffect(() => {
+        if (role === "BRANCH_ADMIN") {
+            router.push("/dashboard")
+        }
+    }, [role, router])
+
     const { organizationId: contextOrgId } = useAppContext()
     const [localOrgId, setLocalOrgId] = useState<string>("")
     const [selectedGroupId, setSelectedGroupId] = useState<string>("")

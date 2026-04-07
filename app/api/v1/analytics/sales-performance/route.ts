@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server"
 import { and, eq, gte, lte, sql, or, inArray, desc, gt } from "drizzle-orm"
-import { requireApiRole, ok } from "@/lib/api"
+import { requireApiRole, ok, error } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders, branches, organizations } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
@@ -47,23 +47,52 @@ export async function GET(req: NextRequest) {
     let branchIds: number[] = []
     let organizationIds: number[] = []
 
-    // Role-based scoping
+    // SECURITY: Enforce strict data isolation based on user role
     if (role === "BRANCH_ADMIN") {
+        // Branch Admin can only see their own branch
         organizationId = scope?.organizationId ?? null
         branchId = scope?.branchId ?? null
+        // IGNORE URL PARAMETERS for security
     } else if (role === "HEAD_OFFICE") {
+        // Head Office can see all branches in their organization, but not other organizations
         organizationId = scope?.organizationId ?? null
+        // Only allow branch filtering within their organization
         if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
-            branchId = Number(branchIdParam)
+            const requestedBranchId = Number(branchIdParam)
+            // Verify this branch belongs to their organization
+            if (organizationId && requestedBranchId) {
+                try {
+                    const [branchCheck] = await db
+                        .select({ id: branches.id })
+                        .from(branches)
+                        .where(and(eq(branches.id, requestedBranchId), eq(branches.organizationId, organizationId)))
+                        .limit(1)
+                    
+                    if (branchCheck) {
+                        branchId = requestedBranchId
+                    } else {
+                        console.warn(`[Security] Head Office user tried to access branch ${requestedBranchId} outside their org ${organizationId}`)
+                        return error("Access denied: Branch not found in your organization")
+                    }
+                } catch (err) {
+                    console.error("[Security] Error verifying branch access for Head Office:", err)
+                    return error("Access verification failed")
+                }
+            }
         }
-    } else {
-        // SUPER_ADMIN
+        // IGNORE organizationId parameter for security
+    } else if (role === "SUPER_ADMIN") {
+        // Super Admin can see everything (intended)
         if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") {
             organizationId = Number(orgIdParam)
         }
         if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
             branchId = Number(branchIdParam)
         }
+    } else {
+        // Unknown role - deny access
+        console.warn(`[Security] Unknown role ${role} attempting to access sales-performance API`)
+        return error("Access denied: Invalid user role")
     }
 
     if (branchIdsParam) {

@@ -69,6 +69,13 @@ const reportCards = [
     gradient: "from-violet-500 to-purple-500",
   },
   {
+    title: "Organization Report",
+    description: "Multi-organization data comparison and global performance metrics",
+    href: "/reports/organization-report",
+    icon: Building2,
+    gradient: "from-blue-600 to-indigo-600",
+  },
+  {
     title: "Groups Report",
     description: "Group performance, member branches, and purchase breakdowns",
     href: "/reports/groups",
@@ -90,22 +97,29 @@ export default function ReportsPage() {
   const displayReportCards = reportCards
     .filter(card => {
       if (role === "BRANCH_ADMIN") {
-        if (card.title === "Groups Report" || card.title === "Corporate Report") {
+        const restrictedTitles = [
+          "Groups Report", 
+          "Organization Report", 
+          "Stock Reports", 
+          "Stock Logs", 
+          "Stock Store Report"
+        ]
+        if (restrictedTitles.includes(card.title)) {
           return false
         }
       }
       return true
     })
     .map(card => {
-      if (!isBuyer) return card
-      
       let description = card.description
-      if (card.title === "Product Report" || card.title === "Product Performance") {
-        description = "Analyze product purchases and category-wise breakdown"
+      if (card.title === "Product Report") {
+        description = "Analyze product performance and category-wise breakdown"
       } else if (card.title === "Branch Reports") {
-        description = "Branch-level purchase rankings, threshold alerts, and comparisons"
+        description = "Branch-level performance rankings, threshold alerts, and comparisons"
       } else if (card.title === "Groups Report") {
         description = "Group performance, member branches, and purchase breakdowns"
+      } else if (card.title === "Organization Report") {
+        description = "Multi-organization data comparison and global performance metrics"
       }
       
       return { ...card, description }

@@ -9,6 +9,8 @@ import { CommandPalette } from "@/components/ui/command-palette"
 import { ContextSelector } from "@/components/shell/context-selector"
 import Link from "next/link"
 import { NotificationBell } from "@/components/notifications/notification-center"
+import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
+import { useAppContext } from "@/components/context/app-context"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,12 +25,11 @@ export function Topbar() {
   const { data: session } = useSession()
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
+  const { organizationId, branchIds, setBranchIds, userRole } = useAppContext()
 
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  const userRole = (session?.user as any)?.role
 
   async function logout() {
     try {
@@ -56,6 +57,17 @@ export function Topbar() {
         <div className="hidden lg:flex">
           <ContextSelector />
         </div>
+        
+        {/* Global Branch Filter for HEAD_OFFICE */}
+        {userRole === "HEAD_OFFICE" && organizationId && (
+          <div className="hidden lg:flex">
+            <MultiBranchFilter
+              organizationId={organizationId}
+              selectedBranchIds={branchIds}
+              onChange={setBranchIds}
+            />
+          </div>
+        )}
       </div>
 
       {/* Right Side - Actions & Profile */}

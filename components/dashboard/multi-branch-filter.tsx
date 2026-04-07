@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useCallback } from "react"
-import { Check, ChevronDown, GitBranch, X } from "lucide-react"
+import React, { useState, useCallback, useMemo } from "react"
+import { Check, ChevronDown, GitBranch, X, Search } from "lucide-react"
 import useSWR from "swr"
 import { fetcher } from "@/lib/fetcher"
 
@@ -18,6 +18,7 @@ interface MultiBranchFilterProps {
 
 export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange }: MultiBranchFilterProps) {
     const [open, setOpen] = useState(false)
+    const [searchQuery, setSearchQuery] = useState("")
 
     const url = organizationId
         ? `/api/v1/branches?organizationId=${organizationId}&limit=100`
@@ -28,6 +29,16 @@ export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange 
     })
 
     const branches = data?.items || []
+
+    // Filter branches based on search query
+    const filteredBranches = useMemo(() => {
+        if (!searchQuery.trim()) return branches
+        const query = searchQuery.toLowerCase()
+        return branches.filter(branch => 
+            branch.name.toLowerCase().includes(query) ||
+            branch.id.toString().includes(query)
+        )
+    }, [branches, searchQuery])
 
     const toggle = useCallback((id: string) => {
         if (selectedBranchIds.includes(id)) {
@@ -43,8 +54,8 @@ export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange 
     }, [onChange])
 
     const selectAll = useCallback(() => {
-        onChange(branches.map(b => String(b.id)))
-    }, [branches, onChange])
+        onChange(filteredBranches.map(b => String(b.id)))
+    }, [filteredBranches, onChange])
 
     const hasSelection = selectedBranchIds.length > 0
     const label = hasSelection
@@ -82,8 +93,22 @@ export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange 
             {open && (
                 <div className="absolute top-full right-0 mt-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200 min-w-[220px]">
                     <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden">
+                        <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                <input
+                                    type="text"
+                                    placeholder="Search branches..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-10 pr-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                        </div>
                         <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">Select Branches</span>
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                                {filteredBranches.length === branches.length ? "All Branches" : `Filtered (${filteredBranches.length})`}
+                            </span>
                             <div className="flex gap-2">
                                 <button onClick={selectAll} className="text-xs text-blue-600 hover:underline font-medium">All</button>
                                 <span className="text-slate-300">|</span>
@@ -91,33 +116,39 @@ export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange 
                             </div>
                         </div>
                         <div className="max-h-60 overflow-y-auto py-2">
-                            {branches.map(branch => {
-                                const isSelected = selectedBranchIds.includes(String(branch.id))
-                                return (
-                                    <button
-                                        key={branch.id}
-                                        onClick={() => toggle(String(branch.id))}
-                                        className={`
-                      w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors
-                      ${isSelected
-                                                ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
-                                                : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                                            }
-                    `}
-                                    >
-                                        <div className={`
-                      h-4 w-4 rounded flex items-center justify-center border transition-all flex-shrink-0
-                      ${isSelected
-                                                ? "bg-blue-600 border-blue-600"
-                                                : "border-slate-300 dark:border-slate-600"
-                                            }
-                    `}>
-                                            {isSelected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
-                                        </div>
-                                        <span className="truncate font-medium">{branch.name}</span>
-                                    </button>
-                                )
-                            })}
+                            {filteredBranches.length === 0 ? (
+                                <div className="px-4 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+                                    {searchQuery.trim() ? "No branches found" : "No branches available"}
+                                </div>
+                            ) : (
+                                filteredBranches.map(branch => {
+                                    const isSelected = selectedBranchIds.includes(String(branch.id))
+                                    return (
+                                        <button
+                                            key={branch.id}
+                                            onClick={() => toggle(String(branch.id))}
+                                            className={`
+                              w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors
+                              ${isSelected
+                                                    ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                                                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                                                }
+                        `}
+                                        >
+                                            <div className={`
+                              h-4 w-4 rounded flex items-center justify-center border transition-all flex-shrink-0
+                              ${isSelected
+                                                    ? "bg-blue-600 border-blue-600"
+                                                    : "border-slate-300 dark:border-slate-600"
+                                                }
+                        `}>
+                                                {isSelected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+                                            </div>
+                                            <span className="truncate font-medium">{branch.name}</span>
+                                        </button>
+                                    )
+                                })
+                            )}
                         </div>
                         {selectedBranchIds.length > 0 && (
                             <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700">

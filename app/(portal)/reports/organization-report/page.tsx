@@ -95,11 +95,22 @@ export default function OrganizationReportPage() {
     const router = useRouter()
     const searchParams = useSearchParams()
 
-    // ━━━ PERSISTENT STATE ━━━
-    const [hasMounted, setHasMounted] = useState(false)
+    // STATE DECLARATIONS
     const [generatedDate, setGeneratedDate] = useState("")
     const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "analytics")
+    const [hasMounted, setHasMounted] = useState(false)
     const pathname = usePathname()
+
+    useEffect(() => {
+        setHasMounted(true)
+        setGeneratedDate(new Date().toLocaleString())
+    }, [])
+
+    useEffect(() => {
+        if (hasMounted && (session?.user as any)?.role === "BRANCH_ADMIN") {
+            router.push("/reports")
+        }
+    }, [hasMounted, session, router])
 
     // ━━━ GLOBAL CONTEXT FILTERS ━━━
     const startFromUrl = searchParams.get("startDate")
@@ -171,11 +182,6 @@ export default function OrganizationReportPage() {
     const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/organization-stats?allTime=true`, fetcher)
 
     const isInitialLoad = useRef(true)
-
-    useEffect(() => {
-        setHasMounted(true)
-        setGeneratedDate(new Date().toLocaleString())
-    }, [])
 
     const organizationId = userOrgId || (selectedOrgIds.length === 1 ? selectedOrgIds[0] : null)
 

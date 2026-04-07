@@ -44,25 +44,85 @@ export async function GET(req: NextRequest) {
     let branchId: number | null = null
     let branchIds: number[] = []
 
+    // SECURITY: Enforce strict data isolation based on user role
     if (role === "BRANCH_ADMIN") {
+        // Branch Admin can only see their own branch
         organizationId = scope?.organizationId ?? null
         branchId = scope?.branchId ?? null
+        // IGNORE URL PARAMETERS for security
     } else if (role === "HEAD_OFFICE") {
+        // Head Office can see all branches in their organization, but not other organizations
         organizationId = scope?.organizationId ?? null
+        // Only allow branch filtering within their organization
         if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
-            branchId = Number(branchIdParam)
+            const requestedBranchId = Number(branchIdParam)
+            // Verify this branch belongs to their organization
+            if (organizationId && requestedBranchId) {
+                try {
+                    const [branchCheck] = await db
+                        .select({ id: branches.id })
+                        .from(branches)
+                        .where(and(eq(branches.id, requestedBranchId), eq(branches.organizationId, organizationId)))
+                        .limit(1)
+                    
+                    if (branchCheck) {
+                        branchId = requestedBranchId
+                    } else {
+                        console.warn(`[Security] Head Office user tried to access branch ${requestedBranchId} outside their org ${organizationId}`)
+                        return error("Access denied: Branch not found in your organization")
+                    }
+                } catch (err) {
+                    console.error("[Security] Error verifying branch access for Head Office:", err)
+                    return error("Access verification failed")
+                }
+            }
         }
-    } else {
+        // IGNORE organizationId parameter for security
+    } else if (role === "SUPER_ADMIN") {
+        // Super Admin can see everything (intended)
         if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0" && orgIdParam !== "undefined") {
             organizationId = Number(orgIdParam)
         }
         if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
             branchId = Number(branchIdParam)
         }
+    } else {
+        // Unknown role - deny access
+        console.warn(`[Security] Unknown role ${role} attempting to access drill-down API`)
+        return error("Access denied: Invalid user role")
     }
 
+    // SECURITY: Only allow branchIds for SUPER_ADMIN or validated HEAD_OFFICE requests
     if (branchIdsParam) {
-        branchIds = branchIdsParam.split(",").map((n: any) => Number(n)).filter((n: any) => !isNaN(n) && n > 0)
+        if (role === "SUPER_ADMIN") {
+            branchIds = branchIdsParam.split(",").map((n: any) => Number(n)).filter((n: any) => !isNaN(n) && n > 0)
+        } else if (role === "HEAD_OFFICE") {
+            // Verify all requested branches belong to the user's organization
+            const requestedBranchIds = branchIdsParam.split(",").map((n: any) => Number(n)).filter((n: any) => !isNaN(n) && n > 0)
+            if (organizationId && requestedBranchIds.length > 0) {
+                try {
+                    const validBranches = await db
+                        .select({ id: branches.id })
+                        .from(branches)
+                        .where(and(
+                            inArray(branches.id, requestedBranchIds),
+                            eq(branches.organizationId, organizationId)
+                        ))
+                    
+                    branchIds = validBranches.map(b => b.id)
+                    
+                    // Check if any requested branches were invalid
+                    const invalidBranches = requestedBranchIds.filter((id: number) => !branchIds.includes(id))
+                    if (invalidBranches.length > 0) {
+                        console.warn(`[Security] Head Office user tried to access invalid branches: ${invalidBranches.join(',')}, in org ${organizationId}`)
+                    }
+                } catch (err) {
+                    console.error("[Security] Error verifying branchIds for Head Office:", err)
+                    return error("Access verification failed")
+                }
+            }
+        }
+        // BRANCH_ADMIN and others: IGNORE branchIds parameter for security
     }
 
     const conditions: any[] = []
@@ -162,6 +222,7 @@ export async function GET(req: NextRequest) {
                 id: orderItems.id,
                 orderId: orderItems.orderId,
                 productName: orderItems.productName,
+                productCode: orderItems.productCode,
                 quantity: orderItems.quantity,
                 priceCents: orderItems.priceCents,
                 refundQuantity: sql<number>`COALESCE(${refundItems.quantity}, 0)`.mapWith(Number),
@@ -184,6 +245,7 @@ export async function GET(req: NextRequest) {
                         acc[curr.orderId].push({
                             id: curr.id,
                             name: curr.productName,
+                            productCode: curr.productCode,
                             quantity: curr.quantity,
                             price: curr.priceCents / 100,
                             refundQuantity: curr.refundQuantity,
@@ -338,7 +400,7 @@ export async function GET(req: NextRequest) {
                 customerLevel: (order.id % 5 === 0) ? "VIP" : "Regular",
                 preparationTime: prepTimeStr,
                 buyerName: order.receiptData?.buyerName || order.creatorName || "Walk-in Customer",
-                buyerPhone: order.receiptData?.buyerPhone || "N/A",
+                buyerPhone: order.receiptData?.buyerPhone || null,
                 creatorName: order.creatorName,
                 creatorEmployeeId: order.creatorEmployeeId,
                 items: detailedItemsMap[order.id] || []

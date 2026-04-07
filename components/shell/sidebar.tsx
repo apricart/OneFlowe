@@ -39,7 +39,7 @@ const getNavigationByRole = (role: string) => {
         label: "Reports",
         icon: BarChart3,
         subItems: [
-          { href: "/reports/organization-report", label: "Corporate Report" },
+          { href: "/reports/organization-report", label: "Organization Report" },
           { href: "/reports/order-report", label: "Order Report" },
           { href: "/reports/budget-summary", label: "Budget Report" },
           { href: "/reports/product-performance", label: "Product Report" },
