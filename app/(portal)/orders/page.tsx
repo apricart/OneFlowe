@@ -429,19 +429,6 @@ export default function OrdersManagementPage() {
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               {/* Left Side: Search & Primary Filters */}
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto">
-                {/* Search */}
-                <div className="relative group w-full lg:w-64 shrink-0">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-all group-focus-within:text-indigo-500" />
-                  <Input
-                    placeholder="Search TID or ID..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 h-10 bg-slate-100/50 dark:bg-slate-900/50 border-transparent focus:bg-white dark:focus:bg-slate-900 transition-all duration-300 text-sm font-medium rounded-xl"
-                  />
-                </div>
-
-                <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
-
                 {/* Status Tabs */}
                 <div className="flex items-center p-1 bg-slate-100/60 dark:bg-slate-800/50 rounded-xl border border-slate-200/50 dark:border-slate-700/50 overflow-x-auto no-scrollbar max-w-full">
                   {["all", "approved", "fulfilled", "rejected", "refunded"].map((status) => (

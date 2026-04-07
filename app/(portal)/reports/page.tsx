@@ -97,7 +97,7 @@ export default function ReportsPage() {
   const displayReportCards = reportCards
     .filter(card => {
       if (role === "BRANCH_ADMIN") {
-        if (card.title === "Groups Report" || card.title === "Corporate Report") {
+        if (card.title === "Groups Report" || card.title === "Organization Report") {
           return false
         }
       }

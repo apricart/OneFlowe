@@ -341,6 +341,23 @@ employeeId: users.employeeId,
             INNER JOIN ${refunds} ON ${refundItems.refundId} = ${refunds.id}
             WHERE ${refunds.orderId} = ${orders.id}
             AND UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED')
+        )`.mapWith(Number),
+        quantityOrdered: sql<number>`(
+            SELECT COALESCE(SUM(${orderItems.quantity}), 0)
+            FROM ${orderItems}
+            WHERE ${orderItems.orderId} = ${orders.id}
+        )`.mapWith(Number),
+        quantityDelivered: sql<number>`(
+            SELECT COALESCE(SUM(${orderItems.quantity}), 0)
+            FROM ${orderItems}
+            WHERE ${orderItems.orderId} = ${orders.id}
+        )`.mapWith(Number),
+        quantityRefunded: sql<number>`(
+            SELECT COALESCE(SUM(${refundItems.quantity}), 0)
+            FROM ${refundItems}
+            INNER JOIN ${refunds} ON ${refundItems.refundId} = ${refunds.id}
+            WHERE ${refunds.orderId} = ${orders.id}
+            AND UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED')
         )`.mapWith(Number)
     })
         .from(orders)

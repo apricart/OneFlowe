@@ -210,7 +210,7 @@ export default function OrganizationReportPage() {
 
         if (format === 'pdf') {
             const doc = new jsPDF()
-            doc.setFontSize(20); doc.text(isBuyer ? "Corporate Purchase Ledger" : "Corporate Performance Ledger", 14, 20)
+            doc.setFontSize(20); doc.text(isBuyer ? "Organization Purchase Ledger" : "Organization Performance Ledger", 14, 20)
             doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
             autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid' })
             doc.save(`organization-report-${new Date().getTime()}.pdf`)
@@ -341,7 +341,7 @@ export default function OrganizationReportPage() {
                             <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Organization Intelligence</h1>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
                                 <LayoutGrid className="h-3 w-3" />
-                                Unified corporate performance metrics
+                                Unified organization performance metrics
                             </p>
                         </div>
                     </div>
@@ -733,7 +733,7 @@ export default function OrganizationReportPage() {
                                         <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl">
                                             <ListOrdered className="w-5 h-5 text-indigo-600" />
                                         </div>
-                                        Corporate Performance Ledger
+                                        Organization Performance Ledger
                                     </CardTitle>
                                     <div className="flex items-center gap-2">
                                         <Badge variant="outline" className="h-8 rounded-lg px-3 bg-slate-50 dark:bg-slate-900 text-[10px] font-black border-slate-200 dark:border-slate-800 uppercase tracking-widest text-slate-500">

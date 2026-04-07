@@ -678,7 +678,7 @@ export default function UserReportPage() {
                                     <div className="relative group">
                                         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
                                         <Input
-                                            placeholder="Audit user by name or email..."
+                                            placeholder="Audit user by name, email, or employee #..."
                                             className="pl-10 h-10 w-72 text-[11px] font-bold bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500/50 rounded-xl shadow-sm transition-all"
                                             value={reportSearch}
                                             onChange={(e) => setReportSearch(e.target.value)}
