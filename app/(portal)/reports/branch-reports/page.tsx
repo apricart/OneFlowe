@@ -81,7 +81,17 @@ export default function BranchReportsPage() {
     const [compareYears, setCompareYears] = useState<number[]>([])
     
     const [selectedOrgId, setSelectedOrgId] = useState<string>(contextOrgId ? String(contextOrgId) : (userOrgId ? String(userOrgId) : ""))
-    const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
+    const [reportGroupIds, setReportGroupIds] = useState<string[]>([])
+    const lastSyncedBranchIds = useRef<string[]>([])
+
+    // ━━━ SMART SYNC (Global to Local) ━━━
+    useEffect(() => {
+        const hasGlobalChanged = JSON.stringify(contextBranchIds) !== JSON.stringify(lastSyncedBranchIds.current)
+        if (hasGlobalChanged && contextBranchIds.length > 0) {
+            setSelectedBranchIds([...contextBranchIds])
+            lastSyncedBranchIds.current = [...contextBranchIds]
+        }
+    }, [contextBranchIds])
     const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>(
         role === "BRANCH_ADMIN" && userBranchId ? [String(userBranchId)] : []
     )
@@ -269,7 +279,7 @@ export default function BranchReportsPage() {
     return (
         <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] pb-20">
             {/* ━━━ STICKY PREMIUM HEADER ━━━ */}
-            <div className="sticky top-0 z-50 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
+            <div className="sticky top-0 z-30 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
                 <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-500/20 rotate-3 group hover:rotate-0 transition-all duration-500">

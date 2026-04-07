@@ -61,25 +61,35 @@ export function MultiSelectFilter({
     }, [items, searchQuery])
 
     const toggleItem = (id: string | number) => {
+        let newDraft: (string | number)[] = []
         setDraft(prev => {
             if (prev.includes(id)) {
-                return prev.filter(i => i !== id)
+                newDraft = prev.filter(i => i !== id)
+            } else if (maxSelect === 1) {
+                newDraft = [id]
+            } else if (maxSelect && prev.length >= maxSelect) {
+                newDraft = prev
+            } else {
+                newDraft = [...prev, id]
             }
-            if (maxSelect === 1) {
-                return [id]
-            }
-            if (maxSelect && prev.length >= maxSelect) {
-                return prev
-            }
-            return [...prev, id]
+            // Sync onChange immediately to match Global filters
+            setTimeout(() => onChange(newDraft), 0)
+            return newDraft
         })
     }
 
-    const selectAll = () => setDraft(items.map(i => i.id))
-    const clearAll = () => setDraft([])
+    const selectAll = () => {
+        const newDraft = items.map(i => i.id)
+        setDraft(newDraft)
+        onChange(newDraft)
+    }
+
+    const clearAll = () => {
+        setDraft([])
+        onChange([])
+    }
 
     const handleApply = () => {
-        onChange(draft)
         setOpen(false)
     }
 
@@ -93,7 +103,9 @@ export function MultiSelectFilter({
 
     const displayText = visibleSelectedCount === 0 
         ? placeholder 
-        : `${visibleSelectedCount} Selected`
+        : visibleSelectedCount === 1
+            ? (items.find(i => selectedIds.includes(i.id))?.label || "1 Selected")
+            : `${visibleSelectedCount} Selected`
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -115,10 +127,10 @@ export function MultiSelectFilter({
                 </Button>
             </PopoverTrigger>
             <PopoverContent 
-                className={cn("w-64 p-0 rounded-2xl border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden", className)} 
+                className={cn("w-64 p-0 rounded-2xl border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden z-[50]", className)} 
                 align="start"
                 side="bottom"
-                avoidCollisions={false}
+                avoidCollisions={true}
             >
                 <div className="flex flex-col max-h-[300px]">
                     <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-3">
