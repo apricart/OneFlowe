@@ -97,45 +97,20 @@ export default function ReportsPage() {
   const displayReportCards = reportCards
     .filter(card => {
       if (role === "BRANCH_ADMIN") {
-<<<<<<< HEAD
-        const restrictedTitles = [
-          "Groups Report", 
-          "Organization Report", 
-          "Stock Reports", 
-          "Stock Logs", 
-          "Stock Store Report"
-        ]
-        if (restrictedTitles.includes(card.title)) {
-=======
         if (card.title === "Groups Report" || card.title === "Corporate Report") {
->>>>>>> ace00fd5f93c7861fc43bbcd09b2385c8e6cef1f
           return false
         }
       }
       return true
     })
     .map(card => {
-<<<<<<< HEAD
-      let description = card.description
-      if (card.title === "Product Report") {
-        description = "Analyze product performance and category-wise breakdown"
-      } else if (card.title === "Branch Reports") {
-        description = "Branch-level performance rankings, threshold alerts, and comparisons"
-      } else if (card.title === "Groups Report") {
-        description = "Group performance, member branches, and purchase breakdowns"
-      } else if (card.title === "Organization Report") {
-        description = "Multi-organization data comparison and global performance metrics"
-=======
       if (!isBuyer) return card
       
       let description = card.description
-      if (card.title === "Product Report" || card.title === "Product Performance") {
-        description = "Analyze product purchases and category-wise breakdown"
-      } else if (card.title === "Branch Reports") {
+      if (card.title === "Order Report") {
         description = "Branch-level purchase rankings, threshold alerts, and comparisons"
       } else if (card.title === "Groups Report") {
         description = "Group performance, member branches, and purchase breakdowns"
->>>>>>> ace00fd5f93c7861fc43bbcd09b2385c8e6cef1f
       }
       
       return { ...card, description }

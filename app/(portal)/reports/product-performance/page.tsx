@@ -1133,11 +1133,7 @@ export default function ProductPerformancePage() {
                                     <div className="flex items-center gap-3">
                                         <History className="h-4 w-4 text-indigo-500" />
                                         <h3 className="font-bold text-sm uppercase tracking-tight text-slate-800 dark:text-slate-200">
-<<<<<<< HEAD
-                                            Product Wise Sale
-=======
                                             {role === "SUPER_ADMIN" ? "Product Wise Sale" : "Product Wise Purchase"}
->>>>>>> ace00fd5f93c7861fc43bbcd09b2385c8e6cef1f
                                         </h3>
                                     </div>
                                     {(reportYears.length > 0 || reportMonths.length > 0 || reportBranchIds.length > 0 || reportGroupIds.length > 0) && (
