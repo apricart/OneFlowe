@@ -13,7 +13,7 @@ import { Edit, Trash2, ChevronLeft, ChevronRight } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { handleError } from "@/lib/error-handler"
 
-type UserRow = { id: string; firstName: string; lastName: string; email: string; role: string; organizationId?: number | null; branchId?: number | null; phone?: string; mfaEnabled?: boolean; createdAt: string; username?: string | null }
+type UserRow = { id: string; firstName: string; lastName: string; email: string; role: string; organizationId?: number | null; branchId?: number | null; phone?: string; mfaEnabled?: boolean; createdAt: string; username?: string | null; employeeId?: string | null }
 type UsersResp = { items: UserRow[] }
 
 export function UsersTable() {
@@ -262,7 +262,10 @@ export function UsersTable() {
               <TableRow key={u.id}>
                 <TableCell>
                   <div className="font-medium">{u.firstName} {u.lastName}</div>
-                  <div className="text-[10px] text-indigo-500 font-bold">@{u.username || "unset"}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-indigo-500 font-bold">@{u.username || "unset"}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">#{u.employeeId || u.id.slice(0, 8)}</span>
+                  </div>
                 </TableCell>
                 <TableCell>{u.email}</TableCell>
                 <TableCell>{u.phone || "-"}</TableCell>

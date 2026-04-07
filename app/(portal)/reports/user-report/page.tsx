@@ -77,7 +77,7 @@ export default function UserReportPage() {
     const [activePreset, setActivePreset] = useState<FilterPreset>("all")
     const [compare, setCompare] = useState(false)
     const [compareRange, setCompareRange] = useState<DateRange | null>(null)
-    
+
     // Global Multi-Selects
     const [selectedMonths, setSelectedMonths] = useState<number[]>([])
     const [selectedYears, setSelectedYears] = useState<number[]>([])
@@ -114,7 +114,7 @@ export default function UserReportPage() {
     if (globalGroupIds.length) globalParams.set("groupIds", globalGroupIds.join(","))
     if (globalBranchIds.length) globalParams.set("branchIds", globalBranchIds.join(","))
     if (globalUserIds.length) globalParams.set("userIds", globalUserIds.join(","))
-    
+
     if (dateRange?.startDate) globalParams.set("startDate", dateRange.startDate.toISOString())
     if (dateRange?.endDate) globalParams.set("endDate", dateRange.endDate.toISOString())
     if (selectedMonths.length) globalParams.set("months", selectedMonths.join(","))
@@ -135,7 +135,7 @@ export default function UserReportPage() {
     const chartParams = new URLSearchParams()
     if (chartOrganizationIds.length) chartParams.set("organizationIds", chartOrganizationIds.join(","))
     else if (organizationId) chartParams.set("organizationIds", organizationId.toString())
-    
+
     if (chartGroupIds.length) chartParams.set("groupIds", chartGroupIds.join(","))
     if (chartBranchIds.length) chartParams.set("branchIds", chartBranchIds.join(","))
     if (chartUserIds.length) chartParams.set("userIds", chartUserIds.join(","))
@@ -150,7 +150,7 @@ export default function UserReportPage() {
     const reportParams = new URLSearchParams()
     if (reportOrganizationIds.length) reportParams.set("organizationIds", reportOrganizationIds.join(","))
     else if (organizationId) reportParams.set("organizationIds", organizationId.toString())
-    
+
     if (reportGroupIds.length) reportParams.set("groupIds", reportGroupIds.join(","))
     if (reportBranchIds.length) reportParams.set("branchIds", reportBranchIds.join(","))
     if (reportUserIds.length) reportParams.set("userIds", reportUserIds.join(","))
@@ -312,16 +312,16 @@ export default function UserReportPage() {
         // If multiple years selected, show years on X-axis (optional, but keep monthly for now as requested)
         // One year selected (or default to current year) -> show months
         const activeYear = chartYears.length === 1 ? chartYears[0] : new Date().getFullYear();
-        
-        const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12 
-            ? [...chartMonths].sort((a, b) => a - b) 
+
+        const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12
+            ? [...chartMonths].sort((a, b) => a - b)
             : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
         return monthsToShow.map(m => {
             const dateStr = `${activeYear}-${String(m).padStart(2, '0')}`;
             const dataPoint = trend.find((d: any) => d.date === dateStr);
             const compPoint = compareTrend.find((d: any) => d.date === dateStr);
-            
+
             return {
                 name: CHART_MONTH_NAMES[m - 1],
                 orders: dataPoint?.qtyOrdered || 0,
@@ -336,9 +336,15 @@ export default function UserReportPage() {
     }, [trend, compareTrend, chartYears, chartMonths, chartData, isChartUserView])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Employee ID", "Name", "Email", "Status", "Organization", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
+        const headers = role === "SUPER_ADMIN"
+            ? ["Employee ID", "Name", "Email", "Status", "Organization", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
+            : role === "BRANCH_ADMIN"
+                ? ["Employee ID", "Name", "Email", "Status", "Orders", "Fulfilled", "Refunded", "Spent"]
+                : ["Employee ID", "Name", "Email", "Status", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
         const rows = filteredUsers.map((u: any) => [
-            u.employeeId || "-", u.userName, u.userEmail, u.status || "active", u.organizationName || 'N/A', u.branchName || 'N/A', 
+            u.employeeId || "-", u.userName, u.userEmail, u.status || "active",
+            ...(role === "SUPER_ADMIN" ? [u.organizationName || 'N/A'] : []),
+            ...(role !== "BRANCH_ADMIN" ? [u.branchName || 'N/A'] : []),
             u.totalOrders, u.fulfilledOrders, u.refundedOrders,
             (u.totalSpentCents / 100).toFixed(2)
         ])
@@ -410,7 +416,7 @@ export default function UserReportPage() {
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-                    
+
                     <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-1">
                         <TabsList className="bg-transparent h-auto p-0 gap-8">
                             <TabsTrigger value="analytics" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
@@ -419,7 +425,7 @@ export default function UserReportPage() {
                             </TabsTrigger>
                             <TabsTrigger value="reports" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
                                 <Database className="h-4 w-4 mr-2" />
-                                Records
+                                Reports
                             </TabsTrigger>
                         </TabsList>
                     </div>
@@ -439,20 +445,24 @@ export default function UserReportPage() {
                                 <div className="flex flex-wrap items-center gap-2">
                                     <MonthFilter selected={chartMonths} onChange={setChartMonths} />
                                     <YearFilter selected={chartYears} onChange={setChartYears} availableYears={allTimeData?.years || []} />
-                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                    {role === "SUPER_ADMIN" && (
                                         <OrganizationFilter selectedIds={chartOrganizationIds} onChange={setChartOrganizationIds} />
                                     )}
-                                    <GroupFilter 
-                                        selectedIds={chartGroupIds} 
-                                        onChange={setChartGroupIds} 
-                                        organizationIds={chartOrganizationIds.length > 0 ? chartOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
-                                    />
-                                    <BranchFilter 
-                                        selectedIds={chartBranchIds} 
-                                        onChange={setChartBranchIds} 
-                                        organizationIds={chartOrganizationIds.length > 0 ? chartOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
-                                        groupIds={chartGroupIds}
-                                    />
+                                    {role !== "BRANCH_ADMIN" && (
+                                        <>
+                                            <GroupFilter
+                                                selectedIds={chartGroupIds}
+                                                onChange={setChartGroupIds}
+                                                organizationIds={chartOrganizationIds.length > 0 ? chartOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                                            />
+                                            <BranchFilter
+                                                selectedIds={chartBranchIds}
+                                                onChange={setChartBranchIds}
+                                                organizationIds={chartOrganizationIds.length > 0 ? chartOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                                                groupIds={chartGroupIds}
+                                            />
+                                        </>
+                                    )}
                                     <UserFilter
                                         selectedIds={chartUserIds}
                                         onChange={setChartUserIds}
@@ -460,11 +470,11 @@ export default function UserReportPage() {
                                         groupIds={chartGroupIds}
                                         branchIds={chartBranchIds}
                                     />
-                                    <Button variant="ghost" size="icon" onClick={() => { 
-                                        setChartMonths([1,2,3,4,5,6,7,8,9,10,11,12]); 
-                                        setChartYears([]); 
-                                        setChartBranchIds([]); 
-                                        setChartOrganizationIds([]); 
+                                    <Button variant="ghost" size="icon" onClick={() => {
+                                        setChartMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+                                        setChartYears([]);
+                                        setChartBranchIds([]);
+                                        setChartOrganizationIds([]);
                                         setChartGroupIds([]);
                                         setChartUserIds([]);
                                     }} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all">
@@ -495,7 +505,7 @@ export default function UserReportPage() {
                                                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} dy={10} />
                                                 <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} tickFormatter={(val) => val.toLocaleString()} />
                                                 <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 600 }} tickFormatter={(val) => `Rs ${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`} />
-                                                <RechartsTooltip 
+                                                <RechartsTooltip
                                                     content={({ active, payload, label }: any) => {
                                                         if (active && payload && payload.length) {
                                                             const u = processedChartData.find((d: any) => d.name === label);
@@ -519,7 +529,7 @@ export default function UserReportPage() {
                                                                                 </div>
                                                                             </>
                                                                         )}
-                                                                            <div className="flex justify-between items-center bg-indigo-500/5 p-2 rounded-xl">
+                                                                        <div className="flex justify-between items-center bg-indigo-500/5 p-2 rounded-xl">
                                                                             <span className="text-[10px] font-bold text-indigo-600 uppercase">{isBuyer ? "Purchased" : "Yield"} {compare ? '(A/B)' : ''}</span>
                                                                             <span className="text-[11px] font-black text-indigo-700">
                                                                                 {formatPKR(Number(payload[compare ? 2 : 1]?.value || 0))} {compare ? `/ ${formatPKR(Number(payload[3]?.value || 0))}` : ''}
@@ -575,80 +585,81 @@ export default function UserReportPage() {
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {(userProductsData?.data || [])
-                                        .filter((u: any) => 
-                                            !reportSearch || 
-                                            u.userName?.toLowerCase().includes(reportSearch.toLowerCase()) || 
+                                        .filter((u: any) =>
+                                            !reportSearch ||
+                                            u.userName?.toLowerCase().includes(reportSearch.toLowerCase()) ||
                                             u.userId.toString().includes(reportSearch)
                                         )
                                         .slice(0, 6)
                                         .map((user: any, idx: number) => (
-                                        <Card key={user.userId} className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900/40 backdrop-blur-3xl rounded-[2rem] transition-all hover:-translate-y-1 hover:shadow-indigo-500/10">
-                                            <div className="p-5 border-b border-slate-100 dark:border-slate-800/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/20">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={cn(
-                                                        "h-10 w-10 flex items-center justify-center rounded-2xl font-black shadow-sm",
-                                                        idx === 0 ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20" : 
-                                                        idx === 1 ? "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300" :
-                                                        idx === 2 ? "bg-orange-100 text-orange-600 dark:bg-orange-500/20" :
-                                                        "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 text-indigo-400"
-                                                    )}>
-                                                        #{idx + 1}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate max-w-[120px]">{user.userName}</h4>
-                                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                                            <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest"><span className="text-slate-900 dark:text-white font-black">{formatPKR(user.fulfilledProductRevenueCents / 100)}</span> Total</p>
+                                            <Card key={user.userId} className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900/40 backdrop-blur-3xl rounded-[2rem] transition-all hover:-translate-y-1 hover:shadow-indigo-500/10">
+                                                <div className="p-5 border-b border-slate-100 dark:border-slate-800/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/20">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={cn(
+                                                            "h-10 w-10 flex items-center justify-center rounded-2xl font-black shadow-sm",
+                                                            idx === 0 ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20" :
+                                                                idx === 1 ? "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300" :
+                                                                    idx === 2 ? "bg-orange-100 text-orange-600 dark:bg-orange-500/20" :
+                                                                        "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 text-indigo-400"
+                                                        )}>
+                                                            #{idx + 1}
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate max-w-[120px]">{user.userName}</h4>
+                                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                                <span className="text-[9px] font-black text-indigo-500 font-mono">#{user.employeeId || (user.userId ? user.userId.toString().split('-')[0] : 'N/A')}</span>
+                                                                <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest"><span className="text-slate-900 dark:text-white font-black">{formatPKR(user.fulfilledProductRevenueCents / 100)}</span> Total</p>
+                                                            </div>
                                                         </div>
                                                     </div>
+                                                    <div className="text-right flex flex-col items-end gap-1">
+                                                        <Badge variant="outline" className="text-[10px] font-black uppercase bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/30">
+                                                            {user.totalProductsSold} Items
+                                                        </Badge>
+                                                        <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest whitespace-nowrap">
+                                                            {user.totalProductsSold - user.refundedProductsSold} Fulfilled
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div className="text-right flex flex-col items-end gap-1">
-                                                    <Badge variant="outline" className="text-[10px] font-black uppercase bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/30">
-                                                        {user.totalProductsSold} Items
-                                                    </Badge>
-                                                    <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest whitespace-nowrap">
-                                                        {user.totalProductsSold - user.refundedProductsSold} Fulfilled
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <CardContent className="p-0">
-                                                <div className="divide-y divide-slate-100 dark:divide-slate-800 mt-2">
-                                                    {user.products.slice(0, 3).map((product: any, pIdx: number) => (
-                                                        <div key={product.productId} className="flex justify-between items-center px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
-                                                            <div className="flex items-start gap-3 w-1/2">
-                                                                <span className="text-[10px] font-black text-slate-300 dark:text-slate-600 mt-0.5 w-3 text-right">{pIdx + 1}.</span>
-                                                                <div className="min-w-0">
-                                                                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight truncate break-words" title={product.productName}>
-                                                                        {product.productName}
-                                                                    </p>
-                                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">{product.categoryName}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="text-right flex flex-col items-end gap-1">
-                                                                <div className="flex items-center gap-2">
-                                                                    <p className="text-[11px] font-black text-slate-700 dark:text-slate-300 tracking-tight">{formatPKR(product.fulfilledRevenueCents / 100)}</p>
-                                                                    <div className="flex items-center gap-1">
-                                                                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded cursor-help" title={`Total Items: ${product.quantity}`}>Qty: {product.quantity}</p>
-                                                                        <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Net Fulfilled (Total - Refunded)">Ful: {product.quantity - product.refundedQuantity}</p>
+                                                <CardContent className="p-0">
+                                                    <div className="divide-y divide-slate-100 dark:divide-slate-800 mt-2">
+                                                        {user.products.slice(0, 3).map((product: any, pIdx: number) => (
+                                                            <div key={product.productId} className="flex justify-between items-center px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                                                                <div className="flex items-start gap-3 w-1/2">
+                                                                    <span className="text-[10px] font-black text-slate-300 dark:text-slate-600 mt-0.5 w-3 text-right">{pIdx + 1}.</span>
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight truncate break-words" title={product.productName}>
+                                                                            {product.productName}
+                                                                        </p>
+                                                                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">{product.categoryName}</p>
                                                                     </div>
                                                                 </div>
-                                                                {product.refundedQuantity > 0 && (
+                                                                <div className="text-right flex flex-col items-end gap-1">
                                                                     <div className="flex items-center gap-2">
-                                                                        <p className="text-[9px] font-black text-rose-500 tracking-tight">-{formatPKR(product.refundedRevenueCents / 100)}</p>
-                                                                        <p className="text-[8px] font-bold text-rose-500 uppercase tracking-widest whitespace-nowrap bg-rose-50 dark:bg-rose-500/10 px-1.5 py-0.5 rounded" title={`Refunded Money: ${formatPKR(product.refundedRevenueCents / 100)}`}>Ref: {product.refundedQuantity}</p>
+                                                                        <p className="text-[11px] font-black text-slate-700 dark:text-slate-300 tracking-tight">{formatPKR(product.fulfilledRevenueCents / 100)}</p>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded cursor-help" title={`Total Items: ${product.quantity}`}>Qty: {product.quantity}</p>
+                                                                            <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Net Fulfilled (Total - Refunded)">Ful: {product.quantity - product.refundedQuantity}</p>
+                                                                        </div>
                                                                     </div>
-                                                                )}
+                                                                    {product.refundedQuantity > 0 && (
+                                                                        <div className="flex items-center gap-2">
+                                                                            <p className="text-[9px] font-black text-rose-500 tracking-tight">-{formatPKR(product.refundedRevenueCents / 100)}</p>
+                                                                            <p className="text-[8px] font-bold text-rose-500 uppercase tracking-widest whitespace-nowrap bg-rose-50 dark:bg-rose-500/10 px-1.5 py-0.5 rounded" title={`Refunded Money: ${formatPKR(product.refundedRevenueCents / 100)}`}>Ref: {product.refundedQuantity}</p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    ))}
-                                                    {user.products.length > 3 && (
-                                                        <div className="px-6 py-3 text-center bg-slate-50/30 dark:bg-slate-900/30">
-                                                            <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors">+{user.products.length - 3} more items...</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    ))}
+                                                        ))}
+                                                        {user.products.length > 3 && (
+                                                            <div className="px-6 py-3 text-center bg-slate-50/30 dark:bg-slate-900/30">
+                                                                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors">+{user.products.length - 3} more items...</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
                                 </div>
                             )}
                         </div>
@@ -675,20 +686,24 @@ export default function UserReportPage() {
                                     </div>
                                     <MonthFilter selected={reportMonths} onChange={setReportMonths} />
                                     <YearFilter selected={reportYears} onChange={setReportYears} availableYears={allTimeData?.years || []} />
-                                    {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
+                                    {role === "SUPER_ADMIN" && (
                                         <OrganizationFilter selectedIds={reportOrganizationIds} onChange={setReportOrganizationIds} />
                                     )}
-                                    <GroupFilter 
-                                        selectedIds={reportGroupIds} 
-                                        onChange={setReportGroupIds} 
-                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
-                                    />
-                                    <BranchFilter 
-                                        selectedIds={reportBranchIds} 
-                                        onChange={setReportBranchIds} 
-                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
-                                        groupIds={reportGroupIds}
-                                    />
+                                    {role !== "BRANCH_ADMIN" && (
+                                        <>
+                                            <GroupFilter
+                                                selectedIds={reportGroupIds}
+                                                onChange={setReportGroupIds}
+                                                organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                                            />
+                                            <BranchFilter
+                                                selectedIds={reportBranchIds}
+                                                onChange={setReportBranchIds}
+                                                organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : (organizationId ? [organizationId.toString()] : undefined)}
+                                                groupIds={reportGroupIds}
+                                            />
+                                        </>
+                                    )}
                                     <UserFilter
                                         selectedIds={reportUserIds}
                                         onChange={setReportUserIds}
@@ -696,11 +711,11 @@ export default function UserReportPage() {
                                         groupIds={reportGroupIds}
                                         branchIds={reportBranchIds}
                                     />
-                                    <Button variant="ghost" size="icon" onClick={() => { 
-                                        setReportMonths([1,2,3,4,5,6,7,8,9,10,11,12]); 
-                                        setReportYears([]); 
-                                        setReportBranchIds([]); 
-                                        setReportOrganizationIds([]); 
+                                    <Button variant="ghost" size="icon" onClick={() => {
+                                        setReportMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+                                        setReportYears([]);
+                                        setReportBranchIds([]);
+                                        setReportOrganizationIds([]);
                                         setReportGroupIds([]);
                                         setReportUserIds([]);
                                     }} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all">
@@ -734,7 +749,7 @@ export default function UserReportPage() {
                                             <TableHead className="pl-8 h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Employee Profile</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">ID Reference</TableHead>
-                                            <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Domain / Branch</TableHead>
+                                            {role !== "BRANCH_ADMIN" && <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{role === "SUPER_ADMIN" ? "Domain / Branch" : "Branch"}</TableHead>}
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Orders {compare && "(A/B)"}</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Fulfilled</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Refunded</TableHead>
@@ -755,26 +770,28 @@ export default function UserReportPage() {
                                                     </TableCell>
                                                     <TableCell className="text-center py-5">
                                                         <Badge variant="outline" className={cn(
-                                                            "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none", 
-                                                            u.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600" : 
-                                                            u.status === "DELETED" ? "bg-rose-500/10 text-rose-600" : 
-                                                            "bg-slate-500/10 text-slate-600"
+                                                            "text-[9px] font-black uppercase tracking-widest px-3 py-1 border-none",
+                                                            u.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600" :
+                                                                u.status === "DELETED" ? "bg-rose-500/10 text-rose-600" :
+                                                                    "bg-slate-500/10 text-slate-600"
                                                         )}>
                                                             {u.status === "ACTIVE" ? <ShieldCheck className="h-3 w-3 mr-1" /> : (u.status === "DELETED" ? <ShieldX className="h-3 w-3 mr-1" /> : <ShieldX className="h-3 w-3 mr-1 opacity-50" />)}
                                                             {u.status || "INACTIVE"}
                                                         </Badge>
                                                     </TableCell>
                                                     <TableCell className="py-5">
-                                                        <Badge variant="outline" className="text-[10px] font-black font-mono px-2.5 py-1 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 group-hover:border-indigo-500/30 transition-all">
-                                                            {u.employeeId || "NO-ID"}
+                                                        <Badge variant="outline" className="text-[10px] font-black font-mono px-2.5 py-1 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 group-hover:border-indigo-500/30 transition-all text-indigo-600">
+                                                            #{u.employeeId || (u.userId ? u.userId.toString().split('-')[0] : 'N/A')}
                                                         </Badge>
                                                     </TableCell>
-                                                    <TableCell className="py-5">
-                                                        <div className="flex flex-col gap-0.5">
-                                                            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-tighter truncate max-w-[150px]">{u.organizationName || "N/A"}</span>
-                                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter opacity-60 truncate max-w-[150px]">{u.branchName || "Global"}</span>
-                                                        </div>
-                                                    </TableCell>
+                                                    {role !== "BRANCH_ADMIN" && (
+                                                        <TableCell className="py-5">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                {role === "SUPER_ADMIN" && <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-tighter truncate max-w-[150px]">{u.organizationName || "N/A"}</span>}
+                                                                <span className={cn("text-[9px] font-black text-slate-400 uppercase tracking-tighter opacity-60 truncate max-w-[150px]", role !== "SUPER_ADMIN" && "text-[11px] font-bold text-slate-700 dark:text-slate-300 opacity-100")}>{u.branchName || "Global"}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                    )}
                                                     <TableCell className="text-center py-5">
                                                         <div className="flex flex-col items-center">
                                                             <span className="font-black text-xs text-slate-900 dark:text-white font-mono tracking-tighter">{u.totalOrders}</span>
@@ -830,7 +847,7 @@ function MonthFilter({ selected, onChange }: any) {
             title="Months"
             items={items}
             selectedIds={selected}
-            onChange={(ids) => onChange(ids.sort((a,b) => a - b))}
+            onChange={(ids) => onChange(ids.sort((a, b) => a - b))}
             icon={<Calendar className="h-3.5 w-3.5 mr-2 text-indigo-500" />}
             placeholder="Months"
             showSearch={false}
@@ -845,7 +862,7 @@ function YearFilter({ selected, onChange, availableYears }: any) {
             title="Years"
             items={items}
             selectedIds={selected}
-            onChange={(ids) => onChange(ids.sort((a,b) => b - a))}
+            onChange={(ids) => onChange(ids.sort((a, b) => b - a))}
             icon={<Layers className="h-3.5 w-3.5 mr-2 text-indigo-500" />}
             placeholder="Years"
             showSearch={false}

@@ -39,11 +39,11 @@ const getNavigationByRole = (role: string) => {
         label: "Reports",
         icon: BarChart3,
         subItems: [
-          { href: "/reports/organization-report", label: "Organization Report" },
+          { href: "/reports/organization-report", label: "Corporate Report" },
+          { href: "/reports/order-report", label: "Order Report" },
           { href: "/reports/budget-summary", label: "Budget Report" },
           { href: "/reports/product-performance", label: "Product Report" },
           { href: "/reports/user-report", label: "User Report" },
-          { href: "/reports/order-report", label: "Order Report" },
           { href: "/reports/branch-reports", label: "Branch Report" },
           { href: "/reports/groups", label: "Group Report" },
         ]
@@ -66,11 +66,11 @@ const getNavigationByRole = (role: string) => {
         label: "Reports",
         icon: BarChart3,
         subItems: [
-          { href: "/reports/organization-report", label: "Organization Report" },
+          { href: "/reports/organization-report", label: "Corporate Report" },
+          { href: "/reports/order-report", label: "Order Report" },
           { href: "/reports/budget-summary", label: "Budget Report" },
           { href: "/reports/product-performance", label: "Product Report" },
           { href: "/reports/user-report", label: "User Report" },
-          { href: "/reports/order-report", label: "Order Report" },
           { href: "/reports/branch-reports", label: "Branch Report" },
           { href: "/reports/groups", label: "Group Report" },
         ]
@@ -84,8 +84,17 @@ const getNavigationByRole = (role: string) => {
       ...baseNav,
       { href: "/orders", label: "Orders", icon: Package },
       { href: "/branch-inventory", label: "Inventory", icon: Boxes },
-      // { href: "/employee-management", label: "Employee Management", icon: Users },
-
+      {
+        href: "/reports",
+        label: "Reports",
+        icon: BarChart3,
+        subItems: [
+          { href: "/reports/order-report", label: "Order Report" },
+          { href: "/reports/product-performance", label: "Product Report" },
+          { href: "/reports/user-report", label: "User Report" },
+          { href: "/reports/branch-reports", label: "Branch Report" },
+        ]
+      },
       { href: "/settings", label: "Settings", icon: Settings },
     ]
   }
