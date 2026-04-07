@@ -324,7 +324,7 @@ export async function GET(req: NextRequest) {
         fulfilledAt: orders.fulfilledAt,
         refundedAt: orders.refundedAt,
         userName: users.fullName,
-        employeeId: users.employeeId,
+employeeId: users.employeeId,
         itemCount: sql<number>`(
             SELECT COALESCE(SUM(${orderItems.quantity}), 0)
             FROM ${orderItems}

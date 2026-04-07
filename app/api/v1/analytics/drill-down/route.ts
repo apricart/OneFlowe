@@ -400,7 +400,7 @@ export async function GET(req: NextRequest) {
                 customerLevel: (order.id % 5 === 0) ? "VIP" : "Regular",
                 preparationTime: prepTimeStr,
                 buyerName: order.receiptData?.buyerName || order.creatorName || "Walk-in Customer",
-                buyerPhone: order.receiptData?.buyerPhone || null,
+buyerPhone: order.receiptData?.buyerPhone || "N/A",
                 creatorName: order.creatorName,
                 creatorEmployeeId: order.creatorEmployeeId,
                 items: detailedItemsMap[order.id] || []

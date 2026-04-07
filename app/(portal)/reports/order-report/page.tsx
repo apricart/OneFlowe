@@ -101,10 +101,17 @@ export default function OrderReportPage() {
 
     // Role-based terminology
     const kpiRevenueLabel = isBuyer ? "Net Amount" : "Net Revenue"
+<<<<<<< HEAD
     const kpiAvgLabel = "Avg Value"
     const chartRevenueLabel = "Revenue"
     const chartOrdersLabel = "Orders"
     const exportTitleLabel = "Order Consumption Report"
+=======
+    const kpiAvgLabel = isBuyer ? "Avg Purchased Value" : "Avg Value"
+    const chartRevenueLabel = isBuyer ? "Purchased" : "Revenue"
+    const chartOrdersLabel = isBuyer ? "Orders" : "Orders"
+    const exportTitleLabel = isBuyer ? "Order Purchase Report" : "Order Consumption Report"
+>>>>>>> ace00fd5f93c7861fc43bbcd09b2385c8e6cef1f
 
     const [hasMounted, setHasMounted] = useState(false)
     const [activeTab, setActiveTab] = useState("analytics")
