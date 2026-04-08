@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
+import { withSuperAdmin } from "@/lib/db"
 import { globalProducts, categories, organizationInventory, organizations, auditLogs } from "@/db/schema"
 import { eq, and, like, ilike, or, desc, sql, inArray, isNull, ne, type SQL } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
@@ -41,51 +41,55 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "Invalid product ID" }, { status: 400 })
       }
 
-      const [item] = await db
-        .select({
-          id: globalProducts.id,
-          productCode: globalProducts.productCode,
-          name: globalProducts.name,
-          description: globalProducts.description,
-          categoryId: globalProducts.categoryId,
-          imageUrl: globalProducts.imageUrl,
-          basePrice: globalProducts.basePrice,
-          unit: globalProducts.unit,
-          status: globalProducts.status,
-          stockQuantity: globalProducts.stockQuantity,
-          metadata: globalProducts.metadata,
-          discountType: globalProducts.discountType,
-          discountValue: globalProducts.discountValue,
-          discountStartAt: globalProducts.discountStartAt,
-          discountEndAt: globalProducts.discountEndAt,
-          discountActive: globalProducts.discountActive,
-          createdAt: globalProducts.createdAt,
-          updatedAt: globalProducts.updatedAt,
-          categoryName: categories.name,
-        })
-        .from(globalProducts)
-        .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
-        .where(eq(globalProducts.id, productId))
-        .limit(1)
+      const [item] = await withSuperAdmin(async (tx) => {
+        return tx
+          .select({
+            id: globalProducts.id,
+            productCode: globalProducts.productCode,
+            name: globalProducts.name,
+            description: globalProducts.description,
+            categoryId: globalProducts.categoryId,
+            imageUrl: globalProducts.imageUrl,
+            basePrice: globalProducts.basePrice,
+            unit: globalProducts.unit,
+            status: globalProducts.status,
+            stockQuantity: globalProducts.stockQuantity,
+            metadata: globalProducts.metadata,
+            discountType: globalProducts.discountType,
+            discountValue: globalProducts.discountValue,
+            discountStartAt: globalProducts.discountStartAt,
+            discountEndAt: globalProducts.discountEndAt,
+            discountActive: globalProducts.discountActive,
+            createdAt: globalProducts.createdAt,
+            updatedAt: globalProducts.updatedAt,
+            categoryName: categories.name,
+          })
+          .from(globalProducts)
+          .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+          .where(eq(globalProducts.id, productId))
+          .limit(1)
+      }) as any[]
 
       if (!item) {
         return NextResponse.json({ error: "Product not found" }, { status: 404 })
       }
 
       // Compute assignment count for this single product
-      const [assignment] = await db
-        .select({
-          globalProductId: organizationInventory.globalProductId,
-          assignedOrganizations: sql<number>`count(distinct ${organizationInventory.organizationId})`,
-        })
-        .from(organizationInventory)
-        .where(
-          and(
-            eq(organizationInventory.globalProductId, productId),
-            eq(organizationInventory.isActive, true)
+      const [assignment] = await withSuperAdmin(async (tx) => {
+        return tx
+          .select({
+            globalProductId: organizationInventory.globalProductId,
+            assignedOrganizations: sql<number>`count(distinct ${organizationInventory.organizationId})`,
+          })
+          .from(organizationInventory)
+          .where(
+            and(
+              eq(organizationInventory.globalProductId, productId),
+              eq(organizationInventory.isActive, true)
+            )
           )
-        )
-        .groupBy(organizationInventory.globalProductId)
+          .groupBy(organizationInventory.globalProductId)
+      }) as any[]
 
       const itemWithAssignments = {
         ...item,
@@ -125,29 +129,38 @@ export async function GET(req: NextRequest) {
     }
     if (category) {
       const catId = parseInt(category)
-      // Check if this is a parent category or a subcategory
-      const [catInfo] = await db.select({
-        id: categories.id,
-        parentId: categories.parentId
-      }).from(categories).where(eq(categories.id, catId)).limit(1)
-
-      if (catInfo) {
-        if (catInfo.parentId === null) {
-          // It's a parent category - find all subcategories
-          const subCats = await db.select({ id: categories.id })
-            .from(categories)
-            .where(eq(categories.parentId, catId))
-
-          const subCatIds = subCats.map(sc => sc.id)
-          if (subCatIds.length > 0) {
-            conditions.push(inArray(globalProducts.categoryId, subCatIds))
-          } else {
-            // No subcategories, match nothing if it's a parent with no children
-            conditions.push(eq(globalProducts.categoryId, -1))
+      if (catId) {
+        // Check if this is a parent category or a subcategory
+        const catInfo = await withSuperAdmin(async (tx) => {
+          const [info] = await tx.select({
+            id: categories.id,
+            parentId: categories.parentId
+          }).from(categories).where(eq(categories.id, catId)).limit(1)
+          
+          if (!info) return null
+          
+          if (info.parentId === null) {
+            // It's a parent category - find all subcategories
+            const subCatsList = await tx.select({ id: categories.id })
+              .from(categories)
+              .where(eq(categories.parentId, catId))
+            return { ...info, subCatIds: subCatsList.map(sc => sc.id) }
           }
-        } else {
-          // It's a subcategory - match directly
-          conditions.push(eq(globalProducts.categoryId, catId))
+          return info
+        }) as { id: number; parentId: number | null; subCatIds?: number[] } | null
+
+        if (catInfo) {
+          if (catInfo.parentId === null) {
+            if (catInfo.subCatIds && catInfo.subCatIds.length > 0) {
+              conditions.push(inArray(globalProducts.categoryId, catInfo.subCatIds))
+            } else {
+              // No subcategories, match nothing if it's a parent with no children
+              conditions.push(eq(globalProducts.categoryId, -1))
+            }
+          } else {
+            // It's a subcategory - match directly
+            conditions.push(eq(globalProducts.categoryId, catId))
+          }
         }
       }
     }
@@ -166,56 +179,60 @@ export async function GET(req: NextRequest) {
     const subCategories = alias(categories, "subCategories")
     const parentCategories = alias(categories, "parentCategories")
 
-    // Fetch products with pagination and category information
-    const [items, totalResult] = await Promise.all([
-      db.select({
-        id: globalProducts.id,
-        productCode: globalProducts.productCode,
-        name: globalProducts.name,
-        description: globalProducts.description,
-        categoryId: globalProducts.categoryId,
-        imageUrl: globalProducts.imageUrl,
-        basePrice: globalProducts.basePrice,
-        unit: globalProducts.unit,
-        status: globalProducts.status,
-        stockQuantity: globalProducts.stockQuantity,
-        metadata: globalProducts.metadata,
-        discountType: globalProducts.discountType,
-        discountValue: globalProducts.discountValue,
-        discountStartAt: globalProducts.discountStartAt,
-        discountEndAt: globalProducts.discountEndAt,
-        discountActive: globalProducts.discountActive,
-        createdAt: globalProducts.createdAt,
-        updatedAt: globalProducts.updatedAt,
-        categoryName: subCategories.name,
-        parentCategoryName: parentCategories.name,
-      })
-        .from(globalProducts)
-        .leftJoin(subCategories, eq(globalProducts.categoryId, subCategories.id))
-        .leftJoin(parentCategories, eq(subCategories.parentId, parentCategories.id))
-        .where(whereClause)
-        .orderBy(desc(globalProducts.createdAt))
-        .limit(limit)
-        .offset(offset),
-      db.select({ count: sql<number>`count(*)::int` }).from(globalProducts).where(whereClause)
-    ])
+    const { items, total } = await withSuperAdmin(async (tx) => {
+      const [items, totalResult] = await Promise.all([
+        tx.select({
+          id: globalProducts.id,
+          productCode: globalProducts.productCode,
+          name: globalProducts.name,
+          description: globalProducts.description,
+          categoryId: globalProducts.categoryId,
+          imageUrl: globalProducts.imageUrl,
+          basePrice: globalProducts.basePrice,
+          unit: globalProducts.unit,
+          status: globalProducts.status,
+          stockQuantity: globalProducts.stockQuantity,
+          metadata: globalProducts.metadata,
+          discountType: globalProducts.discountType,
+          discountValue: globalProducts.discountValue,
+          discountStartAt: globalProducts.discountStartAt,
+          discountEndAt: globalProducts.discountEndAt,
+          discountActive: globalProducts.discountActive,
+          createdAt: globalProducts.createdAt,
+          updatedAt: globalProducts.updatedAt,
+          categoryName: subCategories.name,
+          parentCategoryName: parentCategories.name,
+        })
+          .from(globalProducts)
+          .leftJoin(subCategories, eq(globalProducts.categoryId, subCategories.id))
+          .leftJoin(parentCategories, eq(subCategories.parentId, parentCategories.id))
+          .where(whereClause)
+          .orderBy(desc(globalProducts.createdAt))
+          .limit(limit)
+          .offset(offset),
+        tx.select({ count: sql<number>`count(*)::int` }).from(globalProducts).where(whereClause)
+      ])
 
-    const total = totalResult[0]?.count || 0
+      const total = totalResult[0]?.count || 0
+      return { items, total }
+    })
 
     // Get assignment counts for each product
     const productIds = items.map(item => item.id)
-    const assignmentCounts = productIds.length > 0 ? await db.select({
-      globalProductId: organizationInventory.globalProductId,
-      assignedOrganizations: sql<number>`count(distinct ${organizationInventory.organizationId})`,
-    })
-      .from(organizationInventory)
-      .where(
-        and(
-          inArray(organizationInventory.globalProductId, productIds),
-          eq(organizationInventory.isActive, true)
+    const assignmentCounts = productIds.length > 0 ? await withSuperAdmin(async (tx) => {
+      return tx.select({
+        globalProductId: organizationInventory.globalProductId,
+        assignedOrganizations: sql<number>`count(distinct ${organizationInventory.organizationId})`,
+      })
+        .from(organizationInventory)
+        .where(
+          and(
+            inArray(organizationInventory.globalProductId, productIds),
+            eq(organizationInventory.isActive, true)
+          )
         )
-      )
-      .groupBy(organizationInventory.globalProductId) : []
+        .groupBy(organizationInventory.globalProductId)
+    }) : []
 
     // Create a map for quick lookup
     const assignmentMap = new Map()
@@ -284,47 +301,53 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if product code already exists (excluding soft-deleted products)
-    const existingProduct = await db.select()
-      .from(globalProducts)
-      .where(
-        and(
-          eq(globalProducts.productCode, productCode),
-          isNull(globalProducts.deletedAt)
+    const [existingProduct] = await withSuperAdmin(async (tx) => {
+      return tx.select()
+        .from(globalProducts)
+        .where(
+          and(
+            eq(globalProducts.productCode, productCode),
+            isNull(globalProducts.deletedAt)
+          )
         )
-      )
-      .limit(1)
+        .limit(1)
+    })
 
-    if (existingProduct.length > 0) {
+    if (existingProduct) {
       return NextResponse.json({ error: "Product code already exists" }, { status: 400 })
     }
 
-    const [newProduct] = await db.insert(globalProducts)
-      .values({
-        productCode,
-        name,
-        description: description || null,
-        categoryId: categoryId ? parseInt(categoryId) : null,
-        imageUrl: imageUrl || null,
-        basePrice: Math.round(parseFloat(basePrice) * 100), // Convert to cents
-        unit: unit || "unit",
-        status,
-        stockQuantity: stockQuantity !== undefined ? Math.max(0, parseInt(String(stockQuantity)) || 0) : 0,
-        metadata,
-        discountType: discountType || null,
-        discountValue: discountValue !== undefined && discountValue !== null ? parseInt(discountValue) : null,
-        discountStartAt: discountStartAt ? new Date(discountStartAt) : null,
-        discountEndAt: discountEndAt ? new Date(discountEndAt) : null,
-        discountActive: !!discountActive,
-      })
-      .returning()
+    const product = await withSuperAdmin(async (tx) => {
+      const [newProduct] = await tx.insert(globalProducts)
+        .values({
+          productCode,
+          name,
+          description: description || null,
+          categoryId: categoryId ? parseInt(categoryId) : null,
+          imageUrl: imageUrl || null,
+          basePrice: Math.round(parseFloat(basePrice) * 100), // Convert to cents
+          unit: unit || "unit",
+          status,
+          stockQuantity: stockQuantity !== undefined ? Math.max(0, parseInt(String(stockQuantity)) || 0) : 0,
+          metadata: metadata,
+          discountType: discountType || null,
+          discountValue: discountValue !== undefined && discountValue !== null ? parseInt(discountValue) : null,
+          discountStartAt: discountStartAt ? new Date(discountStartAt) : null,
+          discountEndAt: discountEndAt ? new Date(discountEndAt) : null,
+          discountActive: !!discountActive,
+        })
+        .returning()
 
-    // Log the creation
-    await db.insert(auditLogs).values({
-      userId: (session.user as any).id,
-      action: "CREATE",
-      entity: "GlobalProduct",
-      entityId: newProduct.id.toString(),
-      metadata: { productCode, name, basePrice },
+      // Log the creation
+      await tx.insert(auditLogs).values({
+        userId: (session.user as any).id,
+        action: "CREATE",
+        entity: "GlobalProduct",
+        entityId: newProduct.id.toString(),
+        metadata: { productCode, name, basePrice },
+      })
+
+      return newProduct
     })
 
     // Invalidate global inventory cache
@@ -332,7 +355,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       message: "Product created successfully",
-      product: newProduct
+      product: product
     })
   } catch (error: any) {
     console.error("Error creating product:", error)
@@ -380,35 +403,42 @@ export async function PUT(req: NextRequest) {
     const productId = parseInt(id)
 
     // Check if product code already exists for another product (excluding soft-deleted)
-    if (productCode) {
-      const [existingProductWithCode] = await db.select()
-        .from(globalProducts)
-        .where(
-          and(
-            eq(globalProducts.productCode, productCode.toString().trim()),
-            ne(globalProducts.id, productId),
-            isNull(globalProducts.deletedAt)
+    const { existingProduct, existingProductWithCode } = await withSuperAdmin(async (tx) => {
+      // Check if product code already exists for another product (excluding soft-deleted)
+      let productWithCode = null
+      if (productCode) {
+        const [found] = await tx.select()
+          .from(globalProducts)
+          .where(
+            and(
+              eq(globalProducts.productCode, productCode.toString().trim()),
+              ne(globalProducts.id, productId),
+              isNull(globalProducts.deletedAt)
+            )
           )
-        )
+          .limit(1)
+        productWithCode = found
+      }
+
+      // Check if product exists and get current status
+      const [foundProduct] = await tx.select({
+        id: globalProducts.id,
+        status: globalProducts.status,
+        name: globalProducts.name,
+        description: globalProducts.description,
+        imageUrl: globalProducts.imageUrl,
+        basePrice: globalProducts.basePrice,
+      })
+        .from(globalProducts)
+        .where(eq(globalProducts.id, parseInt(id)))
         .limit(1)
 
-      if (existingProductWithCode) {
-        return NextResponse.json({ error: "Product code already exists" }, { status: 400 })
-      }
-    }
-
-    // Check if product exists and get current status
-    const [existingProduct] = await db.select({
-      id: globalProducts.id,
-      status: globalProducts.status,
-      name: globalProducts.name,
-      description: globalProducts.description,
-      imageUrl: globalProducts.imageUrl,
-      basePrice: globalProducts.basePrice,
+      return { existingProduct: foundProduct, existingProductWithCode: productWithCode }
     })
-      .from(globalProducts)
-      .where(eq(globalProducts.id, parseInt(id)))
-      .limit(1)
+
+    if (existingProductWithCode) {
+      return NextResponse.json({ error: "Product code already exists" }, { status: 400 })
+    }
 
     if (!existingProduct) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
@@ -432,76 +462,80 @@ export async function PUT(req: NextRequest) {
     if (discountActive !== undefined) updateData.discountActive = !!discountActive
     updateData.updatedAt = new Date()
 
-    const [updatedProduct] = await db.update(globalProducts)
-      .set(updateData)
-      .where(eq(globalProducts.id, parseInt(id)))
-      .returning()
+    const updatedProduct = await withSuperAdmin(async (tx) => {
+      const [updated] = await tx.update(globalProducts)
+        .set(updateData)
+        .where(eq(globalProducts.id, parseInt(id)))
+        .returning()
 
-    // If status changed, cascade to organization and branch inventory
-    if (status !== undefined && status !== existingProduct.status) {
-      const cascadeResult = await cascadeGlobalProductStatusChange(
-        parseInt(id),
-        status,
-        (session.user as any).id,
-        "SUPER_ADMIN"
-      )
+      // If status changed, cascade to organization and branch inventory
+      if (status !== undefined && status !== existingProduct.status) {
+        const cascadeResult = await cascadeGlobalProductStatusChange(
+          parseInt(id),
+          status,
+          (session.user as any).id,
+          "SUPER_ADMIN"
+        )
 
-      // Log the cascade update
-      await db.insert(auditLogs).values({
+        // Log the cascade update
+        await tx.insert(auditLogs).values({
+          userId: (session.user as any).id,
+          action: "CASCADE_UPDATE",
+          entity: "GlobalProduct",
+          entityId: id.toString(),
+          metadata: {
+            globalProductId: parseInt(id),
+            status,
+            orgUpdates: cascadeResult.updatedOrgCount,
+            branchUpdates: cascadeResult.updatedBranchCount,
+            affectedOrgs: cascadeResult.affectedOrgs,
+            affectedBranches: cascadeResult.affectedBranches,
+            performedByRole: "SUPER_ADMIN"
+          },
+        })
+      }
+
+      // Identify semantic field changes to clear overrides
+      const fieldChanges: Array<{ field: 'name' | 'description' | 'imageUrl' | 'basePrice'; oldValue: any; newValue: any }> = []
+
+      if (name !== undefined && name !== existingProduct.name) {
+        fieldChanges.push({ field: 'name', oldValue: existingProduct.name, newValue: name })
+      }
+      if (description !== undefined && description !== existingProduct.description) {
+        fieldChanges.push({ field: 'description', oldValue: existingProduct.description, newValue: description })
+      }
+      if (imageUrl !== undefined && imageUrl !== existingProduct.imageUrl) {
+        fieldChanges.push({ field: 'imageUrl', oldValue: existingProduct.imageUrl, newValue: imageUrl })
+      }
+      if (basePrice !== undefined) {
+        const newPriceCents = Math.round(parseFloat(basePrice) * 100)
+        if (newPriceCents !== existingProduct.basePrice) {
+          fieldChanges.push({ field: 'basePrice', oldValue: existingProduct.basePrice, newValue: newPriceCents })
+        }
+      }
+
+      if (fieldChanges.length > 0) {
+        const cascadeResult = await cascadeGlobalProductFieldUpdate(
+          parseInt(id),
+          fieldChanges,
+          (session.user as any).id
+        )
+
+        if (cascadeResult.updatedCount > 0) {
+          console.log(`[Cascade] Cleared ${cascadeResult.updatedCount} overrides for global product ${id}`)
+        }
+      }
+
+      // Log the update
+      await tx.insert(auditLogs).values({
         userId: (session.user as any).id,
-        action: "CASCADE_UPDATE",
+        action: "UPDATE",
         entity: "GlobalProduct",
         entityId: id.toString(),
-        metadata: {
-          globalProductId: parseInt(id),
-          status,
-          orgUpdates: cascadeResult.updatedOrgCount,
-          branchUpdates: cascadeResult.updatedBranchCount,
-          affectedOrgs: cascadeResult.affectedOrgs,
-          affectedBranches: cascadeResult.affectedBranches,
-          performedByRole: "SUPER_ADMIN"
-        },
+        metadata: updateData,
       })
-    }
 
-    // Identify semantic field changes to clear overrides
-    const fieldChanges: Array<{ field: 'name' | 'description' | 'imageUrl' | 'basePrice'; oldValue: any; newValue: any }> = []
-
-    if (name !== undefined && name !== existingProduct.name) {
-      fieldChanges.push({ field: 'name', oldValue: existingProduct.name, newValue: name })
-    }
-    if (description !== undefined && description !== existingProduct.description) {
-      fieldChanges.push({ field: 'description', oldValue: existingProduct.description, newValue: description })
-    }
-    if (imageUrl !== undefined && imageUrl !== existingProduct.imageUrl) {
-      fieldChanges.push({ field: 'imageUrl', oldValue: existingProduct.imageUrl, newValue: imageUrl })
-    }
-    if (basePrice !== undefined) {
-      const newPriceCents = Math.round(parseFloat(basePrice) * 100)
-      if (newPriceCents !== existingProduct.basePrice) {
-        fieldChanges.push({ field: 'basePrice', oldValue: existingProduct.basePrice, newValue: newPriceCents })
-      }
-    }
-
-    if (fieldChanges.length > 0) {
-      const cascadeResult = await cascadeGlobalProductFieldUpdate(
-        parseInt(id),
-        fieldChanges,
-        (session.user as any).id
-      )
-
-      if (cascadeResult.updatedCount > 0) {
-        console.log(`[Cascade] Cleared ${cascadeResult.updatedCount} overrides for global product ${id}`)
-      }
-    }
-
-    // Log the update
-    await db.insert(auditLogs).values({
-      userId: (session.user as any).id,
-      action: "UPDATE",
-      entity: "GlobalProduct",
-      entityId: id.toString(),
-      metadata: updateData,
+      return updated
     })
 
     // Invalidate global inventory cache
@@ -554,75 +588,79 @@ export async function DELETE(req: NextRequest) {
 
     const productId = parseInt(id)
 
-    // Check if product exists
-    const [existingProduct] = await db.select({
-      id: globalProducts.id,
-      productCode: globalProducts.productCode,
-      name: globalProducts.name,
-      status: globalProducts.status,
-    })
-      .from(globalProducts)
-      .where(and(eq(globalProducts.id, productId), isNull(globalProducts.deletedAt)))
-      .limit(1)
+    const result = await withSuperAdmin(async (tx) => {
+      // Check if product exists
+      const [existingProduct] = await tx.select({
+        id: globalProducts.id,
+        productCode: globalProducts.productCode,
+        name: globalProducts.name,
+        status: globalProducts.status,
+      })
+        .from(globalProducts)
+        .where(and(eq(globalProducts.id, productId), isNull(globalProducts.deletedAt)))
+        .limit(1)
 
-    if (!existingProduct) {
-      return NextResponse.json({ error: "Product not found" }, { status: 404 })
-    }
+      if (!existingProduct) {
+        throw new Error("Product not found")
+      }
 
-    if (mode === "delete") {
-      // Soft delete by marking deletedAt
-      await db.update(globalProducts)
-        .set({
-          status: "inactive",
-          deletedAt: new Date(),
-          updatedAt: new Date()
-        })
-        .where(eq(globalProducts.id, productId))
-    } else {
-      // Just deactivate
-      await db.update(globalProducts)
-        .set({
-          status: "inactive",
-          updatedAt: new Date()
-        })
-        .where(eq(globalProducts.id, productId))
-    }
+      if (mode === "delete") {
+        // Soft delete by marking deletedAt
+        await tx.update(globalProducts)
+          .set({
+            status: "inactive",
+            deletedAt: new Date(),
+            updatedAt: new Date()
+          })
+          .where(eq(globalProducts.id, productId))
+      } else {
+        // Just deactivate
+        await tx.update(globalProducts)
+          .set({
+            status: "inactive",
+            updatedAt: new Date()
+          })
+          .where(eq(globalProducts.id, productId))
+      }
 
-    // Cascade status change to organization and branch inventory
-    const cascadeResult = await cascadeGlobalProductStatusChange(
-      productId,
-      "inactive",
-      (session.user as any).id,
-      "SUPER_ADMIN"
-    )
+      // Cascade status change to organization and branch inventory
+      const cascadeResult = await cascadeGlobalProductStatusChange(
+        productId,
+        "inactive",
+        (session.user as any).id,
+        "SUPER_ADMIN"
+      )
 
-    // Log the action
-    await db.insert(auditLogs).values({
-      userId: (session.user as any).id,
-      action: mode === "delete" ? "DELETE" : "UPDATE",
-      entity: "GlobalProduct",
-      entityId: id.toString(),
-      metadata: {
-        productCode: existingProduct.productCode,
-        productName: existingProduct.name,
-        mode,
-        type: mode === "delete" ? "soft_delete" : "status_change",
-        cascadeResult: {
-          updatedOrgCount: cascadeResult.updatedOrgCount,
-          updatedBranchCount: cascadeResult.updatedBranchCount,
-          affectedOrgs: cascadeResult.affectedOrgs,
-          affectedBranches: cascadeResult.affectedBranches
-        }
-      },
+      // Log the action
+      await tx.insert(auditLogs).values({
+        userId: (session.user as any).id,
+        action: mode === "delete" ? "DELETE" : "UPDATE",
+        entity: "GlobalProduct",
+        entityId: id.toString(),
+        metadata: {
+          productCode: existingProduct.productCode,
+          productName: existingProduct.name,
+          mode,
+          type: mode === "delete" ? "soft_delete" : "status_change",
+          cascadeResult: {
+            updatedOrgCount: cascadeResult.updatedOrgCount,
+            updatedBranchCount: cascadeResult.updatedBranchCount,
+            affectedOrgs: cascadeResult.affectedOrgs,
+            affectedBranches: cascadeResult.affectedBranches
+          }
+        },
+      })
+
+      return { existingProduct, cascadeResult }
     })
 
     // Invalidate global inventory cache
     await invalidateByPrefix('global-inv')
 
     return NextResponse.json({
-      message: "Product deleted successfully",
-      product: existingProduct,
-      cascadeResult
+      message: mode === "delete" ? "Product deleted successfully" : "Product deactivated successfully",
+      product: result.existingProduct,
+      cascadeResult: result.cascadeResult
     })
   } catch (error: any) {
     console.error("Error deleting product:", error)

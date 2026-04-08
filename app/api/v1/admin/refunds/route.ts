@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
+import { db, withSuperAdmin } from "@/lib/db"
 import { orders, orderItems, organizations, branches, users, budgets, auditLogs, refunds, refundItems } from "@/db/schema"
 import { eq, or, ilike, sql, and, desc } from "drizzle-orm"
 
@@ -28,26 +28,28 @@ export async function GET(req: NextRequest) {
         const query = searchParams.get("q")?.trim()
 
         if (searchParams.has("status") && searchParams.get("status") === "pending") {
-            const pendingRefunds = await db
-                .select({
-                    id: refunds.id,
-                    amountCents: refunds.amountCents,
-                    reason: refunds.reason,
-                    status: refunds.status,
-                    createdAt: refunds.createdAt,
-                    orderId: orders.id,
-                    tid: orders.tid,
-                    totalCents: orders.totalCents,
-                    branchName: branches.name,
-                    requestedByName: users.fullName,
-                })
-                .from(refunds)
-                .innerJoin(orders, eq(refunds.orderId, orders.id))
-                .leftJoin(branches, eq(orders.branchId, branches.id))
-                .leftJoin(users, eq(refunds.requestedByUserId, users.id))
-                .where(eq(refunds.status, "PENDING"))
-                .orderBy(desc(refunds.createdAt))
-                .limit(50)
+            const pendingRefunds = await withSuperAdmin(async (tx) => {
+                return tx
+                    .select({
+                        id: refunds.id,
+                        amountCents: refunds.amountCents,
+                        reason: refunds.reason,
+                        status: refunds.status,
+                        createdAt: refunds.createdAt,
+                        orderId: orders.id,
+                        tid: orders.tid,
+                        totalCents: orders.totalCents,
+                        branchName: branches.name,
+                        requestedByName: users.fullName,
+                    })
+                    .from(refunds)
+                    .innerJoin(orders, eq(refunds.orderId, orders.id))
+                    .leftJoin(branches, eq(orders.branchId, branches.id))
+                    .leftJoin(users, eq(refunds.requestedByUserId, users.id))
+                    .where(eq(refunds.status, "PENDING"))
+                    .orderBy(desc(refunds.createdAt))
+                    .limit(50)
+            })
 
             return NextResponse.json({ refunds: pendingRefunds })
         }
@@ -61,126 +63,126 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Search query too long" }, { status: 400 })
         }
 
-        // Search by TID only (case-insensitive)
-        const [orderData] = await db
-            .select({
-                id: orders.id,
-                tid: orders.tid,
-                organizationId: orders.organizationId,
-                branchId: orders.branchId,
-                status: orders.status,
-                subtotalCents: orders.subtotalCents,
-                taxCents: orders.taxCents,
-                totalCents: orders.totalCents,
-                notes: orders.notes,
-                createdAt: orders.createdAt,
-                fulfilledAt: orders.fulfilledAt,
-                approvedAt: orders.approvedAt,
-                statusAtRefund: orders.statusAtRefund,
-                refundedAt: orders.refundedAt,
-                refundAmountCents: orders.refundAmountCents,
-                refundReason: orders.refundReason,
-                createdByUserId: orders.createdByUserId,
-            })
-            .from(orders)
-            .where(ilike(orders.tid, `%${query}%`))
-            .limit(1)
+        const result = await withSuperAdmin(async (tx) => {
+            // Search by TID only (case-insensitive)
+            const [orderData] = await tx
+                .select({
+                    id: orders.id,
+                    tid: orders.tid,
+                    organizationId: orders.organizationId,
+                    branchId: orders.branchId,
+                    status: orders.status,
+                    subtotalCents: orders.subtotalCents,
+                    taxCents: orders.taxCents,
+                    totalCents: orders.totalCents,
+                    notes: orders.notes,
+                    createdAt: orders.createdAt,
+                    fulfilledAt: orders.fulfilledAt,
+                    approvedAt: orders.approvedAt,
+                    statusAtRefund: orders.statusAtRefund,
+                    refundedAt: orders.refundedAt,
+                    refundAmountCents: orders.refundAmountCents,
+                    refundReason: orders.refundReason,
+                    createdByUserId: orders.createdByUserId,
+                })
+                .from(orders)
+                .where(ilike(orders.tid, `%${query}%`))
+                .limit(1)
 
-        if (!orderData) {
-            return NextResponse.json({ error: "Order not found" }, { status: 404 })
-        }
-
-        // Get organization and branch names
-        const [org] = await db
-            .select({ name: organizations.name })
-            .from(organizations)
-            .where(eq(organizations.id, orderData.organizationId!))
-            .limit(1)
-
-        const [branch] = await db
-            .select({ name: branches.name })
-            .from(branches)
-            .where(eq(branches.id, orderData.branchId))
-            .limit(1)
-
-        // Get user name
-        const [user] = await db
-            .select({ fullName: users.fullName, email: users.email })
-            .from(users)
-            .where(eq(users.id, orderData.createdByUserId))
-            .limit(1)
-
-        // Get order items
-        const items = await db
-            .select({
-                id: orderItems.id,
-                productName: orderItems.productName,
-                productCode: orderItems.productCode,
-                quantity: orderItems.quantity,
-                priceCents: orderItems.priceCents,
-                unit: orderItems.unit,
-            })
-            .from(orderItems)
-            .where(eq(orderItems.orderId, orderData.id))
-
-        // Fetch already refunded quantities
-        const refundedItemsData = await db
-            .select({
-                refundId: refundItems.refundId, // Added to link to refund status
-                orderItemId: refundItems.orderItemId,
-                quantity: refundItems.quantity,
-            })
-            .from(refundItems)
-            .innerJoin(refunds, eq(refunds.id, refundItems.refundId))
-            .where(and(
-                eq(refunds.orderId, orderData.id),
-                or(
-                    eq(refunds.status, "APPROVED"),
-                    eq(refunds.status, "COMPLETED"),
-                    eq(refunds.status, "PENDING")
-                )
-            ))
-
-        // Fetch refund records with status to distinguish
-        const refundRecords = await db
-            .select({
-                id: refunds.id,
-                status: refunds.status,
-            })
-            .from(refunds)
-            .where(eq(refunds.orderId, orderData.id))
-
-        const refundStatusMap = new Map(refundRecords.map(r => [r.id, r.status]))
-
-        // Aggregate refunded vs requested quantities
-        const approvedQuantityMap = new Map<number, number>()
-        const pendingQuantityMap = new Map<number, number>()
-
-        for (const record of refundedItemsData) {
-            const status = refundStatusMap.get(record.refundId)
-            if (status === "APPROVED" || status === "COMPLETED") {
-                const current = approvedQuantityMap.get(record.orderItemId) || 0
-                approvedQuantityMap.set(record.orderItemId, current + record.quantity)
-            } else if (status === "PENDING") {
-                const current = pendingQuantityMap.get(record.orderItemId) || 0
-                pendingQuantityMap.set(record.orderItemId, current + record.quantity)
+            if (!orderData) {
+                return null
             }
-        }
 
-        // Merge with items
-        const itemsWithRefundStats = items.map(item => {
-            const approved = approvedQuantityMap.get(item.id) || 0
-            const pending = pendingQuantityMap.get(item.id) || 0
+            // Get organization and branch names
+            const [org] = await tx
+                .select({ name: organizations.name })
+                .from(organizations)
+                .where(eq(organizations.id, orderData.organizationId!))
+                .limit(1)
+
+            const [branch] = await tx
+                .select({ name: branches.name })
+                .from(branches)
+                .where(eq(branches.id, orderData.branchId))
+                .limit(1)
+
+            // Get user name
+            const [user] = await tx
+                .select({ fullName: users.fullName, email: users.email })
+                .from(users)
+                .where(eq(users.id, orderData.createdByUserId))
+                .limit(1)
+
+            // Get order items
+            const items = await tx
+                .select({
+                    id: orderItems.id,
+                    productName: orderItems.productName,
+                    productCode: orderItems.productCode,
+                    quantity: orderItems.quantity,
+                    priceCents: orderItems.priceCents,
+                    unit: orderItems.unit,
+                })
+                .from(orderItems)
+                .where(eq(orderItems.orderId, orderData.id))
+
+            // Fetch already refunded quantities
+            const refundedItemsData = await tx
+                .select({
+                    refundId: refundItems.refundId, // Added to link to refund status
+                    orderItemId: refundItems.orderItemId,
+                    quantity: refundItems.quantity,
+                })
+                .from(refundItems)
+                .innerJoin(refunds, eq(refunds.id, refundItems.refundId))
+                .where(and(
+                    eq(refunds.orderId, orderData.id),
+                    or(
+                        eq(refunds.status, "APPROVED"),
+                        eq(refunds.status, "COMPLETED"),
+                        eq(refunds.status, "PENDING")
+                    )
+                ))
+
+            // Fetch refund records with status to distinguish
+            const refundRecords = await tx
+                .select({
+                    id: refunds.id,
+                    status: refunds.status,
+                })
+                .from(refunds)
+                .where(eq(refunds.orderId, orderData.id))
+
+            const refundStatusMap = new Map(refundRecords.map(r => [r.id, r.status]))
+
+            // Aggregate refunded vs requested quantities
+            const approvedQuantityMap = new Map<number, number>()
+            const pendingQuantityMap = new Map<number, number>()
+
+            for (const record of refundedItemsData) {
+                const status = refundStatusMap.get(record.refundId)
+                if (status === "APPROVED" || status === "COMPLETED") {
+                    const current = approvedQuantityMap.get(record.orderItemId) || 0
+                    approvedQuantityMap.set(record.orderItemId, current + record.quantity)
+                } else if (status === "PENDING") {
+                    const current = pendingQuantityMap.get(record.orderItemId) || 0
+                    pendingQuantityMap.set(record.orderItemId, current + record.quantity)
+                }
+            }
+
+            // Merge with items
+            const itemsWithRefundStats = items.map(item => {
+                const approved = approvedQuantityMap.get(item.id) || 0
+                const pending = pendingQuantityMap.get(item.id) || 0
+                return {
+                    ...item,
+                    refundedQuantity: approved, // Represents approved/completed refunds
+                    requestedQuantity: pending, // Represents pending refunds
+                    remainingQuantity: item.quantity - approved
+                }
+            })
+
             return {
-                ...item,
-                refundedQuantity: approved, // Represents approved/completed refunds
-                requestedQuantity: pending, // Represents pending refunds
-                remainingQuantity: item.quantity - approved
-            }
-        })
-
-        return NextResponse.json({
-            order: {
                 ...orderData,
                 organizationName: org?.name || "Unknown",
                 branchName: branch?.name || "Unknown",
@@ -188,6 +190,12 @@ export async function GET(req: NextRequest) {
                 items: itemsWithRefundStats,
             }
         })
+
+        if (!result) {
+            return NextResponse.json({ error: "Order not found" }, { status: 404 })
+        }
+
+        return NextResponse.json({ order: result })
 
     } catch (error: any) {
         console.error("[Refunds Search] Error:", error)
@@ -420,17 +428,21 @@ export async function POST(req: NextRequest) {
 
         // ===== VALIDATE REFUND AMOUNT =====
         const orderTotal = orderData.totalCents || 0
-        const approvedTotal = await db
-            .select({ amount: refunds.amountCents })
-            .from(refunds)
-            .where(and(eq(refunds.orderId, orderId), or(eq(refunds.status, "APPROVED"), eq(refunds.status, "COMPLETED"))))
-            .then(res => res.reduce((sum, r) => sum + (r.amount || 0), 0))
+        const { approvedTotal, pendingTotal } = await withSuperAdmin(async (tx) => {
+            const approvedTotal = await tx
+                .select({ amount: refunds.amountCents })
+                .from(refunds)
+                .where(and(eq(refunds.orderId, orderId), or(eq(refunds.status, "APPROVED"), eq(refunds.status, "COMPLETED"))))
+                .then(res => res.reduce((sum, r) => sum + (r.amount || 0), 0))
 
-        const pendingTotal = await db
-            .select({ amount: refunds.amountCents })
-            .from(refunds)
-            .where(and(eq(refunds.orderId, orderId), eq(refunds.status, "PENDING")))
-            .then(res => res.reduce((sum, r) => sum + (r.amount || 0), 0))
+            const pendingTotal = await tx
+                .select({ amount: refunds.amountCents })
+                .from(refunds)
+                .where(and(eq(refunds.orderId, orderId), eq(refunds.status, "PENDING")))
+                .then(res => res.reduce((sum, r) => sum + (r.amount || 0), 0))
+
+            return { approvedTotal, pendingTotal }
+        })
 
         const remainingRefundable = orderTotal - approvedTotal
 
@@ -445,7 +457,7 @@ export async function POST(req: NextRequest) {
         const refundType = isFullRefund ? "FULL" : "PARTIAL"
 
         // ===== PROCESS REFUND IN TRANSACTION =====
-        await db.transaction(async (tx) => {
+        await withSuperAdmin(async (tx) => {
 
             // 1. Update order with refund info and update receipt data
             const [currentOrder] = await tx

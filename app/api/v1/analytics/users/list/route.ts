@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
+import { db, withTenant } from "@/lib/db"
 import { users, branches, roles } from "@/db/schema"
 import { and, eq, inArray, isNull, sql } from "drizzle-orm"
 
@@ -32,14 +32,18 @@ export async function GET(req: NextRequest) {
         } else if (groupIdsParam) {
             const gIds = groupIdsParam.split(",").map(Number).filter(id => !isNaN(id) && id > 0)
             if (gIds.length > 0) {
-                const b = await db.select({ id: branches.id }).from(branches).where(inArray(branches.groupId, gIds))
+                const b = await withTenant(session.user as any, async (tx) => 
+                    tx.select({ id: branches.id }).from(branches).where(inArray(branches.groupId, gIds))
+                ) as any[]
                 branchIds = b.map(br => br.id)
             }
         } 
         
         // If still no branchIds but we have org, and we are NOT branch admin, resolve all branches in org
         if (branchIds.length === 0 && organizationIds.length > 0 && userRole !== "BRANCH_ADMIN" && userRole !== "BRANCH_MANAGER") {
-             const b = await db.select({ id: branches.id }).from(branches).where(inArray(branches.organizationId, organizationIds))
+             const b = await withTenant(session.user as any, async (tx) => 
+                tx.select({ id: branches.id }).from(branches).where(inArray(branches.organizationId, organizationIds))
+             ) as any[]
              branchIds = b.map(br => br.id)
         } else if (branchIds.length === 0 && (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER")) {
              branchIds = [userBranchId]
@@ -58,20 +62,22 @@ export async function GET(req: NextRequest) {
             conditions.push(inArray(users.branchId, branchIds))
         }
 
-        const items = await db
-            .select({
-                id: users.id,
-                name: sql<string>`COALESCE(${users.fullName}, ${users.firstName} || ' ' || ${users.lastName}, ${users.email})`,
-                employeeId: users.employeeId,
-                branchId: users.branchId,
-                organizationId: users.organizationId
-            })
-            .from(users)
-            .innerJoin(roles, eq(users.roleId, roles.id))
-            .where(and(...conditions, eq(roles.name, "ORDER_PORTAL")))
-            .groupBy(users.id, users.fullName, users.firstName, users.lastName, users.email, users.employeeId, users.branchId, users.organizationId)
-            .orderBy(users.fullName)
-            .limit(1000)
+        const items = await withTenant(session.user as any, async (tx) => 
+            tx
+                .select({
+                    id: users.id,
+                    name: sql<string>`COALESCE(${users.fullName}, ${users.firstName} || ' ' || ${users.lastName}, ${users.email})`,
+                    employeeId: users.employeeId,
+                    branchId: users.branchId,
+                    organizationId: users.organizationId
+                })
+                .from(users)
+                .innerJoin(roles, eq(users.roleId, roles.id))
+                .where(and(...conditions, eq(roles.name, "ORDER_PORTAL")))
+                .groupBy(users.id, users.fullName, users.firstName, users.lastName, users.email, users.employeeId, users.branchId, users.organizationId)
+                .orderBy(users.fullName)
+                .limit(1000)
+        ) as any[]
 
         return NextResponse.json({ items })
     } catch (error: any) {

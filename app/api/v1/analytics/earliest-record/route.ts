@@ -1,30 +1,25 @@
 import { NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { withTenant, withSuperAdmin } from "@/lib/db"
 import { orders } from "@/db/schema"
 import { asc } from "drizzle-orm"
-import { requireApiRole } from "@/lib/api"
-
-const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
+import { getRequestScope } from "@/lib/auth"
 
 export async function GET() {
-    const err = await requireApiRole(allowedRoles as any)
-    if (err) return err
+  try {
+    const scope = await getRequestScope()
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    try {
-        const firstOrder = await db.select({
-            createdAt: orders.createdAt
-        })
-        .from(orders)
-        .orderBy(asc(orders.createdAt))
-        .limit(1)
+    const result = await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
 
-        if (firstOrder.length === 0) {
-            return NextResponse.json({ earliestDate: new Date().toISOString() })
-        }
+    async function handler(tx: any) {
+      const firstOrder = await tx.select({ createdAt: orders.createdAt })
+        .from(orders).orderBy(asc(orders.createdAt)).limit(1)
 
-        return NextResponse.json({ earliestDate: firstOrder[0].createdAt })
-    } catch (e) {
-        console.error("[EarliestRecord] Error:", e)
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+      if (firstOrder.length === 0) return { earliestDate: new Date().toISOString() }
+      return { earliestDate: firstOrder[0].createdAt }
     }
+    return NextResponse.json(result)
+  } catch (e: any) {
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+  }
 }

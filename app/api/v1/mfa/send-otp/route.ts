@@ -1,51 +1,40 @@
-import { NextRequest } from "next/server"
-import { ok, error, requireApiRole, readJson } from "@/lib/api"
-import { getRequestScope } from "@/lib/auth"
+import { NextRequest, NextResponse } from "next/server"
 import { generateAndSendOTP } from "@/lib/mfa"
+import { withSuperAdmin } from "@/lib/db"
+import { users } from "@/db/schema"
+import { eq, and, isNull } from "drizzle-orm"
+import { getRequestScope } from "@/lib/auth"
 
 export async function POST(req: NextRequest) {
-  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
-  if (err) return err
-
   try {
-    const body = await readJson<any>(req)
-    if (!body) return error("Invalid request body", 400)
-
-    const { type = 'LOGIN' } = body
     const scope = await getRequestScope()
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    if (!scope?.userId) {
-      return error("User not authenticated", 401)
-    }
+    const body = await req.json().catch(() => ({}))
+    const { type = 'LOGIN' } = body
 
-    // Get user email
-    const { db } = await import("@/lib/db")
-    const { users } = await import("@/db/schema")
-    const { eq, and, isNull } = await import("drizzle-orm")
+    const result = await withSuperAdmin(async (tx) => {
+      const [user] = await tx
+        .select({ email: users.email })
+        .from(users)
+        .where(and(eq(users.id, scope.userId), isNull(users.deletedAt)))
+        .limit(1)
 
-    const [user] = await db
-      .select({ email: users.email })
-      .from(users)
-      .where(and(eq(users.id, scope.userId), isNull(users.deletedAt)))
-      .limit(1)
-
-    if (!user) {
-      return error("User not found", 404)
-    }
-
-    const result = await generateAndSendOTP(scope.userId, user.email, type)
+      if (!user) throw new Error("User not found")
+      return await generateAndSendOTP(scope.userId, user.email, type)
+    })
 
     if (result.success) {
-      return ok({
+      return NextResponse.json({
         message: result.message,
         cooldownUntil: result.cooldownUntil
       })
     } else {
-      return error(result.message, 400)
+      return NextResponse.json({ error: result.message }, { status: 400 })
     }
-
-  } catch (err) {
-    console.error("Error sending OTP:", err)
-    return error("Failed to send OTP", 500)
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to send OTP" }, { status: 500 })
   }
 }
+
+

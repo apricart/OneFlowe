@@ -1,120 +1,91 @@
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { invalidateByPrefix } from "@/lib/cache-utils"
-import { db } from "@/lib/db"
+import { withTenant, withSuperAdmin } from "@/lib/db"
 import { branches } from "@/db/schema"
-import { eq } from "drizzle-orm"
+import { eq, and } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 
-export async function GET(
-  _: Request,
-  props: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
   if (err) return err
-  const params = await props.params
-  const { id } = params
-  const [item] = await db.select().from(branches).where(eq(branches.id, Number(id)))
-  if (!item) return error("Not found", 404)
 
-  // BOLA Protection: verify user has access to this branch's organization
-  const { verifyResourceAccess } = await import("@/lib/auth")
-  const hasAccess = await verifyResourceAccess(item.organizationId, item.id)
-  if (!hasAccess) return error("Forbidden: You do not have access to this branch", 403)
+  const { id } = await props.params
+  const scope = await getRequestScope()
+  const branchId = parseInt(id)
 
-  return ok({ item })
+  try {
+    const item = await (scope?.role === "SUPER_ADMIN"
+      ? withSuperAdmin((tx) => tx.select().from(branches).where(eq(branches.id, branchId)).limit(1).then(r => r[0]))
+      : withTenant(scope as any, (tx) => {
+        const cond = [eq(branches.id, branchId), eq(branches.organizationId, scope!.organizationId!)]
+        if (scope?.role === "BRANCH_ADMIN" && scope.branchId) cond.push(eq(branches.id, scope.branchId))
+        return tx.select().from(branches).where(and(...cond)).limit(1).then(r => r[0])
+      }))
+
+    if (!item) return error("Not found", 404)
+    return ok({ item })
+  } catch (e) {
+    return error("Failed to fetch branch", 500)
+  }
 }
 
-export async function PATCH(
-  req: Request,
-  props: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
   if (err) return err
+
   const body = await readJson<any>(req)
   if (!body) return error("Invalid body", 400)
+
+  const { id } = await props.params
+  const scope = await getRequestScope()
+  const branchId = parseInt(id)
+
   try {
-    const params = await props.params
-    const { id } = params
-
-    const scope = await getRequestScope()
-    if (scope?.role === "HEAD_OFFICE") {
-      const [branch] = await db
-        .select({ organizationId: branches.organizationId })
-        .from(branches)
-        .where(eq(branches.id, Number(id)))
-      if (!branch) return error("Not found", 404)
-      if (!scope.organizationId || scope.organizationId !== branch.organizationId) {
-        return error("Forbidden", 403)
-      }
-    }
-
-    const patch: any = {}
+    const patch: any = { updatedAt: new Date() }
     if (body.name !== undefined) patch.name = String(body.name)
     if (body.status !== undefined) {
-      const normalized = String(body.status).toLowerCase()
-      const validStatuses = ['active', 'inactive', 'suspended']
-      if (!validStatuses.includes(normalized)) {
-        return error(`Status must be one of: ${validStatuses.join(', ')}`, 400)
-      }
-      patch.status = normalized
+      const valid = ['active', 'inactive', 'suspended']
+      if (!valid.includes(body.status)) return error("Invalid status", 400)
+      patch.status = body.status
     }
     if (body.groupId !== undefined) patch.groupId = body.groupId === null ? null : Number(body.groupId)
-    patch.updatedAt = new Date()
-    const [item] = await db.update(branches).set(patch).where(eq(branches.id, Number(id))).returning()
 
-    // Invalidate branches and groups cache so GET returns fresh data immediately
+    const updated = await (scope?.role === "SUPER_ADMIN"
+      ? withSuperAdmin((tx) => tx.update(branches).set(patch).where(eq(branches.id, branchId)).returning().then(r => r[0]))
+      : withTenant(scope as any, (tx) => tx.update(branches).set(patch).where(and(eq(branches.id, branchId), eq(branches.organizationId, scope!.organizationId!))).returning().then(r => r[0])))
+
+
+    if (!updated) return error("Branch not found or unauthorized", 404)
+
     await invalidateByPrefix('branches')
     await invalidateByPrefix('groups')
-
-    return ok({ item })
-  } catch (e: any) {
-    console.error("Update branch failed:", e)
+    return ok({ item: updated })
+  } catch (e) {
     return error("Update failed", 400)
   }
 }
 
-export async function DELETE(
-  _: Request,
-  props: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
   const err = await requireApiRole(["SUPER_ADMIN"])
   if (err) return err
-  const params = await props.params
-  const { id } = params
-  const branchId = Number(id)
+
+  const { id } = await props.params
+  const branchId = parseInt(id)
 
   try {
-    // 0. Check if exists
-    const [existing] = await db.select().from(branches).where(eq(branches.id, branchId))
-    if (!existing) return error("Branch not found", 404)
+    const result = await withSuperAdmin(async (tx) => {
+      const [existing] = await tx.select().from(branches).where(eq(branches.id, branchId))
+      if (!existing) throw new Error("Branch not found")
+      if (existing.status === 'inactive') throw new Error("Already inactive")
 
-    // Already inactive
-    if (existing.status === 'inactive') {
-      return error("Branch is already inactive", 400)
-    }
-
-    // Soft-delete: mark as inactive instead of hard-deleting
-    // All historical data (budgets, orders, audit logs, etc.) is preserved
-    const [updated] = await db.update(branches)
-      .set({
-        status: 'inactive',
-        updatedAt: new Date(),
-      })
-      .where(eq(branches.id, branchId))
-      .returning()
-
-    // Invalidate caches
-    await invalidateByPrefix('branches')
-
-    return ok({
-      ok: true,
-      message: "Branch deactivated successfully. All historical data has been preserved.",
-      item: updated
+      return tx.update(branches).set({ status: 'inactive', updatedAt: new Date() }).where(eq(branches.id, branchId)).returning().then(r => r[0])
     })
 
+    await invalidateByPrefix('branches')
+    return ok({ message: "Branch deactivated", item: result })
   } catch (e: any) {
-    console.error("Delete branch failed:", e)
-    return error("Failed to deactivate branch", 500)
+    return error(e.message || "Deactivation failed", 400)
   }
 }
+
 

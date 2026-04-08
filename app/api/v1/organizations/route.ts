@@ -1,156 +1,94 @@
-import { ok, error, requireApiRole, readJson } from "@/lib/api"
-export const dynamic = 'force-dynamic'
-import { NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { NextRequest, NextResponse } from "next/server"
+import { withTenant, withSuperAdmin } from "@/lib/db"
 import { organizations as orgsTable } from "@/db/schema"
-import { and, desc, eq } from "drizzle-orm"
-import { getRequestScope } from "@/lib/auth"
-import { handleError } from "@/lib/error-handler"
-import { logError } from "@/lib/global-logger"
+import { desc, eq } from "drizzle-orm"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { getRequestScope } from "@/lib/auth"
 
-/**
- * GET /api/v1/organizations - List organizations
- */
-export async function GET() {
+export const dynamic = 'force-dynamic'
+
+export async function GET(req: NextRequest) {
   try {
-    const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"])
-    if (err) return err
-
     const scope = await getRequestScope()
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // Validate scope data
-    if (!scope?.role) {
-      logError(new Error('Missing role in request scope'), 'ORGANIZATIONS_GET')
-      return error("Invalid session data", 401)
-    }
+    const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"]
+    if (!allowedRoles.includes(scope.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    // SUPER_ADMIN sees all, others see only their organization
-    const where = scope.role === "SUPER_ADMIN"
-      ? undefined as any
-      : scope.organizationId
-        ? eq(orgsTable.id, Number(scope.organizationId))
-        : undefined as any
-
-    // Validate organizationId for non-SUPER_ADMIN users
     if (scope.role !== "SUPER_ADMIN" && !scope.organizationId) {
-      return error("Organization context required", 403)
+      return NextResponse.json({ error: "Organization context required" }, { status: 403 })
     }
 
-    const cacheKey = scopedCacheKey('organizations', { role: scope.role, orgId: scope.organizationId })
+    const { role, organizationId } = scope
+    const cacheKey = scopedCacheKey('organizations', { role, orgId: organizationId })
 
     const result = await getCached(cacheKey, async () => {
-      const items = await db
-        .select()
-        .from(orgsTable)
-        .where(where)
-        .orderBy(desc(orgsTable.createdAt))
+      return await (role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
 
-      return { items, count: items.length }
+      async function handler(tx: any) {
+        const where = role === "SUPER_ADMIN"
+          ? undefined
+          : organizationId
+            ? eq(orgsTable.id, Number(organizationId))
+            : undefined
+
+        const items = await tx
+          .select()
+          .from(orgsTable)
+          .where(where)
+          .orderBy(desc(orgsTable.createdAt))
+
+        return { items, count: items.length }
+      }
     }, CACHE_TTL.LISTING)
 
-    return ok(result)
+    return NextResponse.json(result)
+
   } catch (e: any) {
-    logError(e, 'ORGANIZATIONS_GET')
-    logError(e, 'ORGANIZATIONS_GET')
-    const { status, ...errorBody } = handleError(e, 'ORGANIZATIONS_GET')
-    return NextResponse.json(errorBody, { status })
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
-/**
- * POST /api/v1/organizations - Create new organization
- */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const err = await requireApiRole(["SUPER_ADMIN"]) // Only Super Admin can create organizations
-    if (err) return err
+    const scope = await getRequestScope()
+    if (!scope || scope.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    const body = await readJson<any>(req)
+    const body = await req.json().catch(() => ({}))
+    const { name, code } = body
 
-    // Validate required fields
-    if (!body?.name || typeof body.name !== 'string') {
-      return error("Organization name is required and must be a string", 400)
-    }
+    if (!name || typeof name !== 'string') return NextResponse.json({ error: "Organization name is required" }, { status: 400 })
+    if (!code || typeof code !== 'string') return NextResponse.json({ error: "Organization code is required" }, { status: 400 })
 
-    if (!body?.code || typeof body.code !== 'string') {
-      return error("Organization code is required and must be a string", 400)
-    }
+    const sanitizedName = name.trim()
+    const sanitizedCode = code.trim().toUpperCase()
 
-    // Validate field lengths
-    const name = String(body.name).trim()
-    const code = String(body.code).trim().toUpperCase()
+    if (sanitizedName.length < 2 || sanitizedName.length > 100) return NextResponse.json({ error: "Organization name must be between 2 and 100 characters" }, { status: 400 })
+    if (sanitizedCode.length < 2 || sanitizedCode.length > 20) return NextResponse.json({ error: "Organization code must be between 2 and 20 characters" }, { status: 400 })
+    if (!/^[A-Z0-9_]+$/.test(sanitizedCode)) return NextResponse.json({ error: "Organization code must contain only uppercase letters, numbers, and underscores" }, { status: 400 })
 
-    if (name.length < 2 || name.length > 100) {
-      return error("Organization name must be between 2 and 100 characters", 400)
-    }
-
-    if (code.length < 2 || code.length > 20) {
-      return error("Organization code must be between 2 and 20 characters", 400)
-    }
-
-    // Validate code format (alphanumeric and underscores only)
-    if (!/^[A-Z0-9_]+$/.test(code)) {
-      return error("Organization code must contain only uppercase letters, numbers, and underscores", 400)
-    }
-
-    // Validate status if provided
     const validStatuses = ['active', 'inactive', 'suspended']
     const status = body.status ? String(body.status).toLowerCase() : 'active'
+    if (!validStatuses.includes(status)) return NextResponse.json({ error: `Status must be one of: ${validStatuses.join(', ')}` }, { status: 400 })
 
-    if (!validStatuses.includes(status)) {
-      return error(`Status must be one of: ${validStatuses.join(', ')}`, 400)
-    }
+    const result = await withSuperAdmin(async (tx) => {
+      // Check for duplicate name
+      const [existingName] = await tx.select({ id: orgsTable.id }).from(orgsTable).where(eq(orgsTable.name, sanitizedName)).limit(1)
+      if (existingName) throw new Error(`Organization with name '${sanitizedName}' already exists`)
 
-    // Check for duplicate name
-    const existingName = await db
-      .select({ id: orgsTable.id })
-      .from(orgsTable)
-      .where(eq(orgsTable.name, name))
-      .limit(1)
+      // Check for duplicate code
+      const [existingCode] = await tx.select({ id: orgsTable.id }).from(orgsTable).where(eq(orgsTable.code, sanitizedCode)).limit(1)
+      if (existingCode) throw new Error(`Organization with code '${sanitizedCode}' already exists`)
 
-    if (existingName.length > 0) {
-      return error(`Organization with name '${name}' already exists`, 400)
-    }
+      const [newOrg] = await tx.insert(orgsTable).values({ name: sanitizedName, code: sanitizedCode, status }).returning()
+      return newOrg
+    })
 
-    // Check for duplicate code
-    const existingCode = await db
-      .select({ id: orgsTable.id })
-      .from(orgsTable)
-      .where(eq(orgsTable.code, code))
-      .limit(1)
-
-    if (existingCode.length > 0) {
-      return error(`Organization with code '${code}' already exists`, 400)
-    }
-
-    // Insert organization
-    const [item] = await db
-      .insert(orgsTable)
-      .values({
-        name,
-        code,
-        status
-      })
-      .returning()
-
-    // Invalidate organizations cache
     await invalidateByPrefix('organizations')
-
-    return ok({
-      item,
-      message: "Organization created successfully"
-    }, { status: 201 })
-
+    return NextResponse.json({ item: result, message: "Organization created successfully" }, { status: 201 })
   } catch (e: any) {
-    // Handle database constraint violations
-    if (e.code === '23505') { // Unique violation
-      return error("Organization with this code already exists", 409)
-    }
-
-    logError(e, 'ORGANIZATIONS_POST')
-    logError(e, 'ORGANIZATIONS_POST')
-    const { status, ...errorBody } = handleError(e, 'ORGANIZATIONS_POST')
-    return NextResponse.json(errorBody, { status })
+    if (e.message?.includes('already exists')) return NextResponse.json({ error: e.message }, { status: 400 })
+    return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 })
   }
 }
+

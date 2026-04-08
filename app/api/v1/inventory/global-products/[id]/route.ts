@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
+import { db, withTenant } from "@/lib/db"
 import { globalProducts, auditLogs } from "@/db/schema"
 import { eq, and, ne } from "drizzle-orm"
 
@@ -19,7 +19,9 @@ export async function GET(
     }
 
     const productId = parseInt(params.id)
-    const [product] = await db.select().from(globalProducts).where(eq(globalProducts.id, productId)).limit(1)
+    const [product] = await withTenant(session.user as any, async (tx) => 
+      tx.select().from(globalProducts).where(eq(globalProducts.id, productId)).limit(1)
+    ) as any[]
 
     if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
@@ -48,6 +50,11 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const userRole = (session.user as any).role
+    if (userRole !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
     const params = await props.params
     const productId = parseInt(params.id)
     const body = await req.json()
@@ -56,15 +63,17 @@ export async function PUT(
     // Check if product code already exists
     if (productCode) {
       const start = Date.now()
-      const [existingProductWithCode] = await db.select()
-        .from(globalProducts)
-        .where(
-          and(
-            eq(globalProducts.productCode, productCode.toString().trim()),
-            ne(globalProducts.id, productId)
+      const [existingProductWithCode] = await withTenant(session.user as any, async (tx) => 
+        tx.select()
+          .from(globalProducts)
+          .where(
+            and(
+              eq(globalProducts.productCode, productCode.toString().trim()),
+              ne(globalProducts.id, productId)
+            )
           )
-        )
-        .limit(1)
+          .limit(1)
+      ) as any[]
 
       console.log(`[UpdateProduct] Check for duplicate code '${productCode}' took ${Date.now() - start}ms. Found: ${!!existingProductWithCode}`)
 
@@ -74,38 +83,44 @@ export async function PUT(
     }
 
     // Check if product exists
-    const [existingProduct] = await db.select().from(globalProducts).where(eq(globalProducts.id, productId)).limit(1)
+    const [existingProduct] = await withTenant(session.user as any, async (tx) => 
+      tx.select().from(globalProducts).where(eq(globalProducts.id, productId)).limit(1)
+    ) as any[]
     if (!existingProduct) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
     // Update product
-    const [updatedProduct] = await db.update(globalProducts)
-      .set({
-        ...(productCode && { productCode }),
-        ...(name && { name }),
-        ...(description !== undefined && { description }),
-        ...(categoryId !== undefined && { categoryId }),
-        ...(imageUrl !== undefined && { imageUrl }),
-        ...(basePrice !== undefined && { basePrice }),
-        ...(unit && { unit }),
-        ...(status && { status }),
-        ...(metadata !== undefined && { metadata }),
-        updatedAt: new Date()
-      })
-      .where(eq(globalProducts.id, productId))
-      .returning()
+    const [updatedProduct] = await withTenant(session.user as any, async (tx) => 
+      tx.update(globalProducts)
+        .set({
+          ...(productCode && { productCode }),
+          ...(name && { name }),
+          ...(description !== undefined && { description }),
+          ...(categoryId !== undefined && { categoryId }),
+          ...(imageUrl !== undefined && { imageUrl }),
+          ...(basePrice !== undefined && { basePrice }),
+          ...(unit && { unit }),
+          ...(status && { status }),
+          ...(metadata !== undefined && { metadata }),
+          updatedAt: new Date()
+        })
+        .where(eq(globalProducts.id, productId))
+        .returning()
+    ) as any[]
 
     // Log audit
-    await db.insert(auditLogs).values({
-      userId: (session.user as any).id,
-      organizationId: null,
-      branchId: null,
-      action: "update_global_product",
-      entity: "global_products",
-      entityId: productId.toString(),
-      metadata: { changes: body }
-    })
+    await withTenant(session.user as any, async (tx) => 
+      tx.insert(auditLogs).values({
+        userId: (session.user as any).id,
+        organizationId: null,
+        branchId: null,
+        action: "update_global_product",
+        entity: "global_products",
+        entityId: productId.toString(),
+        metadata: { changes: body }
+      })
+    )
 
     return NextResponse.json({ product: updatedProduct })
   } catch (error: any) {
@@ -131,30 +146,41 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const userRole = (session.user as any).role
+    if (userRole !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
     const params = await props.params
     const productId = parseInt(params.id)
 
     // Check if product exists
-    const [existingProduct] = await db.select().from(globalProducts).where(eq(globalProducts.id, productId)).limit(1)
+    const [existingProduct] = await withTenant(session.user as any, async (tx) => 
+      tx.select().from(globalProducts).where(eq(globalProducts.id, productId)).limit(1)
+    ) as any[]
     if (!existingProduct) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
     // Soft delete by setting status to inactive
-    await db.update(globalProducts)
-      .set({ status: "inactive", updatedAt: new Date() })
-      .where(eq(globalProducts.id, productId))
+    await withTenant(session.user as any, async (tx) => 
+      tx.update(globalProducts)
+        .set({ status: "soft_deleted", updatedAt: new Date() })
+        .where(eq(globalProducts.id, productId))
+    )
 
     // Log audit
-    await db.insert(auditLogs).values({
-      userId: (session.user as any).id,
-      organizationId: null,
-      branchId: null,
-      action: "delete_global_product",
-      entity: "global_products",
-      entityId: productId.toString(),
-      metadata: { productCode: existingProduct.productCode }
-    })
+    await withTenant(session.user as any, async (tx) => 
+      tx.insert(auditLogs).values({
+        userId: (session.user as any).id,
+        organizationId: null,
+        branchId: null,
+        action: "delete_global_product",
+        entity: "global_products",
+        entityId: productId.toString(),
+        metadata: { productCode: existingProduct.productCode }
+      })
+    )
 
     return NextResponse.json({ message: "Product deleted successfully" })
   } catch (error: any) {

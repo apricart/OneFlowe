@@ -1,52 +1,33 @@
-import { NextRequest } from "next/server"
-import { ok, error, requireApiRole, readJson } from "@/lib/api"
+import { NextRequest, NextResponse } from "next/server"
+import { enableMFA, disableMFA } from "@/lib/mfa"
 import { getRequestScope } from "@/lib/auth"
-import { enableMFA, disableMFA, verifyOTP } from "@/lib/mfa"
 
 export async function POST(req: NextRequest) {
-  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
-  if (err) return err
-
   try {
-    const body = await readJson<any>(req)
-    if (!body) return error("Invalid request body", 400)
-
-    const { action, otpCode } = body // 'enable' or 'disable'
-
     const scope = await getRequestScope()
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    if (!scope?.userId) {
-      return error("User not authenticated", 401)
-    }
+    const body = await req.json().catch(() => ({}))
+    const { action } = body
 
     if (action === 'enable') {
-      // For enabling MFA, we don't need OTP verification since the user is already authenticated
-      // and accessing the settings page proves their identity
-
       const result = await enableMFA(scope.userId)
-      return ok({
+      return NextResponse.json({
         message: result.message,
         mfaEnabled: true
       })
-    }
-
-    else if (action === 'disable') {
-      // For disabling MFA, we don't need OTP verification since the user is already authenticated
-      // and accessing the settings page proves their identity
-
+    } else if (action === 'disable') {
       const result = await disableMFA(scope.userId)
-      return ok({
+      return NextResponse.json({
         message: result.message,
         mfaEnabled: false
       })
+    } else {
+      return NextResponse.json({ error: "Invalid action. Use 'enable' or 'disable'" }, { status: 400 })
     }
-
-    else {
-      return error("Invalid action. Use 'enable' or 'disable'", 400)
-    }
-
   } catch (err) {
-    console.error("Error toggling MFA:", err)
-    return error("Failed to toggle MFA", 500)
+    return NextResponse.json({ error: "Failed to toggle MFA" }, { status: 500 })
   }
 }
+
+

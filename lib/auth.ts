@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth"
 import type { Role } from "./rbac"
-import { db } from "@/lib/db"
+import { db, withSuperAdmin } from "@/lib/db"
 import { sessions, users } from "@/db/schema"
 import { and, eq } from "drizzle-orm"
 import { authOptions } from "./auth-options"
@@ -99,11 +99,13 @@ export async function getRequestScope(): Promise<RequestScope | null> {
 
     // Fetch user's organization and branch with error handling
     try {
-      const [row] = await db
-        .select({ organizationId: users.organizationId, branchId: users.branchId })
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1)
+      const [row] = await withSuperAdmin(async (tx) => 
+        tx
+          .select({ organizationId: users.organizationId, branchId: users.branchId })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1)
+      )
 
       if (!row) {
         console.warn(`[Auth] User ${userId} not found in database for request scope`)
@@ -139,10 +141,12 @@ export async function touchSession(userId: string): Promise<void> {
       return
     }
 
-    await db
-      .update(sessions)
-      .set({ lastActivityAt: new Date() })
-      .where(and(eq(sessions.userId, userId)))
+    await withSuperAdmin(async (tx) => 
+      tx
+        .update(sessions)
+        .set({ lastActivityAt: new Date() })
+        .where(and(eq(sessions.userId, userId)))
+    )
 
   } catch (error) {
     logError(error, 'TOUCH_SESSION', { userId })

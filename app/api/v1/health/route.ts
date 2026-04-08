@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
-import { Pool } from "pg"
+import { withSuperAdmin } from "@/lib/db"
+import { sql } from "drizzle-orm"
 
 export const runtime = "nodejs"
 
@@ -10,27 +11,20 @@ export async function GET() {
     timestamp: new Date().toISOString(),
   }
 
-  const dbUrl = process.env.DATABASE_URL
-  if (!dbUrl) {
-    return NextResponse.json(
-      {
-        status: "degraded",
-        checks: { database: { ok: false, error: "DATABASE_URL is not set" } },
-        details,
-      },
-      { status: 503 }
-    )
-  }
-
   try {
-    const pool = new Pool({ connectionString: dbUrl })
-    await pool.query("select 1")
-    const elapsedMs = Date.now() - startedAt
+    const elapsedMs = await withSuperAdmin(async (tx) => {
+      const dbStart = Date.now()
+      await tx.execute(sql`SELECT 1`)
+      return Date.now() - dbStart
+    })
+
+    const totalElapsedMs = Date.now() - startedAt
+    
     return NextResponse.json(
       {
         status: "ok",
         checks: { database: { ok: true, latencyMs: elapsedMs } },
-        details,
+        details: { ...details, responseTimeMs: totalElapsedMs },
       },
       { status: 200 }
     )
@@ -46,3 +40,4 @@ export async function GET() {
     )
   }
 }
+

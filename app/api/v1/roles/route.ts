@@ -1,18 +1,35 @@
-import { db } from "@/lib/db"
+import { withSuperAdmin } from "@/lib/db"
 import { roles } from "@/db/schema"
-import { ok, requireApiRole } from "@/lib/api"
 import { getCached, CACHE_TTL } from "@/lib/cache-utils"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth-options"
+import { NextResponse } from "next/server"
 
 export async function GET() {
-  // Allow all authenticated administrative users to view roles
-  // Restricted from ORDER_PORTAL as they don't need role management visibility
-  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
-  if (err) return err
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const data = await getCached(
-    'cache:roles:all',
-    () => db.select({ id: roles.id, name: roles.name }).from(roles),
-    CACHE_TTL.STATIC
-  )
-  return ok({ data })
+    const user = session.user as any
+    const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"]
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const data = await getCached(
+      'cache:roles:all',
+      async () => {
+        return await withSuperAdmin(async (tx) => {
+          return await tx.select({ id: roles.id, name: roles.name }).from(roles)
+        })
+      },
+      CACHE_TTL.STATIC
+    )
+
+    return NextResponse.json({ data })
+  } catch (error) {
+    console.error("Roles GET Error:", error)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+  }
 }
+

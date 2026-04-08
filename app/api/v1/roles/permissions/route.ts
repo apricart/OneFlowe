@@ -1,156 +1,178 @@
-import { db } from "@/lib/db"
+import { db, withSuperAdmin } from "@/lib/db"
 import { roles, rolePermissions, auditLogs } from "@/db/schema"
 import { eq } from "drizzle-orm"
-import { ok, err, requireApiRole } from "@/lib/api"
-import { NextRequest } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth-options"
+import { NextRequest, NextResponse } from "next/server"
 
 export async function GET(req: NextRequest) {
-  const authErr = await requireApiRole(["SUPER_ADMIN"])
-  if (authErr) return authErr
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    
+    const user = session.user as any
+    if (user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  const roleId = req.nextUrl.searchParams.get("roleId")
+    const roleId = req.nextUrl.searchParams.get("roleId")
 
-  if (roleId) {
-    const permissions = await db
-      .select()
-      .from(rolePermissions)
-      .where(eq(rolePermissions.roleId, parseInt(roleId)))
+    const result = await withSuperAdmin(async (tx) => {
+      if (roleId) {
+        const permissions = await tx
+          .select()
+          .from(rolePermissions)
+          .where(eq(rolePermissions.roleId, parseInt(roleId)))
 
-    return ok({ data: permissions })
+        return { permissions }
+      }
+
+      const allRoles = await tx.select().from(roles)
+      const allPermissions = await tx.select().from(rolePermissions)
+
+      return {
+        roles: allRoles,
+        permissions: allPermissions,
+      }
+    })
+
+    return NextResponse.json({ data: result })
+  } catch (err: any) {
+    console.error("Permissions GET error:", err)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
-
-  const allRoles = await db.select().from(roles)
-  const allPermissions = await db.select().from(rolePermissions)
-
-  return ok({
-    data: {
-      roles: allRoles,
-      permissions: allPermissions,
-    }
-  })
 }
 
 export async function POST(req: NextRequest) {
-  const authErr = await requireApiRole(["SUPER_ADMIN"])
-  if (authErr) return authErr
-
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    
+    const user = session.user as any
+    if (user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
     const body = await req.json()
     const { roleId, permissionKey, allowed = true } = body
 
     if (!roleId || !permissionKey) {
-      return err("roleId and permissionKey are required", 400)
+      return NextResponse.json({ error: "roleId and permissionKey are required" }, { status: 400 })
     }
 
-    // Check if permission already exists
-    const existing = await db
-      .select()
-      .from(rolePermissions)
-      .where(eq(rolePermissions.roleId, roleId))
-      .limit(1)
+    const result = await withSuperAdmin(async (tx) => {
+      const [newPermission] = await tx
+        .insert(rolePermissions)
+        .values({
+          roleId,
+          permissionKey,
+          allowed,
+        })
+        .returning()
 
-    // Insert new permission
-    const [newPermission] = await db
-      .insert(rolePermissions)
-      .values({
-        roleId,
-        permissionKey,
-        allowed,
+      await tx.insert(auditLogs).values({
+        userId: user.id,
+        action: "CREATE_PERMISSION",
+        entity: "role_permissions",
+        entityId: newPermission.id.toString(),
+        metadata: { roleId, permissionKey, allowed },
       })
-      .returning()
 
-    // Log the action
-    await db.insert(auditLogs).values({
-      action: "CREATE_PERMISSION",
-      entity: "role_permissions",
-      entityId: newPermission.id.toString(),
-      metadata: { roleId, permissionKey, allowed },
+      return newPermission
     })
 
-    return ok({ data: newPermission })
+    return NextResponse.json({ data: result })
   } catch (error: any) {
-    return err("Failed to create permission", 500)
+    console.error("Permissions POST error:", error)
+    return NextResponse.json({ error: "Failed to create permission" }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
-  const authErr = await requireApiRole(["SUPER_ADMIN"])
-  if (authErr) return authErr
-
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    
+    const user = session.user as any
+    if (user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
     const body = await req.json()
     const { roleId, permissions } = body
 
     if (!roleId || !permissions || !Array.isArray(permissions)) {
-      return err("roleId and permissions array are required", 400)
+      return NextResponse.json({ error: "roleId and permissions array are required" }, { status: 400 })
     }
 
-    // Delete existing permissions for this role
-    await db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId))
+    await withSuperAdmin(async (tx) => {
+      // 1. Delete existing
+      await tx.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId))
 
-    // Insert new permissions
-    if (permissions.length > 0) {
-      const permissionValues = permissions.map((key: string) => ({
-        roleId,
-        permissionKey: key,
-        allowed: true,
-      }))
+      // 2. Insert new
+      if (permissions.length > 0) {
+        const permissionValues = permissions.map((key: string) => ({
+          roleId,
+          permissionKey: key,
+          allowed: true,
+        }))
+        await tx.insert(rolePermissions).values(permissionValues)
+      }
 
-      await db.insert(rolePermissions).values(permissionValues)
-    }
+      // 3. Update roles jsonb
+      const permissionsObj = permissions.reduce((acc: any, key: string) => {
+        acc[key] = true
+        return acc
+      }, {})
 
-    // Update role's permissions JSONB field for backward compatibility
-    const permissionsObj = permissions.reduce((acc: any, key: string) => {
-      acc[key] = true
-      return acc
-    }, {})
+      await tx
+        .update(roles)
+        .set({
+          permissions: permissionsObj,
+          updatedAt: new Date(),
+        })
+        .where(eq(roles.id, roleId))
 
-    await db
-      .update(roles)
-      .set({
-        permissions: permissionsObj,
-        updatedAt: new Date(),
+      // 4. Audit
+      await tx.insert(auditLogs).values({
+        userId: user.id,
+        action: "UPDATE_ROLE_PERMISSIONS",
+        entity: "roles",
+        entityId: roleId.toString(),
+        metadata: { permissions },
       })
-      .where(eq(roles.id, roleId))
-
-    // Log the action
-    await db.insert(auditLogs).values({
-      action: "UPDATE_ROLE_PERMISSIONS",
-      entity: "roles",
-      entityId: roleId.toString(),
-      metadata: { permissions },
     })
 
-    return ok({ message: "Permissions updated successfully" })
+    return NextResponse.json({ message: "Permissions updated successfully" })
   } catch (error: any) {
-    return err("Failed to update permissions", 500)
+    console.error("Permissions PUT error:", error)
+    return NextResponse.json({ error: "Failed to update permissions" }, { status: 500 })
   }
 }
 
 export async function DELETE(req: NextRequest) {
-  const authErr = await requireApiRole(["SUPER_ADMIN"])
-  if (authErr) return authErr
-
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    
+    const user = session.user as any
+    if (user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
     const { searchParams } = req.nextUrl
     const id = searchParams.get("id")
 
-    if (!id) {
-      return err("Permission id is required", 400)
-    }
+    if (!id) return NextResponse.json({ error: "Permission id is required" }, { status: 400 })
 
-    await db.delete(rolePermissions).where(eq(rolePermissions.id, parseInt(id)))
+    await withSuperAdmin(async (tx) => {
+      await tx.delete(rolePermissions).where(eq(rolePermissions.id, parseInt(id)))
 
-    // Log the action
-    await db.insert(auditLogs).values({
-      action: "DELETE_PERMISSION",
-      entity: "role_permissions",
-      entityId: id,
+      await tx.insert(auditLogs).values({
+        userId: user.id,
+        action: "DELETE_PERMISSION",
+        entity: "role_permissions",
+        entityId: id,
+      })
     })
 
-    return ok({ message: "Permission deleted successfully" })
+    return NextResponse.json({ message: "Permission deleted successfully" })
   } catch (error: any) {
-    return err("Failed to delete permission", 500)
+    console.error("Permissions DELETE error:", error)
+    return NextResponse.json({ error: "Failed to delete permission" }, { status: 500 })
   }
 }
+
 

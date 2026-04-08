@@ -1,6 +1,6 @@
 import type { NextAuthOptions } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { db } from "@/lib/db"
+import { db, withSuperAdmin } from "@/lib/db"
 import { users, roles, mfaCodes, employeeCredentials, organizations, branches } from "@/db/schema"
 import { eq, and, gt, isNull, sql } from "drizzle-orm"
 import { verifyPassword } from "@/lib/password"
@@ -21,7 +21,7 @@ export const authOptions: NextAuthOptions = {
         const password = String(credentials?.password || "")
         if (!username || !password) return null
 
-        const [u] = await db
+        const [u] = await withSuperAdmin(async (tx) => tx
           .select({
             id: users.id,
             username: users.username,
@@ -37,6 +37,7 @@ export const authOptions: NextAuthOptions = {
           })
           .from(users)
           .where(and(eq(users.username, username), isNull(users.deletedAt)))
+        )
         if (!u) return null
 
         const ok = await verifyPassword(password, u.hash)
@@ -44,11 +45,12 @@ export const authOptions: NextAuthOptions = {
 
         // Check organization status
         if (u.organizationId) {
-          const [org] = await db
+          const [org] = await withSuperAdmin(async (tx) => tx
             .select({ status: organizations.status })
             .from(organizations)
-            .where(eq(organizations.id, u.organizationId))
+            .where(eq(organizations.id, u.organizationId as number))
             .limit(1)
+          )
 
           if (!org || org.status?.toLowerCase() !== 'active') {
             throw new Error('ORGANIZATION_INACTIVE')
@@ -57,11 +59,12 @@ export const authOptions: NextAuthOptions = {
 
         // Check branch status
         if (u.branchId) {
-          const [branch] = await db
+          const [branch] = await withSuperAdmin(async (tx) => tx
             .select({ status: branches.status })
             .from(branches)
-            .where(eq(branches.id, u.branchId))
+            .where(eq(branches.id, u.branchId as number))
             .limit(1)
+          )
 
           if (!branch || branch.status?.toLowerCase() !== 'active') {
             throw new Error('BRANCH_INACTIVE')
@@ -76,14 +79,13 @@ export const authOptions: NextAuthOptions = {
         // Check if MFA is enabled for this user
         if (u.mfaEnabled) {
           // Return special error to trigger MFA flow
-          // Cooldown will be checked when sending OTP, not during initial login
           throw new Error("MFA_REQUIRED")
         }
 
         // Clear daily count after successful login (for non-MFA users)
         await clearDailyCount(u.id)
 
-        const [r] = await db.select().from(roles).where(eq(roles.id, u.roleId))
+        const [r] = await withSuperAdmin(async (tx) => tx.select().from(roles).where(eq(roles.id, u.roleId)))
         return {
           id: u.id,
           email: u.email,
@@ -112,7 +114,7 @@ export const authOptions: NextAuthOptions = {
         if (!username || !password || !otp) return null
 
         // Verify credentials first
-        const [u] = await db
+        const [u] = await withSuperAdmin(async (tx) => tx
           .select({
             id: users.id,
             username: users.username,
@@ -128,6 +130,7 @@ export const authOptions: NextAuthOptions = {
           })
           .from(users)
           .where(and(eq(users.username, username), isNull(users.deletedAt)))
+        )
         if (!u) return null
 
         const ok = await verifyPassword(password, u.hash)
@@ -135,11 +138,12 @@ export const authOptions: NextAuthOptions = {
 
         // Check organization status
         if (u.organizationId) {
-          const [org] = await db
+          const [org] = await withSuperAdmin(async (tx) => tx
             .select({ status: organizations.status })
             .from(organizations)
-            .where(eq(organizations.id, u.organizationId))
+            .where(eq(organizations.id, u.organizationId as number))
             .limit(1)
+          )
 
           if (!org || org.status?.toLowerCase() !== 'active') {
             throw new Error('ORGANIZATION_INACTIVE')
@@ -148,11 +152,12 @@ export const authOptions: NextAuthOptions = {
 
         // Check branch status
         if (u.branchId) {
-          const [branch] = await db
+          const [branch] = await withSuperAdmin(async (tx) => tx
             .select({ status: branches.status })
             .from(branches)
-            .where(eq(branches.id, u.branchId))
+            .where(eq(branches.id, u.branchId as number))
             .limit(1)
+          )
 
           if (!branch || branch.status?.toLowerCase() !== 'active') {
             throw new Error('BRANCH_INACTIVE')
@@ -175,7 +180,7 @@ export const authOptions: NextAuthOptions = {
         // Clear daily count after successful login
         await clearDailyCount(u.id)
 
-        const [r] = await db.select().from(roles).where(eq(roles.id, u.roleId))
+        const [r] = await withSuperAdmin(async (tx) => tx.select().from(roles).where(eq(roles.id, u.roleId)))
         return {
           id: u.id,
           email: u.email,
@@ -188,7 +193,6 @@ export const authOptions: NextAuthOptions = {
         } as any
       },
     }),
-    // Employee Portal Login
     Credentials({
       id: "employee-credentials",
       name: "employee-credentials",
@@ -199,33 +203,27 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         const username = String(credentials?.username || "").toLowerCase()
         const password = String(credentials?.password || "")
-        if (!username || !password) {
-          return null
-        }
+        if (!username || !password) return null
 
-        const [emp] = await db
+        const [emp] = await withSuperAdmin(async (tx) => tx
           .select()
           .from(employeeCredentials)
           .where(and(eq(employeeCredentials.username, username), eq(employeeCredentials.isActive, true)))
+        )
 
-        if (!emp) {
-          return null
-        }
-
-
+        if (!emp) return null
 
         const passwordMatch = await compare(password, emp.passwordHash)
-        if (!passwordMatch) {
-          return null
-        }
+        if (!passwordMatch) return null
 
         // Check organization status
         if (emp.organizationId) {
-          const [org] = await db
+          const [org] = await withSuperAdmin(async (tx) => tx
             .select({ status: organizations.status })
             .from(organizations)
-            .where(eq(organizations.id, emp.organizationId))
+            .where(eq(organizations.id, emp.organizationId as number))
             .limit(1)
+          )
 
           if (!org || org.status?.toLowerCase() !== 'active') {
             throw new Error('ORGANIZATION_INACTIVE')
@@ -234,25 +232,22 @@ export const authOptions: NextAuthOptions = {
 
         // Check branch status
         if (emp.branchId) {
-          const [branch] = await db
+          const [branch] = await withSuperAdmin(async (tx) => tx
             .select({ status: branches.status })
             .from(branches)
-            .where(eq(branches.id, emp.branchId))
+            .where(eq(branches.id, emp.branchId as number))
             .limit(1)
+          )
 
           if (!branch || branch.status?.toLowerCase() !== 'active') {
             throw new Error('BRANCH_INACTIVE')
           }
         }
 
-        // Check employee status (already filtered by isActive in WHERE, but explicit check for clarity)
         if (!emp.isActive) {
           throw new Error('USER_INACTIVE')
         }
 
-
-
-        // Check if MFA is enabled
         if (emp.mfaEnabled) {
           throw new Error("MFA_REQUIRED")
         }
@@ -270,7 +265,6 @@ export const authOptions: NextAuthOptions = {
         } as any
       },
     }),
-    // Employee MFA Login
     Credentials({
       id: "employee-mfa-credentials",
       name: "employee-mfa-credentials",
@@ -286,10 +280,11 @@ export const authOptions: NextAuthOptions = {
 
         if (!username || !password || !otp) return null
 
-        const [emp] = await db
+        const [emp] = await withSuperAdmin(async (tx) => tx
           .select()
           .from(employeeCredentials)
           .where(and(eq(employeeCredentials.username, username), eq(employeeCredentials.isActive, true)))
+        )
 
         if (!emp) return null
 
@@ -298,11 +293,12 @@ export const authOptions: NextAuthOptions = {
 
         // Check organization status
         if (emp.organizationId) {
-          const [org] = await db
+          const [org] = await withSuperAdmin(async (tx) => tx
             .select({ status: organizations.status })
             .from(organizations)
-            .where(eq(organizations.id, emp.organizationId))
+            .where(eq(organizations.id, emp.organizationId as number))
             .limit(1)
+          )
 
           if (!org || org.status?.toLowerCase() !== 'active') {
             throw new Error('ORGANIZATION_INACTIVE')
@@ -311,25 +307,24 @@ export const authOptions: NextAuthOptions = {
 
         // Check branch status
         if (emp.branchId) {
-          const [branch] = await db
+          const [branch] = await withSuperAdmin(async (tx) => tx
             .select({ status: branches.status })
             .from(branches)
-            .where(eq(branches.id, emp.branchId))
+            .where(eq(branches.id, emp.branchId as number))
             .limit(1)
+          )
 
           if (!branch || branch.status?.toLowerCase() !== 'active') {
             throw new Error('BRANCH_INACTIVE')
           }
         }
 
-        // Check employee status
         if (!emp.isActive) {
           throw new Error('USER_INACTIVE')
         }
 
         if (!emp.mfaEnabled || !emp.mfaSecret) return null
 
-        // Verify OTP for employee
         const mfaResult = await verifyOTP(`emp_${emp.id}`, otp, 'LOGIN')
         if (!mfaResult.success) {
           throw new Error(mfaResult.message)
@@ -365,7 +360,6 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        // Essential session assignments (always run)
         (session.user as any).id = token.sub
           ; (session.user as any).role = (token as any).role
           ; (session.user as any).organizationId = (token as any).organizationId
@@ -375,20 +369,16 @@ export const authOptions: NextAuthOptions = {
           ; (session.user as any).isEmployee = (token as any).isEmployee
           ; (session.user as any).employeeId = (token as any).employeeId
 
-        // Bank-grade security: Verify user is still active and not deleted on every session check
-        // This ensures that password resets, deletions, or deactivations kick users out immediately
         try {
           const isEmployee = token.isEmployee === true
           const userId = token.sub as string
-
           if (!userId) return session
 
           let dbUser: { isActive: boolean, deletedAt: Date | null, sessionVersion: number } | null = null
 
           if (isEmployee) {
-            // Employee ID in token sub is "emp_123", we need the numeric ID for DB lookup
             const numericId = parseInt(userId.replace("emp_", ""), 10)
-            const [emp] = await db
+            const [emp] = await withSuperAdmin(async (tx) => tx
               .select({
                 isActive: employeeCredentials.isActive,
                 deletedAt: sql<Date | null>`NULL`,
@@ -397,9 +387,10 @@ export const authOptions: NextAuthOptions = {
               .from(employeeCredentials)
               .where(eq(employeeCredentials.id, numericId))
               .limit(1)
+            )
             dbUser = emp as any
           } else {
-            const [u] = await db
+            const [u] = await withSuperAdmin(async (tx) => tx
               .select({
                 isActive: users.isActive,
                 deletedAt: users.deletedAt,
@@ -408,34 +399,39 @@ export const authOptions: NextAuthOptions = {
               .from(users)
               .where(eq(users.id, userId))
               .limit(1)
+            )
             dbUser = u as any
           }
 
           if (!dbUser || !dbUser.isActive || (dbUser.deletedAt && !isEmployee) || dbUser.sessionVersion !== token.sessionVersion) {
-            console.log(`[Auth] Invaliding session for user ${userId}: Status/Version mismatch`)
             return null as any
           }
 
-          // Also check for organization and branch status in session check
           if (token.organizationId) {
-            const [org] = await db.select({ status: organizations.status }).from(organizations).where(eq(organizations.id, token.organizationId as number)).limit(1)
+            const [org] = await withSuperAdmin(async (tx) => tx
+                .select({ status: organizations.status })
+                .from(organizations)
+                .where(eq(organizations.id, token.organizationId as number))
+                .limit(1)
+            )
             if (!org || org.status?.toLowerCase() !== 'active') {
-              console.log(`[Auth] Invaliding session for user ${userId}: Org deactivated`)
               return null as any
             }
           }
 
           if (token.branchId) {
-            const [branch] = await db.select({ status: branches.status }).from(branches).where(eq(branches.id, token.branchId as number)).limit(1)
+            const [branch] = await withSuperAdmin(async (tx) => tx
+                .select({ status: branches.status })
+                .from(branches)
+                .where(eq(branches.id, token.branchId as number))
+                .limit(1)
+            )
             if (!branch || branch.status?.toLowerCase() !== 'active') {
-              console.log(`[Auth] Invaliding session for user ${userId}: Branch deactivated`)
               return null as any
             }
           }
         } catch (err) {
           console.error("[Auth] Session validation error:", err)
-          // On DB error, we allow the session to continue but log the error
-          // This prevents a DB hiccup from locking everyone out
         }
       }
       return session

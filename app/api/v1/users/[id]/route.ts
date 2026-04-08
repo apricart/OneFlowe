@@ -1,10 +1,10 @@
-import { type NextRequest } from "next/server"
-import { db } from "@/lib/db"
-import { users, systemLogs, mfaCodes, orders, groups, auditLogs, notifications, employeeCredentials, sessions, groupAuditLogs } from "@/db/schema"
-import { eq, or, count } from "drizzle-orm"
+import { type NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth-options"
+import { db, withTenant, withSuperAdmin } from "@/lib/db"
+import { users, systemLogs, mfaCodes, orders, groups, auditLogs, notifications, employeeCredentials, sessions, groupAuditLogs, roles as rolesTable } from "@/db/schema"
+import { eq, or, count, and, ne } from "drizzle-orm"
 import { hashPassword } from "@/lib/password"
-import { ok, error, requireApiRole, readJson } from "@/lib/api"
-import { getRequestScope } from "@/lib/auth"
 import { invalidateByPrefix } from "@/lib/cache-utils"
 import { headers } from "next/headers"
 
@@ -13,34 +13,44 @@ export async function PATCH(
   props: { params: Promise<{ id: string }> }
 ) {
   try {
-    const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
-    if (err) return err
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const currentUserRole = (session.user as any).role
+    if (currentUserRole !== "SUPER_ADMIN" && currentUserRole !== "HEAD_OFFICE") {
+      return NextResponse.json({ error: "Forbidden: Head Office or Super Admin required" }, { status: 403 })
+    }
+
     const params = await props.params
     const { id } = params
-    const body = await readJson<any>(req)
-    if (!body) return error("Invalid body", 400)
+    const body = await req.json()
+    if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 })
 
-    // Check if HEAD_OFFICE user can edit this user (BOLA Protection)
-    const { verifyResourceAccess } = await import("@/lib/auth")
-    const [targetUser] = await db.select({
-      organizationId: users.organizationId,
-      branchId: users.branchId,
-      email: users.email
-    }).from(users).where(eq(users.id, id)).limit(1)
-    if (!targetUser) return error("User not found", 404)
+    const [targetUser] = await withTenant(session.user as any, async (tx) => 
+      tx.select({
+        organizationId: users.organizationId,
+        branchId: users.branchId,
+        email: users.email
+      }).from(users).where(eq(users.id, id)).limit(1)
+    ) as any[]
 
-    const hasAccess = await verifyResourceAccess(targetUser.organizationId)
-    if (!hasAccess) return error("Unauthorized to assign user to this resource", 403)
+    if (!targetUser) {
+      return NextResponse.json({ error: "User not found or access denied" }, { status: 404 })
+    }
 
     // Check uniqueness if email or username changed
     if (body.username) {
-      const [existing] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.username, body.username))
-        .limit(1)
+      const [existing] = await withSuperAdmin(async (tx) => 
+        tx
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.username, body.username))
+          .limit(1)
+      ) as any[]
       if (existing && existing.id !== id) {
-        return error("Username already in use by another user", 400)
+        return NextResponse.json({ error: "Username already in use by another user" }, { status: 400 })
       }
     }
 
@@ -63,7 +73,9 @@ export async function PATCH(
 
     // Update full name if first or last name changed
     if (body.firstName || body.lastName) {
-      const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1)
+      const [existing] = await withTenant(session.user as any, async (tx) => 
+        tx.select().from(users).where(eq(users.id, id)).limit(1)
+      ) as any[]
       const firstName = body.firstName || existing?.firstName || ""
       const lastName = body.lastName || existing?.lastName || ""
       patch.fullName = `${firstName} ${lastName}`.trim()
@@ -90,44 +102,51 @@ export async function PATCH(
     const isSecurityChange = !!body.password || emailActuallyChanged || orgChanged || branchChanged
     if (isSecurityChange) {
       console.log(`[API/Users] Security-relevant change for user ${id}. Incrementing session version...`)
-      const [currentUser] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, id)).limit(1)
-      patch.sessionVersion = (currentUser?.sessionVersion || 0) + 1
+      const [u] = await withTenant(session.user as any, async (tx) => 
+        tx.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, id)).limit(1)
+      ) as any[]
+      patch.sessionVersion = (u?.sessionVersion || 0) + 1
     }
 
     // Execute update (includes sessionVersion bump if needed — single atomic write)
-    await db.update(users).set(patch).where(eq(users.id, id))
+    await withTenant(session.user as any, async (tx) => 
+      tx.update(users).set(patch).where(eq(users.id, id))
+    )
 
     // Also delete physical sessions if they exist (for database-bound sessions if used)
     if (isSecurityChange) {
-      await db.delete(sessions).where(eq(sessions.userId, id))
+      await withTenant(session.user as any, async (tx) => 
+        tx.delete(sessions).where(eq(sessions.userId, id))
+      )
     }
 
     // Audit Log (optional)
     try {
-      const logScope = await getRequestScope()
       const headersList = await headers()
       const userAgent = headersList.get("user-agent")
       const forwardedFor = headersList.get("x-forwarded-for")
       const ip = forwardedFor ? forwardedFor.split(',')[0] : "unknown"
 
-      await db.insert(systemLogs).values({
-        userId: logScope?.userId,
-        userRole: logScope?.role,
-        organizationId: logScope?.organizationId,
-        branchId: logScope?.branchId || undefined,
-        action: "USER_UPDATE",
-        resourceType: "user",
-        resourceId: id,
-        details: {
-          patchKeys: Object.keys(patch),
-          updatedUserOrgId: body.organizationId,
-          updatedUserBranchId: body.branchId,
-          sessionsInvalidated: isSecurityChange
-        },
-        ipAddress: ip,
-        userAgent: userAgent,
-        success: true
-      })
+      await withTenant(session.user as any, async (tx) => 
+        tx.insert(systemLogs).values({
+          userId: (session.user as any).id,
+          userRole: currentUserRole,
+          organizationId: (session.user as any).organizationId,
+          branchId: (session.user as any).branchId || undefined,
+          action: "USER_UPDATE",
+          resourceType: "user",
+          resourceId: id,
+          details: {
+            patchKeys: Object.keys(patch),
+            updatedUserOrgId: body.organizationId,
+            updatedUserBranchId: body.branchId,
+            sessionsInvalidated: isSecurityChange
+          },
+          ipAddress: ip,
+          userAgent: userAgent,
+          success: true
+        })
+      )
     } catch (logErr) {
       console.error("[API/Users] Audit Log Error:", logErr)
     }
@@ -135,18 +154,18 @@ export async function PATCH(
     // Invalidate users cache so lists refresh immediately in production
     await invalidateByPrefix('users')
 
-    return ok({ success: true })
+    return NextResponse.json({ success: true })
   } catch (criticalErr: any) {
     const errorMessage = criticalErr.message || "Failed to update user"
     console.error("[API/Users] ERROR IN PATCH:", criticalErr)
 
     if (criticalErr.code === '23505' || errorMessage.includes('unique constraint') || errorMessage.includes('already exists')) {
       const detail = String(criticalErr.detail || criticalErr.cause?.detail || "").toLowerCase()
-      if (detail.includes('username')) return error("Username already in use by another user", 400)
-      if (detail.includes('employee_id')) return error("Internal ID (Employee ID) already exists.", 400)
-      if (detail.includes('email')) return error("Email address already exists.", 400)
-      if (detail.includes('phone')) return error("Phone number already exists.", 400)
-      return error("Unique field conflict: " + detail, 400)
+      if (detail.includes('username')) return NextResponse.json({ error: "Username already in use by another user" }, { status: 400 })
+      if (detail.includes('employee_id')) return NextResponse.json({ error: "Internal ID (Employee ID) already exists." }, { status: 400 })
+      if (detail.includes('email')) return NextResponse.json({ error: "Email address already exists." }, { status: 400 })
+      if (detail.includes('phone')) return NextResponse.json({ error: "Phone number already exists." }, { status: 400 })
+      return NextResponse.json({ error: "Unique field conflict: " + detail }, { status: 400 })
     }
 
     const isValidationError = errorMessage.includes("Invalid password") ||
@@ -160,7 +179,7 @@ export async function PATCH(
       criticalErr.code === "23505" ||
       criticalErr.code === "23503"
 
-    return error(errorMessage, isValidationError ? 400 : 500)
+    return NextResponse.json({ error: errorMessage }, { status: isValidationError ? 400 : 500 })
   }
 }
 
@@ -168,40 +187,34 @@ export async function DELETE(
   req: NextRequest,
   props: { params: Promise<{ id: string }> }
 ) {
-  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
-  if (err) return err
-  const params = await props.params
-  const { id } = params
-
   try {
-    const scope = await getRequestScope()
-    if (scope?.userId === id) {
-      return error("Cannot delete: You cannot delete your own account while logged in.", 400)
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { verifyResourceAccess } = await import("@/lib/auth")
-    const [targetUser] = await db.select({
-      organizationId: users.organizationId,
-      email: users.email
-    }).from(users).where(eq(users.id, id)).limit(1)
-    if (!targetUser) return error("User not found", 404)
+    const currentUserRole = (session.user as any).role
+    if (currentUserRole !== "SUPER_ADMIN" && currentUserRole !== "HEAD_OFFICE") {
+      return NextResponse.json({ error: "Forbidden: Head Office or Super Admin required" }, { status: 403 })
+    }
 
-    const hasAccess = await verifyResourceAccess(targetUser.organizationId)
-    if (!hasAccess) return error("Forbidden: You do not have access to this user", 403)
+    const params = await props.params
+    const { id } = params
 
-    // Dependency checks - Block deletion if critical data exists
-    const {
-      branches,
-      orders,
-      refunds,
-      restockRequests,
-      groups,
-      globalProducts: globalProductsTable,
-      organizationInventory: orgInventory,
-      branchInventory: branchInv,
-      productAssignments: prodAssign,
-      modifiers: modsTable
-    } = await import("@/db/schema")
+    if ((session.user as any).id === id) {
+      return NextResponse.json({ error: "Cannot delete: You cannot delete your own account while logged in." }, { status: 400 })
+    }
+
+    const [targetUser] = await withTenant(session.user as any, async (tx) => 
+      tx.select({
+        organizationId: users.organizationId,
+        email: users.email
+      }).from(users).where(eq(users.id, id)).limit(1)
+    ) as any[]
+
+    if (!targetUser) {
+      return NextResponse.json({ error: "User not found or access denied" }, { status: 404 })
+    }
 
     // Check for critical dependencies before attempting deletion
     const [
@@ -216,54 +229,69 @@ export async function DELETE(
       branchInvCount,
       prodAssignCount,
       modCount
-    ] = await Promise.all([
-      // 1. Check if user is an admin for any branches
-      db.select({ val: count() }).from(branches).where(eq(branches.adminUserId, id)),
+    ] = await withTenant(session.user as any, async (tx) => {
+      const {
+        branches,
+        orders,
+        refunds,
+        restockRequests,
+        groups,
+        globalProducts: globalProductsTable,
+        organizationInventory: orgInventory,
+        branchInventory: branchInv,
+        productAssignments: prodAssign,
+        modifiers: modsTable
+      } = await import("@/db/schema")
+      
+      return await Promise.all([
+        // 1. Check if user is an admin for any branches
+        tx.select({ val: count() }).from(branches).where(eq(branches.adminUserId, id)),
 
-      // 2. Check for orders involvement
-      db.select({ val: count() }).from(orders).where(
-        or(
-          eq(orders.createdByUserId, id),
-          eq(orders.approvedByUserId, id),
-          eq(orders.rejectedByUserId, id),
-          eq(orders.fulfilledByUserId, id),
-          eq(orders.refundedByUserId, id)
-        )
-      ),
+        // 2. Check for orders involvement
+        tx.select({ val: count() }).from(orders).where(
+          or(
+            eq(orders.createdByUserId, id),
+            eq(orders.approvedByUserId, id),
+            eq(orders.rejectedByUserId, id),
+            eq(orders.fulfilledByUserId, id),
+            eq(orders.refundedByUserId, id)
+          )
+        ),
 
-      // 3. Check for refunds involvement
-      db.select({ val: count() }).from(refunds).where(
-        or(
-          eq(refunds.requestedByUserId, id),
-          eq(refunds.processedByUserId, id)
-        )
-      ),
+        // 3. Check for refunds involvement
+        tx.select({ val: count() }).from(refunds).where(
+          or(
+            eq(refunds.requestedByUserId, id),
+            eq(refunds.processedByUserId, id)
+          )
+        ),
 
-      // 4. Check for restock requests
-      db.select({ val: count() }).from(restockRequests).where(
-        or(
-          eq(restockRequests.requestedByUserId, id),
-          eq(restockRequests.reviewedByUserId, id)
-        )
-      ),
+        // 4. Check for restock requests
+        tx.select({ val: count() }).from(restockRequests).where(
+          or(
+            eq(restockRequests.requestedByUserId, id),
+            eq(restockRequests.reviewedByUserId, id)
+          )
+        ),
 
-      // 5. Check for groups created
-      db.select({ val: count() }).from(groups).where(eq(groups.createdByUserId, id)),
+        // 5. Check for groups created
+        tx.select({ val: count() }).from(groups).where(eq(groups.createdByUserId, id)),
 
-      // 6. Check for master products created
-      db.select({ val: count() }).from(globalProductsTable).where(eq(globalProductsTable.createdByUserId, id)),
+        // 6. Check for master products created
+        tx.select({ val: count() }).from(globalProductsTable).where(eq(globalProductsTable.createdByUserId, id)),
 
-      // 7. Check for employee credentials created
-      db.select({ count: count() }).from(employeeCredentials).where(eq(employeeCredentials.createdByUserId, id)),
+        // 7. Check for employee credentials created
+        tx.select({ count: count() }).from(employeeCredentials).where(eq(employeeCredentials.createdByUserId, id)),
 
-      // 8. Check for inventory assignments
-      db.select({ val: count() }).from(orgInventory).where(eq(orgInventory.assignedByUserId, id)),
-      db.select({ val: count() }).from(branchInv).where(eq(branchInv.assignedByUserId, id)),
-      db.select({ val: count() }).from(prodAssign).where(eq(prodAssign.performedByUserId, id)),
+        // 8. Check for inventory assignments
+        tx.select({ val: count() }).from(orgInventory).where(eq(orgInventory.assignedByUserId, id)),
+        tx.select({ val: count() }).from(branchInv).where(eq(branchInv.assignedByUserId, id)),
+        tx.select({ val: count() }).from(prodAssign).where(eq(prodAssign.performedByUserId, id)),
 
-      // 9. Check for modifiers created
-      db.select({ val: count() }).from(modsTable).where(eq(modsTable.createdByUserId, id))
-    ])
+        // 9. Check for modifiers created
+        tx.select({ val: count() }).from(modsTable).where(eq(modsTable.createdByUserId, id))
+      ])
+    }) as any[]
 
     // Decide between hard delete and soft delete
     const hasHistory = orderCount[0].val > 0 ||
@@ -279,48 +307,56 @@ export async function DELETE(
 
     // Return error messages ONLY for critical active roles that MUST be reassigned
     if (adminCount[0].val > 0) {
-      return error(`Cannot delete: This user is assigned as the administrator for ${adminCount[0].val} branch(es). Please reassign branch administration before deleting.`, 400)
+      return NextResponse.json({ error: `Cannot delete: This user is assigned as the administrator for ${adminCount[0].val} branch(es). Please reassign branch administration before deleting.` }, { status: 400 })
     }
 
     if (hasHistory) {
       console.log(`[API/Users] User ${id} has historical records. Performing soft-delete...`)
 
       // Perform soft-delete
-      await db.update(users).set({
-        deletedAt: new Date(),
-        isActive: false,
-        // Append timestamp to email to free up the original email for a new account
-        email: `deleted_${Date.now()}_${targetUser.email}`
-      }).where(eq(users.id, id))
+      await withTenant(session.user as any, async (tx) => 
+        tx.update(users).set({
+          deletedAt: new Date(),
+          isActive: false,
+          // Append timestamp to email to free up the original email for a new account
+          email: `deleted_${Date.now()}_${targetUser.email}`
+        }).where(eq(users.id, id))
+      )
 
       // Clean up non-critical data
       console.log(`[API/Users] Cleaning up non-critical sessions/MFA for soft-deleted user ${id}...`)
-      await Promise.all([
-        db.delete(mfaCodes).where(eq(mfaCodes.userId, id)),
-        db.delete(sessions).where(eq(sessions.userId, id)),
-        db.delete(notifications).where(eq(notifications.userId, id))
-      ])
+      await withTenant(session.user as any, async (tx) => {
+        await Promise.all([
+          tx.delete(mfaCodes).where(eq(mfaCodes.userId, id)),
+          tx.delete(sessions).where(eq(sessions.userId, id)),
+          tx.delete(notifications).where(eq(notifications.userId, id))
+        ])
+      })
     } else {
       // Clean up all dependencies before hard deletion
       console.log(`[API/Users] Cleaning up all dependencies for hard-delete of user ${id}...`)
 
       try {
-        await Promise.all([
-          db.delete(mfaCodes).where(eq(mfaCodes.userId, id)),
-          db.delete(sessions).where(eq(sessions.userId, id)),
-          db.delete(notifications).where(eq(notifications.userId, id)),
-          db.delete(groupAuditLogs).where(eq(groupAuditLogs.performedByUserId, id)),
-          db.update(auditLogs).set({ userId: null }).where(eq(auditLogs.userId, id)),
-          db.update(systemLogs).set({ userId: null }).where(eq(systemLogs.userId, id))
-        ])
+        await withTenant(session.user as any, async (tx) => {
+          await Promise.all([
+            tx.delete(mfaCodes).where(eq(mfaCodes.userId, id)),
+            tx.delete(sessions).where(eq(sessions.userId, id)),
+            tx.delete(notifications).where(eq(notifications.userId, id)),
+            tx.delete(groupAuditLogs).where(eq(groupAuditLogs.performedByUserId, id)),
+            tx.update(auditLogs).set({ userId: null }).where(eq(auditLogs.userId, id)),
+            tx.update(systemLogs).set({ userId: null }).where(eq(systemLogs.userId, id))
+          ])
+        })
         console.log(`[API/Users] Successfully cleaned up dependencies for user ${id}`)
       } catch (cleanupErr: any) {
         console.error("[API/Users] Error during dependency cleanup:", cleanupErr)
-        return error(`Failed to clean up user dependencies: ${cleanupErr.message}. Please contact support.`, 500)
+        return NextResponse.json({ error: `Failed to clean up user dependencies: ${cleanupErr.message}. Please contact support.` }, { status: 500 })
       }
 
       // Then delete the user from the database
-      await db.delete(users).where(eq(users.id, id))
+      await withTenant(session.user as any, async (tx) => 
+        tx.delete(users).where(eq(users.id, id))
+      )
     }
 
     // Invalidate users cache
@@ -328,32 +364,33 @@ export async function DELETE(
 
     // Audit Log
     try {
-      const logScope = await getRequestScope()
       const headersList = await headers()
       const userAgent = headersList.get("user-agent")
       const forwardedFor = headersList.get("x-forwarded-for")
       const ip = forwardedFor ? forwardedFor.split(',')[0] : "unknown"
 
-      await db.insert(systemLogs).values({
-        userId: logScope?.userId,
-        userRole: logScope?.role,
-        organizationId: logScope?.organizationId,
-        branchId: undefined,
-        action: "USER_DELETE",
-        resourceType: "user",
-        resourceId: id,
-        details: {
-          deletedUserId: id
-        },
-        ipAddress: ip,
-        userAgent: userAgent,
-        success: true
-      })
+      await withTenant(session.user as any, async (tx) => 
+        tx.insert(systemLogs).values({
+          userId: (session.user as any).id,
+          userRole: currentUserRole,
+          organizationId: (session.user as any).organizationId,
+          branchId: undefined,
+          action: "USER_DELETE",
+          resourceType: "user",
+          resourceId: id,
+          details: {
+            deletedUserId: id
+          },
+          ipAddress: ip,
+          userAgent: userAgent,
+          success: true
+        })
+      )
     } catch (logErr) {
       console.error("Failed to write audit log:", logErr)
     }
 
-    return ok({ success: true })
+    return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error("[API/Users] CRITICAL ERROR IN DELETE:", {
       message: err.message,
@@ -372,20 +409,20 @@ export async function DELETE(
       const detail = err.detail?.toLowerCase() || ""
 
       if (detail.includes("mfa_codes") || detail.includes("mfacodes")) {
-        return error("Cannot delete: This user has active MFA codes. Please deactivate MFA first or contact support.", 400)
+        return NextResponse.json({ error: "Cannot delete: This user has active MFA codes. Please deactivate MFA first or contact support." }, { status: 400 })
       }
       if (detail.includes("sessions")) {
-        return error("Cannot delete: This user has active sessions. Please wait for sessions to expire or deactivate the user instead.", 400)
+        return NextResponse.json({ error: "Cannot delete: This user has active sessions. Please wait for sessions to expire or deactivate the user instead." }, { status: 400 })
       }
       if (detail.includes("notifications")) {
-        return error("Cannot delete: This user has notification history. To preserve system integrity, please deactivate the user instead.", 400)
+        return NextResponse.json({ error: "Cannot delete: This user has notification history. To preserve system integrity, please deactivate the user instead." }, { status: 400 })
       }
       if (detail.includes("audit_logs") || detail.includes("auditlogs")) {
-        return error("Cannot delete: This user has audit log entries. To preserve system history, please deactivate the user instead.", 400)
+        return NextResponse.json({ error: "Cannot delete: This user has audit log entries. To preserve system history, please deactivate the user instead." }, { status: 400 })
       }
 
       // Generic FK error for any other tables
-      return error("Cannot delete: This user is linked to other system records (sessions, notifications, or audit logs). To preserve system history and data integrity, please deactivate the user instead of deleting.", 400)
+      return NextResponse.json({ error: "Cannot delete: This user is linked to other system records (sessions, notifications, or audit logs). To preserve system history and data integrity, please deactivate the user instead of deleting." }, { status: 400 })
     }
 
     const isValidationError = errorMessage.includes("foreign key") ||
@@ -398,6 +435,6 @@ export async function DELETE(
       err.code === "23503" ||
       err.code === "23505"
 
-    return error(errorMessage, isValidationError ? 400 : 500)
+    return NextResponse.json({ error: errorMessage }, { status: isValidationError ? 400 : 500 })
   }
 }

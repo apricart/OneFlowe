@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
+import { db, withTenant } from "@/lib/db"
 import { orders, orderItems, globalProducts, categories, users, branches, refundItems } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, sql } from "drizzle-orm"
 
@@ -42,18 +42,26 @@ export async function GET(req: NextRequest) {
         if (branchIdsParam) {
             branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         } else if (groupIds.length > 0) {
-            const b = await db.select({ id: branches.id }).from(branches).where(inArray(branches.groupId, groupIds))
+            const b = await withTenant(session.user as any, async (tx) => 
+                tx.select({ id: branches.id }).from(branches).where(inArray(branches.groupId, groupIds))
+            ) as any[]
             branchIds = b.map(br => br.id)
         } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {
             branchIds = [userBranchId]
         } else if (organizationIds.length > 0) {
-            const b = await db.select({ id: branches.id }).from(branches).where(inArray(branches.organizationId, organizationIds))
+            const b = await withTenant(session.user as any, async (tx) => 
+                tx.select({ id: branches.id }).from(branches).where(inArray(branches.organizationId, organizationIds))
+            ) as any[]
             branchIds = b.map(br => br.id)
         } else if (userOrgId) {
-            const b = await db.select({ id: branches.id }).from(branches).where(eq(branches.organizationId, userOrgId))
+            const b = await withTenant(session.user as any, async (tx) => 
+                tx.select({ id: branches.id }).from(branches).where(eq(branches.organizationId, userOrgId))
+            ) as any[]
             branchIds = b.map(br => br.id)
         } else {
-            const b = await db.select({ id: branches.id }).from(branches)
+            const b = await withTenant(session.user as any, async (tx) => 
+                tx.select({ id: branches.id }).from(branches)
+            ) as any[]
             branchIds = b.map(br => br.id)
         }
 
@@ -88,41 +96,41 @@ export async function GET(req: NextRequest) {
             if (endDate) baseConditions.push(lte(orders.createdAt, endDate))
         }
 
-        // Pre-aggregate refunds to prevent SQL Fan-out join issues
-        const preAggRefunds = db.select({
-                orderItemId: refundItems.orderItemId,
-                refundTotalQty: sql<number>`SUM(${refundItems.quantity})`.as('refundTotalQty'),
-                refundTotalAmt: sql<number>`SUM(${refundItems.amountCents})`.as('refundTotalAmt'),
-            })
-            .from(refundItems)
-            .groupBy(refundItems.orderItemId)
-            .as('preAggRefunds')
+        const results = await withTenant(session.user as any, async (tx) => {
+            // Pre-aggregate refunds to prevent SQL Fan-out join issues
+            const preAggRefunds = tx.select({
+                    orderItemId: refundItems.orderItemId,
+                    refundTotalQty: sql<number>`SUM(${refundItems.quantity})`.as('refundTotalQty'),
+                    refundTotalAmt: sql<number>`SUM(${refundItems.amountCents})`.as('refundTotalAmt'),
+                })
+                .from(refundItems)
+                .groupBy(refundItems.orderItemId)
+                .as('preAggRefunds')
 
-        const q = db
-            .select({
-                userId: users.id,
-                userName: users.fullName,
-                productId: globalProducts.id,
-                productName: globalProducts.name,
-                categoryName: categories.name,
-                totalQuantity: sql<number>`SUM(${orderItems.quantity})`.mapWith(Number),
-                revenueCents: sql<number>`SUM(${orderItems.quantity} * ${orderItems.priceCents})`.mapWith(Number),
-                fulfilledQuantity: sql<number>`SUM(CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED') THEN ${orderItems.quantity} ELSE 0 END)`.mapWith(Number),
-                fulfilledRevenueCents: sql<number>`SUM(CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED') THEN (${orderItems.quantity} * ${orderItems.priceCents}) ELSE 0 END)`.mapWith(Number),
-                refundedQuantity: sql<number>`SUM(COALESCE(${preAggRefunds.refundTotalQty}, 0))`.mapWith(Number),
-                refundedRevenueCents: sql<number>`SUM(COALESCE(${preAggRefunds.refundTotalAmt}, 0))`.mapWith(Number),
-            })
-            .from(orderItems)
-            .innerJoin(orders, eq(orderItems.orderId, orders.id))
-            .leftJoin(preAggRefunds, eq(orderItems.id, preAggRefunds.orderItemId))
-            .innerJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
-            .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
-            .innerJoin(users, eq(orders.createdByUserId, users.id))
-            .where(and(...baseConditions))
-            .groupBy(users.id, users.fullName, globalProducts.id, globalProducts.name, categories.name)
-            .orderBy(desc(sql<number>`SUM(${orderItems.quantity} * ${orderItems.priceCents})`))
-
-        const results = await q
+            return tx
+                .select({
+                    userId: users.id,
+                    userName: users.fullName,
+                    productId: globalProducts.id,
+                    productName: globalProducts.name,
+                    categoryName: categories.name,
+                    totalQuantity: sql<number>`SUM(${orderItems.quantity})`.mapWith(Number),
+                    revenueCents: sql<number>`SUM(${orderItems.quantity} * ${orderItems.priceCents})`.mapWith(Number),
+                    fulfilledQuantity: sql<number>`SUM(CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED') THEN ${orderItems.quantity} ELSE 0 END)`.mapWith(Number),
+                    fulfilledRevenueCents: sql<number>`SUM(CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED') THEN (${orderItems.quantity} * ${orderItems.priceCents}) ELSE 0 END)`.mapWith(Number),
+                    refundedQuantity: sql<number>`SUM(COALESCE(${preAggRefunds.refundTotalQty}, 0))`.mapWith(Number),
+                    refundedRevenueCents: sql<number>`SUM(COALESCE(${preAggRefunds.refundTotalAmt}, 0))`.mapWith(Number),
+                })
+                .from(orderItems)
+                .innerJoin(orders, eq(orderItems.orderId, orders.id))
+                .leftJoin(preAggRefunds, eq(orderItems.id, preAggRefunds.orderItemId))
+                .innerJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
+                .leftJoin(categories, eq(globalProducts.categoryId, categories.id))
+                .innerJoin(users, eq(orders.createdByUserId, users.id))
+                .where(and(...baseConditions))
+                .groupBy(users.id, users.fullName, globalProducts.id, globalProducts.name, categories.name)
+                .orderBy(desc(sql<number>`SUM(${orderItems.quantity} * ${orderItems.priceCents})`))
+        }) as any[]
 
         // Transform into a user-centric structure
         const userMap = new Map<string, any>()

@@ -1,63 +1,31 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
-import { orders, users, roles, branches, organizations, groups, orderItems, refunds, refundItems } from "@/db/schema"
+import { withTenant, withSuperAdmin } from "@/lib/db"
+import { orders, users, branches, organizations, groups, orderItems, refunds, refundItems } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql, sum, count, inArray } from "drizzle-orm"
 import { metricExpressions } from "@/lib/metric-utils"
+import { getRequestScope } from "@/lib/auth"
+import { error, ok } from "@/lib/api"
 
 export async function GET(req: NextRequest) {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-    const userId = (session.user as any).id
-
-    // Fetch user context
-    let roleName = (session.user as any).role
-    let currentUserBranchId = null
-    let currentUserOrgId = null
-
-    try {
-        const currentUserData = await db.select({
-            branchId: users.branchId,
-            organizationId: users.organizationId,
-            roleName: roles.name
-        })
-            .from(users)
-            .leftJoin(roles, eq(users.roleId, roles.id))
-            .where(eq(users.id, userId))
-            .limit(1)
-
-        if (currentUserData.length > 0) {
-            roleName = currentUserData[0].roleName || roleName
-            currentUserBranchId = currentUserData[0].branchId
-            currentUserOrgId = currentUserData[0].organizationId
-        }
-    } catch (e) {
-        console.error("Failed to fetch user context", e)
-    }
+  try {
+    const scope = await getRequestScope()
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const url = new URL(req.url)
     const startDate = url.searchParams.get("startDate")
     const endDate = url.searchParams.get("endDate")
-    const branchId = url.searchParams.get("branchId")
+    const branchIdParam = url.searchParams.get("branchId")
     const branchIdsRaw = url.searchParams.get("branchIds")
-    const organizationId = url.searchParams.get("organizationId")
-    const groupId = url.searchParams.get("groupId")
+    const organizationIdParam = url.searchParams.get("organizationId")
+    const groupIdParam = url.searchParams.get("groupId")
     const groupIdsRaw = url.searchParams.get("groupIds")
     const statusParam = url.searchParams.get("status")
     const compare = url.searchParams.get("compare") === "true"
     const compareStartDateParam = url.searchParams.get("compareStartDate")
     const compareEndDateParam = url.searchParams.get("compareEndDate")
 
-    // Parsing branchIds
-    const parsedBranchIds = branchIdsRaw
-        ? branchIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
-        : []
-
-    const parsedGroupIds = groupIdsRaw
-        ? groupIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
-        : (groupId && groupId !== "all" ? [Number(groupId)] : [])
+    const parsedBranchIds = branchIdsRaw ? branchIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0) : []
+    const parsedGroupIds = groupIdsRaw ? groupIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0) : (groupIdParam && groupIdParam !== "all" ? [Number(groupIdParam)] : [])
 
     const page = parseInt(url.searchParams.get("page") || "1")
     const limit = parseInt(url.searchParams.get("limit") || "50")
@@ -73,309 +41,82 @@ export async function GET(req: NextRequest) {
     const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
     const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
 
-    const conditions = []
+    const result = await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
 
-    // Status filter
-    if (statusParam && statusParam.toLowerCase() !== "all") {
-        if (statusParam.toUpperCase() === "REJECTED") {
-            conditions.push(sql`UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED')`)
-        } else {
-            conditions.push(eq(sql`UPPER(${orders.status})`, statusParam.toUpperCase()))
+    async function handler(tx: any) {
+      const conditions: any[] = []
+      if (statusParam && statusParam.toLowerCase() !== "all") {
+        if (statusParam.toUpperCase() === "REJECTED") conditions.push(sql`UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED')`)
+        else conditions.push(eq(sql`UPPER(${orders.status})`, statusParam.toUpperCase()))
+      }
+
+      if (scope!.role === "SUPER_ADMIN" && organizationIdParam && organizationIdParam !== "null" && organizationIdParam !== "0") {
+        conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
+      }
+      
+      if (parsedBranchIds.length > 0) conditions.push(inArray(orders.branchId, parsedBranchIds))
+      else if (branchIdParam && branchIdParam !== "all" && branchIdParam !== "null") conditions.push(eq(orders.branchId, Number(branchIdParam)))
+
+      if (parsedGroupIds.length > 0) conditions.push(inArray(branches.groupId, parsedGroupIds))
+      else if (groupIdParam && groupIdParam !== "all" && groupIdParam !== "null") conditions.push(eq(branches.groupId, Number(groupIdParam)))
+
+      if (startDate && !monthsRaw && !yearsRaw) { const s = new Date(startDate); s.setHours(0, 0, 0, 0); conditions.push(gte(orders.createdAt, s)) }
+      if (endDate && !monthsRaw && !yearsRaw) { const e = new Date(endDate); e.setHours(23, 59, 59, 999); conditions.push(lte(orders.createdAt, e)) }
+
+      if (parsedMonths.length > 0) conditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
+      if (parsedYears.length > 0) conditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
+
+      const whereClause = and(...conditions)
+
+      let comparisonSummary = null
+      if (compare) {
+        const compConditions = conditions.filter(c => { const s = String(c); return !s.includes("createdAt") && !s.includes("created_at") && !s.includes("EXTRACT(MONTH") && !s.includes("EXTRACT(YEAR"); })
+        if (parsedCompMonths.length > 0) compConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
+        if (parsedCompYears.length > 0) compConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
+        if (parsedCompMonths.length === 0 && parsedCompYears.length === 0) {
+          let pS: Date; let pE: Date
+          if (compareStartDateParam && compareEndDateParam) { pS = new Date(compareStartDateParam); pE = new Date(compareEndDateParam); pS.setHours(0, 0, 0, 0); pE.setHours(23, 59, 59, 999) }
+          else if (startDate && endDate) { const s = new Date(startDate); const e = new Date(endDate); const dur = e.getTime() - s.getTime(); pS = new Date(s.getTime() - dur - 1); pE = new Date(s.getTime() - 1) }
+          else { pS = new Date(0); pE = new Date(0) }
+          if (pS.getTime() !== 0) { compConditions.push(gte(orders.createdAt, pS), lte(orders.createdAt, pE)) }
         }
+        const compWhere = and(...compConditions)
+        const compResult = await tx.select({ totalSales: metricExpressions.revenue, orderCount: metricExpressions.orderVolume, refundedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END), 0)`.mapWith(Number), rejectedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END), 0)`.mapWith(Number), approvedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' THEN 1 END), 0)`.mapWith(Number) }).from(orders).leftJoin(branches, eq(orders.branchId, branches.id)).where(compWhere)
+        const compItems = await tx.select({ totalItemsSold: sum(orderItems.quantity) }).from(orderItems).innerJoin(orders, eq(orderItems.orderId, orders.id)).leftJoin(branches, eq(orders.branchId, branches.id)).where(compWhere)
+        comparisonSummary = { totalSales: compResult[0]?.totalSales || 0, totalOrders: compResult[0]?.orderCount || 0, refundedCount: compResult[0]?.refundedCount || 0, rejectedCount: compResult[0]?.rejectedCount || 0, approvedCount: compResult[0]?.approvedCount || 0, totalItemsSold: Number(compItems[0]?.totalItemsSold) || 0 }
+      }
+
+      const isFiltered = statusParam && statusParam.toLowerCase() !== "all"
+      const summaryResult = await tx.select({ totalSales: isFiltered ? sql<number>`COALESCE(SUM(${orders.totalCents}), 0)`.mapWith(Number) : metricExpressions.revenue, totalTax: sum(orders.taxCents), totalSubtotal: sum(orders.subtotalCents), orderCount: isFiltered ? count(orders.id) : metricExpressions.orderVolume, totalOrderCount: count(orders.id), totalRefunds: sum(orders.refundAmountCents) }).from(orders).leftJoin(branches, eq(orders.branchId, branches.id)).where(whereClause)
+      const itemsRes = await tx.select({ totalItemsSold: sum(orderItems.quantity) }).from(orderItems).innerJoin(orders, eq(orderItems.orderId, orders.id)).leftJoin(branches, eq(orders.branchId, branches.id)).where(whereClause)
+      const summary = { ...summaryResult[0], totalItemsSold: itemsRes[0]?.totalItemsSold || 0 }
+
+      const statusDistribution = await tx.select({ name: sql<string>`UPPER(${orders.status})`, value: count(orders.id) }).from(orders).leftJoin(branches, eq(orders.branchId, branches.id)).where(whereClause).groupBy(sql`UPPER(${orders.status})`)
+      const trendOnly = url.searchParams.get("trendOnly") === "true"
+      let trendAgg: any[] = []
+      if (trendOnly) {
+        trendAgg = await tx.select({ month: sql<number>`EXTRACT(MONTH FROM ${orders.createdAt})`, year: sql<number>`EXTRACT(YEAR FROM ${orders.createdAt})`, revenue: metricExpressions.revenue, orders: metricExpressions.orderVolume }).from(orders).leftJoin(branches, eq(orders.branchId, branches.id)).where(whereClause).groupBy(sql`EXTRACT(MONTH FROM ${orders.createdAt})`, sql`EXTRACT(YEAR FROM ${orders.createdAt})`).orderBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`, sql`EXTRACT(MONTH FROM ${orders.createdAt})`)
+      }
+
+      const summaryOnly = url.searchParams.get("summaryOnly") === "true"
+      if (summaryOnly) return { summary: { ...summary, comparison: comparisonSummary, statusDistribution } }
+      if (trendOnly) return { summary: { ...summary, comparison: comparisonSummary }, statusDistribution, trend: trendAgg }
+
+      const recentOrders = await tx.select({
+        id: orders.id, tid: orders.tid, status: orders.status, totalCents: orders.totalCents, subtotalCents: orders.subtotalCents, taxCents: orders.taxCents, refundAmountCents: orders.refundAmountCents,
+        branchId: orders.branchId, branchName: branches.name, groupName: groups.name, organizationName: organizations.name,
+        createdAt: orders.createdAt, fulfilledAt: orders.fulfilledAt, refundedAt: orders.refundedAt, userName: users.fullName, employeeId: users.employeeId,
+        quantityOrdered: sql`(${tx.select({ s: sum(orderItems.quantity) }).from(orderItems).where(eq(orderItems.orderId, orders.id))})`,
+        quantityRefunded: sql`(${tx.select({ s: sum(refundItems.quantity) }).from(refundItems).innerJoin(refunds, eq(refundItems.refundId, refunds.id)).where(and(eq(refunds.orderId, orders.id), sql`UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED')`))})`
+      }).from(orders).leftJoin(branches, eq(orders.branchId, branches.id)).leftJoin(organizations, eq(orders.organizationId, organizations.id)).leftJoin(groups, eq(branches.groupId, groups.id)).leftJoin(users, eq(orders.createdByUserId, users.id)).where(whereClause).orderBy(desc(orders.createdAt)).limit(limit).offset(offset)
+
+      const topPerformers = await tx.select({ branchId: orders.branchId, branchName: branches.name, sales: metricExpressions.revenue, orderCount: metricExpressions.orderVolume, fulfilledCount: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END)`.mapWith(Number), rejectedCount: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)`.mapWith(Number), refundedCount: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END)`.mapWith(Number) }).from(orders).leftJoin(branches, eq(orders.branchId, branches.id)).where(whereClause).groupBy(orders.branchId, branches.name).orderBy(desc(metricExpressions.revenue)).limit(10)
+
+      return { summary: { ...summary, comparison: comparisonSummary }, orders: recentOrders, topPerformers, pagination: { page, limit, hasMore: recentOrders.length === limit } }
     }
 
-    // Security: RBAC
-    const normalizedRole = (roleName || "").toUpperCase().replace(/\s+/g, '_')
-    console.log(`[Summary API] User: ${userId}, Role: ${normalizedRole}, Params: Branch=${branchId}, Org=${organizationId}, Group=${groupId}`)
-
-    if (normalizedRole === "SUPER_ADMIN") {
-        if (organizationId && organizationId !== "null" && organizationId !== "undefined" && organizationId !== "0") {
-            const orgId = Number(organizationId)
-            if (orgId > 0) conditions.push(eq(orders.organizationId, orgId))
-        }
-        if (parsedBranchIds.length > 0) {
-            conditions.push(inArray(orders.branchId, parsedBranchIds))
-        } else if (branchId && branchId !== "all" && branchId !== "null") {
-            conditions.push(eq(orders.branchId, Number(branchId)))
-        }
-        if (parsedGroupIds.length > 0) {
-            conditions.push(inArray(branches.groupId, parsedGroupIds))
-        } else if (groupId && groupId !== "all" && groupId !== "null") {
-            conditions.push(eq(branches.groupId, Number(groupId)))
-        }
-    } else if (normalizedRole === "HEAD_OFFICE") {
-        if (currentUserOrgId) {
-            conditions.push(eq(orders.organizationId, currentUserOrgId))
-            if (parsedBranchIds.length > 0) {
-                conditions.push(inArray(orders.branchId, parsedBranchIds))
-            } else if (branchId && branchId !== "all" && branchId !== "null") {
-                conditions.push(eq(orders.branchId, Number(branchId)))
-            }
-            if (parsedGroupIds.length > 0) {
-                conditions.push(inArray(branches.groupId, parsedGroupIds))
-            } else if (groupId && groupId !== "all" && groupId !== "null") {
-                conditions.push(eq(branches.groupId, Number(groupId)))
-            }
-        }
-    } else if (normalizedRole === "BRANCH_ADMIN" || normalizedRole === "BRANCH_MANAGER") {
-        if (!currentUserBranchId) {
-            return NextResponse.json({ error: "Branch context missing" }, { status: 403 })
-        }
-        conditions.push(eq(orders.branchId, currentUserBranchId))
-    } else {
-        return NextResponse.json({ error: "Access denied" }, { status: 403 })
-    }
-
-    // Date Filtering - Inclusive
-    if (startDate && !monthsRaw && !yearsRaw) {
-        const start = new Date(startDate)
-        start.setHours(0, 0, 0, 0)
-        conditions.push(gte(orders.createdAt, start))
-    }
-    if (endDate && !monthsRaw && !yearsRaw) {
-        const end = new Date(endDate)
-        end.setHours(23, 59, 59, 999)
-        conditions.push(lte(orders.createdAt, end))
-    }
-
-    // Advanced Multi-Select Date Filtering (Months / Years arrays)
-    if (parsedMonths.length > 0) {
-        conditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
-    }
-    if (parsedYears.length > 0) {
-        conditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
-    }
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined
-
-    // COMPARISON LOGIC
-    let comparisonSummary = null
-    const hasCompareArrays = parsedCompMonths.length > 0 || parsedCompYears.length > 0
-    const hasPrimaryDates = startDate && endDate
-    
-    if (compare && (hasPrimaryDates || compareStartDateParam || hasCompareArrays)) {
-        // Correctly filter out createdAt conditions to avoid overlapping periods
-        const compConditions = conditions.filter(c => {
-            const str = String(c);
-            return !str.includes("createdAt") && !str.includes("created_at") && !str.includes("EXTRACT(MONTH") && !str.includes("EXTRACT(YEAR");
-        })
-
-        if (parsedCompMonths.length > 0) {
-            compConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
-        }
-        if (parsedCompYears.length > 0) {
-            compConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
-        }
-
-        // Apply fallback standard dates if NO custom arrays were provided for Period B
-        if (!hasCompareArrays) {
-            let prevStart: Date
-            let prevEnd: Date
-            if (compareStartDateParam && compareEndDateParam) {
-                prevStart = new Date(compareStartDateParam)
-                prevEnd = new Date(compareEndDateParam)
-                prevStart.setHours(0, 0, 0, 0)
-                prevEnd.setHours(23, 59, 59, 999)
-            } else if (startDate && endDate && parsedMonths.length === 0 && parsedYears.length === 0) {
-                const start = new Date(startDate)
-                const end = new Date(endDate)
-                const duration = end.getTime() - start.getTime()
-                prevStart = new Date(start.getTime() - duration - 1)
-                prevEnd = new Date(start.getTime() - 1)
-            } else {
-                // If it's a primary array query without fallback dates, we don't apply any date boundaries implicitly
-                prevStart = new Date(0)
-                prevEnd = new Date(0)
-            }
-
-            if (prevStart.getTime() !== 0) {
-                compConditions.push(gte(orders.createdAt, prevStart))
-                compConditions.push(lte(orders.createdAt, prevEnd))
-            }
-        }
-
-        const compWhere = compConditions.length > 0 ? and(...compConditions) : undefined
-
-        const compSummaryResult = await db.select({
-            totalSales: metricExpressions.revenue,
-            orderCount: metricExpressions.orderVolume,
-            refundedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END), 0)`.mapWith(Number),
-            rejectedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END), 0)`.mapWith(Number),
-            approvedCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' THEN 1 END), 0)`.mapWith(Number),
-        })
-            .from(orders)
-            .leftJoin(branches, eq(orders.branchId, branches.id))
-            .where(compWhere)
-
-        const compItemsResult = await db.select({
-            totalItemsSold: sum(orderItems.quantity)
-        })
-            .from(orderItems)
-            .innerJoin(orders, eq(orderItems.orderId, orders.id))
-            .leftJoin(branches, eq(orders.branchId, branches.id))
-            .where(compWhere)
-
-        comparisonSummary = {
-            totalSales: compSummaryResult[0]?.totalSales || 0,
-            totalOrders: compSummaryResult[0]?.orderCount || 0,
-            refundedCount: compSummaryResult[0]?.refundedCount || 0,
-            rejectedCount: compSummaryResult[0]?.rejectedCount || 0,
-            approvedCount: compSummaryResult[0]?.approvedCount || 0,
-            totalItemsSold: Number(compItemsResult[0]?.totalItemsSold) || 0
-        }
-    }
-    console.log(`[Summary API] Final where clause established. Filtering logic active.`)
-
-    const isFilteredByStatus = statusParam && statusParam.toLowerCase() !== "all"
-
-    // Aggregation Query
-    const summaryResult = await db.select({
-        totalSales: isFilteredByStatus
-            ? sql<number>`COALESCE(SUM(${orders.totalCents}), 0)`.mapWith(Number)
-            : metricExpressions.revenue,
-        totalTax: sum(orders.taxCents),
-        totalSubtotal: sum(orders.subtotalCents),
-        orderCount: isFilteredByStatus
-            ? count(orders.id)
-            : metricExpressions.orderVolume,
-        totalOrderCount: count(orders.id),
-        totalRefunds: sum(orders.refundAmountCents),
-    })
-        .from(orders)
-        .leftJoin(branches, eq(orders.branchId, branches.id))
-        .where(whereClause)
-
-    // Items Summary (Separate to avoid count multiplication by joins)
-    const itemsResult = await db.select({
-        totalItemsSold: sum(orderItems.quantity)
-    })
-        .from(orderItems)
-        .innerJoin(orders, eq(orderItems.orderId, orders.id))
-        .leftJoin(branches, eq(orders.branchId, branches.id))
-        .where(whereClause)
-
-    const summary = {
-        ...summaryResult[0],
-        totalItemsSold: itemsResult[0]?.totalItemsSold || 0
-    }
-
-    // Status Distribution (ALL orders in period, ignoring pagination)
-    const statusDistribution = await db.select({
-        name: sql<string>`UPPER(${orders.status})`,
-        value: count(orders.id)
-    })
-        .from(orders)
-        .leftJoin(branches, eq(orders.branchId, branches.id))
-        .where(whereClause)
-        .groupBy(sql`UPPER(${orders.status})`)
-
-    // Trend Aggregation (ALL orders in period by Month-Year)
-    const trendOnly = url.searchParams.get("trendOnly") === "true"
-    let trendAggregates: any[] = []
-    if (trendOnly) {
-        trendAggregates = await db.select({
-            month: sql<number>`EXTRACT(MONTH FROM ${orders.createdAt})`,
-            year: sql<number>`EXTRACT(YEAR FROM ${orders.createdAt})`,
-            revenue: metricExpressions.revenue,
-            orders: metricExpressions.orderVolume,
-        })
-            .from(orders)
-            .leftJoin(branches, eq(orders.branchId, branches.id))
-            .where(whereClause)
-            .groupBy(sql`EXTRACT(MONTH FROM ${orders.createdAt})`, sql`EXTRACT(YEAR FROM ${orders.createdAt})`)
-            .orderBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`, sql`EXTRACT(MONTH FROM ${orders.createdAt})`)
-    }
-
-    if (url.searchParams.get("summaryOnly") === "true") {
-        return NextResponse.json({
-            summary: {
-                ...summary,
-                comparison: comparisonSummary,
-                statusDistribution
-            }
-        })
-    }
-
-    if (trendOnly) {
-        return NextResponse.json({
-            summary: {
-                ...summary,
-                comparison: comparisonSummary
-            },
-            statusDistribution,
-            trend: trendAggregates
-        })
-    }
-
-    // Recent Orders for Table with Branch Name and Pagination
-    const recentOrders = await db.select({
-        id: orders.id,
-        tid: orders.tid,
-        status: orders.status,
-        totalCents: orders.totalCents,
-        subtotalCents: orders.subtotalCents,
-        taxCents: orders.taxCents,
-        refundAmountCents: orders.refundAmountCents,
-        branchId: orders.branchId,
-        branchName: branches.name,
-        groupName: groups.name,
-        organizationName: organizations.name,
-        createdAt: orders.createdAt,
-        fulfilledAt: orders.fulfilledAt,
-        refundedAt: orders.refundedAt,
-        userName: users.fullName,
-employeeId: users.employeeId,
-        quantityOrdered: sql<number>`(
-            SELECT COALESCE(SUM(${orderItems.quantity}), 0)
-            FROM ${orderItems}
-            WHERE ${orderItems.orderId} = ${orders.id}
-        )`.mapWith(Number),
-        quantityRefunded: sql<number>`(
-            SELECT COALESCE(SUM(${refundItems.quantity}), 0)
-            FROM ${refundItems}
-            INNER JOIN ${refunds} ON ${refundItems.refundId} = ${refunds.id}
-            WHERE ${refunds.orderId} = ${orders.id}
-            AND UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED')
-        )`.mapWith(Number)
-    })
-        .from(orders)
-        .leftJoin(branches, eq(orders.branchId, branches.id))
-        .leftJoin(organizations, eq(orders.organizationId, organizations.id))
-        .leftJoin(groups, eq(branches.groupId, groups.id))
-        .leftJoin(users, eq(orders.createdByUserId, users.id))
-        .where(whereClause)
-        .orderBy(desc(orders.createdAt))
-        .limit(limit)
-        .offset(offset)
-
-    // Branch Ranking (Top Performers) aggregated by sales volume
-    const topPerformers = await db.select({
-        branchId: orders.branchId,
-        branchName: branches.name,
-        sales: metricExpressions.revenue,
-        orderCount: metricExpressions.orderVolume,
-        fulfilledCount: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END)`.mapWith(Number),
-        rejectedCount: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)`.mapWith(Number),
-        refundedCount: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END)`.mapWith(Number),
-    })
-        .from(orders)
-        .leftJoin(branches, eq(orders.branchId, branches.id))
-        .where(whereClause)
-        .groupBy(orders.branchId, branches.name)
-        .orderBy(desc(metricExpressions.revenue))
-        .limit(10)
-
-    return NextResponse.json({
-        summary: {
-            ...summary,
-            comparison: comparisonSummary
-        },
-        orders: recentOrders,
-        topPerformers,
-        pagination: {
-            page,
-            limit,
-            hasMore: recentOrders.length === limit
-        }
-    })
+    return ok(result)
+  } catch (e: any) {
+    return error(e.message || "Internal error")
+  }
 }

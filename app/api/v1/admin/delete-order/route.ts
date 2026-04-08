@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
+import { withSuperAdmin } from "@/lib/db"
 import { orders, orderItems, budgets, systemLogs, globalProducts, refunds } from "@/db/schema"
 import { eq, and, sql } from "drizzle-orm"
 
@@ -35,7 +35,7 @@ export async function DELETE(req: NextRequest) {
         const orderIdNum = Number(orderId)
 
         // Get order details first
-        const [order] = await db.select().from(orders).where(eq(orders.id, orderIdNum))
+        const [order] = await withSuperAdmin(async (tx) => tx.select().from(orders).where(eq(orders.id, orderIdNum))) as any[]
 
         if (!order) {
             return NextResponse.json({ error: `Order ${orderId} not found` }, { status: 404 })
@@ -47,7 +47,7 @@ export async function DELETE(req: NextRequest) {
         }
 
         // Start transaction to safely delete everything
-        await db.transaction(async (tx) => {
+        await withSuperAdmin(async (tx) => {
             // 1. Get order items (need this to restore stock)
             const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, orderIdNum))
 

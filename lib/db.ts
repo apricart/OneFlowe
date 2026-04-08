@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from "pg"
 import { drizzle } from "drizzle-orm/node-postgres"
+import { sql } from "drizzle-orm"
 
 // Do NOT throw before seed loads env
 if (!process.env.DATABASE_URL) {
@@ -196,3 +197,87 @@ export function getPoolStats() {
 
 // Export pool for advanced use cases
 export { pool }
+
+// ============================================================
+// ROW-LEVEL SECURITY (RLS) TENANT ISOLATION
+// ============================================================
+
+/**
+ * Session user type for RLS context.
+ * This matches the shape of `session.user` from NextAuth.
+ */
+export interface TenantUser {
+  role: string
+  organizationId?: number | null
+}
+
+/**
+ * Execute a database operation within a tenant-scoped transaction.
+ * 
+ * This function enforces Row-Level Security (RLS) by setting the
+ * `app.current_org_id` session variable before executing any queries.
+ * PostgreSQL will then automatically filter all rows to only show data
+ * belonging to the specified organization.
+ * 
+ * For SUPER_ADMIN users, RLS is bypassed so they can see all data.
+ * 
+ * Usage:
+ * ```ts
+ * const orders = await withTenant(session.user, async (tx) => {
+ *   return tx.select().from(ordersTable);
+ * });
+ * ```
+ * 
+ * @param user - The authenticated user (must have role and organizationId)
+ * @param callback - The database operation to execute within the tenant context
+ * @returns The result of the callback
+ */
+export async function withTenant<T>(
+  user: TenantUser,
+  callback: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    if (user.role === 'SUPER_ADMIN') {
+      // Super Admins bypass RLS entirely — they see all organizations' data
+      await tx.execute(sql`SET LOCAL row_security = off`)
+    } else if (user.organizationId) {
+      // Lock this transaction to the user's organization
+      await tx.execute(
+        sql`SET LOCAL app.current_org_id = ${sql.raw(String(user.organizationId))}`
+      )
+    }
+    // If no organizationId and not super admin, RLS will block everything (safe default)
+
+    return callback(tx)
+  })
+}
+
+/**
+ * Execute a database operation with RLS disabled (Super Admin context).
+ * 
+ * Use this for system-level operations that need to access data across
+ * all organizations, such as:
+ * - Super Admin dashboards and reports
+ * - Background cron jobs
+ * - System migrations and maintenance
+ * - Authentication (login must query users across all orgs)
+ * 
+ * ⚠️ WARNING: Only use this when you explicitly need cross-org access.
+ * For normal API routes, always use `withTenant` instead.
+ * 
+ * Usage:
+ * ```ts
+ * const allOrgs = await withSuperAdmin(async (tx) => {
+ *   return tx.select().from(organizationsTable);
+ * });
+ * ```
+ */
+export async function withSuperAdmin<T>(
+  callback: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL row_security = off`)
+    return callback(tx)
+  })
+}
+

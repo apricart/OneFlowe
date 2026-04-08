@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
+import { db, withTenant } from "@/lib/db"
 import { budgets, branches, auditLogs, budgetAddons, groups } from "@/db/schema"
 import { and, eq, inArray } from "drizzle-orm"
 import { handleError } from "@/lib/error-handler"
@@ -84,40 +84,39 @@ export async function GET(req: NextRequest) {
         }
 
         // Use LEFT JOIN to get all branches, even if they don't have budgets for current period yet
-        const allBranches = await db
-          .select({
-            branchId: branches.id,
-            branchName: branches.name,
-            organizationId: branches.organizationId,
-            groupId: branches.groupId,
-            groupName: groups.name,
-            amountAllocatedCents: budgets.amountAllocatedCents,
-            amountSpentCents: budgets.amountSpentCents,
-            amountHeldCents: budgets.amountHeldCents,
-            amountCreditedCents: budgets.amountCreditedCents,
-            baselineBudgetCents: branches.baselineBudgetCents,
-          })
-          .from(branches)
-          .leftJoin(groups, eq(branches.groupId, groups.id))
-          .leftJoin(
-            budgets,
-            and(eq(budgets.branchId, branches.id), eq(budgets.period, currentMonth))
-          )
-          // SUPER_ADMIN: if an organizationId is provided (via context), scope to it; otherwise, global
-          // HEAD_OFFICE: always scoped to their organization
-          // Only show active branches (inactive/soft-deleted branches are hidden from budget management)
-          .where(
-            and(
-              eq(branches.status, 'active'),
-              role === "SUPER_ADMIN"
-                ? orgId
-                  ? eq(branches.organizationId, orgId)
-                  : undefined
-                : eq(branches.organizationId, orgId),
-              parsedGroupIds.length > 0 ? inArray(branches.groupId, parsedGroupIds) : undefined,
-              parsedBranchIds.length > 0 ? inArray(branches.id, parsedBranchIds) : undefined
+        const allBranches = await withTenant(session.user as any, async (tx) => 
+          tx
+            .select({
+              branchId: branches.id,
+              branchName: branches.name,
+              organizationId: branches.organizationId,
+              groupId: branches.groupId,
+              groupName: groups.name,
+              amountAllocatedCents: budgets.amountAllocatedCents,
+              amountSpentCents: budgets.amountSpentCents,
+              amountHeldCents: budgets.amountHeldCents,
+              amountCreditedCents: budgets.amountCreditedCents,
+              baselineBudgetCents: branches.baselineBudgetCents,
+            })
+            .from(branches)
+            .leftJoin(groups, eq(branches.groupId, groups.id))
+            .leftJoin(
+              budgets,
+              and(eq(budgets.branchId, branches.id), eq(budgets.period, currentMonth))
             )
-          )
+            .where(
+              and(
+                eq(branches.status, 'active'),
+                role === "SUPER_ADMIN"
+                  ? orgId
+                    ? eq(branches.organizationId, orgId)
+                    : undefined
+                  : eq(branches.organizationId, orgId),
+                parsedGroupIds.length > 0 ? inArray(branches.groupId, parsedGroupIds) : undefined,
+                parsedBranchIds.length > 0 ? inArray(branches.id, parsedBranchIds) : undefined
+              )
+            )
+        ) as any[]
 
         // Identify branches missing a budget for the current month and auto-initialize them
         const missingBudgets = allBranches.filter(b => b.amountAllocatedCents === null)
@@ -134,7 +133,9 @@ export async function GET(req: NextRequest) {
             amountCreditedCents: 0,
           }))
 
-          await db.insert(budgets).values(newRecords).onConflictDoNothing()
+          await withTenant(session.user as any, async (tx) => 
+            tx.insert(budgets).values(newRecords).onConflictDoNothing()
+          )
         }
 
         // Detect stale budgets: records where allocated=0 but branch baseline is non-zero
@@ -150,38 +151,42 @@ export async function GET(req: NextRequest) {
         if (staleBudgets.length > 0) {
           console.log(`[Budgets] Syncing ${staleBudgets.length} stale budgets with updated baselines for ${currentMonth}`)
           for (const sb of staleBudgets) {
-            await db.update(budgets)
-              .set({ amountAllocatedCents: sb.baselineBudgetCents || 0, updatedAt: new Date() })
-              .where(and(eq(budgets.branchId, sb.branchId), eq(budgets.period, currentMonth)))
+            await withTenant(session.user as any, async (tx) => 
+              tx.update(budgets)
+                .set({ amountAllocatedCents: sb.baselineBudgetCents || 0, updatedAt: new Date() })
+                .where(and(eq(budgets.branchId, sb.branchId), eq(budgets.period, currentMonth)))
+            )
           }
         }
 
         // If we had any missing or stale budgets, re-fetch to get the updated data
         if (missingBudgets.length > 0 || staleBudgets.length > 0) {
-          const refreshed = await db
-            .select({
-              branchId: branches.id,
-              branchName: branches.name,
-              organizationId: branches.organizationId,
-              groupId: branches.groupId,
-              groupName: groups.name,
-              amountAllocatedCents: budgets.amountAllocatedCents,
-              amountSpentCents: budgets.amountSpentCents,
-              amountHeldCents: budgets.amountHeldCents,
-              amountCreditedCents: budgets.amountCreditedCents,
-              baselineBudgetCents: branches.baselineBudgetCents,
-            })
-            .from(branches)
-            .leftJoin(groups, eq(branches.groupId, groups.id))
-            .leftJoin(budgets, and(eq(budgets.branchId, branches.id), eq(budgets.period, currentMonth)))
-            .where(
-              and(
-                eq(branches.status, 'active'),
-                role === "SUPER_ADMIN" ? (orgId ? eq(branches.organizationId, orgId) : undefined) : eq(branches.organizationId, orgId),
-                parsedGroupIds.length > 0 ? inArray(branches.groupId, parsedGroupIds) : undefined,
-                parsedBranchIds.length > 0 ? inArray(branches.id, parsedBranchIds) : undefined
+          const refreshed = await withTenant(session.user as any, async (tx) => 
+            tx
+              .select({
+                branchId: branches.id,
+                branchName: branches.name,
+                organizationId: branches.organizationId,
+                groupId: branches.groupId,
+                groupName: groups.name,
+                amountAllocatedCents: budgets.amountAllocatedCents,
+                amountSpentCents: budgets.amountSpentCents,
+                amountHeldCents: budgets.amountHeldCents,
+                amountCreditedCents: budgets.amountCreditedCents,
+                baselineBudgetCents: branches.baselineBudgetCents,
+              })
+              .from(branches)
+              .leftJoin(groups, eq(branches.groupId, groups.id))
+              .leftJoin(budgets, and(eq(budgets.branchId, branches.id), eq(budgets.period, currentMonth)))
+              .where(
+                and(
+                  eq(branches.status, 'active'),
+                  role === "SUPER_ADMIN" ? (orgId ? eq(branches.organizationId, orgId) : undefined) : eq(branches.organizationId, orgId),
+                  parsedGroupIds.length > 0 ? inArray(branches.groupId, parsedGroupIds) : undefined,
+                  parsedBranchIds.length > 0 ? inArray(branches.id, parsedBranchIds) : undefined
+                )
               )
-            )
+          ) as any[]
 
           const finalBudgets = refreshed.map(b => {
             const allocated = b.amountAllocatedCents ?? (b.baselineBudgetCents || 0)
@@ -234,30 +239,35 @@ export async function GET(req: NextRequest) {
     }
 
     const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
-    let [b] = await db.select({
-      id: budgets.id,
-      organizationId: budgets.organizationId,
-      branchId: budgets.branchId,
-      period: budgets.period,
-      amountAllocatedCents: budgets.amountAllocatedCents,
-      amountSpentCents: budgets.amountSpentCents,
-      amountHeldCents: budgets.amountHeldCents,
-      amountCreditedCents: budgets.amountCreditedCents,
-      createdAt: budgets.createdAt,
-      updatedAt: budgets.updatedAt,
-      baselineBudgetCents: branches.baselineBudgetCents,
-      orgIdFromBranch: branches.organizationId
-    })
-      .from(budgets)
-      .rightJoin(branches, and(eq(budgets.branchId, branches.id), eq(budgets.period, currentMonth)))
-      .where(eq(branches.id, branchId))
-      .limit(1) as any[]
+    let [b] = await withTenant(session.user as any, async (tx) => 
+      tx.select({
+        id: budgets.id,
+        organizationId: budgets.organizationId,
+        branchId: budgets.branchId,
+        period: budgets.period,
+        amountAllocatedCents: budgets.amountAllocatedCents,
+        amountSpentCents: budgets.amountSpentCents,
+        amountHeldCents: budgets.amountHeldCents,
+        amountCreditedCents: budgets.amountCreditedCents,
+        createdAt: budgets.createdAt,
+        updatedAt: budgets.updatedAt,
+        baselineBudgetCents: branches.baselineBudgetCents,
+        orgIdFromBranch: branches.organizationId
+      })
+        .from(budgets)
+        .rightJoin(branches, and(eq(budgets.branchId, branches.id), eq(budgets.period, currentMonth)))
+        .where(eq(branches.id, branchId))
+        .limit(1)
+    ) as any[]
 
     // If no budget record exists for current month, auto-initialize it using branch baseline
     if (!b || b.amountAllocatedCents === null) {
       console.log(`[Budgets] Auto-initializing budget for branch ${branchId} for period ${currentMonth}`)
       
-      const [branchRecord] = await db.select().from(branches).where(eq(branches.id, branchId)).limit(1)
+      const [branchRecord] = await withTenant(session.user as any, async (tx) => 
+        tx.select().from(branches).where(eq(branches.id, branchId)).limit(1)
+      ) as any[]
+      
       if (!branchRecord) {
         return NextResponse.json({ error: "Branch not found" }, { status: 404 })
       }
@@ -272,7 +282,9 @@ export async function GET(req: NextRequest) {
         amountCreditedCents: 0,
       }
 
-      const [inserted] = await db.insert(budgets).values(newBudget).onConflictDoNothing().returning()
+      const [inserted] = await withTenant(session.user as any, async (tx) => 
+        tx.insert(budgets).values(newBudget).onConflictDoNothing().returning()
+      ) as any[]
       
       // Use the newly created/found budget
       b = {
@@ -366,11 +378,13 @@ export async function PUT(req: NextRequest) {
     }
 
     // Verify branch exists and belongs to org
-    const [branch] = await db
-      .select()
-      .from(branches)
-      .where(eq(branches.id, branchId))
-      .limit(1)
+    const [branch] = await withTenant(session.user as any, async (tx) => 
+      tx
+        .select()
+        .from(branches)
+        .where(eq(branches.id, branchId))
+        .limit(1)
+    ) as any[]
 
     if (!branch) {
       return NextResponse.json({ error: "Branch not found" }, { status: 404 })
@@ -385,11 +399,13 @@ export async function PUT(req: NextRequest) {
 
     // Update or create budget for current period
     const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
-    const [budget] = await db
-      .select()
-      .from(budgets)
-      .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
-      .limit(1)
+    const [budget] = await withTenant(session.user as any, async (tx) => 
+      tx
+        .select()
+        .from(budgets)
+        .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
+        .limit(1)
+    ) as any[]
 
     // Retrieve current spending for validation
     const currentSpent = (budget?.amountSpentCents || 0) + (budget?.amountHeldCents || 0)
@@ -424,49 +440,57 @@ export async function PUT(req: NextRequest) {
 
     if (type === "monthly") {
       // Update baseline on the branch record
-      await db.update(branches)
-        .set({
-          baselineBudgetCents: amountAllocatedCents,
-          updatedAt: new Date(),
-        })
-        .where(eq(branches.id, branchId))
+      await withTenant(session.user as any, async (tx) => 
+          tx.update(branches)
+            .set({
+              baselineBudgetCents: amountAllocatedCents,
+              updatedAt: new Date(),
+            })
+            .where(eq(branches.id, branchId))
+      )
 
       // If budget record exists for current month, we might want to reconcile it
       // For simplicity, if it exists, we update it IF it was just using the old baseline
       if (budget) {
-        await db.update(budgets)
-          .set({
-            amountAllocatedCents,
-            updatedAt: new Date(),
-          })
-          .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
+        await withTenant(session.user as any, async (tx) => 
+          tx.update(budgets)
+            .set({
+              amountAllocatedCents,
+              updatedAt: new Date(),
+            })
+            .where(and(eq(budgets.branchId, branchId), eq(budgets.period, currentMonth)))
+        )
       } else {
         // Create it if it doesn't exist
-        await db.insert(budgets).values({
-          organizationId: branch.organizationId,
-          branchId,
-          period: currentMonth,
-          amountAllocatedCents,
-          amountSpentCents: 0,
-          amountHeldCents: 0,
-          amountCreditedCents: 0,
-        })
+        await withTenant(session.user as any, async (tx) => 
+          tx.insert(budgets).values({
+            organizationId: branch.organizationId,
+            branchId,
+            period: currentMonth,
+            amountAllocatedCents,
+            amountSpentCents: 0,
+            amountHeldCents: 0,
+            amountCreditedCents: 0,
+          })
+        )
       }
 
       // Log action
       try {
-        await db.insert(auditLogs).values({
-          userId,
-          organizationId: branch.organizationId,
-          action: "UPDATE_BRANCH_BASELINE",
-          entity: "BRANCH",
-          entityId: String(branchId),
-          metadata: {
-            branchName: branch.name,
-            oldBaseline: (branch.baselineBudgetCents || 0) / 100,
-            newBaseline: amountAllocatedCents / 100,
-          },
-        })
+        await withTenant(session.user as any, async (tx) => 
+          tx.insert(auditLogs).values({
+            userId,
+            organizationId: branch.organizationId,
+            action: "UPDATE_BRANCH_BASELINE",
+            entity: "BRANCH",
+            entityId: String(branchId),
+            metadata: {
+              branchName: branch.name,
+              oldBaseline: (branch.baselineBudgetCents || 0) / 100,
+              newBaseline: amountAllocatedCents / 100,
+            },
+          })
+        )
       } catch (auditError) {
         logError(auditError, 'BUDGETS_AUDIT_LOG')
       }
@@ -479,12 +503,14 @@ export async function PUT(req: NextRequest) {
 
     // SYNC: Also update the permanent branch baseline if we are setting an absolute value (e.g. Emptying/Wiping)
     if (setAbsolute) {
-      await db.update(branches)
-        .set({
-          baselineBudgetCents: newAllocated,
-          updatedAt: new Date(),
-        })
-        .where(eq(branches.id, branchId))
+      await withTenant(session.user as any, async (tx) => 
+        tx.update(branches)
+          .set({
+            baselineBudgetCents: newAllocated,
+            updatedAt: new Date(),
+          })
+          .where(eq(branches.id, branchId))
+      )
     }
 
     // Prevent negative budgets
@@ -497,57 +523,63 @@ export async function PUT(req: NextRequest) {
     console.log(`[BUDGETS] Processing PUT request for branchId: ${branchId}, amount: ${amountAllocatedCents / 100} PKR, type: ${type}`)
 
     // Use UPSERT for maximum reliability
-    const upsertResult = await db.insert(budgets)
-      .values({
-        organizationId: branch.organizationId,
-        branchId,
-        period: currentMonth,
-        amountAllocatedCents: newAllocated,
-        amountCreditedCents: newCredited,
-        amountSpentCents: budget?.amountSpentCents ?? 0,
-        amountHeldCents: budget?.amountHeldCents ?? 0,
-      })
-      .onConflictDoUpdate({
-        target: [budgets.branchId, budgets.period],
-        set: {
+    const upsertResult = await withTenant(session.user as any, async (tx) => 
+      tx.insert(budgets)
+        .values({
+          organizationId: branch.organizationId,
+          branchId,
+          period: currentMonth,
           amountAllocatedCents: newAllocated,
           amountCreditedCents: newCredited,
-          updatedAt: new Date(),
-        }
-      })
-      .returning()
+          amountSpentCents: budget?.amountSpentCents ?? 0,
+          amountHeldCents: budget?.amountHeldCents ?? 0,
+        })
+        .onConflictDoUpdate({
+          target: [budgets.branchId, budgets.period],
+          set: {
+            amountAllocatedCents: newAllocated,
+            amountCreditedCents: newCredited,
+            updatedAt: new Date(),
+          }
+        })
+        .returning()
+    ) as any[]
 
     const finalRecord = upsertResult[0]
 
     // Record addon transaction if needed
     if (type === "addon" && finalRecord) {
-      await db.insert(budgetAddons).values({
-        budgetId: finalRecord.id,
-        amountCents: amountAllocatedCents,
-        reason: body.reason || "Monthly Add-on Credit",
-        createdByUserId: userId,
-      })
+      await withTenant(session.user as any, async (tx) => 
+        tx.insert(budgetAddons).values({
+          budgetId: finalRecord.id,
+          amountCents: amountAllocatedCents,
+          reason: body.reason || "Monthly Add-on Credit",
+          createdByUserId: userId,
+        })
+      )
     }
 
     console.log(`[BUDGETS] Successfully upserted budget record for branch: ${branchId}`)
 
     // Log action
     try {
-      await db.insert(auditLogs).values({
-        userId,
-        organizationId: branch.organizationId,
-        action: setAbsolute ? "SET_BUDGET_ALLOCATION" : (type === "addon" ? "ADD_CREDIT" : "UPDATE_BUDGET_ALLOCATION"),
-        entity: "BUDGET",
-        entityId: String(branchId),
-        metadata: {
-          branchName: branch.name,
-          period: currentMonth,
-          oldAmount: oldAmount / 100,
-          newAmount: newAllocated / 100,
-          addedAmount: type === "addon" ? amountAllocatedCents / 100 : undefined,
-          wasReset: newAllocated === 0
-        },
-      })
+      await withTenant(session.user as any, async (tx) => 
+        tx.insert(auditLogs).values({
+          userId,
+          organizationId: branch.organizationId,
+          action: setAbsolute ? "SET_BUDGET_ALLOCATION" : (type === "addon" ? "ADD_CREDIT" : "UPDATE_BUDGET_ALLOCATION"),
+          entity: "BUDGET",
+          entityId: String(branchId),
+          metadata: {
+            branchName: branch.name,
+            period: currentMonth,
+            oldAmount: oldAmount / 100,
+            newAmount: newAllocated / 100,
+            addedAmount: type === "addon" ? amountAllocatedCents / 100 : undefined,
+            wasReset: newAllocated === 0
+          },
+        })
+      )
     } catch (auditError) {
       logError(auditError, 'BUDGETS_AUDIT_LOG')
     }

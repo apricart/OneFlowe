@@ -1,40 +1,33 @@
-import { NextRequest } from "next/server"
-import { ok, error, requireApiRole, readJson } from "@/lib/api"
-import { getRequestScope } from "@/lib/auth"
+import { NextRequest, NextResponse } from "next/server"
 import { verifyOTP } from "@/lib/mfa"
+import { getRequestScope } from "@/lib/auth"
 
 export async function POST(req: NextRequest) {
-  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
-  if (err) return err
-
   try {
-    const body = await readJson<any>(req)
-    if (!body) return error("Invalid request body", 400)
+    const scope = await getRequestScope()
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    const body = await req.json().catch(() => ({}))
     const { code, type = 'LOGIN' } = body
 
     if (!code || code.length !== 6) {
-      return error("Please enter a valid 6-digit OTP code", 400)
-    }
-
-    const scope = await getRequestScope()
-    if (!scope?.userId) {
-      return error("User not authenticated", 401)
+      return NextResponse.json({ error: "Please enter a valid 6-digit OTP code" }, { status: 400 })
     }
 
     const result = await verifyOTP(scope.userId, code, type)
 
     if (result.success) {
-      return ok({
+      return NextResponse.json({
         message: result.message,
         verified: true
       })
     } else {
-      return error(result.message + (result.remainingAttempts !== undefined ? ` (${result.remainingAttempts} attempts remaining)` : ''), 400)
+      const remainingMsg = result.remainingAttempts !== undefined ? ` (${result.remainingAttempts} attempts remaining)` : ''
+      return NextResponse.json({ error: result.message + remainingMsg }, { status: 400 })
     }
-
-  } catch (err) {
-    console.error("Error verifying OTP:", err)
-    return error("Failed to verify OTP", 500)
+  } catch (err: any) {
+    return NextResponse.json({ error: "Failed to verify OTP" }, { status: 500 })
   }
 }
+
+

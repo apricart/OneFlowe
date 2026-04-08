@@ -1,12 +1,10 @@
-import { db } from "@/lib/db"
+import { db, withTenant, withSuperAdmin } from "@/lib/db"
 import { organizationSettings, auditLogs } from "@/db/schema"
 import { eq, and } from "drizzle-orm"
-import { ok, err, requireApiRole } from "@/lib/api"
 import { NextRequest, NextResponse } from "next/server"
-import { handleError } from "@/lib/error-handler"
-import { logError } from "@/lib/global-logger"
-import { getRequestScope } from "@/lib/auth"
-import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth-options"
+import { getCached, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
 // Valid setting keys
 const VALID_SETTING_KEYS = new Set([
@@ -21,61 +19,59 @@ const VALID_SETTING_KEYS = new Set([
 ])
 
 /**
- * Validate setting key
- */
-function isValidSettingKey(key: string): boolean {
-  return VALID_SETTING_KEYS.has(key)
-}
-
-/**
  * GET /api/v1/settings - Fetch organization settings
  */
 export async function GET(req: NextRequest) {
-  const authErr = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
-  if (authErr) return authErr
-
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const user = session.user as any
+    if (user.role !== "SUPER_ADMIN" && user.role !== "HEAD_OFFICE") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
     const { searchParams } = req.nextUrl
     let organizationIdParam = searchParams.get("organizationId")
 
-    // BOLA: HEAD_OFFICE must be scoped to their own organization
-    const scope = await getRequestScope()
-    if (scope?.role === "HEAD_OFFICE") {
-      organizationIdParam = scope.organizationId ? String(scope.organizationId) : null
-      if (!organizationIdParam) return err("Organization context required", 400)
+    if (user.role === "HEAD_OFFICE") {
+      organizationIdParam = String(user.organizationId)
     }
 
+    const runner = user.role === "SUPER_ADMIN" ? withSuperAdmin : (cb: any) => withTenant(user, cb)
+
     if (organizationIdParam) {
-      // Validate organization ID
       const organizationId = parseInt(organizationIdParam, 10)
-      if (isNaN(organizationId) || organizationId <= 0) {
-        return err("Invalid organization ID", 400)
-      }
+      if (isNaN(organizationId)) return NextResponse.json({ error: "Invalid organization ID" }, { status: 400 })
 
       const cacheKey = scopedCacheKey('settings', { orgId: organizationId })
 
-      const settings = await getCached(cacheKey, () =>
-        db
-          .select()
-          .from(organizationSettings)
-          .where(eq(organizationSettings.organizationId, organizationId)),
-        CACHE_TTL.SETTINGS
-      )
+      const settings = await getCached(cacheKey, async () => {
+        return await runner(async (tx: any) => {
+          return await tx
+            .select()
+            .from(organizationSettings)
+            .where(eq(organizationSettings.organizationId, organizationId))
+        })
+      }, CACHE_TTL.SETTINGS)
 
-      return ok({ data: settings })
+      return NextResponse.json({ data: (settings as any) })
     }
 
-    // Return all settings (SUPER_ADMIN only path)
+    // SUPER_ADMIN only: Return all settings
+    if (user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
     const cacheKeyAll = 'cache:settings:all'
-    const allSettings = await getCached(cacheKeyAll, () =>
-      db.select().from(organizationSettings),
-      CACHE_TTL.SETTINGS
-    )
-    return ok({ data: allSettings })
+    const allSettings = await getCached(cacheKeyAll, async () => {
+      return await withSuperAdmin(async (tx) => {
+        return await tx.select().from(organizationSettings)
+      })
+    }, CACHE_TTL.SETTINGS)
+
+    return NextResponse.json({ data: (allSettings as any) })
   } catch (e: any) {
-    logError(e, 'SETTINGS_GET')
-    const { status, ...errorBody } = handleError(e, 'Settings API')
-    return NextResponse.json(errorBody, { status })
+    console.error("Settings GET Error:", e)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
@@ -83,183 +79,160 @@ export async function GET(req: NextRequest) {
  * POST /api/v1/settings - Create or update setting
  */
 export async function POST(req: NextRequest) {
-  const authErr = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE"])
-  if (authErr) return authErr
-
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const user = session.user as any
+    if (user.role !== "SUPER_ADMIN" && user.role !== "HEAD_OFFICE") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
     const body = await req.json()
     const { organizationId, key, value } = body
 
-    // Validate required fields
-    if (!organizationId) {
-      return err("organizationId is required", 400)
-    }
+    if (!organizationId) return NextResponse.json({ error: "organizationId is required" }, { status: 400 })
+    if (user.role === "HEAD_OFFICE" && Number(organizationId) !== user.organizationId) {
 
-    // BOLA: HEAD_OFFICE must only modify their own org's settings
-    const scope = await getRequestScope()
-    if (scope?.role === "HEAD_OFFICE" && Number(organizationId) !== scope.organizationId) {
-      return err("Forbidden: Cannot modify settings for other organizations", 403)
+      return NextResponse.json({ error: "Forbidden: Cannot modify settings for other organizations" }, { status: 403 })
     }
 
     if (!key || typeof key !== 'string') {
-      return err("key is required and must be a string", 400)
+      return NextResponse.json({ error: "key is required and must be a string" }, { status: 400 })
     }
 
-    // Validate organization ID
     if (typeof organizationId !== 'number' || organizationId <= 0) {
-      return err("organizationId must be a positive number", 400)
+      return NextResponse.json({ error: "organizationId must be a positive number" }, { status: 400 })
     }
 
-    // Validate setting key
-    if (!isValidSettingKey(key)) {
-      return err(`Invalid setting key: ${key}. Must be one of: ${Array.from(VALID_SETTING_KEYS).join(', ')}`, 400)
+    if (!VALID_SETTING_KEYS.has(key)) {
+      return NextResponse.json({ error: `Invalid setting key: ${key}` }, { status: 400 })
     }
 
-    // Validate value is not undefined
     if (value === undefined) {
-      return err("value is required", 400)
+      return NextResponse.json({ error: "value is required" }, { status: 400 })
     }
 
-    // Type validation based on key
+    // Type validation
     if (key === 'tax_rate' && (typeof value !== 'number' || value < 0 || value > 1)) {
-      return err("tax_rate must be a number between 0 and 1", 400)
+      return NextResponse.json({ error: "tax_rate must be a number between 0 and 1" }, { status: 400 })
     }
 
-    if (key === 'order_approval_threshold' && (typeof value !== 'number' || value < 0)) {
-      return err("order_approval_threshold must be a non-negative number", 400)
-    }
+    const runner = user.role === "SUPER_ADMIN" ? withSuperAdmin : (cb: any) => withTenant(user, cb)
 
-    if (key === 'session_timeout_minutes' && (typeof value !== 'number' || value < 1 || value > 1440)) {
-      return err("session_timeout_minutes must be between 1 and 1440 (24 hours)", 400)
-    }
-
-    if (key === 'low_stock_threshold' && (typeof value !== 'number' || value < 0)) {
-      return err("low_stock_threshold must be a non-negative number", 400)
-    }
-
-    if (['auto_approve_orders', 'require_mfa', 'enable_notifications'].includes(key) && typeof value !== 'boolean') {
-      return err(`${key} must be a boolean`, 400)
-    }
-
-    if (key === 'default_currency' && (typeof value !== 'string' || value.length !== 3)) {
-      return err("default_currency must be a 3-letter currency code", 400)
-    }
-
-    // Check if setting already exists
-    const existing = await db
-      .select()
-      .from(organizationSettings)
-      .where(
-        and(
-          eq(organizationSettings.organizationId, organizationId),
-          eq(organizationSettings.key, key)
+    const result = await runner(async (tx: any) => {
+      // Check if setting already exists
+      const [existing] = await tx
+        .select()
+        .from(organizationSettings)
+        .where(
+          and(
+            eq(organizationSettings.organizationId, organizationId),
+            eq(organizationSettings.key, key)
+          )
         )
-      )
-      .limit(1)
+        .limit(1)
 
-    let result
-    if (existing.length > 0) {
-      // Update existing setting
-      [result] = await db
-        .update(organizationSettings)
-        .set({ value, updatedAt: new Date() })
-        .where(eq(organizationSettings.id, existing[0].id))
-        .returning()
-    } else {
-      // Create new setting
-      [result] = await db
-        .insert(organizationSettings)
-        .values({ organizationId, key, value })
-        .returning()
-    }
+      let savedResult
+      if (existing) {
+        // Update
+        [savedResult] = await tx
+          .update(organizationSettings)
+          .set({ value, updatedAt: new Date() })
+          .where(eq(organizationSettings.id, existing.id))
+          .returning()
+      } else {
+        // Create
+        [savedResult] = await tx
+          .insert(organizationSettings)
+          .values({ organizationId, key, value })
+          .returning()
+      }
 
-    // Log the action
-    try {
-      await db.insert(auditLogs).values({
-        action: existing.length > 0 ? "UPDATE_SETTING" : "CREATE_SETTING",
-        entity: "organization_settings",
-        entityId: result.id.toString(),
-        organizationId,
-        metadata: { key, value },
-      })
-    } catch (auditError) {
-      // Log but don't fail the request
-      logError(auditError, 'SETTINGS_AUDIT_LOG')
-    }
+      // Log the action
+      try {
+        await tx.insert(auditLogs).values({
+          action: existing ? "UPDATE_SETTING" : "CREATE_SETTING",
+          entity: "organization_settings",
+          entityId: String(savedResult.id),
+          organizationId,
+          metadata: { key, value },
+          userId: user.id
+        })
+      } catch (auditError) {
+        console.error("Audit log error:", auditError)
+      }
 
-    // Invalidate settings cache
-    await invalidateByPrefix('settings')
+      return { data: savedResult, wasUpdate: !!existing }
+    })
 
-    return ok({
-      data: result,
-      message: existing.length > 0 ? "Setting updated successfully" : "Setting created successfully"
+    return NextResponse.json({
+      data: (result as any).data,
+      message: (result as any).wasUpdate ? "Setting updated successfully" : "Setting created successfully"
     })
   } catch (error: any) {
-    if (error?.name === 'SyntaxError') {
-      return err("Invalid JSON in request body", 400)
-    }
-    logError(error, 'SETTINGS_POST')
-    return err("Failed to save setting", 500)
+    console.error("Settings POST Error:", error)
+    return NextResponse.json({ error: "Failed to save setting" }, { status: 500 })
   }
 }
 
 /**
- * DELETE /api/v1/settings - Delete setting
+ * DELETE /api/v1/settings - Delete setting (SUPER_ADMIN only)
  */
 export async function DELETE(req: NextRequest) {
-  const authErr = await requireApiRole(["SUPER_ADMIN"])
-  if (authErr) return authErr
-
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const user = session.user as any
+    if (user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
     const { searchParams } = req.nextUrl
     const idParam = searchParams.get("id")
 
-    if (!idParam) {
-      return err("Setting id is required", 400)
-    }
+    if (!idParam) return NextResponse.json({ error: "Setting id is required" }, { status: 400 })
 
-    // Validate ID
     const id = parseInt(idParam, 10)
-    if (isNaN(id) || id <= 0) {
-      return err("Invalid setting id", 400)
-    }
+    if (isNaN(id)) return NextResponse.json({ error: "Invalid setting id" }, { status: 400 })
 
-    // Check if setting exists
-    const existing = await db
-      .select()
-      .from(organizationSettings)
-      .where(eq(organizationSettings.id, id))
-      .limit(1)
+    const deleted = await withSuperAdmin(async (tx) => {
+      // Check if setting exists
+      const [existing] = await tx
+        .select()
+        .from(organizationSettings)
+        .where(eq(organizationSettings.id, id))
+        .limit(1)
 
-    if (existing.length === 0) {
-      return err("Setting not found", 404)
-    }
+      if (!existing) {
+        throw new Error("Setting not found")
+      }
 
-    const [deleted] = await db
-      .delete(organizationSettings)
-      .where(eq(organizationSettings.id, id))
-      .returning()
+      const [removed] = await tx
+        .delete(organizationSettings)
+        .where(eq(organizationSettings.id, id))
+        .returning()
 
-    // Log the action
-    try {
-      await db.insert(auditLogs).values({
+      // Log the action
+      await tx.insert(auditLogs).values({
         action: "DELETE_SETTING",
         entity: "organization_settings",
-        entityId: id.toString(),
-        organizationId: deleted.organizationId,
-        metadata: { key: deleted.key }
+        entityId: String(id),
+        organizationId: removed.organizationId,
+        metadata: { key: removed.key },
+        userId: user.id
       })
-    } catch (auditError) {
-      // Log but don't fail the request
-      logError(auditError, 'SETTINGS_AUDIT_LOG')
-    }
 
-    return ok({
+      return removed
+    })
+
+    return NextResponse.json({
       message: "Setting deleted successfully",
       deletedKey: deleted.key
     })
   } catch (error: any) {
-    logError(error, 'SETTINGS_DELETE')
-    return err("Failed to delete setting", 500)
+    console.error("Settings DELETE Error:", error)
+    const status = error.message === "Setting not found" ? 404 : 500
+    return NextResponse.json({ error: error.message || "Failed to delete setting" }, { status })
   }
 }
+

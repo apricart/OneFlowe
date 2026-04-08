@@ -4,7 +4,7 @@
  * Uses Redis for caching and cooldown management
  */
 
-import { db } from "@/lib/db"
+import { db, withSuperAdmin } from "@/lib/db"
 import { users, mfaCodes } from "@/db/schema"
 import { eq, and, gte, desc } from "drizzle-orm"
 import { randomInt } from "crypto"
@@ -232,13 +232,15 @@ export async function generateAndSendOTP(
     // Save to database for audit trail
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000)
     try {
-      await db.insert(mfaCodes).values({
-        userId,
-        code,
-        type,
-        expiresAt,
-        attempts: 0,
-        isUsed: false
+      await withSuperAdmin(async (tx) => {
+        await tx.insert(mfaCodes).values({
+          userId,
+          code,
+          type,
+          expiresAt,
+          attempts: 0,
+          isUsed: false
+        })
       })
     } catch (dbError) {
       logError(dbError, 'MFA_DB_INSERT_CODE', { userId, type })
@@ -386,16 +388,18 @@ export async function verifyOTP(
 
     // Update database for audit trail
     try {
-      await db
-        .update(mfaCodes)
-        .set({ isUsed: true })
-        .where(
-          and(
-            eq(mfaCodes.userId, userId),
-            eq(mfaCodes.code, sanitizedCode),
-            eq(mfaCodes.type, type)
+      await withSuperAdmin(async (tx) => {
+        await tx
+          .update(mfaCodes)
+          .set({ isUsed: true })
+          .where(
+            and(
+              eq(mfaCodes.userId, userId),
+              eq(mfaCodes.code, sanitizedCode),
+              eq(mfaCodes.type, type)
+            )
           )
-        )
+      })
     } catch (dbError) {
       logError(dbError, 'MFA_DB_MARK_USED', { userId, type })
       // Log but don't fail - OTP was validated
@@ -437,10 +441,12 @@ export async function enableMFA(userId: string): Promise<MFAResult> {
       }
     }
 
-    await db
-      .update(users)
-      .set({ mfaEnabled: true })
-      .where(eq(users.id, userId))
+    await withSuperAdmin(async (tx) => {
+      await tx
+        .update(users)
+        .set({ mfaEnabled: true })
+        .where(eq(users.id, userId))
+    })
 
     return {
       success: true,
@@ -469,20 +475,22 @@ export async function disableMFA(userId: string): Promise<MFAResult> {
       }
     }
 
-    await db
-      .update(users)
-      .set({ mfaEnabled: false })
-      .where(eq(users.id, userId))
+    await withSuperAdmin(async (tx) => {
+      await tx
+        .update(users)
+        .set({ mfaEnabled: false })
+        .where(eq(users.id, userId))
 
-    // Clean up any pending OTP codes from database
-    try {
-      await db
-        .delete(mfaCodes)
-        .where(eq(mfaCodes.userId, userId))
-    } catch (deleteError) {
-      console.error('[MFA] Failed to delete MFA codes:', deleteError)
-      // Log but continue - main goal achieved
-    }
+      // Clean up any pending OTP codes from database
+      try {
+        await tx
+          .delete(mfaCodes)
+          .where(eq(mfaCodes.userId, userId))
+      } catch (deleteError) {
+        console.error('[MFA] Failed to delete MFA codes:', deleteError)
+        // Log but continue - main goal achieved
+      }
+    })
 
     // Clean up Redis cooldowns and OTPs
     try {
@@ -516,11 +524,14 @@ export async function isMFAEnabled(userId: string): Promise<boolean> {
       return false
     }
 
-    const [user] = await db
-      .select({ mfaEnabled: users.mfaEnabled })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1)
+    const user = await withSuperAdmin(async (tx) => {
+      const [found] = await tx
+        .select({ mfaEnabled: users.mfaEnabled })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1)
+      return found
+    })
 
     return user?.mfaEnabled || false
   } catch (error) {

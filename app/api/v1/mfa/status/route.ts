@@ -1,27 +1,20 @@
-import { NextRequest } from "next/server"
-import { ok, error, requireApiRole } from "@/lib/api"
-import { getRequestScope } from "@/lib/auth"
+import { NextRequest, NextResponse } from "next/server"
 import { isMFAEnabled } from "@/lib/mfa"
+import { getRequestScope } from "@/lib/auth"
 
 export async function GET(req: NextRequest) {
-  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
-  if (err) return err
-
   try {
     const scope = await getRequestScope()
-    if (!scope?.userId) {
-      return error("User not authenticated", 401)
-    }
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const enabled = await isMFAEnabled(scope.userId)
 
-    return ok({
+    return NextResponse.json({
       mfaEnabled: enabled,
       message: enabled ? "MFA is enabled" : "MFA is disabled"
     })
-
   } catch (err) {
-    console.error("Error checking MFA status:", err)
-    return error("Failed to check MFA status", 500)
+    return NextResponse.json({ error: "Failed to check MFA status" }, { status: 500 })
   }
 }
+

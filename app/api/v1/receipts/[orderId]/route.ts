@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
+import { db, withTenant, withSuperAdmin } from "@/lib/db"
 import { orders, refunds, refundItems, orderItems } from "@/db/schema"
-import { eq } from "drizzle-orm"
+import { eq, and } from "drizzle-orm"
 
 export async function GET(
     req: NextRequest,
@@ -21,39 +21,55 @@ export async function GET(
             return NextResponse.json({ error: "Invalid order ID" }, { status: 400 })
         }
 
-        // Fetch order with receipt data
-        const [order] = await db
-            .select()
-            .from(orders)
-            .where(eq(orders.id, orderId))
-            .limit(1)
+        const user = session.user as any
+        const runner = user.role === "SUPER_ADMIN" ? withSuperAdmin : (cb: any) => withTenant(user, cb)
 
-        if (!order) {
+        const result = await runner(async (tx: any) => {
+            // Fetch order with receipt data
+            const [order] = await tx
+                .select()
+                .from(orders)
+                .where(eq(orders.id, orderId))
+                .limit(1)
+
+            if (!order) {
+                return null
+            }
+
+            // BOLA check for Branch Admin (already handled by RLS if withTenant, but good for explicit error)
+            if (user.role === "BRANCH_ADMIN" && order.branchId !== user.branchId) {
+                throw new Error("Forbidden - Access to this order's receipt is denied")
+            }
+
+            // Fetch refund information
+            const refundData = await tx
+                .select({
+                    refundId: refunds.id,
+                    refundAmount: refunds.amountCents,
+                    refundReason: refunds.reason,
+                    refundStatus: refunds.status,
+                    refundCreatedAt: refunds.createdAt,
+                    orderItemId: refundItems.orderItemId,
+                    refundedQuantity: refundItems.quantity,
+                    refundedAmount: refundItems.amountCents,
+                    productName: orderItems.productName,
+                })
+                .from(refunds)
+                .leftJoin(refundItems, eq(refunds.id, refundItems.refundId))
+                .leftJoin(orderItems, eq(refundItems.orderItemId, orderItems.id))
+                .where(eq(refunds.orderId, orderId))
+
+            return { order, refundData }
+        })
+
+        if (!result) {
             return NextResponse.json({ error: "Order not found" }, { status: 404 })
         }
 
-        // TODO: Add role-based access control to ensure user can view this order
-
-        // Fetch refund information
-        const refundData = await db
-            .select({
-                refundId: refunds.id,
-                refundAmount: refunds.amountCents,
-                refundReason: refunds.reason,
-                refundStatus: refunds.status,
-                refundCreatedAt: refunds.createdAt,
-                orderItemId: refundItems.orderItemId,
-                refundedQuantity: refundItems.quantity,
-                refundedAmount: refundItems.amountCents,
-                productName: orderItems.productName,
-            })
-            .from(refunds)
-            .leftJoin(refundItems, eq(refunds.id, refundItems.refundId))
-            .leftJoin(orderItems, eq(refundItems.orderItemId, orderItems.id))
-            .where(eq(refunds.orderId, orderId))
+        const { order, refundData } = result as { order: any, refundData: any[] }
 
         // Group refund items by refund
-        const refundHistory = refundData.reduce((acc, item) => {
+        const refundHistory = refundData.reduce((acc: any[], item: any) => {
             if (!item.refundId) return acc
 
             const existing = acc.find(r => r.refundId === item.refundId)
@@ -82,19 +98,7 @@ export async function GET(
                 })
             }
             return acc
-        }, [] as Array<{
-            refundId: number
-            amount: number
-            reason: string
-            status: string
-            createdAt: Date
-            items: Array<{
-                orderItemId: number
-                productName: string
-                quantity: number
-                amount: number
-            }>
-        }>)
+        }, [])
 
         return NextResponse.json({
             orderId: order.id,
@@ -106,9 +110,11 @@ export async function GET(
         })
     } catch (e: any) {
         console.error("Receipt retrieval error:", e)
+        const status = e.message.includes("Forbidden") ? 403 : 500
         return NextResponse.json(
-            { error: "Internal Server Error" },
-            { status: 500 }
+            { error: e.message || "Internal Server Error" },
+            { status }
         )
     }
 }
+

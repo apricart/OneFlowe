@@ -16,11 +16,13 @@ import { eq, and, isNull } from "drizzle-orm"
 export async function cascadeOrgDeletion(
   organizationInventoryId: number,
   performedByUserId: string,
-  performedByRole: string
+  performedByRole: string,
+  tx?: any
 ) {
   try {
+    const dbInstance = tx || db
     // Find all branch inventory items linked to this org inventory
-    const branchItems = await db.select({
+    const branchItems = await dbInstance.select({
       id: branchInventory.id,
       branchId: branchInventory.branchId,
       organizationId: branchInventory.organizationId,
@@ -39,7 +41,7 @@ export async function cascadeOrgDeletion(
 
     // Soft delete all branch inventory items
     const now = new Date()
-    await db.update(branchInventory)
+    await dbInstance.update(branchInventory)
       .set({
         deletedAt: now,
         updatedAt: now
@@ -52,29 +54,30 @@ export async function cascadeOrgDeletion(
       )
 
     // Log the cascade deletion
-    await db.insert(auditLogs).values({
+    await dbInstance.insert(auditLogs).values({
       userId: performedByUserId,
       action: "CASCADE_DELETE",
       entity: "BranchInventory",
-      entityId: branchItems.map(item => item.id).join(','),
+      entityId: branchItems.map((item: any) => item.id).join(','),
       metadata: {
         triggeredBy: "organization_inventory_deletion",
         organizationInventoryId,
         deletedCount: branchItems.length,
-        affectedBranches: branchItems.map(item => item.branchId),
+        affectedBranches: branchItems.map((item: any) => item.branchId),
         performedByRole
       },
     })
 
     return {
       deletedCount: branchItems.length,
-      affectedBranches: branchItems.map(item => item.branchId)
+      affectedBranches: branchItems.map((item: any) => item.branchId)
     }
   } catch (error) {
     console.error("Error in cascadeOrgDeletion:", error)
     throw error
   }
 }
+
 
 /**
  * Cascade status changes from organization inventory to branch inventory
@@ -87,9 +90,11 @@ export async function cascadeOrgStatusChange(
   organizationInventoryId: number,
   isActive: boolean,
   performedByUserId: string,
-  performedByRole: string
+  performedByRole: string,
+  tx?: any
 ) {
   try {
+    const dbInstance = tx || db
     // Update all branch inventory items and get the affected ones in one go
     const updateData: any = {
       isActive,
@@ -97,7 +102,7 @@ export async function cascadeOrgStatusChange(
       isVisible: isActive // If disabling, also hide from branches; if enabling, restore visibility
     }
 
-    const branchItems = await db.update(branchInventory)
+    const branchItems = await dbInstance.update(branchInventory)
       .set(updateData)
       .where(
         and(
@@ -116,17 +121,17 @@ export async function cascadeOrgStatusChange(
     }
 
     // Log the cascade update
-    await db.insert(auditLogs).values({
+    await dbInstance.insert(auditLogs).values({
       userId: performedByUserId,
       action: "CASCADE_UPDATE",
       entity: "BranchInventory",
-      entityId: branchItems.map(item => item.id).join(','),
+      entityId: branchItems.map((item: any) => item.id).join(','),
       metadata: {
         triggeredBy: "organization_inventory_status_change",
         organizationInventoryId,
         isActive,
         updatedCount: branchItems.length,
-        affectedBranches: branchItems.map(item => item.branchId),
+        affectedBranches: branchItems.map((item: any) => item.branchId),
         performedByRole,
         changes: updateData
       },
@@ -134,13 +139,14 @@ export async function cascadeOrgStatusChange(
 
     return {
       updatedCount: branchItems.length,
-      affectedBranches: branchItems.map(item => item.branchId)
+      affectedBranches: branchItems.map((item: any) => item.branchId)
     }
   } catch (error) {
     console.error("Error in cascadeOrgStatusChange:", error)
     throw error
   }
 }
+
 
 /**
  * Cascade global product deletion to organization and branch inventory
@@ -362,14 +368,14 @@ export async function cascadeGlobalProductFieldUpdate(
     oldValue: any
     newValue: any
   }>,
-  performedByUserId: string
+  performedByUserId: string,
+  tx?: any
 ) {
   try {
     if (updates.length === 0) return { updatedCount: 0 }
-
+    const dbInstance = tx || db
     let updatedCount = 0
 
-    // Only proceed if there are actual changes that might have overrides
     const fieldMapping = {
       name: 'customName',
       description: 'customDescription',
@@ -381,15 +387,9 @@ export async function cascadeGlobalProductFieldUpdate(
       const customField = fieldMapping[update.field]
       if (!customField) continue
 
-      // Find all organization inventory items where the custom override matches the old global value
-      // This indicates the override was likely a static copy of the old global data
       let oldValue = update.oldValue
-      if (update.field === 'basePrice' && typeof oldValue === 'number') {
-        // basePrice in globalProducts is in cents, customPrice in organizationInventory is also in cents
-        // Ensure we are comparing same types
-      }
 
-      const result = await db.update(organizationInventory)
+      const result = await dbInstance.update(organizationInventory)
         .set({
           [customField]: null,
           updatedAt: new Date()
@@ -406,19 +406,18 @@ export async function cascadeGlobalProductFieldUpdate(
       updatedCount += result.length
 
       if (result.length > 0) {
-        // Log the cascade override clearing
-        await db.insert(auditLogs).values({
+        await dbInstance.insert(auditLogs).values({
           userId: performedByUserId,
           action: "CASCADE_CLEAR_OVERRIDE",
           entity: "OrganizationInventory",
-          entityId: result.map(r => r.id).join(','),
+          entityId: result.map((r: any) => r.id).join(','),
           metadata: {
             triggeredBy: "global_product_update",
             globalProductId,
             field: update.field,
             oldValue: update.oldValue,
             newValue: update.newValue,
-            affectedOrgs: result.map(r => r.organizationId)
+            affectedOrgs: result.map((r: any) => r.organizationId)
           },
         })
       }
@@ -430,3 +429,4 @@ export async function cascadeGlobalProductFieldUpdate(
     throw error
   }
 }
+

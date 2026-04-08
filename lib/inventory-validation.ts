@@ -1,18 +1,14 @@
-/**
- * Validation utilities for inventory management
- * Prevents orphaned records and ensures data integrity
- */
-
 import { db } from "@/lib/db"
 import { organizationInventory, branchInventory, globalProducts, organizations, branches } from "@/db/schema"
-import { eq, and, isNull, ne } from "drizzle-orm"
+import { eq, and, isNull } from "drizzle-orm"
 
 /**
  * Validate that an organization exists and is active
  */
-export async function validateOrganization(organizationId: number): Promise<boolean> {
+export async function validateOrganization(organizationId: number, tx?: any): Promise<boolean> {
   try {
-    const org = await db.select({ id: organizations.id })
+    const dbInstance = tx || db
+    const org = await dbInstance.select({ id: organizations.id })
       .from(organizations)
       .where(eq(organizations.id, organizationId))
       .limit(1)
@@ -27,9 +23,10 @@ export async function validateOrganization(organizationId: number): Promise<bool
 /**
  * Validate that a branch exists and belongs to the organization
  */
-export async function validateBranch(branchId: number, organizationId: number): Promise<boolean> {
+export async function validateBranch(branchId: number, organizationId: number, tx?: any): Promise<boolean> {
   try {
-    const branch = await db.select({ id: branches.id })
+    const dbInstance = tx || db
+    const branch = await dbInstance.select({ id: branches.id })
       .from(branches)
       .where(
         and(
@@ -49,9 +46,10 @@ export async function validateBranch(branchId: number, organizationId: number): 
 /**
  * Validate that a global product exists and is active
  */
-export async function validateGlobalProduct(globalProductId: number): Promise<boolean> {
+export async function validateGlobalProduct(globalProductId: number, tx?: any): Promise<boolean> {
   try {
-    const product = await db.select({ id: globalProducts.id })
+    const dbInstance = tx || db
+    const product = await dbInstance.select({ id: globalProducts.id })
       .from(globalProducts)
       .where(
         eq(globalProducts.id, globalProductId)
@@ -70,10 +68,12 @@ export async function validateGlobalProduct(globalProductId: number): Promise<bo
  */
 export async function validateOrganizationInventory(
   organizationInventoryId: number,
-  organizationId: number
+  organizationId: number,
+  tx?: any
 ): Promise<boolean> {
   try {
-    const orgInventory = await db.select({ id: organizationInventory.id })
+    const dbInstance = tx || db
+    const orgInventory = await dbInstance.select({ id: organizationInventory.id })
       .from(organizationInventory)
       .where(
         and(
@@ -97,10 +97,12 @@ export async function validateOrganizationInventory(
 export async function validateBranchInventory(
   branchInventoryId: number,
   branchId: number,
-  organizationId: number
+  organizationId: number,
+  tx?: any
 ): Promise<boolean> {
   try {
-    const branchInv = await db.select({ id: branchInventory.id })
+    const dbInstance = tx || db
+    const branchInv = await dbInstance.select({ id: branchInventory.id })
       .from(branchInventory)
       .where(
         and(
@@ -159,10 +161,12 @@ export async function validateUserBranchAccess(
  */
 export async function checkDuplicateOrganizationAssignment(
   organizationId: number,
-  globalProductId: number
+  globalProductId: number,
+  tx?: any
 ): Promise<boolean> {
   try {
-    const existing = await db.select({ id: organizationInventory.id })
+    const dbInstance = tx || db
+    const existing = await dbInstance.select({ id: organizationInventory.id })
       .from(organizationInventory)
       .where(
         and(
@@ -185,10 +189,12 @@ export async function checkDuplicateOrganizationAssignment(
  */
 export async function checkDuplicateBranchAssignment(
   branchId: number,
-  organizationInventoryId: number
+  organizationInventoryId: number,
+  tx?: any
 ): Promise<boolean> {
   try {
-    const existing = await db.select({ id: branchInventory.id })
+    const dbInstance = tx || db
+    const existing = await dbInstance.select({ id: branchInventory.id })
       .from(branchInventory)
       .where(
         and(
@@ -215,13 +221,13 @@ export async function validateAssignmentData(data: {
   globalProductId?: number
   organizationInventoryId?: number
   userId?: string
-}): Promise<{ valid: boolean; errors: string[] }> {
+}, tx?: any): Promise<{ valid: boolean; errors: string[] }> {
   const errors: string[] = []
 
   try {
     // Validate organization
     if (data.organizationId) {
-      const orgValid = await validateOrganization(data.organizationId)
+      const orgValid = await validateOrganization(data.organizationId, tx)
       if (!orgValid) {
         errors.push("Invalid organization ID")
       }
@@ -229,7 +235,7 @@ export async function validateAssignmentData(data: {
 
     // Validate branch
     if (data.branchId && data.organizationId) {
-      const branchValid = await validateBranch(data.branchId, data.organizationId)
+      const branchValid = await validateBranch(data.branchId, data.organizationId, tx)
       if (!branchValid) {
         errors.push("Invalid branch ID or branch does not belong to organization")
       }
@@ -237,7 +243,7 @@ export async function validateAssignmentData(data: {
 
     // Validate global product
     if (data.globalProductId) {
-      const productValid = await validateGlobalProduct(data.globalProductId)
+      const productValid = await validateGlobalProduct(data.globalProductId, tx)
       if (!productValid) {
         errors.push("Invalid global product ID or product is not active")
       }
@@ -245,7 +251,7 @@ export async function validateAssignmentData(data: {
 
     // Validate organization inventory
     if (data.organizationInventoryId && data.organizationId) {
-      const orgInvValid = await validateOrganizationInventory(data.organizationInventoryId, data.organizationId)
+      const orgInvValid = await validateOrganizationInventory(data.organizationInventoryId, data.organizationId, tx)
       if (!orgInvValid) {
         errors.push("Invalid organization inventory ID or access denied")
       }
@@ -253,14 +259,14 @@ export async function validateAssignmentData(data: {
 
     // Check for duplicates
     if (data.organizationId && data.globalProductId) {
-      const isDuplicate = await checkDuplicateOrganizationAssignment(data.organizationId, data.globalProductId)
+      const isDuplicate = await checkDuplicateOrganizationAssignment(data.organizationId, data.globalProductId, tx)
       if (isDuplicate) {
         errors.push("Product is already assigned to this organization")
       }
     }
 
     if (data.branchId && data.organizationInventoryId) {
-      const isDuplicate = await checkDuplicateBranchAssignment(data.branchId, data.organizationInventoryId)
+      const isDuplicate = await checkDuplicateBranchAssignment(data.branchId, data.organizationInventoryId, tx)
       if (isDuplicate) {
         errors.push("Product is already assigned to this branch")
       }
@@ -278,3 +284,4 @@ export async function validateAssignmentData(data: {
     }
   }
 }
+

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
+import { withTenant } from "@/lib/db"
 import { groups, groupAuditLogs, branches, organizations } from "@/db/schema"
 import { and, eq, sql } from "drizzle-orm"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
@@ -11,12 +11,13 @@ export async function GET(req: NextRequest) {
         const session = await getServerSession(authOptions)
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-        const role = (session.user as any).role
-        let orgId = role === "SUPER_ADMIN" ? null : (session.user as any).organizationId
+        const { role: userRole, organizationId: userOrgId } = session.user as any
+        const role = (userRole || "").toUpperCase().replace(/\s+/g, '_')
+
+        let orgId = role === "SUPER_ADMIN" ? null : userOrgId
         const { searchParams } = new URL(req.url)
         const orgIdParam = searchParams.get("organizationId")
 
-        // For admin users using context selector, accept organizationId from query param
         if (orgIdParam && role === "SUPER_ADMIN") {
             const parsedOrgId = parseInt(orgIdParam)
             if (Number.isFinite(parsedOrgId)) {
@@ -31,42 +32,41 @@ export async function GET(req: NextRequest) {
         const cacheKey = scopedCacheKey('groups', { orgId: orgId })
 
         const allGroups = await getCached(cacheKey, async () => {
-            return db
-                .select({
-                    id: groups.id,
-                    organizationId: groups.organizationId,
-                    organizationName: organizations.name,
-                    name: groups.name,
-                    description: groups.description,
-                    status: sql<string>`CASE 
-                        WHEN ${groups.status} = 'deleted' THEN 'deleted'
-                        WHEN count(${branches.id}) > 0 THEN 'connected'
-                        ELSE 'not connected'
-                    END`,
-                    createdAt: groups.createdAt,
-                    updatedAt: groups.updatedAt,
-                    branchCount: sql<number>`count(${branches.id})::int`,
-                })
-                .from(groups)
-                .innerJoin(organizations, eq(groups.organizationId, organizations.id))
-                .leftJoin(branches, eq(branches.groupId, groups.id))
-                .where(
-                    and(
-                        orgId ? eq(groups.organizationId, orgId) : undefined,
-                        sql`${groups.status} != 'deleted'`
+            return await withTenant(session.user as any, async (tx) => {
+                return tx
+                    .select({
+                        id: groups.id,
+                        organizationId: groups.organizationId,
+                        organizationName: organizations.name,
+                        name: groups.name,
+                        description: groups.description,
+                        status: sql<string>`CASE 
+                            WHEN ${groups.status} = 'deleted' THEN 'deleted'
+                            WHEN count(${branches.id}) > 0 THEN 'connected'
+                            ELSE 'not connected'
+                        END`,
+                        createdAt: groups.createdAt,
+                        updatedAt: groups.updatedAt,
+                        branchCount: sql<number>`count(${branches.id})::int`,
+                    })
+                    .from(groups)
+                    .innerJoin(organizations, eq(groups.organizationId, organizations.id))
+                    .leftJoin(branches, eq(branches.groupId, groups.id))
+                    .where(
+                        and(
+                            orgId ? eq(groups.organizationId, orgId) : undefined,
+                            sql`${groups.status} != 'deleted'`
+                        )
                     )
-                )
-                .groupBy(groups.id, organizations.id)
-                .orderBy(groups.name)
+                    .groupBy(groups.id, organizations.id)
+                    .orderBy(groups.name)
+            })
         }, CACHE_TTL.LISTING)
 
         return NextResponse.json({ groups: allGroups })
     } catch (e: any) {
         console.error("Error fetching groups:", e)
-        return NextResponse.json({
-            error: "Failed to fetch groups",
-            details: process.env.NODE_ENV === 'development' ? e.message : undefined
-        }, { status: 500 })
+        return NextResponse.json({ error: "Failed to fetch groups" }, { status: 500 })
     }
 }
 
@@ -75,11 +75,9 @@ export async function POST(req: NextRequest) {
         const session = await getServerSession(authOptions)
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-        const role = (session.user as any).role
-        const userId = (session.user as any).id
-        const userOrgId = (session.user as any).organizationId
+        const { role: userRole, id: userId, organizationId: userOrgId } = session.user as any
+        const role = (userRole || "").toUpperCase().replace(/\s+/g, '_')
 
-        // Only Super Admin and Head Office can create groups
         if (role !== "SUPER_ADMIN" && role !== "HEAD_OFFICE") {
             return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 })
         }
@@ -87,7 +85,7 @@ export async function POST(req: NextRequest) {
         const body = await req.json()
         let { organizationId, name, description } = body
 
-        // Security: Head Office can only create groups in their own organization
+        // HEAD_OFFICE can only create groups in their own organization
         if (role === "HEAD_OFFICE") {
             organizationId = userOrgId
         }
@@ -96,51 +94,52 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Organization ID and name are required" }, { status: 400 })
         }
 
-        // Check if group already exists for this organization (case-insensitive)
-        const [existingGroup] = await db
-            .select()
-            .from(groups)
-            .where(
-                and(
-                    eq(groups.organizationId, organizationId),
-                    sql`lower(${groups.name}) = lower(${name})`,
-                    sql`${groups.status} != 'deleted'`
+        const newGroup = await withTenant(session.user as any, async (tx) => {
+            // Check for duplicate
+            const [existingGroup] = await tx
+                .select()
+                .from(groups)
+                .where(
+                    and(
+                        eq(groups.organizationId, organizationId),
+                        sql`lower(${groups.name}) = lower(${name})`,
+                        sql`${groups.status} != 'deleted'`
+                    )
                 )
-            )
-            .limit(1)
+                .limit(1)
 
-        if (existingGroup) {
-            return NextResponse.json({ error: `A group named "${name}" already exists.` }, { status: 409 })
-        }
+            if (existingGroup) {
+                throw new Error(`A group named "${name}" already exists.`)
+            }
 
-        // Create group
-        const [newGroup] = await db.insert(groups).values({
-            organizationId,
-            name,
-            description,
-            status: "not connected",
-            createdByUserId: userId,
-        }).returning()
+            const [created] = await tx.insert(groups).values({
+                organizationId,
+                name,
+                description,
+                status: "not connected",
+                createdByUserId: userId,
+            }).returning()
 
-        // Log action
-        await db.insert(groupAuditLogs).values({
-            organizationId,
-            groupId: newGroup.id,
-            action: "CREATE_GROUP",
-            performedByUserId: userId,
-            performedByRole: role,
-            metadata: { name, description },
+            await tx.insert(groupAuditLogs).values({
+                organizationId,
+                groupId: created.id,
+                action: "CREATE_GROUP",
+                performedByUserId: userId,
+                performedByRole: role,
+                metadata: { name, description },
+            })
+
+            return created
         })
 
-        // Invalidate all group-related caches (list and counts)
         await invalidateByPrefix('group')
 
         return NextResponse.json({ group: newGroup })
     } catch (e: any) {
+        if (e.message?.includes('already exists')) {
+            return NextResponse.json({ error: e.message }, { status: 409 })
+        }
         console.error("Error creating group:", e)
-        return NextResponse.json({
-            error: "Internal Server Error",
-            details: process.env.NODE_ENV === 'development' ? (e.detail || e.message) : undefined
-        }, { status: 500 })
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
     }
 }

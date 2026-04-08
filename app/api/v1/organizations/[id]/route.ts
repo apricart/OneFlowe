@@ -1,6 +1,6 @@
-import { ok, error, readJson, requireApiRole } from "@/lib/api"
+import { NextRequest, NextResponse } from "next/server"
+import { withTenant, withSuperAdmin } from "@/lib/db"
 import { invalidateByPrefix } from "@/lib/cache-utils"
-import { db } from "@/lib/db"
 import {
   organizations,
   branches,
@@ -26,179 +26,165 @@ import {
   groupAuditLogs
 } from "@/db/schema"
 import { eq, count, and, ne, isNull } from "drizzle-orm"
+import { getRequestScope } from "@/lib/auth"
 
 export async function GET(
-  _: Request,
+  _: NextRequest,
   props: { params: Promise<{ id: string }> }
 ) {
-  const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
-  if (err) return err
-  const params = await props.params
-  const { id } = params
+  try {
+    const scope = await getRequestScope()
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // BOLA Protection
-  const orgId = Number(id)
-  const { verifyResourceAccess } = await import("@/lib/auth")
-  const hasAccess = await verifyResourceAccess(orgId)
-  if (!hasAccess) return error("Forbidden: You do not have access to this organization", 403)
+    const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"]
+    if (!allowedRoles.includes(scope.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  const [item] = await db.select().from(organizations).where(eq(organizations.id, orgId))
-  if (!item) return error("Not found", 404)
-  return ok({ item })
+    const params = await props.params
+    const orgId = Number(params.id)
+
+    if (scope.role !== "SUPER_ADMIN" && scope.organizationId !== orgId) {
+      return NextResponse.json({ error: "Forbidden: You do not have access to this organization" }, { status: 403 })
+    }
+
+    const [item] = await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
+
+    async function handler(tx: any) {
+      return tx.select().from(organizations).where(eq(organizations.id, orgId))
+    }
+
+    if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 })
+    return NextResponse.json({ item })
+  } catch (e: any) {
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+  }
 }
 
 export async function PATCH(
-  req: Request,
+  req: NextRequest,
   props: { params: Promise<{ id: string }> }
 ) {
-  const err = await requireApiRole(["SUPER_ADMIN"])
-  if (err) return err
-  const body = await readJson<any>(req)
-  if (!body) return error("Invalid body", 400)
   try {
+    const scope = await getRequestScope()
+    if (!scope || scope.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+
     const params = await props.params
     const { id } = params
-    const patch: any = {}
-    if (body.name !== undefined) {
-      const name = String(body.name).trim()
-      // Check for duplicate name
-      const exists = await db.select({ id: organizations.id })
-        .from(organizations)
-        .where(and(eq(organizations.name, name), ne(organizations.id, Number(id))))
-        .limit(1)
-      if (exists.length > 0) return error(`Organization with name '${name}' already exists`, 400)
-      patch.name = name
-    }
-    if (body.code !== undefined) {
-      const code = String(body.code).trim().toUpperCase()
-      // Check for duplicate code
-      const exists = await db.select({ id: organizations.id })
-        .from(organizations)
-        .where(and(eq(organizations.code, code), ne(organizations.id, Number(id))))
-        .limit(1)
-      if (exists.length > 0) return error(`Organization with code '${code}' already exists`, 400)
-      patch.code = code
-    }
-    if (body.status !== undefined) {
-      const normalized = String(body.status).toLowerCase()
-      const validStatuses = ['active', 'inactive', 'suspended']
-      if (!validStatuses.includes(normalized)) {
-        return error(`Status must be one of: ${validStatuses.join(', ')}`, 400)
+    const body = await req.json().catch(() => ({}))
+    if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 })
+
+    const item = await withSuperAdmin(async (tx) => {
+      const patch: any = {}
+
+      if (body.name !== undefined) {
+        const name = String(body.name).trim()
+        const [exists] = await tx.select({ id: organizations.id })
+          .from(organizations)
+          .where(and(eq(organizations.name, name), ne(organizations.id, Number(id))))
+          .limit(1)
+        if (exists) throw new Error(`Organization with name '${name}' already exists`)
+        patch.name = name
       }
-      patch.status = normalized
-      console.log(`[Org Update] PATCH /api/v1/organizations/${id} - New status: ${patch.status}`)
-    }
-    patch.updatedAt = new Date()
-    const [item] = await db.update(organizations).set(patch).where(eq(organizations.id, Number(id))).returning()
 
-    // Invalidate organizations cache so GET returns fresh data immediately
+      if (body.code !== undefined) {
+        const code = String(body.code).trim().toUpperCase()
+        const [exists] = await tx.select({ id: organizations.id })
+          .from(organizations)
+          .where(and(eq(organizations.code, code), ne(organizations.id, Number(id))))
+          .limit(1)
+        if (exists) throw new Error(`Organization with code '${code}' already exists`)
+        patch.code = code
+      }
+
+      if (body.status !== undefined) {
+        const normalized = String(body.status).toLowerCase()
+        const validStatuses = ['active', 'inactive', 'suspended']
+        if (!validStatuses.includes(normalized)) throw new Error(`Status must be one of: ${validStatuses.join(', ')}`)
+        patch.status = normalized
+      }
+
+      patch.updatedAt = new Date()
+      const [updated] = await tx.update(organizations).set(patch).where(eq(organizations.id, Number(id))).returning()
+      return updated
+    })
+
     await invalidateByPrefix('organizations')
-
-    return ok({ item })
+    return NextResponse.json({ item })
   } catch (e: any) {
-    return error(e?.message || "Update failed", 400)
+    if (e.message?.includes('already exists') || e.message?.includes('Status must be')) {
+      return NextResponse.json({ error: e.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: e?.message || "Update failed" }, { status: 500 })
   }
 }
 
 export async function DELETE(
-  _: Request,
+  _: NextRequest,
   props: { params: Promise<{ id: string }> }
 ) {
-  const err = await requireApiRole(["SUPER_ADMIN"])
-  if (err) return err
-  const params = await props.params
-  const { id } = params
-  const orgId = Number(id)
-
   try {
-    // 0. Check if it exists
-    const [existing] = await db.select().from(organizations).where(eq(organizations.id, orgId))
-    if (!existing) return error("Organization not found", 404)
+    const scope = await getRequestScope()
+    if (!scope || scope.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-    // 1. Tier 1: Check for Critical Blockers (Data the user must handle manually)
-    // These tables contain core business entities that shouldn't be auto-deleted.
+    const params = await props.params
+    const orgId = Number(params.id)
 
-    const [activeBranchCount] = await db.select({ val: count() }).from(branches).where(and(eq(branches.organizationId, orgId), eq(branches.status, 'active')))
-    if (activeBranchCount.val > 0) {
-      return error(`Cannot delete: This company has ${activeBranchCount.val} active branch(es). Please remove or deactivate every active branch before deleting the company.`, 400)
-    }
+    await withSuperAdmin(async (tx) => {
+      const [existing] = await tx.select().from(organizations).where(eq(organizations.id, orgId))
+      if (!existing) throw new Error("Organization not found")
 
-    const [activeUserCount] = await db.select({ val: count() }).from(users).where(
-      and(
-        eq(users.organizationId, orgId),
-        eq(users.isActive, true),
-        isNull(users.deletedAt)
-      )
-    )
-    if (activeUserCount.val > 0) {
-      return error(`Cannot delete: This company has ${activeUserCount.val} active user(s). Please remove or deactivate every active user before deleting the company.`, 400)
-    }
+      // Validations
+      const [activeBranchCount]: any[] = await tx.select({ val: count() }).from(branches).where(and(eq(branches.organizationId, orgId), eq(branches.status, 'active')))
+      if (activeBranchCount.val > 0) throw new Error(`Cannot delete: This company has ${activeBranchCount.val} active branch(es).`)
 
-    const [orderCount] = await db.select({ val: count() }).from(orders).where(eq(orders.organizationId, orgId))
-    if (orderCount.val > 0) {
-      return error(`Cannot delete: Historical order records were found. Organizations with financial transaction history cannot be deleted.`, 400)
-    }
+      const [activeUserCount]: any[] = await tx.select({ val: count() }).from(users).where(and(eq(users.organizationId, orgId), eq(users.isActive, true), isNull(users.deletedAt)))
+      if (activeUserCount.val > 0) throw new Error(`Cannot delete: This company has ${activeUserCount.val} active user(s).`)
 
-    const [groupCount] = await db.select({ val: count() }).from(groups).where(and(eq(groups.organizationId, orgId), ne(groups.status, 'deleted')))
-    if (groupCount.val > 0) {
-      return error(`Cannot delete: This organization has ${groupCount.val} active group(s) defined. Please delete the organization's groups first.`, 400)
-    }
+      const [orderCount]: any[] = await tx.select({ val: count() }).from(orders).where(eq(orders.organizationId, orgId))
+      if (orderCount.val > 0) throw new Error(`Cannot delete: Historical order records were found.`)
 
-    const [hoCount] = await db.select({ val: count() }).from(headOffices).where(eq(headOffices.organizationId, orgId))
-    if (hoCount.val > 0) {
-      return error(`Cannot delete: A Head Office record exists for this organization. Please remove it first.`, 400)
-    }
+      const [groupCount]: any[] = await tx.select({ val: count() }).from(groups).where(and(eq(groups.organizationId, orgId), ne(groups.status, 'deleted')))
+      if (groupCount.val > 0) throw new Error(`Cannot delete: This organization has ${groupCount.val} active group(s).`)
 
-    // 2. Tier 2: Auto-Cleanup Non-Critical Metadata/System Data
-    // These tables contain logs, settings, and transitive associations that can be safely auto-purged.
-    await db.transaction(async (tx) => {
-      // System and Audit Logs
+      const [hoCount]: any[] = await tx.select({ val: count() }).from(headOffices).where(eq(headOffices.organizationId, orgId))
+      if (hoCount.val > 0) throw new Error(`Cannot delete: A Head Office record exists.`)
+
+      // Cleanup
       await tx.delete(auditLogs).where(eq(auditLogs.organizationId, orgId))
       await tx.delete(systemLogs).where(eq(systemLogs.organizationId, orgId))
       await tx.delete(groupAuditLogs).where(eq(groupAuditLogs.organizationId, orgId))
       await tx.delete(notifications).where(eq(notifications.organizationId, orgId))
       await tx.delete(sessions).where(eq(sessions.organizationId, orgId))
-
-      // Configuration and Metrics
       await tx.delete(organizationSettings).where(eq(organizationSettings.organizationId, orgId))
       await tx.delete(orgMetrics).where(eq(orgMetrics.organizationId, orgId))
-
-      // Catalog and Inventory Associations
       await tx.delete(inventory).where(eq(inventory.organizationId, orgId))
       await tx.delete(organizationInventory).where(eq(organizationInventory.organizationId, orgId))
       await tx.delete(organizationProducts).where(eq(organizationProducts.organizationId, orgId))
-
-      // Local Product Definitions (categories/products are often org-scoped)
       await tx.delete(skus).where(eq(skus.organizationId, orgId))
       await tx.delete(products).where(eq(products.organizationId, orgId))
       await tx.delete(categories).where(eq(categories.organizationId, orgId))
-
-      // Operational Data
       await tx.delete(suppliers).where(eq(suppliers.organizationId, orgId))
       await tx.delete(budgets).where(eq(budgets.organizationId, orgId))
       await tx.delete(employeeCredentials).where(eq(employeeCredentials.organizationId, orgId))
       await tx.delete(groups).where(eq(groups.organizationId, orgId))
-
-      // 3. Final Step: Delete the Organization
       await tx.delete(organizations).where(eq(organizations.id, orgId))
     })
 
-    // 4. Invalidate caches
     await invalidateByPrefix('organizations')
     await invalidateByPrefix('branches')
 
-    return ok({ ok: true })
+    return NextResponse.json({ ok: true })
   } catch (e: any) {
-    console.error("Delete organization failed:", e)
+    if (e.message?.startsWith('Cannot delete:') || e.message === 'Organization not found') {
+      return NextResponse.json({ error: e.message }, { status: 400 })
+    }
 
     const errorCode = String(e.code || e.originalError?.code || "")
     const errorMessage = String(e.message || "").toLowerCase()
-
-    // Catch-all for any remaining foreign key constraints
     if (errorCode === "23503" || errorMessage.includes("foreign key") || errorMessage.includes("violates")) {
-      return error("Cannot delete: A database dependency (foreign key) is still blocking deletion. Ensure all branches, users, and groups are removed.", 400)
+      return NextResponse.json({ error: "Cannot delete: A database dependency (foreign key) is still blocking deletion." }, { status: 400 })
     }
 
-    return error("Failed to delete organization", 500)
+    return NextResponse.json({ error: "Failed to delete organization" }, { status: 500 })
   }
 }
+

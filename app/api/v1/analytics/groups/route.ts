@@ -1,436 +1,122 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
-import { groups, branches, orders, organizations, budgets } from "@/db/schema"
-import { and, eq, sql, isNull, gte, lte, desc, inArray } from "drizzle-orm"
+import { withTenant, withSuperAdmin } from "@/lib/db"
+import { groups, branches, orders, organizations, budgets, globalProducts, organizationInventory, categories } from "@/db/schema"
+import { and, eq, sql, isNull, gte, lte, desc, inArray, asc } from "drizzle-orm"
 import { metricExpressions, REVENUE_ELIGIBLE_FILTER } from "@/lib/metric-utils"
+import { getRequestScope } from "@/lib/auth"
 
 export async function GET(req: NextRequest) {
-    try {
-        const session = await getServerSession(authOptions)
-        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  try {
+    const scope = await getRequestScope()
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-        const role = (session.user as any).role
-        let orgId = role === "SUPER_ADMIN" ? null : (session.user as any).organizationId
-        const { searchParams } = new URL(req.url)
-        const orgIdParam = searchParams.get("organizationId")
-        const groupIdsParam = searchParams.get("groupIds")
-        const branchIdsParam = searchParams.get("branchIds")
-        const startDate = searchParams.get("startDate")
-        const endDate = searchParams.get("endDate")
-        const compare = searchParams.get("compare") === "true"
-        const compareStartDateParam = searchParams.get("compareStartDate")
-        const compareEndDateParam = searchParams.get("compareEndDate")
+    const { searchParams } = new URL(req.url)
+    const orgIdParam = searchParams.get("organizationId")
+    const groupIdsParam = searchParams.get("groupIds")
+    const branchIdsParam = searchParams.get("branchIds")
+    const startDate = searchParams.get("startDate")
+    const endDate = searchParams.get("endDate")
+    const compare = searchParams.get("compare") === "true"
+    const compareStartDateParam = searchParams.get("compareStartDate")
+    const compareEndDateParam = searchParams.get("compareEndDate")
 
-        const monthsRaw = searchParams.get("months")
-        const yearsRaw = searchParams.get("years")
-        const compareMonthsRaw = searchParams.get("compareMonths")
-        const compareYearsRaw = searchParams.get("compareYears")
+    const monthsRaw = searchParams.get("months")
+    const yearsRaw = searchParams.get("years")
+    const compareMonthsRaw = searchParams.get("compareMonths")
+    const compareYearsRaw = searchParams.get("compareYears")
 
-        const parsedMonths = monthsRaw ? monthsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n >= 1 && n <= 12) : []
-        const parsedYears = yearsRaw ? yearsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n > 2000) : []
-        const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n >= 1 && n <= 12) : []
-        const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n > 2000) : []
+    const parsedMonths = monthsRaw ? monthsRaw.split(',').map(Number).filter((n) => !isNaN(n) && n >= 1 && n <= 12) : []
+    const parsedYears = yearsRaw ? yearsRaw.split(',').map(Number).filter((n) => !isNaN(n) && n > 2000) : []
+    const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter((n) => !isNaN(n) && n >= 1 && n <= 12) : []
+    const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter((n) => !isNaN(n) && n > 2000) : []
 
-        const summaryOnly = searchParams.get("summaryOnly") === "true"
-        const trendOnly = searchParams.get("trendOnly") === "true"
-        const allTime = searchParams.get("allTime") === "true"
+    const summaryOnly = searchParams.get("summaryOnly") === "true"
+    const trendOnly = searchParams.get("trendOnly") === "true"
+    const allTime = searchParams.get("allTime") === "true"
+    const earliestOnly = searchParams.get("earliestOnly") === "true"
 
-        if (orgIdParam && role === "SUPER_ADMIN") {
-            const parsedOrgId = parseInt(orgIdParam)
-            if (Number.isFinite(parsedOrgId)) orgId = parsedOrgId
+    return await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
+
+    async function handler(tx: any) {
+      if (earliestOnly) {
+        const firstOrder = await tx.select({ createdAt: orders.createdAt }).from(orders).orderBy(asc(orders.createdAt)).limit(1)
+        return { earliestDate: firstOrder.length > 0 ? firstOrder[0].createdAt : new Date().toISOString() }
+      }
+
+      let orgId = scope?.organizationId
+      if (orgIdParam && scope?.role === "SUPER_ADMIN") orgId = parseInt(orgIdParam)
+      const parsedGroupIds = groupIdsParam ? groupIdsParam.split(',').map(Number).filter(id => !isNaN(id)) : []
+      const parsedBranchIds = branchIdsParam ? branchIdsParam.split(',').map(Number).filter(id => !isNaN(id)) : []
+
+      if (allTime) {
+        const distinctYears = await tx.select({ year: sql<number>`EXTRACT(YEAR FROM ${orders.createdAt})::int` }).from(orders).innerJoin(branches, eq(orders.branchId, branches.id)).innerJoin(groups, eq(branches.groupId, groups.id)).where(and(REVENUE_ELIGIBLE_FILTER, orgId ? eq(groups.organizationId, orgId) : undefined)).groupBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`).orderBy(desc(sql`EXTRACT(YEAR FROM ${orders.createdAt})`))
+        return { years: distinctYears.map((y: any) => y.year) }
+      }
+
+      const orderConditions: any[] = [REVENUE_ELIGIBLE_FILTER]
+      if (parsedMonths.length > 0) orderConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
+      if (parsedYears.length > 0) orderConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
+      if (parsedMonths.length === 0 && parsedYears.length === 0) {
+        if (startDate) { const start = new Date(startDate); start.setHours(0, 0, 0, 0); orderConditions.push(gte(orders.createdAt, start)) }
+        if (endDate) { const end = new Date(endDate); end.setHours(23, 59, 59, 999); orderConditions.push(lte(orders.createdAt, end)) }
+      }
+      const orderWhere = and(...orderConditions)
+
+      const periodList: string[] = []
+      if (parsedMonths.length > 0 && parsedYears.length > 0) { parsedYears.forEach(y => parsedMonths.forEach(m => periodList.push(`${y}-${String(m).padStart(2, '0')}`))) }
+      else if (startDate && endDate) { let curr = new Date(startDate); let end = new Date(endDate); while (curr <= end) { periodList.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}`); curr.setMonth(curr.getMonth() + 1) } }
+      else { periodList.push(new Date().toISOString().slice(0, 7)) }
+
+      const groupConditions = []
+      if (orgId) groupConditions.push(eq(groups.organizationId, orgId))
+      if (parsedGroupIds.length > 0) groupConditions.push(sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})`)
+
+      if (trendOnly) {
+        const trendData = await tx.select({ date: sql<string>`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`, revenue: metricExpressions.revenue, orders: metricExpressions.totalOrderCount }).from(orders).innerJoin(branches, eq(orders.branchId, branches.id)).innerJoin(groups, eq(branches.groupId, groups.id)).where(and(orderWhere, orgId ? eq(groups.organizationId, orgId) : undefined, parsedGroupIds.length > 0 ? sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})` : undefined, parsedBranchIds.length > 0 ? sql`${branches.id} IN (${sql.join(parsedBranchIds, sql`, `)})` : undefined)).groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`).orderBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
+        let compareTrend: any[] = []
+        if (compare) {
+          let pS: Date, pE: Date; if (compareStartDateParam && compareEndDateParam) { pS = new Date(compareStartDateParam); pE = new Date(compareEndDateParam) } else if (startDate && endDate) { const start = new Date(startDate); const end = new Date(endDate); const dur = end.getTime() - start.getTime(); pS = new Date(start.getTime() - dur - 1); pE = new Date(start.getTime() - 1) } else { pS = new Date(); pE = new Date() }
+          compareTrend = await tx.select({ date: sql<string>`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`, revenue: metricExpressions.revenue }).from(orders).innerJoin(branches, eq(orders.branchId, branches.id)).innerJoin(groups, eq(branches.groupId, groups.id)).where(and(REVENUE_ELIGIBLE_FILTER, orgId ? eq(groups.organizationId, orgId) : undefined, parsedGroupIds.length > 0 ? inArray(groups.id, parsedGroupIds) : undefined, parsedBranchIds.length > 0 ? inArray(branches.id, parsedBranchIds) : undefined, (() => { const c: any[] = []; if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) { if (parsedCompMonths.length > 0) c.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`); if (parsedCompYears.length > 0) c.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`) } else { c.push(gte(orders.createdAt, pS), lte(orders.createdAt, pE)) }; return and(...c) })())).groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
         }
+        return { trend: trendData, compareTrend }
+      }
 
-        if (!orgId && role !== "SUPER_ADMIN") {
-            return NextResponse.json({ error: "Organization ID required" }, { status: 400 })
-        }
+      const rawGroupStats = await tx.select({ id: groups.id, name: groups.name, status: groups.status, organizationId: groups.organizationId, organizationName: organizations.name, totalOrders: sql<number>`count(${orders.id})::int`, totalAmountCents: metricExpressions.revenue, totalRefundCents: sql<number>`coalesce(sum(${orders.refundAmountCents}), 0)::int`, rejectedOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)::int`, branchCount: sql<number>`count(distinct ${branches.id})::int`,
+        branches: sql<any>`COALESCE(JSON_AGG(DISTINCT JSONB_BUILD_OBJECT('id', ${branches.id}, 'name', ${branches.name})) FILTER (WHERE ${branches.id} IS NOT NULL), '[]')`
+      }).from(groups).leftJoin(organizations, eq(groups.organizationId, organizations.id)).leftJoin(branches, eq(branches.groupId, groups.id)).leftJoin(orders, and(eq(orders.branchId, branches.id), orderWhere, parsedBranchIds.length > 0 ? inArray(orders.branchId, parsedBranchIds) : undefined)).where(and(...groupConditions)).groupBy(groups.id, organizations.id).orderBy(desc(metricExpressions.revenue))
 
-        const parsedGroupIds = groupIdsParam ? groupIdsParam.split(',').map(Number).filter(id => !isNaN(id)) : []
-        const parsedBranchIds = branchIdsParam ? branchIdsParam.split(',').map(Number).filter(id => !isNaN(id)) : []
+      const gIds = rawGroupStats.map((g: any) => g.id)
+      const bStatsMap: Record<number, any[]> = {}
+      const gBudMap: Record<number, number> = {}
 
-        // ━━━ Mode: All Time (Year Selection) ━━━
-        if (allTime) {
-            const distinctYears = await db
-                .select({ year: sql<number>`EXTRACT(YEAR FROM ${orders.createdAt})::int` })
-                .from(orders)
-                .innerJoin(branches, eq(orders.branchId, branches.id))
-                .innerJoin(groups, eq(branches.groupId, groups.id))
-                .where(and(
-                    REVENUE_ELIGIBLE_FILTER,
-                    orgId ? eq(groups.organizationId, orgId) : undefined
-                ))
-                .groupBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`)
-                .orderBy(desc(sql`EXTRACT(YEAR FROM ${orders.createdAt})`))
+      if (gIds.length > 0) {
+        const allBudgets = await tx.select({ branchId: branches.id, groupId: branches.groupId, baselineBudgetCents: branches.baselineBudgetCents, period: budgets.period, amountAllocatedCents: budgets.amountAllocatedCents, amountCreditedCents: budgets.amountCreditedCents }).from(branches).leftJoin(budgets, and(eq(budgets.branchId, branches.id), inArray(budgets.period, periodList))).where(inArray(branches.groupId, gIds))
+        const matrix: Record<number, Record<string, { a: number, c: number }>> = {}, baseLines: Record<number, number> = {}, bInG: Record<number, Set<number>> = {}
+        allBudgets.forEach((b: any) => { if (!b.groupId) return; if (!bInG[b.groupId]) bInG[b.groupId] = new Set(); bInG[b.groupId].add(b.branchId); baseLines[b.branchId] = b.baselineBudgetCents || 0; if (b.period) { if (!matrix[b.branchId]) matrix[b.branchId] = {}; matrix[b.branchId][b.period] = { a: b.amountAllocatedCents || 0, c: b.amountCreditedCents || 0 } } })
+        gIds.forEach((gid: any) => { let total = 0; (bInG[gid] || []).forEach((bid: any) => { periodList.forEach(p => { const r = matrix[bid]?.[p]; total += r ? (r.a + r.c) : (baseLines[bid] || 0) }) }); gBudMap[gid] = total })
 
-            return NextResponse.json({
-                years: distinctYears.map(y => y.year)
-            })
-        }
+        const allBranchStats = await tx.select({ id: branches.id, name: branches.name, status: branches.status, groupId: branches.groupId, orders: sql<number>`count(${orders.id})::int`, revenue: metricExpressions.revenue, refunds: sql<number>`coalesce(sum(${orders.refundAmountCents}), 0)::int`, rejected: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)::int` }).from(branches).leftJoin(orders, and(eq(orders.branchId, branches.id), orderWhere, parsedBranchIds.length > 0 ? inArray(orders.branchId, parsedBranchIds) : undefined)).where(inArray(branches.groupId, gIds)).groupBy(branches.id).orderBy(desc(metricExpressions.revenue))
+        allBranchStats.forEach((bs: any) => { if (bs.groupId) { if (!bStatsMap[bs.groupId]) bStatsMap[bs.groupId] = []; let bBud = 0; periodList.forEach(p => { bBud += matrix[bs.id]?.[p] ? (matrix[bs.id][p].a + matrix[bs.id][p].c) : (baseLines[bs.id] || 0) }); bStatsMap[bs.groupId].push({ ...bs, totalBudget: bBud }) } })
+      }
 
-        // Build order conditions for date filtering
-        const orderConditions: any[] = [REVENUE_ELIGIBLE_FILTER]
-        
-        if (parsedMonths.length > 0) {
-            orderConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
-        }
-        if (parsedYears.length > 0) {
-            orderConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
-        }
+      const groupsWithBranches = rawGroupStats.map((g: any) => ({ ...g, totalBudget: gBudMap[g.id] || 0, branches: bStatsMap[g.id] || [] }))
+      const outSummary = { totalGroups: groupsWithBranches.length, totalOrders: groupsWithBranches.reduce((s, g) => s + g.totalOrders, 0), totalRevenue: groupsWithBranches.reduce((s, g) => s + g.totalAmountCents, 0), totalRefunds: groupsWithBranches.reduce((s, g) => s + g.totalRefundCents, 0), avgRevenuePerGroup: groupsWithBranches.length > 0 ? Math.round(groupsWithBranches.reduce((s, g) => s + g.totalAmountCents, 0) / groupsWithBranches.length) : 0 }
 
-        if (parsedMonths.length === 0 && parsedYears.length === 0) {
-            if (startDate) {
-                const start = new Date(startDate)
-                start.setHours(0, 0, 0, 0)
-                orderConditions.push(gte(orders.createdAt, start))
-            }
-            if (endDate) {
-                const end = new Date(endDate)
-                end.setHours(23, 59, 59, 999)
-                orderConditions.push(lte(orders.createdAt, end))
-            }
-        }
+      const ungrouped = await tx.select({ id: branches.id, name: branches.name, organizationId: branches.organizationId, organizationName: organizations.name, totalOrders: sql<number>`count(${orders.id})::int`, totalAmountCents: metricExpressions.revenue }).from(branches).leftJoin(organizations, eq(branches.organizationId, organizations.id)).leftJoin(orders, and(eq(orders.branchId, branches.id), orderWhere)).where(and(orgId ? eq(branches.organizationId, orgId) : undefined, isNull(branches.groupId), eq(branches.status, 'active'))).groupBy(branches.id, organizations.id).orderBy(desc(metricExpressions.revenue))
+      outSummary.totalOrders += ungrouped.reduce((s: number, b: any) => s + b.totalOrders, 0); outSummary.totalRevenue += ungrouped.reduce((s: number, b: any) => s + b.totalAmountCents, 0)
 
-        const orderWhere = and(...orderConditions)
+      let compareSummary = null
+      if (compare && (startDate || parsedCompMonths.length > 0)) {
+        let pS: Date, pE: Date; if (compareStartDateParam && compareEndDateParam) { pS = new Date(compareStartDateParam); pE = new Date(compareEndDateParam) } else if (startDate && endDate) { const dur = new Date(endDate).getTime() - new Date(startDate).getTime(); pS = new Date(new Date(startDate).getTime() - dur - 1); pE = new Date(new Date(startDate).getTime() - 1) } else { pS = new Date(); pE = new Date() }
+        const compStats = await tx.select({ totalOrders: metricExpressions.totalOrderCount, totalAmountCents: metricExpressions.revenue, totalRefunds: metricExpressions.totalRefundAmount }).from(orders).innerJoin(branches, eq(orders.branchId, branches.id)).leftJoin(groups, eq(branches.groupId, groups.id)).where(and(REVENUE_ELIGIBLE_FILTER, orgId ? eq(branches.organizationId, orgId) : undefined, parsedGroupIds.length > 0 ? inArray(groups.id, parsedGroupIds) : undefined, parsedBranchIds.length > 0 ? inArray(branches.id, parsedBranchIds) : undefined, (() => { const c: any[] = []; if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) { if (parsedCompMonths.length > 0) c.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`); if (parsedCompYears.length > 0) c.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`) } else { c.push(gte(orders.createdAt, pS), lte(orders.createdAt, pE)) }; return and(...c) })()))
+        compareSummary = { totalOrders: compStats[0]?.totalOrders || 0, totalRevenue: compStats[0]?.totalAmountCents || 0, totalRefunds: compStats[0]?.totalRefunds || 0 }
+      }
 
-        // Calculate periods for budget summing
-        const periodList: string[] = []
-        if (parsedMonths.length > 0 && parsedYears.length > 0) {
-            parsedYears.forEach(y => {
-                parsedMonths.forEach(m => {
-                    periodList.push(`${y}-${String(m).padStart(2, '0')}`)
-                })
-            })
-        } else if (startDate && endDate) {
-            let curr = new Date(startDate)
-            const end = new Date(endDate)
-            while (curr <= end) {
-                periodList.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}`)
-                curr.setMonth(curr.getMonth() + 1)
-            }
-        } else {
-            // Default to current month if no filters
-            periodList.push(new Date().toISOString().slice(0, 7))
-        }
-
-        // Build group conditions
-        const groupConditions = []
-        if (orgId) {
-            groupConditions.push(eq(groups.organizationId, orgId))
-        }
-        if (parsedGroupIds.length > 0) {
-            groupConditions.push(sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})`)
-        }
-
-        // ━━━ Mode: Trend Only (Bar Chart) ━━━
-        if (trendOnly) {
-            const trendData = await db
-                .select({
-                    date: sql<string>`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`,
-                    revenue: metricExpressions.revenue,
-                    orders: metricExpressions.totalOrderCount,
-                })
-                .from(orders)
-                .innerJoin(branches, eq(orders.branchId, branches.id))
-                .innerJoin(groups, eq(branches.groupId, groups.id))
-                .where(and(
-                    orderWhere,
-                    orgId ? eq(groups.organizationId, orgId) : undefined,
-                    parsedGroupIds.length > 0 ? sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})` : undefined,
-                    parsedBranchIds.length > 0 ? sql`${branches.id} IN (${sql.join(parsedBranchIds, sql`, `)})` : undefined
-                ))
-                .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
-                .orderBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
-
-            let compareTrend: any[] = []
-            if (compare) {
-                let prevStart: Date, prevEnd: Date
-                if (compareStartDateParam && compareEndDateParam) {
-                    prevStart = new Date(compareStartDateParam); prevEnd = new Date(compareEndDateParam)
-                } else if (startDate && endDate) {
-                    const start = new Date(startDate); const end = new Date(endDate)
-                    const duration = end.getTime() - start.getTime()
-                    prevStart = new Date(start.getTime() - duration - 1); prevEnd = new Date(start.getTime() - 1)
-                } else {
-                    prevStart = new Date(); prevEnd = new Date()
-                }
-
-                compareTrend = await db
-                    .select({
-                        date: sql<string>`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`,
-                        revenue: metricExpressions.revenue,
-                    })
-                    .from(orders)
-                    .innerJoin(branches, eq(orders.branchId, branches.id))
-                    .innerJoin(groups, eq(branches.groupId, groups.id))
-                    .where(and(
-                        REVENUE_ELIGIBLE_FILTER,
-                        orgId ? eq(groups.organizationId, orgId) : undefined,
-                        parsedGroupIds.length > 0 ? sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})` : undefined,
-                        parsedBranchIds.length > 0 ? sql`${branches.id} IN (${sql.join(parsedBranchIds, sql`, `)})` : undefined,
-                        (() => {
-                            const compCond: any[] = []
-                            if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {
-                                if (parsedCompMonths.length > 0) compCond.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
-                                if (parsedCompYears.length > 0) compCond.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
-                            } else {
-                                compCond.push(gte(orders.createdAt, prevStart), lte(orders.createdAt, prevEnd))
-                            }
-                            return and(...compCond)
-                        })()
-                    ))
-                    .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
-            }
-
-            return NextResponse.json({ trend: trendData, compareTrend })
-        }
-
-        // 1. Fetch Group stats with branch-level breakdown
-        const groupStats = await db
-            .select({
-                id: groups.id,
-                name: groups.name,
-                status: groups.status,
-                organizationId: groups.organizationId,
-                organizationName: organizations.name,
-                totalOrders: sql<number>`count(${orders.id})::int`,
-                totalAmountCents: metricExpressions.revenue,
-                totalRefundCents: sql<number>`coalesce(sum(${orders.refundAmountCents}), 0)::int`,
-                rejectedOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)::int`,
-                branchCount: sql<number>`count(distinct ${branches.id})::int`,
-                branches: sql<any>`
-                    COALESCE(
-                        JSON_AGG(
-                            DISTINCT JSONB_BUILD_OBJECT(
-                                'id', ${branches.id},
-                                'name', ${branches.name}
-                            )
-                        ) FILTER (WHERE ${branches.id} IS NOT NULL),
-                        '[]'
-                    )
-                `
-            })
-            .from(groups)
-            .leftJoin(organizations, eq(groups.organizationId, organizations.id))
-            .leftJoin(branches, eq(branches.groupId, groups.id))
-            .leftJoin(orders, and(
-                eq(orders.branchId, branches.id),
-                orderWhere,
-                parsedBranchIds.length > 0 ? inArray(orders.branchId, parsedBranchIds) : undefined
-            ))
-            .where(and(...groupConditions))
-            .groupBy(groups.id, organizations.id)
-            .orderBy(desc(metricExpressions.revenue))
-
-        const groupIdsList = groupStats.map(g => g.id)
-        const branchStatsMap: Record<number, any[]> = {}
-        const groupBudgetMap: Record<number, number> = {}
-
-        if (groupIdsList.length > 0) {
-            // Calculate group budgets separately to ensure we sum baseline for missing periods correctly
-            // For each branch in each group, we want:
-            // SUM(budget record for period OR baseline)
-            const allBudgets = await db
-                .select({
-                    branchId: branches.id,
-                    groupId: branches.groupId,
-                    baselineBudgetCents: branches.baselineBudgetCents,
-                    period: budgets.period,
-                    amountAllocatedCents: budgets.amountAllocatedCents,
-                    amountCreditedCents: budgets.amountCreditedCents,
-                })
-                .from(branches)
-                .leftJoin(budgets, and(
-                    eq(budgets.branchId, branches.id),
-                    inArray(budgets.period, periodList)
-                ))
-                .where(inArray(branches.groupId, groupIdsList))
-
-            // Map branch -> period -> budget
-            const branchBudgetMatrix: Record<number, Record<string, { allocated: number, credited: number }>> = {}
-            const branchBaselines: Record<number, number> = {}
-            const branchesInGroups: Record<number, Set<number>> = {}
-
-            allBudgets.forEach(b => {
-                if (!b.groupId) return
-                if (!branchesInGroups[b.groupId]) branchesInGroups[b.groupId] = new Set()
-                branchesInGroups[b.groupId].add(b.branchId)
-                branchBaselines[b.branchId] = b.baselineBudgetCents || 0
-                
-                if (b.period) {
-                    if (!branchBudgetMatrix[b.branchId]) branchBudgetMatrix[b.branchId] = {}
-                    branchBudgetMatrix[b.branchId][b.period] = {
-                        allocated: b.amountAllocatedCents || 0,
-                        credited: b.amountCreditedCents || 0
-                    }
-                }
-            })
-
-            // Sum up for each group
-            groupIdsList.forEach(gid => {
-                let totalGroupBudget = 0
-                const branchIds = branchesInGroups[gid] || new Set<number>()
-                
-                branchIds.forEach(bid => {
-                    periodList.forEach(period => {
-                        const record = branchBudgetMatrix[bid]?.[period]
-                        if (record) {
-                            totalGroupBudget += record.allocated + record.credited
-                        } else {
-                            // Fallback to baseline if no record for this period
-                            totalGroupBudget += branchBaselines[bid] || 0
-                        }
-                    })
-                })
-                groupBudgetMap[gid] = totalGroupBudget
-            })
-
-            // Now fetch the branch stats for expansion view
-            const allBranchStats = await db
-                .select({
-                    id: branches.id,
-                    name: branches.name,
-                    status: branches.status,
-                    groupId: branches.groupId,
-                    orders: sql<number>`count(${orders.id})::int`,
-                    revenue: metricExpressions.revenue,
-                    refunds: sql<number>`coalesce(sum(${orders.refundAmountCents}), 0)::int`,
-                    rejected: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)::int`,
-                })
-                .from(branches)
-                .leftJoin(orders, and(
-                    eq(orders.branchId, branches.id),
-                    orderWhere,
-                    parsedBranchIds.length > 0 ? inArray(orders.branchId, parsedBranchIds) : undefined
-                ))
-                .where(inArray(branches.groupId, groupIdsList))
-                .groupBy(branches.id)
-                .orderBy(desc(metricExpressions.revenue))
-
-            allBranchStats.forEach(bs => {
-                if (bs.groupId) {
-                    if (!branchStatsMap[bs.groupId]) branchStatsMap[bs.groupId] = []
-                    
-                    // Calculate individual branch budget for expansion view
-                    let totalBranchBudget = 0
-                    periodList.forEach(period => {
-                        const record = branchBudgetMatrix[bs.id]?.[period]
-                        totalBranchBudget += record ? (record.allocated + record.credited) : (branchBaselines[bs.id] || 0)
-                    })
-
-                    branchStatsMap[bs.groupId].push({
-                        ...bs,
-                        totalBudget: totalBranchBudget
-                    })
-                }
-            })
-        }
-
-        const groupsWithBranches = groupStats.map(group => ({
-            ...group,
-            totalBudget: groupBudgetMap[group.id] || 0,
-            branches: branchStatsMap[group.id] || []
-        }))
-
-        // 3. Calculate summary statistics
-        const totalGroups = groupsWithBranches.length
-        const totalOrders = groupsWithBranches.reduce((sum, g) => sum + g.totalOrders, 0)
-        const totalRevenue = groupsWithBranches.reduce((sum, g) => sum + g.totalAmountCents, 0)
-        const totalRefunds = groupsWithBranches.reduce((sum, g) => sum + g.totalRefundCents, 0)
-        const avgRevenuePerGroup = totalGroups > 0 ? Math.round(totalRevenue / totalGroups) : 0
-
-        // 4. Ungrouped Branches (For summary too)
-        const ungroupedConditions = []
-        if (orgId) ungroupedConditions.push(eq(branches.organizationId, orgId))
-        ungroupedConditions.push(isNull(branches.groupId), eq(branches.status, 'active'))
-
-        const ungroupedStats = await db
-            .select({
-                id: branches.id,
-                name: branches.name,
-                organizationId: branches.organizationId,
-                organizationName: organizations.name,
-                totalOrders: sql<number>`count(${orders.id})::int`,
-                totalAmountCents: metricExpressions.revenue,
-            })
-            .from(branches)
-            .leftJoin(organizations, eq(branches.organizationId, organizations.id))
-            .leftJoin(orders, and(eq(orders.branchId, branches.id), orderWhere))
-            .where(and(...ungroupedConditions))
-            .groupBy(branches.id, organizations.id)
-            .orderBy(desc(metricExpressions.revenue))
-
-        const totalUngroupedRevenue = ungroupedStats.reduce((sum, b) => sum + b.totalAmountCents, 0)
-        const totalUngroupedOrders = ungroupedStats.reduce((sum, b) => sum + b.totalOrders, 0)
-
-        // Comparison logic
-        let comparisonSummary = null
-        if (compare && (startDate || parsedCompMonths.length > 0)) {
-            let prevStart: Date, prevEnd: Date
-            if (compareStartDateParam && compareEndDateParam) {
-                prevStart = new Date(compareStartDateParam); prevEnd = new Date(compareEndDateParam)
-            } else if (startDate && endDate) {
-                const duration = new Date(endDate).getTime() - new Date(startDate).getTime()
-                prevStart = new Date(new Date(startDate).getTime() - duration - 1); prevEnd = new Date(new Date(startDate).getTime() - 1)
-            } else {
-                prevStart = new Date(); prevEnd = new Date()
-            }
-
-            const compStats = await db
-                .select({
-                    totalOrders: metricExpressions.totalOrderCount,
-                    totalAmountCents: metricExpressions.revenue,
-                    totalRefunds: metricExpressions.totalRefundAmount,
-                })
-                .from(orders)
-                .innerJoin(branches, eq(orders.branchId, branches.id))
-                .leftJoin(groups, eq(branches.groupId, groups.id))
-                .where(and(
-                    REVENUE_ELIGIBLE_FILTER,
-                    orgId ? eq(branches.organizationId, orgId) : undefined,
-                    parsedGroupIds.length > 0 ? sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})` : undefined,
-                    parsedBranchIds.length > 0 ? sql`${branches.id} IN (${sql.join(parsedBranchIds, sql`, `)})` : undefined,
-                    (() => {
-                        const compCond: any[] = []
-                        if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {
-                            if (parsedCompMonths.length > 0) compCond.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
-                            if (parsedCompYears.length > 0) compCond.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
-                        } else {
-                            compCond.push(gte(orders.createdAt, prevStart), lte(orders.createdAt, prevEnd))
-                        }
-                        return and(...compCond)
-                    })()
-                ))
-
-            const compSummary = compStats[0]
-            comparisonSummary = {
-                totalOrders: compSummary?.totalOrders || 0,
-                totalRevenue: compSummary?.totalAmountCents || 0,
-                totalRefunds: compSummary?.totalRefunds || 0
-            }
-        }
-
-        const outSummary = {
-            totalGroups,
-            totalOrders: totalOrders + totalUngroupedOrders,
-            totalRevenue: totalRevenue + totalUngroupedRevenue,
-            totalRefunds: totalRefunds,
-            avgRevenuePerGroup
-        }
-
-        if (summaryOnly) {
-            return NextResponse.json({ summary: outSummary, comparison: comparisonSummary })
-        }
-
-        return NextResponse.json({
-            summary: outSummary,
-            comparison: comparisonSummary,
-            groups: groupsWithBranches,
-            ungroupedBranches: ungroupedStats
-        })
-
-    } catch (e: any) {
-        console.error("Error in group analytics API:", e)
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+      if (summaryOnly) return { summary: outSummary, comparison: compareSummary }
+      return { summary: outSummary, comparison: compareSummary, groups: groupsWithBranches, ungroupedBranches: ungrouped }
     }
+  } catch (e: any) {
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+  }
 }
+

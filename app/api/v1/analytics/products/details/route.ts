@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db } from "@/lib/db"
+import { db, withTenant } from "@/lib/db"
 import { orders, orderItems, branches, users, organizations, groups } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm"
 
@@ -21,12 +21,14 @@ export async function GET(req: NextRequest) {
         const organizationIdParam = url.searchParams.get("organizationId")
 
         // Get user context for strict RBAC
-        const [currentUser] = await db.select({
-            organizationId: users.organizationId,
-            branchId: users.branchId
-        }).from(users).where(eq(users.id, userId)).limit(1)
+        const [currentUser] = await withTenant(session.user as any, async (tx) => 
+            tx.select({
+                organizationId: users.organizationId,
+                branchId: users.branchId
+            }).from(users).where(eq(users.id, userId)).limit(1)
+        ) as any[]
 
-        const conditions = []
+        const conditions: any[] = []
 
         // 1. Role-Based Access Control
         if (role === "SUPER_ADMIN") {
@@ -64,30 +66,32 @@ export async function GET(req: NextRequest) {
         }
 
         // 3. Execution - Granular Details (Not Aggregated)
-        const data = await db
-            .select({
-                id: orderItems.id,
-                productName: orderItems.productName,
-                productCode: orderItems.productCode,
-                unit: orderItems.unit,
-                quantity: orderItems.quantity,
-                priceCents: orderItems.priceCents,
-                tid: orders.tid,
-                orderDate: orders.createdAt,
-                organizationName: organizations.name,
-                groupName: groups.name,
-                branchName: branches.name,
-                createdByName: users.fullName,
-                createdByEmail: users.email
-            })
-            .from(orderItems)
-            .innerJoin(orders, eq(orderItems.orderId, orders.id))
-            .innerJoin(branches, eq(orders.branchId, branches.id))
-            .innerJoin(users, eq(orders.createdByUserId, users.id))
-            .leftJoin(organizations, eq(orders.organizationId, organizations.id))
-            .leftJoin(groups, eq(branches.groupId, groups.id))
-            .where(and(...conditions))
-            .orderBy(desc(orders.createdAt), desc(orderItems.id))
+        const data = await withTenant(session.user as any, async (tx) => 
+            tx
+                .select({
+                    id: orderItems.id,
+                    productName: orderItems.productName,
+                    productCode: orderItems.productCode,
+                    unit: orderItems.unit,
+                    quantity: orderItems.quantity,
+                    priceCents: orderItems.priceCents,
+                    tid: orders.tid,
+                    orderDate: orders.createdAt,
+                    organizationName: organizations.name,
+                    groupName: groups.name,
+                    branchName: branches.name,
+                    createdByName: users.fullName,
+                    createdByEmail: users.email
+                })
+                .from(orderItems)
+                .innerJoin(orders, eq(orderItems.orderId, orders.id))
+                .innerJoin(branches, eq(orders.branchId, branches.id))
+                .innerJoin(users, eq(orders.createdByUserId, users.id))
+                .leftJoin(organizations, eq(orders.organizationId, organizations.id))
+                .leftJoin(groups, eq(branches.groupId, groups.id))
+                .where(and(...conditions))
+                .orderBy(desc(orders.createdAt), desc(orderItems.id))
+        ) as any[]
 
         return NextResponse.json({ items: data })
     } catch (error: any) {

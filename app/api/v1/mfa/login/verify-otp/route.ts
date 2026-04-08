@@ -1,75 +1,45 @@
-import { NextRequest } from "next/server"
-import { ok, error, readJson } from "@/lib/api"
+import { NextRequest, NextResponse } from "next/server"
+import { withSuperAdmin } from "@/lib/db"
+import { users, employeeCredentials } from "@/db/schema"
+import { eq, and, isNull } from "drizzle-orm"
 import { verifyOTP } from "@/lib/mfa"
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await readJson<any>(req)
-    if (!body) return error("Invalid request body", 400)
-
+    const body = await req.json().catch(() => ({}))
     const { username, code, type = 'LOGIN' } = body
-    if (!username || !code) {
-      return error("Username and code are required", 400)
-    }
 
-    if (code.length !== 6) {
-      return error("Please enter a valid 6-digit OTP code", 400)
-    }
+    if (!username || !code) return NextResponse.json({ error: "Username and code are required" }, { status: 400 })
+    if (code.length !== 6) return NextResponse.json({ error: "Please enter a valid 6-digit OTP code" }, { status: 400 })
 
-    const { db } = await import("@/lib/db")
-    const { users, employeeCredentials } = await import("@/db/schema")
-    const { eq, and, isNull } = await import("drizzle-orm")
+    const result = await withSuperAdmin(async (tx) => {
+      let [user]: any[] = await tx.select({ id: users.id, email: users.email, mfaEnabled: users.mfaEnabled })
+        .from(users).where(and(eq(users.username, username.toLowerCase()), isNull(users.deletedAt))).limit(1)
 
-    // 1. Try Users table
-    let [user] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        mfaEnabled: users.mfaEnabled
-      })
-      .from(users)
-      .where(and(eq(users.username, username.toLowerCase()), isNull(users.deletedAt)))
-      .limit(1)
-
-    // 2. Try Employee Credentials table
-    if (!user) {
-      const [emp] = await db
-        .select({
-          id: employeeCredentials.id,
-          email: employeeCredentials.email,
-          mfaEnabled: employeeCredentials.mfaEnabled
-        })
-        .from(employeeCredentials)
-        .where(eq(employeeCredentials.username, username.toLowerCase()))
-        .limit(1)
-      
-      if (emp) {
-        user = emp as any
+      if (!user) {
+        const [emp] = await tx.select({ id: employeeCredentials.id, email: employeeCredentials.email, mfaEnabled: employeeCredentials.mfaEnabled })
+          .from(employeeCredentials).where(eq(employeeCredentials.username, username.toLowerCase())).limit(1)
+        if (emp) user = emp
       }
-    }
 
-    if (!user) {
-      return error("User not found", 404)
-    }
+      if (!user) return { error: "User not found", status: 404 }
+      if (!user.mfaEnabled) return { error: "MFA is not enabled for this user", status: 400 }
 
-    if (!user.mfaEnabled) {
-      return error("MFA is not enabled for this user", 400)
-    }
+      const verifyResult = await verifyOTP(user.id, code, type)
+      return { ...verifyResult, userId: user.id }
+    })
 
-    const result = await verifyOTP(user.id, code, type)
+    if ("error" in result) return NextResponse.json({ error: result.error }, { status: result.status })
 
     if (result.success) {
-      return ok({
-        message: result.message,
-        verified: true,
-        userId: user.id
-      })
+      return NextResponse.json({ message: result.message, verified: true, userId: result.userId })
     } else {
-      return error(result.message + (result.remainingAttempts !== undefined ? ` (${result.remainingAttempts} attempts remaining)` : ''), 400)
+      const remainingMsg = result.remainingAttempts !== undefined ? ` (${result.remainingAttempts} attempts remaining)` : ''
+      return NextResponse.json({ error: result.message + remainingMsg }, { status: 400 })
     }
-
   } catch (err) {
-    console.error("Error verifying OTP:", err)
-    return error("Failed to verify OTP", 500)
+    return NextResponse.json({ error: "Failed to verify OTP" }, { status: 500 })
   }
 }
+
+

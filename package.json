@@ -5,6 +5,7 @@
   "scripts": {
     "build": "next build",
     "db:check": "tsx lib/check-users.ts",
+    "db:dbml": "tsx scripts/generate-dbml.ts",
     "db:export": "tsx scripts/export-db.ts",
     "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config=drizzle.config.ts",
@@ -91,6 +92,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.4",
     "dotenv": "^17.2.3",
+    "drizzle-dbml-generator": "^0.10.0",
     "drizzle-kit": "^0.31.5",
     "jsdom": "^28.1.0",
     "postcss": "^8.5",

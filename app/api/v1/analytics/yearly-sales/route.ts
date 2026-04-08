@@ -1,145 +1,84 @@
-import { NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { and, eq, gte, sql, or, lt } from "drizzle-orm"
-import { requireApiRole, ok } from "@/lib/api"
-import { db } from "@/lib/db"
+import { withTenant, withSuperAdmin } from "@/lib/db"
 import { orders, branches } from "@/db/schema"
-import { getRequestScope } from "@/lib/auth"
 import { metricExpressions } from "@/lib/metric-utils"
-
-const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
-
-type Role = typeof allowedRoles[number]
+import { getRequestScope } from "@/lib/auth"
+import { error, ok } from "@/lib/api"
 
 export async function GET(req: NextRequest) {
-  const err = await requireApiRole(allowedRoles as any)
-  if (err) return err
+  try {
+    const scope = await getRequestScope()
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const scope = await getRequestScope()
-  const role = scope?.role
+    const { searchParams } = new URL(req.url)
+    const orgIdParam = searchParams.get("organizationId")
+    const branchIdParam = searchParams.get("branchId")
+    const yearParam = searchParams.get("year")
+    const groupIdParam = searchParams.get("groupId")
 
-  // Get filter parameters from query string (for UI context selection)
-  const { searchParams } = new URL(req.url)
-  const orgIdParam = searchParams.get("organizationId")
-  const branchIdParam = searchParams.get("branchId")
-  const yearParam = searchParams.get("year")
-  const groupIdParam = searchParams.get("groupId")
+    const result = await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
 
-  // Use query params if provided, otherwise fall back to auth scope
-  let organizationId: number | null = null
-  let branchId: number | null = null
-  let groupId: number | null = null
+    async function handler(tx: any) {
+      let organizationId = scope?.organizationId
+      if (orgIdParam && scope?.role === "SUPER_ADMIN") organizationId = parseInt(orgIdParam)
+      let branchId = (scope?.role === "BRANCH_ADMIN") ? scope.branchId : (branchIdParam ? parseInt(branchIdParam) : null)
+      const groupId = groupIdParam ? parseInt(groupIdParam) : null
 
-  if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") {
-    organizationId = Number(orgIdParam)
-  } else if (role !== "SUPER_ADMIN" && scope?.organizationId) {
-    organizationId = scope.organizationId
-  }
+      const currentYear = new Date().getFullYear()
+      const year = yearParam ? Number(yearParam) : currentYear
 
-  if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
-    branchId = Number(branchIdParam)
-  } else if (role === "BRANCH_ADMIN" && scope?.branchId) {
-    branchId = scope.branchId
-  }
+      const pakistanOffset = 5 * 60 * 60 * 1000 
+      const yearStartPK = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0))
+      const yearStart = new Date(yearStartPK.getTime() - pakistanOffset)
+      const nextYearStartPK = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0, 0))
+      const nextYearStart = new Date(nextYearStartPK.getTime() - pakistanOffset)
 
-  if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") {
-    groupId = Number(groupIdParam)
-  }
+      const dateField = sql`COALESCE(${orders.approvedAt}, ${orders.fulfilledAt}, ${orders.createdAt})`
 
-  // Get year from query param or use current year
-  const currentYear = new Date().getFullYear()
-  const year = yearParam ? Number(yearParam) : currentYear
+      const yearConditions: any[] = [
+        sql`${dateField} IS NOT NULL`,
+        gte(dateField, yearStart),
+        lt(dateField, nextYearStart),
+        or(
+          eq(sql`UPPER(${orders.status})`, "APPROVED"),
+          eq(sql`UPPER(${orders.status})`, "FULFILLED"),
+          eq(sql`UPPER(${orders.status})`, "REFUNDED")
+        ),
+      ]
 
-  // Calculate start and end of the year in Pakistan timezone (UTC+5)
-  // Then convert to UTC for database comparison
-  const pakistanOffset = 5 * 60 * 60 * 1000 // UTC+5 in milliseconds
+      if (organizationId) yearConditions.push(eq(orders.organizationId, organizationId))
+      if (branchId) yearConditions.push(eq(orders.branchId, branchId))
+      if (groupId) yearConditions.push(eq(branches.groupId, groupId))
 
-  // Year start in Pakistan timezone (January 1st, 00:00:00 PK time)
-  const yearStartPK = new Date(Date.UTC(year, 0, 1, 0, 0, 0, 0))
-  // Convert to UTC for database (subtract 5 hours)
-  const yearStart = new Date(yearStartPK.getTime() - pakistanOffset)
+      const monthlySalesRows = await tx
+        .select({
+          monthNum: sql<number>`EXTRACT(MONTH FROM (${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')::int`,
+          month: sql<string>`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'Mon')`,
+          totalCents: metricExpressions.revenue,
+          orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
+        })
+        .from(orders)
+        .leftJoin(branches, eq(orders.branchId, branches.id))
+        .where(and(...yearConditions))
+        .groupBy(sql`1,2`)
+        .orderBy(sql`1`)
 
-  // Year end in Pakistan timezone (December 31st, 23:59:59 PK time)
-  const yearEndPK = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999))
-  // Convert to UTC for database
-  const yearEnd = new Date(yearEndPK.getTime() - pakistanOffset)
+      const salesMap: Record<string, { sales: number; orderCount: number }> = {}
+      monthlySalesRows.forEach((row: any) => {
+        salesMap[row.month] = { sales: (row.totalCents || 0) / 100, orderCount: Number(row.orderCount || 0) }
+      })
 
-  // Next year start in Pakistan timezone
-  const nextYearStartPK = new Date(Date.UTC(year + 1, 0, 1, 0, 0, 0, 0))
-  const nextYearStart = new Date(nextYearStartPK.getTime() - pakistanOffset)
+      const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+      const monthlyData = monthsOrder.map(month => ({
+        month, sales: salesMap[month]?.sales || 0, orderCount: salesMap[month]?.orderCount || 0,
+      }))
 
-  // Build conditions for yearly sales
-  // Count orders when APPROVED (GMV style), not when fulfilled
-  // Include APPROVED, FULFILLED, and REFUNDED orders for the selected year
-  // Use COALESCE to handle history where approvedAt is null
-  const dateField = sql`COALESCE(${orders.approvedAt}, ${orders.fulfilledAt}, ${orders.createdAt})`
-
-  const yearConditions: any[] = [
-    sql`${dateField} IS NOT NULL`,
-    gte(dateField, yearStart),
-    lt(dateField, nextYearStart),
-    or(
-      eq(orders.status, "APPROVED"),
-      eq(orders.status, "approved"),
-      eq(orders.status, "FULFILLED"),
-      eq(orders.status, "fulfilled"),
-      eq(orders.status, "REFUNDED"),
-      eq(orders.status, "refunded")
-    ),
-  ]
-
-  // Apply organization filter
-  if (organizationId) {
-    yearConditions.push(eq(orders.organizationId, organizationId))
-  }
-
-  // Apply branch filter
-  if (branchId) {
-    yearConditions.push(eq(orders.branchId, branchId))
-  }
-
-  // Apply group filter
-  if (groupId) {
-    yearConditions.push(eq(branches.groupId, groupId))
-  }
-
-  // Query yearly sales broken down by month
-  // Convert dateField to Pakistan timezone (Asia/Karachi, UTC+5)
-  const monthlySalesRows = await db
-    .select({
-      monthNum: sql<number>`EXTRACT(MONTH FROM (${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi')::int`,
-      month: sql<string>`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'Mon')`,
-      totalCents: metricExpressions.revenue,
-      orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
-    })
-    .from(orders)
-    .leftJoin(branches, eq(orders.branchId, branches.id))
-    .where(and(...(yearConditions as any)))
-    .groupBy(sql`1,2`)
-    .orderBy(sql`1`)
-
-  // Create a map of month -> sales
-  const salesMap: Record<string, { sales: number; orderCount: number }> = {}
-  for (const row of monthlySalesRows) {
-    const monthKey = row.month
-    salesMap[monthKey] = {
-      sales: (row.totalCents || 0) / 100, // Convert cents to PKR
-      orderCount: Number(row.orderCount || 0),
+      return { year, monthlySales: monthlyData, totalSales: monthlyData.reduce((sum, month) => sum + month.sales, 0), totalOrders: monthlyData.reduce((sum, month) => sum + month.orderCount, 0) }
     }
+
+    return ok(result)
+  } catch (e: any) {
+    return error(e.message || "Internal error")
   }
-
-  // Generate all months of the year (Jan to Dec)
-  const monthsOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  const monthlyData = monthsOrder.map(month => ({
-    month,
-    sales: salesMap[month]?.sales || 0,
-    orderCount: salesMap[month]?.orderCount || 0,
-  }))
-
-  return ok({
-    year,
-    monthlySales: monthlyData,
-    totalSales: monthlyData.reduce((sum, month) => sum + month.sales, 0),
-    totalOrders: monthlyData.reduce((sum, month) => sum + month.orderCount, 0),
-  })
 }
-

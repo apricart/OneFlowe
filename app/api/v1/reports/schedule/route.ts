@@ -1,104 +1,84 @@
-import { NextRequest } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { eq, and } from "drizzle-orm"
-import { requireApiRole, ok, error } from "@/lib/api"
-import { db } from "@/lib/db"
+import { withTenant, withSuperAdmin } from "@/lib/db"
 import { scheduledReports } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
+import { ok, error, forbidden, unauthorized } from "@/lib/api"
 
-const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
+const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"]
 
-export async function GET(req: NextRequest) {
-    try {
-        const err = await requireApiRole(allowedRoles as any)
-        if (err) return err
+export async function GET() {
+  try {
+    const scope = await getRequestScope()
+    if (!scope) return unauthorized()
+    if (!allowedRoles.includes(scope.role)) return forbidden()
 
-        const scope = await getRequestScope()
-        if (!scope?.userId) return error("Unauthorized", 401)
+    const result = await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
 
-        const userSchedules = await db
-            .select()
-            .from(scheduledReports)
-            .where(eq(scheduledReports.userId, scope.userId))
-
-        return ok(userSchedules)
-    } catch (e: any) {
-        console.error("Schedule Fetch Error:", e)
-        // If table doesn't exist, return empty array instead of 500ing
-        if (e.message?.includes('relation "scheduled_reports" does not exist')) {
-            return ok([])
-        }
-        return error(e.message || "Failed to fetch schedules", 500)
+    async function handler(tx: any) {
+      return await tx.select().from(scheduledReports).where(eq(scheduledReports.userId, scope!.userId))
     }
+    return ok(result)
+  } catch (e: any) {
+    return error(e.message || "Failed to fetch schedules")
+  }
 }
 
 export async function POST(req: NextRequest) {
-    const err = await requireApiRole(allowedRoles as any)
-    if (err) return err
-
+  try {
     const scope = await getRequestScope()
-    if (!scope?.userId) return error("Unauthorized", 401)
+    if (!scope) return unauthorized()
+    if (!allowedRoles.includes(scope.role)) return forbidden()
 
     const body = await req.json()
     const { reportName, frequency, format, emails, enabled, id } = body
+    if (!reportName || !frequency || !format || !emails) return error("Missing required fields", 400)
 
-    if (!reportName || !frequency || !format || !emails) {
-        return error("Missing required fields")
+    const result = await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
+
+    async function handler(tx: any) {
+      if (id) {
+        const [updated] = await tx
+          .update(scheduledReports)
+          .set({ frequency, format, emails, enabled, updatedAt: new Date() })
+          .where(and(eq(scheduledReports.id, Number(id)), eq(scheduledReports.userId, scope!.userId)))
+          .returning()
+        if (!updated) throw new Error("Schedule not found or not owned by user")
+        return updated
+      } else {
+        const [created] = await tx
+          .insert(scheduledReports)
+          .values({ organizationId: scope!.organizationId, userId: scope!.userId, reportName, frequency, format, emails, enabled: true })
+          .returning()
+        return created
+      }
     }
-
-    try {
-        if (id) {
-            // Update
-            const [updated] = await db
-                .update(scheduledReports)
-                .set({
-                    frequency,
-                    format,
-                    emails,
-                    enabled,
-                    updatedAt: new Date(),
-                })
-                .where(and(eq(scheduledReports.id, Number(id)), eq(scheduledReports.userId, scope.userId)))
-                .returning()
-
-            return ok(updated)
-        } else {
-            // Create
-            const [created] = await db
-                .insert(scheduledReports)
-                .values({
-                    organizationId: scope.organizationId,
-                    userId: scope.userId,
-                    reportName,
-                    frequency,
-                    format,
-                    emails,
-                    enabled: true,
-                })
-                .returning()
-
-            return ok(created)
-        }
-    } catch (e: any) {
-        console.error("Schedule Save Error:", e)
-        return error(e.message || "Failed to save schedule")
-    }
+    return ok(result)
+  } catch (e: any) {
+    return error(e.message || "Failed to save schedule", e.message.includes("not found") ? 404 : 400)
+  }
 }
 
 export async function DELETE(req: NextRequest) {
-    const err = await requireApiRole(allowedRoles as any)
-    if (err) return err
-
+  try {
     const scope = await getRequestScope()
-    if (!scope?.userId) return error("Unauthorized", 401)
+    if (!scope) return unauthorized()
+    if (!allowedRoles.includes(scope.role)) return forbidden()
 
-    const { searchParams } = new URL(req.url)
-    const id = searchParams.get("id")
+    const id = new URL(req.url).searchParams.get("id")
+    if (!id) return error("Missing ID", 400)
 
-    if (!id) return error("Missing ID")
+    await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
 
-    await db
+    async function handler(tx: any) {
+      const [deleted] = await tx
         .delete(scheduledReports)
-        .where(and(eq(scheduledReports.id, Number(id)), eq(scheduledReports.userId, scope.userId)))
-
+        .where(and(eq(scheduledReports.id, Number(id)), eq(scheduledReports.userId, scope!.userId)))
+        .returning()
+      if (!deleted) throw new Error("Schedule not found or not owned by user")
+    }
     return ok({ success: true })
+  } catch (e: any) {
+    return error(e.message || "Failed to delete schedule", 404)
+  }
 }

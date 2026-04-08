@@ -1,190 +1,86 @@
-import { NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { and, eq, gte, sql, or, lt } from "drizzle-orm"
-import { requireApiRole, ok } from "@/lib/api"
-import { db } from "@/lib/db"
+import { withTenant, withSuperAdmin } from "@/lib/db"
 import { orders, branches } from "@/db/schema"
-import { getRequestScope } from "@/lib/auth"
 import { metricExpressions } from "@/lib/metric-utils"
+import { getRequestScope } from "@/lib/auth"
+import { error, ok } from "@/lib/api"
 
-const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
-
-type Role = typeof allowedRoles[number]
-
-/**
- * Get the start of the current week (Monday) and end of the week (Sunday) in Pakistan timezone
- * Returns UTC timestamps for database comparison
- */
 function getCurrentWeekRange() {
-  // Get current time in Pakistan (Asia/Karachi is UTC+5)
-  // Create a date representing current Pakistan time
   const now = new Date()
-
-  // Convert current UTC time to Pakistan time to determine the day
-  // Pakistan is UTC+5, so add 5 hours to get Pakistan time
-  const pakistanOffset = 5 * 60 * 60 * 1000 // UTC+5 in milliseconds
-  const nowInPakistan = new Date(now.getTime() + pakistanOffset)
-
-  // Get day of week in Pakistan (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-  const dayOfWeek = nowInPakistan.getUTCDay()
-  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-
-  // Calculate Monday 00:00:00 in Pakistan timezone
-  const mondayInPakistan = new Date(nowInPakistan)
-  mondayInPakistan.setUTCDate(nowInPakistan.getUTCDate() - daysToMonday)
-  mondayInPakistan.setUTCHours(0, 0, 0, 0)
-
-  // Convert back to UTC for database comparison
-  const mondayUTC = new Date(mondayInPakistan.getTime() - pakistanOffset)
-
-  // Calculate next Monday in UTC
-  const nextMondayInPakistan = new Date(mondayInPakistan)
-  nextMondayInPakistan.setUTCDate(mondayInPakistan.getUTCDate() + 7)
-  const nextMondayUTC = new Date(nextMondayInPakistan.getTime() - pakistanOffset)
-
-  // Calculate Sunday 23:59:59 in Pakistan timezone
-  const sundayInPakistan = new Date(mondayInPakistan)
-  sundayInPakistan.setUTCDate(mondayInPakistan.getUTCDate() + 6)
-  sundayInPakistan.setUTCHours(23, 59, 59, 999)
-  const sundayUTC = new Date(sundayInPakistan.getTime() - pakistanOffset)
-
-  return {
-    monday: mondayUTC,
-    sunday: sundayUTC,
-    nextMonday: nextMondayUTC,
-    mondayInPakistan // For generating day keys
-  }
+  const pakistanOffset = 5 * 60 * 60 * 1000 
+  const nowInPK = new Date(now.getTime() + pakistanOffset)
+  const dayOfW = nowInPK.getUTCDay()
+  const daysToMon = dayOfW === 0 ? 6 : dayOfW - 1
+  const monInPK = new Date(nowInPK)
+  monInPK.setUTCDate(nowInPK.getUTCDate() - daysToMon)
+  monInPK.setUTCHours(0, 0, 0, 0)
+  const monUTC = new Date(monInPK.getTime() - pakistanOffset)
+  const nextMonPK = new Date(monInPK)
+  nextMonPK.setUTCDate(monInPK.getUTCDate() + 7)
+  const nextMonUTC = new Date(nextMonPK.getTime() - pakistanOffset)
+  const sunPK = new Date(monInPK)
+  sunPK.setUTCDate(monInPK.getUTCDate() + 6)
+  sunPK.setUTCHours(23, 59, 59, 999)
+  const sunUTC = new Date(sunPK.getTime() - pakistanOffset)
+  return { monday: monUTC, sunday: sunUTC, nextMonday: nextMonUTC, mondayInPK: monInPK }
 }
 
 export async function GET(req: NextRequest) {
-  const err = await requireApiRole(allowedRoles as any)
-  if (err) return err
+  try {
+    const scope = await getRequestScope()
+    if (!scope) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const scope = await getRequestScope()
-  const role = scope?.role
+    const { searchParams } = new URL(req.url)
+    const orgIdParam = searchParams.get("organizationId")
+    const branchIdParam = searchParams.get("branchId")
+    const groupIdParam = searchParams.get("groupId")
 
-  // Get filter parameters from query string (for UI context selection)
-  const { searchParams } = new URL(req.url)
-  const orgIdParam = searchParams.get("organizationId")
-  const branchIdParam = searchParams.get("branchId")
-  const groupIdParam = searchParams.get("groupId")
+    const result = await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
 
-  // Use query params if provided, otherwise fall back to auth scope
-  let organizationId: number | null = null
-  let branchId: number | null = null
-  let groupId: number | null = null
+    async function handler(tx: any) {
+      let organizationId = scope?.organizationId
+      if (orgIdParam && scope?.role === "SUPER_ADMIN") organizationId = parseInt(orgIdParam)
+      let branchId = (scope?.role === "BRANCH_ADMIN") ? scope.branchId : (branchIdParam ? parseInt(branchIdParam) : null)
+      const groupId = groupIdParam ? parseInt(groupIdParam) : null
 
-  if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") {
-    organizationId = Number(orgIdParam)
-  } else if (role !== "SUPER_ADMIN" && scope?.organizationId) {
-    organizationId = scope.organizationId
-  }
+      const { monday, sunday, nextMonday, mondayInPK } = getCurrentWeekRange()
+      const dateField = sql`COALESCE(${orders.approvedAt}, ${orders.fulfilledAt}, ${orders.createdAt})`
 
-  if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") {
-    branchId = Number(branchIdParam)
-  } else if (role === "BRANCH_ADMIN" && scope?.branchId) {
-    branchId = scope.branchId
-  }
+      const weekConditions: any[] = [
+        gte(dateField, monday),
+        lt(dateField, nextMonday),
+        or(
+          eq(sql`UPPER(${orders.status})`, "APPROVED"),
+          eq(sql`UPPER(${orders.status})`, "FULFILLED"),
+          eq(sql`UPPER(${orders.status})`, "REFUNDED")
+        ),
+      ]
 
-  if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") {
-    groupId = Number(groupIdParam)
-  }
+      if (organizationId) weekConditions.push(eq(orders.organizationId, organizationId))
+      if (branchId) weekConditions.push(eq(orders.branchId, branchId))
+      if (groupId) weekConditions.push(eq(branches.groupId, groupId))
 
-  const { monday, sunday, nextMonday, mondayInPakistan } = getCurrentWeekRange()
+      const rows = await tx.select({
+        day: sql<string>`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM-DD')`,
+        totalCents: metricExpressions.revenue,
+        orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
+      }).from(orders).leftJoin(branches, eq(orders.branchId, branches.id)).where(and(...weekConditions)).groupBy(sql`1`).orderBy(sql`1`)
 
-  // Build conditions for weekly sales
-  // Count orders when APPROVED (GMV style), not when fulfilled
-  // Include APPROVED, FULFILLED, and REFUNDED orders
-  // Use COALESCE for historical data
-  const dateField = sql`COALESCE(${orders.approvedAt}, ${orders.fulfilledAt}, ${orders.createdAt})`
+      const salesMap: Record<string, { sales: number; orderCount: number }> = {}
+      rows.forEach((r: any) => { salesMap[r.day] = { sales: (r.totalCents || 0) / 100, orderCount: Number(r.orderCount) } })
 
-  const weekConditions: any[] = [
-    gte(dateField, monday),
-    lt(dateField, nextMonday),
-    or(
-      eq(orders.status, "APPROVED"),
-      eq(orders.status, "approved"),
-      eq(orders.status, "FULFILLED"),
-      eq(orders.status, "fulfilled"),
-      eq(orders.status, "REFUNDED"),
-      eq(orders.status, "refunded")
-    ),
-  ]
-
-  // Apply organization filter (if not SUPER_ADMIN or if explicitly selected)
-  if (organizationId) {
-    weekConditions.push(eq(orders.organizationId, organizationId))
-  }
-
-  // Apply branch filter (if explicitly selected)
-  if (branchId) {
-    weekConditions.push(eq(orders.branchId, branchId))
-  }
-
-  // Apply group filter
-  if (groupId) {
-    weekConditions.push(eq(branches.groupId, groupId))
-  }
-
-  // Query weekly sales broken down by day
-  // Convert dateField to Pakistan timezone (Asia/Karachi, UTC+5)
-  // This ensures we group by the day it was approved in local time
-  const weeklySalesRows = await db
-    .select({
-      day: sql<string>`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM-DD')`,
-      totalCents: metricExpressions.revenue,
-      orderCount: sql<number>`coalesce(count(${orders.id}), 0)`,
-    })
-    .from(orders)
-    .leftJoin(branches, eq(orders.branchId, branches.id))
-    .where(and(...(weekConditions as any)))
-    .groupBy(sql`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM-DD')`)
-    .orderBy(sql`TO_CHAR((${dateField} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi', 'YYYY-MM-DD')`)
-  const salesMap: Record<string, { sales: number; orderCount: number }> = {}
-  for (const row of weeklySalesRows) {
-    const dateValue = row.day as any
-    // PostgreSQL DATE type returns as string in format YYYY-MM-DD
-    const dayKey = typeof dateValue === 'string'
-      ? dateValue
-      : new Date(dateValue).toISOString().slice(0, 10)
-
-    salesMap[dayKey] = {
-      sales: (row.totalCents || 0) / 100, // Convert cents to PKR
-      orderCount: Number(row.orderCount || 0),
+      const weekDays = []
+      for (let i = 0; i < 7; i++) {
+        const dPK = new Date(mondayInPK); dPK.setUTCDate(mondayInPK.getUTCDate() + i)
+        const dayKey = `${dPK.getUTCFullYear()}-${String(dPK.getUTCMonth() + 1).padStart(2, '0')}-${String(dPK.getUTCDate()).padStart(2, '0')}`
+        const dNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        weekDays.push({ day: dNames[dPK.getUTCDay()], date: dayKey, sales: salesMap[dayKey]?.sales || 0, orderCount: salesMap[dayKey]?.orderCount || 0 })
+      }
+      return { weekStart: monday.toISOString().slice(0, 10), weekEnd: sunday.toISOString().slice(0, 10), dailySales: weekDays, totalSales: weekDays.reduce((s, d) => s + d.sales, 0), totalOrders: weekDays.reduce((s, d) => s + d.orderCount, 0) }
     }
+    return ok(result)
+  } catch (e: any) {
+    return error(e.message || "Internal error")
   }
-
-  // Generate all days of the week (Monday to Sunday) in Pakistan timezone
-  // Format dates to match the database date format (YYYY-MM-DD)
-  const weekDays = []
-  for (let i = 0; i < 7; i++) {
-    const dayInPakistan = new Date(mondayInPakistan)
-    dayInPakistan.setUTCDate(mondayInPakistan.getUTCDate() + i)
-
-    // Format as YYYY-MM-DD from Pakistan timezone to match database grouping
-    const year = dayInPakistan.getUTCFullYear()
-    const month = String(dayInPakistan.getUTCMonth() + 1).padStart(2, '0')
-    const date = String(dayInPakistan.getUTCDate()).padStart(2, '0')
-    const dayKey = `${year}-${month}-${date}`
-
-    // Get day name for display (Monday, Tuesday, etc.)
-    // dayInPakistan is already in Pakistan timezone (UTC representation)
-    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    const dayName = dayNames[dayInPakistan.getUTCDay()]
-
-    weekDays.push({
-      day: dayName,
-      date: dayKey,
-      sales: salesMap[dayKey]?.sales || 0,
-      orderCount: salesMap[dayKey]?.orderCount || 0,
-    })
-  }
-
-  return ok({
-    weekStart: monday.toISOString().slice(0, 10),
-    weekEnd: sunday.toISOString().slice(0, 10),
-    dailySales: weekDays,
-    totalSales: weekDays.reduce((sum, day) => sum + day.sales, 0),
-    totalOrders: weekDays.reduce((sum, day) => sum + day.orderCount, 0),
-  })
 }
-

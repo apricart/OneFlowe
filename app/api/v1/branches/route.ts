@@ -1,37 +1,43 @@
-import { ok, error, readJson, requireApiRole } from "@/lib/api"
-export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth-options"
+import { withTenant, withSuperAdmin } from "@/lib/db"
 import { branches as branchesTable, organizations } from "@/db/schema"
 import { and, desc, eq, sql, inArray } from "drizzle-orm"
-import { getRequestScope } from "@/lib/auth"
-import { handleError } from "@/lib/error-handler"
-import { logError } from "@/lib/global-logger"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 
-/**
- * GET /api/v1/branches - List branches with access control
- */
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: Request) {
   try {
-    const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"])
-    if (err) return err
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { role: userRole, organizationId: userOrgId, branchId: userBranchId } = session.user as any
+    const role = (userRole || "").toUpperCase().replace(/\s+/g, '_')
+
+    const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"]
+    if (!allowedRoles.includes(role)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
 
     const { searchParams } = new URL(req.url)
     const organizationIdRaw = searchParams.get("organizationId") || undefined
     const groupIdsRaw = searchParams.get("groupIds") || undefined
 
-    // Validate organization ID parameter (supports single or comma-separated)
+    // Validate organization ID parameter
     let orgIds: number[] = []
     if (organizationIdRaw) {
       const ids = organizationIdRaw.split(',').map(id => id.trim())
       for (const id of ids) {
         if (!/^\d+$/.test(id)) {
-          return error("Invalid organization ID format", 400)
+          return NextResponse.json({ error: "Invalid organization ID format" }, { status: 400 })
         }
         const n = Number(id)
         if (n <= 0) {
-          return error("Organization ID must be positive", 400)
+          return NextResponse.json({ error: "Organization ID must be positive" }, { status: 400 })
         }
         orgIds.push(n)
       }
@@ -43,185 +49,160 @@ export async function GET(req: Request) {
       groupIds = groupIdsRaw.split(',').map(id => Number(id.trim())).filter(id => !isNaN(id) && id > 0)
     }
 
-    const scope = await getRequestScope()
-
-    // Validate scope
-    if (!scope?.role) {
-      logError(new Error('Missing role in request scope'), 'BRANCHES_GET')
-      return error("Invalid session data", 401)
-    }
-
-    // Determine which organizations to query based on role
-    const scopedOrgIds = scope.role === "SUPER_ADMIN"
+    // Determine scoped org/branch
+    const scopedOrgIds = role === "SUPER_ADMIN"
       ? orgIds.length ? orgIds : undefined
-      : (scope.organizationId ? [scope.organizationId] : undefined)
+      : (userOrgId ? [userOrgId] : undefined)
 
-    const scopedBranchId = scope.role === "BRANCH_ADMIN"
-      ? scope.branchId
-      : undefined
+    const scopedBranchId = role === "BRANCH_ADMIN" ? userBranchId : undefined
 
-    // HEAD_OFFICE and BRANCH_ADMIN must have organization context
-    if ((scope.role === "HEAD_OFFICE" || scope.role === "BRANCH_ADMIN") && (!scopedOrgIds || scopedOrgIds.length === 0)) {
-      return error("Organization context required", 403)
+    if ((role === "HEAD_OFFICE" || role === "BRANCH_ADMIN") && (!scopedOrgIds || scopedOrgIds.length === 0)) {
+      return NextResponse.json({ error: "Organization context required" }, { status: 403 })
     }
 
-    // BRANCH_ADMIN must have branch context
-    if (scope.role === "BRANCH_ADMIN" && !scopedBranchId) {
-      return error("Branch context required", 403)
+    if (role === "BRANCH_ADMIN" && !scopedBranchId) {
+      return NextResponse.json({ error: "Branch context required" }, { status: 403 })
     }
 
     const cacheKey = scopedCacheKey(
-      'branches', 
-      { role: scope.role, branchId: scopedBranchId },
-      { 
-        orgIds: scopedOrgIds?.join(','),
-        groupIds: groupIds.join(',')
-      }
+      'branches',
+      { role, branchId: scopedBranchId },
+      { orgIds: scopedOrgIds?.join(','), groupIds: groupIds.join(',') }
     )
 
     const result = await getCached(cacheKey, async () => {
-      const items = await db
-        .select({
-          id: branchesTable.id,
-          organizationId: branchesTable.organizationId,
-          name: branchesTable.name,
-          code: branchesTable.code,
-          status: branchesTable.status,
-          groupId: branchesTable.groupId,
-          adminUserId: branchesTable.adminUserId,
-          createdAt: branchesTable.createdAt,
-          updatedAt: branchesTable.updatedAt,
-          groupName: sql<string | null>`(
-            SELECT name FROM groups WHERE id = ${branchesTable.groupId}
-          )`,
-        })
-        .from(branchesTable)
-        .where(and(
-          scopedOrgIds && scopedOrgIds.length > 0 
-            ? (scopedOrgIds.length === 1 
-                ? eq(branchesTable.organizationId, scopedOrgIds[0]) 
-                : inArray(branchesTable.organizationId, scopedOrgIds))
-            : undefined,
-          groupIds.length > 0 ? inArray(branchesTable.groupId, groupIds) : undefined,
-          scopedBranchId ? eq(branchesTable.id, scopedBranchId) : undefined
-        ))
-        .orderBy(desc(branchesTable.createdAt))
+      return await withTenant(session.user as any, async (tx) => {
+        const items = await tx
+          .select({
+            id: branchesTable.id,
+            organizationId: branchesTable.organizationId,
+            name: branchesTable.name,
+            code: branchesTable.code,
+            status: branchesTable.status,
+            groupId: branchesTable.groupId,
+            adminUserId: branchesTable.adminUserId,
+            createdAt: branchesTable.createdAt,
+            updatedAt: branchesTable.updatedAt,
+            groupName: sql<string | null>`(
+              SELECT name FROM groups WHERE id = ${branchesTable.groupId}
+            )`,
+          })
+          .from(branchesTable)
+          .where(and(
+            scopedOrgIds && scopedOrgIds.length > 0
+              ? (scopedOrgIds.length === 1
+                  ? eq(branchesTable.organizationId, scopedOrgIds[0])
+                  : inArray(branchesTable.organizationId, scopedOrgIds))
+              : undefined,
+            groupIds.length > 0 ? inArray(branchesTable.groupId, groupIds) : undefined,
+            scopedBranchId ? eq(branchesTable.id, scopedBranchId) : undefined
+          ))
+          .orderBy(desc(branchesTable.createdAt))
 
-      return { items, count: items.length }
+        return { items, count: items.length }
+      })
     }, CACHE_TTL.LISTING)
 
-    return ok(result)
+    return NextResponse.json(result)
   } catch (e: any) {
-    logError(e, 'BRANCHES_GET')
-    logError(e, 'BRANCHES_GET')
-    const { status, ...errorBody } = handleError(e, 'BRANCHES_GET')
-    return NextResponse.json(errorBody, { status })
+    console.error("Error fetching branches:", e)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
 
-/**
- * POST /api/v1/branches - Create new branch
- */
 export async function POST(req: Request) {
   try {
-    const err = await requireApiRole(["SUPER_ADMIN"])
-    if (err) return err
-
-    const body = await readJson<any>(req)
-
-    // Validate required fields
-    if (!body?.organizationId) {
-      return error("Organization ID is required", 400)
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Validate organizationId type
+    const { role: userRole } = session.user as any
+    const role = (userRole || "").toUpperCase().replace(/\s+/g, '_')
+
+    if (role !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const body = await req.json()
+
+    if (!body?.organizationId) {
+      return NextResponse.json({ error: "Organization ID is required" }, { status: 400 })
+    }
+
     const organizationId = Number(body.organizationId)
     if (!Number.isInteger(organizationId) || organizationId <= 0) {
-      return error("Organization ID must be a positive integer", 400)
+      return NextResponse.json({ error: "Organization ID must be a positive integer" }, { status: 400 })
     }
 
-    // Validate field format and length
     const name = String(body.name || "").trim()
     if (name.length < 2 || name.length > 100) {
-      return error("Branch name must be between 2 and 100 characters", 400)
+      return NextResponse.json({ error: "Branch name must be between 2 and 100 characters" }, { status: 400 })
     }
 
-    // Validate status
     const validStatuses = ['active', 'inactive']
     const status = body.status ? String(body.status).toLowerCase() : 'active'
     if (!validStatuses.includes(status)) {
-      return error(`Status must be one of: ${validStatuses.join(', ')}`, 400)
+      return NextResponse.json({ error: `Status must be one of: ${validStatuses.join(', ')}` }, { status: 400 })
     }
 
-    // Verify organization exists and get its code
-    const [org] = await db
-      .select({ id: organizations.id, name: organizations.name, code: organizations.code })
-      .from(organizations)
-      .where(eq(organizations.id, organizationId))
-      .limit(1)
+    const item = await withSuperAdmin(async (tx) => {
+      // Verify organization exists
+      const [org] = await tx
+        .select({ id: organizations.id, name: organizations.name, code: organizations.code })
+        .from(organizations)
+        .where(eq(organizations.id, organizationId))
+        .limit(1)
 
-    if (!org) {
-      return error(`Organization with ID ${organizationId} not found`, 404)
-    }
+      if (!org) {
+        throw new Error(`Organization with ID ${organizationId} not found`)
+      }
 
-    // Auto-generate code if not provided or to ensure standardization
-    // Format: {ORG_CODE}-{COUNT+1}
-    const [{ count: branchCount }] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(branchesTable)
-      .where(eq(branchesTable.organizationId, organizationId))
+      // Auto-generate code
+      const [{ count: branchCount }] = await tx
+        .select({ count: sql<number>`count(*)` })
+        .from(branchesTable)
+        .where(eq(branchesTable.organizationId, organizationId))
 
-    const nextNumber = (Number(branchCount) + 1).toString().padStart(2, '0')
-    const generatedCode = `${org.code}-${nextNumber}`
+      const nextNumber = (Number(branchCount) + 1).toString().padStart(2, '0')
+      const generatedCode = `${org.code}-${nextNumber}`
 
-    // Double check for duplicate code (just in case of race conditions)
-    const existing = await db
-      .select({ id: branchesTable.id })
-      .from(branchesTable)
-      .where(and(
-        eq(branchesTable.organizationId, organizationId),
-        eq(branchesTable.code, generatedCode)
-      ))
-      .limit(1)
+      const existing = await tx
+        .select({ id: branchesTable.id })
+        .from(branchesTable)
+        .where(and(
+          eq(branchesTable.organizationId, organizationId),
+          eq(branchesTable.code, generatedCode)
+        ))
+        .limit(1)
 
-    let finalCode = generatedCode
-    if (existing.length > 0) {
-      // If collision, add a timestamp or more padding
-      finalCode = `${org.code}-${nextNumber}-${Date.now().toString().slice(-4)}`
-    }
+      let finalCode = generatedCode
+      if (existing.length > 0) {
+        finalCode = `${org.code}-${nextNumber}-${Date.now().toString().slice(-4)}`
+      }
 
-    // Insert branch
-    const [item] = await db
-      .insert(branchesTable)
-      .values({
-        organizationId,
-        name,
-        code: finalCode,
-        status,
-      })
-      .returning()
+      const [newBranch] = await tx
+        .insert(branchesTable)
+        .values({ organizationId, name, code: finalCode, status })
+        .returning()
 
-    // Invalidate branches cache
+      return newBranch
+    })
+
     await invalidateByPrefix('branches')
 
-    return ok({
-      item,
-      message: "Branch created successfully"
-    }, { status: 201 })
-
+    return NextResponse.json({ item, message: "Branch created successfully" }, { status: 201 })
   } catch (e: any) {
-    // Handle database constraint violations
-    if (e.code === '23505') { // Unique violation
-      return error("Branch with this code already exists in this organization", 409)
+    if (e.code === '23505') {
+      return NextResponse.json({ error: "Branch with this code already exists in this organization" }, { status: 409 })
     }
-
-    if (e.code === '23503') { // Foreign key violation
-      return error("Referenced organization does not exist", 404)
+    if (e.code === '23503') {
+      return NextResponse.json({ error: "Referenced organization does not exist" }, { status: 404 })
     }
-
-    logError(e, 'BRANCHES_POST')
-    logError(e, 'BRANCHES_POST')
-    const { status, ...errorBody } = handleError(e, 'BRANCHES_POST')
-    return NextResponse.json(errorBody, { status })
+    if (e.message?.includes('not found')) {
+      return NextResponse.json({ error: e.message }, { status: 404 })
+    }
+    console.error("Error creating branch:", e)
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
