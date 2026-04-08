@@ -81,7 +81,7 @@ export default function BranchReportsPage() {
     const [compareYears, setCompareYears] = useState<number[]>([])
     
     const [selectedOrgId, setSelectedOrgId] = useState<string>(contextOrgId ? String(contextOrgId) : (userOrgId ? String(userOrgId) : ""))
-    const [reportGroupIds, setReportGroupIds] = useState<string[]>([])
+    const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
     const lastSyncedBranchIds = useRef<string[]>([])
 
     // ━━━ SMART SYNC (Global to Local) ━━━
@@ -96,7 +96,6 @@ export default function BranchReportsPage() {
         role === "BRANCH_ADMIN" && userBranchId ? [String(userBranchId)] : []
     )
     
-    const [searchTerm, setSearchTerm] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
     const [activeTab, setActiveTab] = useState("analytics")
 
