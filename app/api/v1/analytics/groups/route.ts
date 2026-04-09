@@ -4,6 +4,7 @@ import { groups, branches, orders, organizations, budgets, globalProducts, organ
 import { and, eq, sql, isNull, gte, lte, desc, inArray, asc } from "drizzle-orm"
 import { metricExpressions, REVENUE_ELIGIBLE_FILTER } from "@/lib/metric-utils"
 import { getRequestScope } from "@/lib/auth"
+import { ok } from "@/lib/api"
 
 export async function GET(req: NextRequest) {
   try {
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
     async function handler(tx: any) {
       if (earliestOnly) {
         const firstOrder = await tx.select({ createdAt: orders.createdAt }).from(orders).orderBy(asc(orders.createdAt)).limit(1)
-        return { earliestDate: firstOrder.length > 0 ? firstOrder[0].createdAt : new Date().toISOString() }
+        return ok({ earliestDate: firstOrder.length > 0 ? firstOrder[0].createdAt : new Date().toISOString() })
       }
 
       let orgId = scope?.organizationId
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
 
       if (allTime) {
         const distinctYears = await tx.select({ year: sql<number>`EXTRACT(YEAR FROM ${orders.createdAt})::int` }).from(orders).innerJoin(branches, eq(orders.branchId, branches.id)).innerJoin(groups, eq(branches.groupId, groups.id)).where(and(REVENUE_ELIGIBLE_FILTER, orgId ? eq(groups.organizationId, orgId) : undefined)).groupBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`).orderBy(desc(sql`EXTRACT(YEAR FROM ${orders.createdAt})`))
-        return { years: distinctYears.map((y: any) => y.year) }
+        return ok({ years: distinctYears.map((y: any) => y.year) })
       }
 
       const orderConditions: any[] = [REVENUE_ELIGIBLE_FILTER]
@@ -78,7 +79,7 @@ export async function GET(req: NextRequest) {
           let pS: Date, pE: Date; if (compareStartDateParam && compareEndDateParam) { pS = new Date(compareStartDateParam); pE = new Date(compareEndDateParam) } else if (startDate && endDate) { const start = new Date(startDate); const end = new Date(endDate); const dur = end.getTime() - start.getTime(); pS = new Date(start.getTime() - dur - 1); pE = new Date(start.getTime() - 1) } else { pS = new Date(); pE = new Date() }
           compareTrend = await tx.select({ date: sql<string>`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`, revenue: metricExpressions.revenue }).from(orders).innerJoin(branches, eq(orders.branchId, branches.id)).innerJoin(groups, eq(branches.groupId, groups.id)).where(and(REVENUE_ELIGIBLE_FILTER, orgId ? eq(groups.organizationId, orgId) : undefined, parsedGroupIds.length > 0 ? inArray(groups.id, parsedGroupIds) : undefined, parsedBranchIds.length > 0 ? inArray(branches.id, parsedBranchIds) : undefined, (() => { const c: any[] = []; if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) { if (parsedCompMonths.length > 0) c.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`); if (parsedCompYears.length > 0) c.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`) } else { c.push(gte(orders.createdAt, pS), lte(orders.createdAt, pE)) }; return and(...c) })())).groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
         }
-        return { trend: trendData, compareTrend }
+        return ok({ trend: trendData, compareTrend })
       }
 
       const rawGroupStats = await tx.select({ id: groups.id, name: groups.name, status: groups.status, organizationId: groups.organizationId, organizationName: organizations.name, totalOrders: sql<number>`count(${orders.id})::int`, totalAmountCents: metricExpressions.revenue, totalRefundCents: sql<number>`coalesce(sum(${orders.refundAmountCents}), 0)::int`, rejectedOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)::int`, branchCount: sql<number>`count(distinct ${branches.id})::int`,
@@ -100,7 +101,7 @@ export async function GET(req: NextRequest) {
       }
 
       const groupsWithBranches = rawGroupStats.map((g: any) => ({ ...g, totalBudget: gBudMap[g.id] || 0, branches: bStatsMap[g.id] || [] }))
-      const outSummary = { totalGroups: groupsWithBranches.length, totalOrders: groupsWithBranches.reduce((s, g) => s + g.totalOrders, 0), totalRevenue: groupsWithBranches.reduce((s, g) => s + g.totalAmountCents, 0), totalRefunds: groupsWithBranches.reduce((s, g) => s + g.totalRefundCents, 0), avgRevenuePerGroup: groupsWithBranches.length > 0 ? Math.round(groupsWithBranches.reduce((s, g) => s + g.totalAmountCents, 0) / groupsWithBranches.length) : 0 }
+      const outSummary = { totalGroups: groupsWithBranches.length, totalOrders: groupsWithBranches.reduce((s: number, g: any) => s + g.totalOrders, 0), totalRevenue: groupsWithBranches.reduce((s: number, g: any) => s + g.totalAmountCents, 0), totalRefunds: groupsWithBranches.reduce((s: number, g: any) => s + g.totalRefundCents, 0), avgRevenuePerGroup: groupsWithBranches.length > 0 ? Math.round(groupsWithBranches.reduce((s: number, g: any) => s + g.totalAmountCents, 0) / groupsWithBranches.length) : 0 }
 
       const ungrouped = await tx.select({ id: branches.id, name: branches.name, organizationId: branches.organizationId, organizationName: organizations.name, totalOrders: sql<number>`count(${orders.id})::int`, totalAmountCents: metricExpressions.revenue }).from(branches).leftJoin(organizations, eq(branches.organizationId, organizations.id)).leftJoin(orders, and(eq(orders.branchId, branches.id), orderWhere)).where(and(orgId ? eq(branches.organizationId, orgId) : undefined, isNull(branches.groupId), eq(branches.status, 'active'))).groupBy(branches.id, organizations.id).orderBy(desc(metricExpressions.revenue))
       outSummary.totalOrders += ungrouped.reduce((s: number, b: any) => s + b.totalOrders, 0); outSummary.totalRevenue += ungrouped.reduce((s: number, b: any) => s + b.totalAmountCents, 0)
@@ -112,8 +113,8 @@ export async function GET(req: NextRequest) {
         compareSummary = { totalOrders: compStats[0]?.totalOrders || 0, totalRevenue: compStats[0]?.totalAmountCents || 0, totalRefunds: compStats[0]?.totalRefunds || 0 }
       }
 
-      if (summaryOnly) return { summary: outSummary, comparison: compareSummary }
-      return { summary: outSummary, comparison: compareSummary, groups: groupsWithBranches, ungroupedBranches: ungrouped }
+      if (summaryOnly) return ok({ summary: outSummary, comparison: compareSummary })
+      return ok({ summary: outSummary, comparison: compareSummary, groups: groupsWithBranches, ungroupedBranches: ungrouped })
     }
   } catch (e: any) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

@@ -84,6 +84,20 @@ export function error(message: string, status = 400) {
 export const err = error
 
 /**
+ * Return an unauthorized (401) response
+ */
+export function unauthorized(message = "Unauthorized") {
+  return NextResponse.json({ error: message }, { status: 401 })
+}
+
+/**
+ * Return a forbidden (403) response
+ */
+export function forbidden(message = "Forbidden") {
+  return NextResponse.json({ error: message }, { status: 403 })
+}
+
+/**
  * Safely read and parse JSON from request body
  */
 export async function readJson<T = any>(req: Request): Promise<T | null> {

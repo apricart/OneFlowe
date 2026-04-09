@@ -22,15 +22,30 @@ export async function GET(req: Request) {
     const organizationId = searchParams.get("organizationId")
     const userRole = (session.user as any).role
     const userOrgId = (session.user as any).organizationId
+    const userBranchId = (session.user as any).branchId
+    const userId = (session.user as any).id
+    
+    // Build full tenant user context for 4-tier RBAC
+    const tenantUser = {
+      role: userRole?.toUpperCase(),
+      organizationId: userOrgId ? Number(userOrgId) : null,
+      branchId: userBranchId ? Number(userBranchId) : null,
+      id: userId || null
+    }
+    
     const scopedOrgId = userRole === "SUPER_ADMIN" ? (organizationId ? Number(organizationId) : undefined) : userOrgId
 
     const cacheKey = scopedCacheKey('users', { orgId: scopedOrgId, role: userRole })
 
     const items = await getCached(cacheKey, async () => {
-      return await withTenant(session.user as any, async (tx) => {
+      return await withTenant(tenantUser, async (tx) => {
+        // Note: RBAC is now enforced via PostgreSQL RLS policies
+        // We only add application-level filters here
         const conditions: any[] = [ne(rolesTable.name, "SUPER_ADMIN"), isNull(usersTable.deletedAt)]
-        if (scopedOrgId) {
-          conditions.push(eq(usersTable.organizationId, scopedOrgId))
+        
+        // Optional: Allow SUPER_ADMIN to filter by specific organization
+        if (userRole === "SUPER_ADMIN" && organizationId && /^\d+$/.test(organizationId)) {
+          conditions.push(eq(usersTable.organizationId, Number(organizationId)))
         }
 
         const rows = await tx

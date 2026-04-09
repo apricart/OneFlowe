@@ -205,21 +205,26 @@ export { pool }
 /**
  * Session user type for RLS context.
  * This matches the shape of `session.user` from NextAuth.
+ * Supports 4-tier RBAC hierarchy.
  */
 export interface TenantUser {
   role: string
   organizationId?: number | null
+  branchId?: number | null
+  id?: string | null
 }
 
 /**
  * Execute a database operation within a tenant-scoped transaction.
  * 
- * This function enforces Row-Level Security (RLS) by setting the
- * `app.current_org_id` session variable before executing any queries.
- * PostgreSQL will then automatically filter all rows to only show data
- * belonging to the specified organization.
+ * This function enforces Row-Level Security (RLS) by setting session variables
+ * before executing any queries. PostgreSQL will then automatically filter all 
+ * rows based on the 4-tier RBAC hierarchy:
  * 
- * For SUPER_ADMIN users, RLS is bypassed so they can see all data.
+ * - SUPER_ADMIN: Full access (bypasses RLS)
+ * - HEAD_OFFICE: Organization-level access
+ * - BRANCH_ADMIN: Branch-level access
+ * - ORDER_PORTAL: User-level access (own orders only)
  * 
  * Usage:
  * ```ts
@@ -228,7 +233,7 @@ export interface TenantUser {
  * });
  * ```
  * 
- * @param user - The authenticated user (must have role and organizationId)
+ * @param user - The authenticated user with role, orgId, branchId, and id
  * @param callback - The database operation to execute within the tenant context
  * @returns The result of the callback
  */
@@ -237,16 +242,43 @@ export async function withTenant<T>(
   callback: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>
 ): Promise<T> {
   return db.transaction(async (tx) => {
-    if (user.role === 'SUPER_ADMIN') {
+    const role = user.role?.toUpperCase()
+    
+    if (role === 'SUPER_ADMIN') {
       // Super Admins bypass RLS entirely — they see all organizations' data
       await tx.execute(sql`SET LOCAL row_security = off`)
-    } else if (user.organizationId) {
-      // Lock this transaction to the user's organization
-      await tx.execute(
-        sql`SET LOCAL app.current_org_id = ${sql.raw(String(user.organizationId))}`
-      )
+    } else {
+      // Set role context for all non-super-admin users
+      if (role) {
+        await tx.execute(
+          sql`SET LOCAL "app.current_role" = ${sql.raw(`'${role}'`)}`
+        )
+      }
+      
+      // Set organization context
+      if (user.organizationId) {
+        await tx.execute(
+          sql`SET LOCAL "app.current_org_id" = ${sql.raw(String(user.organizationId))}`
+        )
+      }
+      
+      // Set branch context for BRANCH_ADMIN and ORDER_PORTAL
+      if (user.branchId && (role === 'BRANCH_ADMIN' || role === 'ORDER_PORTAL')) {
+        await tx.execute(
+          sql`SET LOCAL "app.current_branch_id" = ${sql.raw(String(user.branchId))}`
+        )
+      }
+      
+      // Set user context for ORDER_PORTAL (for created_by filtering)
+      if (user.id && role === 'ORDER_PORTAL') {
+        await tx.execute(
+          sql`SET LOCAL "app.current_user_id" = ${sql.raw(`'${user.id}'`)}`
+        )
+      }
     }
-    // If no organizationId and not super admin, RLS will block everything (safe default)
+    
+    // Enable RLS (ensures policies are enforced)
+    await tx.execute(sql`SET LOCAL row_security = on`)
 
     return callback(tx)
   })

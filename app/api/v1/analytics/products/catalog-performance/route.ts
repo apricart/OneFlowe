@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
           productConditions.push(exists(tx.select().from(organizationInventory).where(and(eq(organizationInventory.globalProductId, globalProducts.id), inArray(organizationInventory.organizationId, parsedOrganizationIds), or(isNull(organizationInventory.deletedAt), isNotNull(globalProducts.deletedAt))))))
         }
 
-        const targetOrgId = parsedOrganizationIds.length === 1 ? parsedOrganizationIds[0] : scope.organizationId
+        const targetOrgId = parsedOrganizationIds.length === 1 ? parsedOrganizationIds[0] : scope!.organizationId
         const allProducts = await tx.select({
           id: globalProducts.id,
           productCode: globalProducts.productCode,
@@ -97,8 +97,8 @@ export async function GET(req: NextRequest) {
         cats.forEach((c: any) => categoriesMap.set(c.id, c))
 
         let salesBranchIds = branchIds
-        if (salesBranchIds.length === 0 && scope.organizationId) {
-          const orgBranches = await tx.select({ id: branches.id }).from(branches).where(eq(branches.organizationId, scope.organizationId))
+        if (salesBranchIds.length === 0 && scope!.organizationId) {
+          const orgBranches = await tx.select({ id: branches.id }).from(branches).where(eq(branches.organizationId, scope!.organizationId))
           salesBranchIds = orgBranches.map((b: any) => b.id)
         }
 
@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
             productName: p.customName || p.name,
             unit: p.unit,
             status: p.deletedAt ? "deleted" : (p.organizationIsActive === false ? "inactive" : p.status),
-            basePriceCents: scope.role === "SUPER_ADMIN" ? (p.basePrice || 0) : 0,
+            basePriceCents: scope!.role === "SUPER_ADMIN" ? (p.basePrice || 0) : 0,
             unitPriceCents: p.customPrice || p.basePrice,
             stockQuantity: p.stockQuantity,
             categoryName: catInfo?.name || "Uncategorized",

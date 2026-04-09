@@ -29,6 +29,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    // Build full tenant user context for 4-tier RBAC
+    const tenantUser = {
+      role: role,
+      organizationId: userOrgId ? Number(userOrgId) : null,
+      branchId: userBranchId ? Number(userBranchId) : null,
+      id: userId || null
+    }
+
     const { searchParams } = new URL(req.url)
     const rawStatus = searchParams.get("status") || undefined
     const status = rawStatus?.toUpperCase()
@@ -47,18 +55,12 @@ export async function GET(req: NextRequest) {
 
     const conditions: any[] = []
 
-    if (role === "SUPER_ADMIN") {
-      if (organizationIdParam && /^\d+$/.test(organizationIdParam))
-        conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
-    } else if (role === "HEAD_OFFICE") {
-      if (userOrgId) conditions.push(eq(orders.organizationId, Number(userOrgId)))
-    } else if (role === "ORDER_PORTAL") {
-      conditions.push(eq(orders.createdByUserId, userId))
-      if (userOrgId) conditions.push(eq(orders.organizationId, Number(userOrgId)))
-      if (userBranchId) conditions.push(eq(orders.branchId, Number(userBranchId)))
-    } else if (role === "BRANCH_ADMIN") {
-      if (userOrgId) conditions.push(eq(orders.organizationId, Number(userOrgId)))
-      if (userBranchId) conditions.push(eq(orders.branchId, Number(userBranchId)))
+    // Note: RBAC is now enforced via PostgreSQL RLS policies
+    // We only add user-provided filters here, not role-based access control
+    
+    // Optional: Allow SUPER_ADMIN to filter by specific organization
+    if (role === "SUPER_ADMIN" && organizationIdParam && /^\d+$/.test(organizationIdParam)) {
+      conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
     }
 
     if (status) conditions.push(eq(orders.status, status))
@@ -79,7 +81,7 @@ export async function GET(req: NextRequest) {
       conditions.push(lte(orders.createdAt, end))
     }
 
-    const { sanitizedItems, orderWithItems } = await withTenant(session.user as any, async (tx) => {
+    const { sanitizedItems, orderWithItems } = await withTenant(tenantUser, async (tx) => {
       // Log group access if applicable
       if (groupId && /^\d+$/.test(groupId)) {
         tx.insert(groupAuditLogs).values({
