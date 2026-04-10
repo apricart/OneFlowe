@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     const result = await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
 
     async function handler(tx: any) {
-      const branchConditions = []
+      const branchConditions: any[] = []
       if (scope!.role !== "SUPER_ADMIN") branchConditions.push(eq(branches.organizationId, scope!.organizationId!))
 
       if (orgIdsParam) {
@@ -46,6 +46,8 @@ export async function GET(req: NextRequest) {
       }
       if (statusParam && statusParam !== "all") branchConditions.push(eq(branches.status, statusParam))
 
+      const branchWhere = branchConditions.length > 0 ? and(...branchConditions) : undefined
+
       const branchStats = await tx.select({
         branchId: branches.id,
         branchName: branches.name,
@@ -55,7 +57,7 @@ export async function GET(req: NextRequest) {
         branchStatus: branches.status,
         activeUserCount: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.branchId} = ${branches.id} AND ${users.isActive} = true)`.mapWith(Number),
         totalUserCount: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.branchId} = ${branches.id})`.mapWith(Number),
-      }).from(branches).leftJoin(organizations, eq(branches.organizationId, organizations.id)).where(and(...branchConditions))
+      }).from(branches).leftJoin(organizations, eq(branches.organizationId, organizations.id)).where(branchWhere)
 
       const branchIdsInScope = branchStats.map((b: any) => b.branchId)
       if (branchIdsInScope.length === 0) return { items: [], trend: [], comparisonTrend: [] }

@@ -93,12 +93,9 @@ export function useSalesPerformance(
             params.set("startDate", dateRange.startDate.toISOString())
             params.set("endDate", dateRange.endDate.toISOString())
         } else if ((!months || months.length === 0) && (!years || years.length === 0)) {
-            // Default: today (only if no custom array is utilized)
-            const today = new Date()
-            const start = new Date(today)
-            start.setHours(0, 0, 0, 0)
-            const end = new Date(today)
-            end.setHours(23, 59, 59, 999)
+            // Default: all time (only if no custom array is utilized)
+            const start = new Date("2000-01-01T00:00:00.000Z")
+            const end = new Date("2099-12-31T23:59:59.999Z")
             params.set("startDate", start.toISOString())
             params.set("endDate", end.toISOString())
         }
