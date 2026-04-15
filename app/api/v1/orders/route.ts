@@ -1,8 +1,9 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { db, withTenant } from "@/lib/db"
-import { budgets, orders, orderItems, organizationInventory, branches, globalProducts, refunds, systemLogs, groupAuditLogs, organizations, refundItems } from "@/db/schema"
+import { db, withTenant, withSuperAdmin } from "@/lib/db"
+import { budgets, orders, orderItems, organizationInventory, branches, globalProducts, refunds, systemLogs, groupAuditLogs, organizations, refundItems, users, roles } from "@/db/schema"
 import { headers } from "next/headers"
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 import { logOrderActivity } from "@/lib/global-logger"
@@ -104,6 +105,7 @@ export async function GET(req: NextRequest) {
           organizationName: organizations.name,
           branchId: orders.branchId,
           status: orders.status,
+          deliveryStatus: orders.deliveryStatus,
           statusAtRefund: orders.statusAtRefund,
           refundedAt: orders.refundedAt,
           refundedByUserId: orders.refundedByUserId,
@@ -424,12 +426,8 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    if (role === "HEAD_OFFICE") {
-      return NextResponse.json({ error: "Read-only access" }, { status: 403 })
-    }
-
     const body = await req.json()
-    const { id, action, rejectionReason, approvalToken } = body as { id: number, action: 'approve' | 'cancel' | 'fulfill' | 'reject', rejectionReason?: string, approvalToken?: string }
+    const { id, action, rejectionReason, approvalToken, deliveryStatus } = body as { id: number, action: 'approve' | 'cancel' | 'fulfill' | 'reject' | 'update_delivery', rejectionReason?: string, approvalToken?: string, deliveryStatus?: string }
     if (!id || !action) return NextResponse.json({ error: 'id and action required' }, { status: 400 })
 
     const result = await withTenant(session.user as any, async (tx) => {
@@ -444,13 +442,19 @@ export async function PUT(req: NextRequest) {
       if (!budget) throw new Error("Budget period not configured")
 
       const currentStatus = ord.status.toLowerCase()
-      if (["cancelled", "fulfilled", "refunded", "rejected"].includes(currentStatus)) {
+      if (action !== 'update_delivery' && ["cancelled", "fulfilled", "refunded", "rejected"].includes(currentStatus)) {
         throw new Error(`Cannot ${action} order already in ${currentStatus} state`)
       }
 
       let generatedApprovalToken: string | null = null
 
-      if (action === 'cancel' || action === 'reject') {
+      if (action === 'update_delivery') {
+        if (role !== 'SUPER_ADMIN') throw new Error("Only super admin can update delivery status")
+        await tx.update(orders).set({
+          deliveryStatus: deliveryStatus || null,
+          updatedAt: new Date()
+        }).where(eq(orders.id, id))
+      } else if (action === 'cancel' || action === 'reject') {
         const targetStatus = action === 'cancel' ? 'cancelled' : 'rejected'
         await tx.update(orders).set({
           status: targetStatus,
@@ -525,8 +529,23 @@ export async function PUT(req: NextRequest) {
 
       logOrderActivity(action.toUpperCase() as any, { ...ord, status: action === 'approve' ? 'approved' : action === 'fulfill' ? 'fulfilled' : action === 'cancel' ? 'cancelled' : 'rejected' }, { id: userId, email: userEmail, role })
 
-      return { generatedApprovalToken }
+      return { generatedApprovalToken, ord }
     })
+
+    if (action === 'approve') {
+      withSuperAdmin(async (saTx) => {
+        const superAdmins = await saTx.select({ email: users.email })
+          .from(users)
+          .innerJoin(roles, eq(users.roleId, roles.id))
+          .where(eq(roles.name, 'SUPER_ADMIN'))
+        
+        const saEmails = superAdmins.map(sa => sa.email).filter(Boolean)
+        if (saEmails.length > 0) {
+          const { sendOrderApprovedEmail } = await import('@/lib/email')
+          await sendOrderApprovedEmail(saEmails, result.ord.tid, userEmail || role || 'System Admin')
+        }
+      }).catch(err => console.error("Failed to notify super admins:", err))
+    }
 
     return NextResponse.json({
       message: 'Order updated successfully',

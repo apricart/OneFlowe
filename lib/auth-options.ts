@@ -33,7 +33,9 @@ export const authOptions: NextAuthOptions = {
             fullName: users.fullName,
             mfaEnabled: users.mfaEnabled,
             isActive: users.isActive,
-            sessionVersion: users.sessionVersion
+            sessionVersion: users.sessionVersion,
+            mustChangePassword: users.mustChangePassword,
+            passwordExpiresAt: users.passwordExpiresAt
           })
           .from(users)
           .where(and(eq(users.username, username), isNull(users.deletedAt)))
@@ -94,7 +96,9 @@ export const authOptions: NextAuthOptions = {
           branchId: u.branchId,
           fullName: u.fullName,
           isEmployee: false,
-          sessionVersion: u.sessionVersion
+          sessionVersion: u.sessionVersion,
+          mustChangePassword: u.mustChangePassword,
+          passwordExpiresAt: u.passwordExpiresAt
         } as any
       },
     }),
@@ -126,7 +130,9 @@ export const authOptions: NextAuthOptions = {
             fullName: users.fullName,
             mfaEnabled: users.mfaEnabled,
             isActive: users.isActive,
-            sessionVersion: users.sessionVersion
+            sessionVersion: users.sessionVersion,
+            mustChangePassword: users.mustChangePassword,
+            passwordExpiresAt: users.passwordExpiresAt
           })
           .from(users)
           .where(and(eq(users.username, username), isNull(users.deletedAt)))
@@ -189,7 +195,9 @@ export const authOptions: NextAuthOptions = {
           branchId: u.branchId,
           fullName: u.fullName,
           isEmployee: false,
-          sessionVersion: u.sessionVersion
+          sessionVersion: u.sessionVersion,
+          mustChangePassword: u.mustChangePassword,
+          passwordExpiresAt: u.passwordExpiresAt
         } as any
       },
     }),
@@ -261,7 +269,9 @@ export const authOptions: NextAuthOptions = {
           fullName: `${emp.firstName} ${emp.lastName}`.trim(),
           isEmployee: true,
           employeeId: emp.id,
-          sessionVersion: emp.sessionVersion
+          sessionVersion: emp.sessionVersion,
+          mustChangePassword: emp.mustChangePassword,
+          passwordExpiresAt: emp.passwordExpiresAt
         } as any
       },
     }),
@@ -339,7 +349,9 @@ export const authOptions: NextAuthOptions = {
           fullName: `${emp.firstName} ${emp.lastName}`.trim(),
           isEmployee: true,
           employeeId: emp.id,
-          sessionVersion: emp.sessionVersion
+          sessionVersion: emp.sessionVersion,
+          mustChangePassword: emp.mustChangePassword,
+          passwordExpiresAt: emp.passwordExpiresAt
         } as any
       },
     }),
@@ -355,6 +367,10 @@ export const authOptions: NextAuthOptions = {
         token.isEmployee = (user as any).isEmployee
         token.employeeId = (user as any).employeeId
         token.sessionVersion = (user as any).sessionVersion
+        
+        const mustChange = (user as any).mustChangePassword === true
+        const expired = (user as any).passwordExpiresAt ? new Date((user as any).passwordExpiresAt) < new Date() : false
+        token.requiresPasswordChange = mustChange || expired
       }
       return token
     },
@@ -368,6 +384,7 @@ export const authOptions: NextAuthOptions = {
           ; (session.user as any).username = (token as any).username
           ; (session.user as any).isEmployee = (token as any).isEmployee
           ; (session.user as any).employeeId = (token as any).employeeId
+          ; (session.user as any).requiresPasswordChange = (token as any).requiresPasswordChange
 
         try {
           const isEmployee = token.isEmployee === true

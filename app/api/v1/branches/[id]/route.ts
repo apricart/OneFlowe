@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { invalidateByPrefix } from "@/lib/cache-utils"
 import { withTenant, withSuperAdmin } from "@/lib/db"

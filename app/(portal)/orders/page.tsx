@@ -30,6 +30,8 @@ import {
   Receipt,
   XCircle,
   Activity,
+  LayoutGrid,
+  Building2,
 } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
@@ -38,6 +40,7 @@ import { OrdersDirectory } from "@/components/orders/orders-directory"
 import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { startOfDay, endOfDay } from "date-fns"
 
 type DateRange = {
@@ -84,6 +87,21 @@ export default function OrdersManagementPage() {
     isInitialized,
     setBranchIds: setContextBranchIds
   } = useAppContext()
+  
+  // Fetch groups and branches for filtering
+  const { data: groupsData } = useSWR(
+    organizationId ? `/api/v1/groups?organizationId=${organizationId}` : null,
+    fetcher
+  )
+  
+  const { data: branchesData } = useSWR(
+    organizationId ? `/api/v1/branches?organizationId=${organizationId}&limit=100` : null,
+    fetcher
+  )
+  
+  const groups = groupsData?.items || []
+  const allBranches = branchesData?.items || []
+  
   const userRole = (session?.user as any)?.role
   const isBranchAdmin = userRole === "BRANCH_ADMIN"
   const isHeadOffice = userRole === "HEAD_OFFICE"
@@ -92,6 +110,14 @@ export default function OrdersManagementPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [dateRange, setDateRange] = useState<DateRange | null>(null)
   const [activePreset, setActivePreset] = useState<FilterPreset>("all")
+  
+  // Group filter state - must be before filteredBranches
+  const [groupId, setGroupId] = useState<string>("all")
+  
+  // Filter branches based on selected group
+  const filteredBranches = groupId && groupId !== "all"
+    ? allBranches.filter((b: any) => b.groupId?.toString() === groupId)
+    : allBranches
   // Sync with global context
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [refundFilter, setRefundFilter] = useState<string>("all")
@@ -324,14 +350,9 @@ export default function OrdersManagementPage() {
   // Derive scope display from context + org/branch metadata
   // These hooks must be called before any conditional returns
   const { data: orgsData } = useSWR(organizationId ? "/api/v1/organizations" : null, fetcher)
-  const { data: branchesData } = useSWR(
-    organizationId ? `/api/v1/branches?organizationId=${organizationId}` : null,
-    fetcher
-  )
   const organizations = orgsData?.items || []
-  const branches = branchesData?.items || []
   const selectedOrg = organizations.find((o: any) => o.id.toString() === organizationId)
-  const selectedBranch = branches.find((b: any) => b.id.toString() === branchId)
+  const selectedBranch = allBranches.find((b: any) => b.id.toString() === branchId)
 
   const statusCounts = {
     all: orders.length,
@@ -453,7 +474,57 @@ export default function OrdersManagementPage() {
                 <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
 
                 {organizationId && (isSuperAdmin || isHeadOffice) && (
-                  <MultiBranchFilter organizationId={organizationId} selectedBranchIds={branchIds} onChange={handleBranchChange} />
+                  <>
+                    {/* Group Filter - disabled when branches are selected */}
+                    <Select
+                      value={groupId}
+                      onValueChange={setGroupId}
+                      disabled={branchIds.length > 0}
+                    >
+                      <SelectTrigger className={`w-[180px] h-9 text-sm gap-2 ${branchIds.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        <LayoutGrid className="h-4 w-4 text-slate-500" />
+                        <SelectValue placeholder="Select Groups" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Groups</SelectItem>
+                        {groups.map((group: any) => (
+                          <SelectItem key={group.id} value={group.id.toString()}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Branch Filter - filtered by selected group */}
+                    <Select
+                      value={branchIds.length === 1 ? branchIds[0] : branchIds.length > 1 ? "multiple" : "all"}
+                      onValueChange={(value) => {
+                        if (value === "all") {
+                          handleBranchChange([])
+                        } else if (value === "multiple") {
+                          // Keep current selection
+                        } else {
+                          handleBranchChange([value])
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-[180px] h-9 text-sm gap-2">
+                        <Building2 className="h-4 w-4 text-slate-500" />
+                        <SelectValue placeholder="Select Branches" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Branches</SelectItem>
+                        {branchIds.length > 1 && (
+                          <SelectItem value="multiple">{branchIds.length} Selected</SelectItem>
+                        )}
+                        {filteredBranches.map((branch: any) => (
+                          <SelectItem key={branch.id} value={branch.id.toString()}>
+                            {branch.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
                 )}
 
                 <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />

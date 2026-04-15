@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server"
 import { withTenant, withSuperAdmin } from "@/lib/db"
 import { organizations as orgsTable } from "@/db/schema"
@@ -5,7 +6,6 @@ import { desc, eq } from "drizzle-orm"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 import { getRequestScope } from "@/lib/auth"
 
-export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   try {

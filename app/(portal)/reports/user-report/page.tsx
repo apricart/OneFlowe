@@ -126,8 +126,13 @@ export default function UserReportPage() {
         if (compareMonths.length) globalParams.set("compareMonths", compareMonths.join(","))
         if (compareYears.length) globalParams.set("compareYears", compareYears.join(","))
     }
+    // For KPI cards: Use all-time data initially, then filtered data when user selects filters
+    const summaryUrl = (dateRange?.startDate || selectedMonths.length > 0 || selectedYears.length > 0 || contextBranchIds.length > 0)
+        ? `/api/v1/analytics/users/performance?${globalParams.toString()}&summaryOnly=true`
+        : `/api/v1/analytics/users/performance?allTime=true&summaryOnly=true`
+    
     const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR(
-        `/api/v1/analytics/users/performance?${globalParams.toString()}&summaryOnly=true`, fetcher
+        summaryUrl, fetcher
     )
 
     // Tier 2: Chart/Trend Data

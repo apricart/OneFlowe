@@ -275,10 +275,10 @@ export async function withTenant<T>(
           sql`SET LOCAL "app.current_user_id" = ${sql.raw(`'${user.id}'`)}`
         )
       }
+
+      // Enable RLS for non-super-admin users (ensures policies are enforced)
+      await tx.execute(sql`SET LOCAL row_security = on`)
     }
-    
-    // Enable RLS (ensures policies are enforced)
-    await tx.execute(sql`SET LOCAL row_security = on`)
 
     return callback(tx)
   })

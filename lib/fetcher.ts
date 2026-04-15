@@ -44,6 +44,7 @@ export async function jsonFetcher<T>(url: string, init?: RequestInit): Promise<T
 
     console.debug(`[Fetcher] ${init?.method || 'GET'} ${url}`)
     const res = await fetch(url, {
+      cache: "no-store",
       headers: {
         "Content-Type": "application/json",
       },
@@ -120,6 +121,7 @@ export async function fetcher<T>(url: string, timeoutMs: number = DEFAULT_TIMEOU
 
     try {
       const res = await fetch(url, {
+        cache: "no-store",
         headers: COMMON_HEADERS,
         signal: controller.signal,
       })

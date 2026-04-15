@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse, type NextRequest } from "next/server"
 import { withTenant, withSuperAdmin } from "@/lib/db"
 import { orders, users, branches, roles, organizations } from "@/db/schema"
@@ -39,28 +40,47 @@ export async function GET(req: NextRequest) {
     return await (scope.role === "SUPER_ADMIN" ? withSuperAdmin(handler) : withTenant(scope as any, handler))
 
     async function handler(tx: any) {
-      // 1. Resolve Organization & Branch context
+      // 1. Resolve Organization & Branch context based on role
       let organizationIds: number[] = []
-      if (organizationIdsParam) {
-        organizationIds = organizationIdsParam.split(",").map(Number).filter(id => !isNaN(id) && id > 0)
-      } else if (scope?.organizationId) {
-        organizationIds = [scope.organizationId]
-      }
-
       let branchIds: number[] = []
-      if (branchIdsParam) {
-        branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
-      } else if (groupIds.length > 0) {
-        const b = await tx.select({ id: branches.id }).from(branches).where(inArray(branches.groupId, groupIds))
-        branchIds = b.map((br: any) => br.id)
+      
+      if (scope?.role === "SUPER_ADMIN") {
+        // SUPER_ADMIN: Use params or all data
+        if (organizationIdsParam) {
+          organizationIds = organizationIdsParam.split(",").map(Number).filter(id => !isNaN(id) && id > 0)
+        }
+        if (branchIdsParam) {
+          branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
+        } else if (groupIds.length > 0) {
+          const b = await tx.select({ id: branches.id }).from(branches).where(inArray(branches.groupId, groupIds))
+          branchIds = b.map((br: any) => br.id)
+        } else if (organizationIds.length > 0) {
+          const b = await tx.select({ id: branches.id }).from(branches).where(inArray(branches.organizationId, organizationIds))
+          branchIds = b.map((br: any) => br.id)
+        } else {
+          const b = await tx.select({ id: branches.id }).from(branches)
+          branchIds = b.map((br: any) => br.id)
+        }
+      } else if (scope?.role === "HEAD_OFFICE") {
+        // HEAD_OFFICE: All branches in their organization
+        organizationIds = [scope.organizationId!]
+        if (branchIdsParam) {
+          branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
+        } else if (groupIds.length > 0) {
+          const b = await tx.select({ id: branches.id }).from(branches).where(and(inArray(branches.groupId, groupIds), eq(branches.organizationId, scope.organizationId!)))
+          branchIds = b.map((br: any) => br.id)
+        } else {
+          const b = await tx.select({ id: branches.id }).from(branches).where(eq(branches.organizationId, scope.organizationId!))
+          branchIds = b.map((br: any) => br.id)
+        }
       } else if (scope?.role === "BRANCH_ADMIN") {
+        // BRANCH_ADMIN: Only their assigned branch
         branchIds = [scope.branchId as number]
-      } else if (organizationIds.length > 0) {
-        const b = await tx.select({ id: branches.id }).from(branches).where(inArray(branches.organizationId, organizationIds))
-        branchIds = b.map((br: any) => br.id)
-      } else {
-        const b = await tx.select({ id: branches.id }).from(branches)
-        branchIds = b.map((br: any) => br.id)
+        organizationIds = scope.organizationId ? [scope.organizationId] : []
+      } else if (scope?.role === "ORDER_PORTAL") {
+        // ORDER_PORTAL: Only their branch
+        branchIds = [scope.branchId as number]
+        organizationIds = scope.organizationId ? [scope.organizationId] : []
       }
 
       if (branchIds.length === 0) return NextResponse.json({ error: "No branches resolved" }, { status: 400 })
@@ -71,7 +91,12 @@ export async function GET(req: NextRequest) {
       if (endDate) endDate.setHours(23, 59, 59, 999)
 
       const baseConditions: any[] = [inArray(orders.branchId, branchIds)]
+      if (organizationIds.length > 0) baseConditions.push(inArray(orders.organizationId, organizationIds))
       if (userIds.length > 0) baseConditions.push(inArray(orders.createdByUserId, userIds))
+      // ORDER_PORTAL can only see their own orders
+      if (scope?.role === "ORDER_PORTAL") {
+        baseConditions.push(eq(orders.createdByUserId, scope.userId!))
+      }
       if (parsedMonths.length > 0) baseConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
       if (parsedYears.length > 0) baseConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
       if (parsedMonths.length === 0 && parsedYears.length === 0) {

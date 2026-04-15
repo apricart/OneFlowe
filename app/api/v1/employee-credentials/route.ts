@@ -55,6 +55,8 @@ export async function POST(req: NextRequest) {
           firstName: firstName || "",
           lastName: lastName || "",
           mfaEnabled: mfaEnabled || false,
+          mustChangePassword: true,
+          passwordExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000), // 10 days
           createdByUserId: (session.user as any).id,
         })
         .returning()

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { withSuperAdmin } from "@/lib/db"
 import { roles } from "@/db/schema"
 import { getCached, CACHE_TTL } from "@/lib/cache-utils"

@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
@@ -213,6 +214,8 @@ export async function POST(req: Request) {
           phone: body.phone ? String(body.phone) : null,
           mfaEnabled: Boolean(body.mfaEnabled),
           isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
+          mustChangePassword: true,
+          passwordExpiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000), // 10 days
           organizationId,
           branchId,
           fullName: `${firstName} ${lastName}`,

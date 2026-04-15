@@ -63,6 +63,7 @@ const ALL_COLUMNS: ColumnDef[] = [
     { key: "group", label: "Group", defaultVisible: true },
     { key: "branchName", label: "Branch", defaultVisible: true },
     { key: "status", label: "Status", defaultVisible: true },
+    { key: "deliveryStatus", label: "Delivery Status", defaultVisible: true },
     { key: "quantityOrdered", label: "Qty Ordered", defaultVisible: true },
     { key: "quantityDelivered", label: "Qty Delivered", defaultVisible: true },
     { key: "quantityRefunded", label: "Qty Refunded", defaultVisible: true },
@@ -178,8 +179,13 @@ export default function OrderReportPage() {
         if (compareMonths.length) globalParams.set("compareMonths", compareMonths.join(","))
         if (compareYears.length) globalParams.set("compareYears", compareYears.join(","))
     }
+    // For KPI cards: Use all-time data initially, then filtered data when user selects filters
+    const summaryUrl = (dateRange?.startDate || selectedMonths.length > 0 || selectedYears.length > 0 || contextBranchIds.length > 0)
+        ? `/api/v1/analytics/summary?${globalParams.toString()}&summaryOnly=true`
+        : `/api/v1/analytics/summary?allTime=true&summaryOnly=true`
+    
     const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR(
-        `/api/v1/analytics/summary?${globalParams.toString()}&summaryOnly=true`, fetcher
+        summaryUrl, fetcher
     )
 
     // Tier 2: Chart/Trend Data
@@ -396,6 +402,7 @@ export default function OrderReportPage() {
             if (isVisible("group") && role !== "BRANCH_ADMIN") row.push(order.groupName || "-")
             if (isVisible("branchName") && role !== "BRANCH_ADMIN") row.push(order.branchName || "-")
             if (isVisible("status")) row.push(order.status)
+            if (isVisible("deliveryStatus")) row.push(order.deliveryStatus || "-")
             if (isVisible("quantityOrdered")) row.push(order.quantityOrdered || 0)
             if (isVisible("quantityDelivered")) row.push((order.quantityOrdered || 0) - (order.quantityRefunded || 0))
             if (isVisible("quantityRefunded")) row.push(order.quantityRefunded || 0)
@@ -699,6 +706,7 @@ export default function OrderReportPage() {
                                             {isVisible("group") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Group</TableHead>}
                                             {isVisible("branchName") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Store className="h-3 w-3" /> Branch</div></TableHead>}
                                             {isVisible("status") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Status</TableHead>}
+                                            {isVisible("deliveryStatus") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Delivery Status</TableHead>}
                                             {isVisible("quantityOrdered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Qty Ordered</TableHead>}
                                             {isVisible("quantityDelivered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-emerald-600">Qty Delivered</TableHead>}
                                             {isVisible("quantityRefunded") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-rose-500">Qty Refunded</TableHead>}
@@ -733,6 +741,13 @@ export default function OrderReportPage() {
                                                             <Badge variant="outline" style={{ backgroundColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}15`, color: STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8', borderColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}30` }} className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border">
                                                                 {order.status}
                                                             </Badge>
+                                                        </TableCell>
+                                                    )}
+                                                    {isVisible("deliveryStatus") && (
+                                                        <TableCell className="px-8 py-5 text-center">
+                                                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                                                {order.deliveryStatus || "---"}
+                                                            </span>
                                                         </TableCell>
                                                     )}
                                                     {isVisible("quantityOrdered") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold font-mono text-slate-600 dark:text-slate-400">{order.quantityOrdered || 0}</TableCell>}

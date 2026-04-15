@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { type NextRequest, NextResponse } from "next/server"
 import { and, eq, gte, sql, or, lt } from "drizzle-orm"
 import { withTenant, withSuperAdmin } from "@/lib/db"
@@ -29,11 +30,9 @@ export async function GET(req: NextRequest) {
         let organizationId = scope.organizationId
         let branchId = scope.branchId
         
-        const fromDate = new Date()
-        fromDate.setDate(fromDate.getDate() - 6)
-        fromDate.setHours(0, 0, 0, 0)
-
-        const orderConditions: any[] = [gte(orders.createdAt, fromDate), REVENUE_ELIGIBLE_FILTER]
+        // Default to all-time data (no date filter) - matches report behavior
+        // Only apply date filter if explicitly requested
+        const orderConditions: any[] = [REVENUE_ELIGIBLE_FILTER]
         
         // Role-based filtering enforcement - CRITICAL: Restricted roles MUST be filtered
         const RESTRICTED_ROLES = ["BRANCH_ADMIN", "ORDER_PORTAL"]
@@ -65,11 +64,29 @@ export async function GET(req: NextRequest) {
         if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") orderConditions.push(eq(branches.groupId, Number(groupIdParam)))
 
         const whereClause = and(...orderConditions)
+        
+        // Get total KPIs (all-time, all data for user's scope)
+        const kpiResult = await tx.select({
+          totalRevenue: sql<number>`COALESCE(SUM(${metricExpressions.revenue}), 0)`.mapWith(Number),
+          totalOrders: sql<number>`COUNT(*)`.mapWith(Number),
+          fulfilledOrders: sql<number>`COUNT(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END)`.mapWith(Number),
+          pendingOrders: sql<number>`COUNT(CASE WHEN UPPER(${orders.status}) = 'PENDING' THEN 1 END)`.mapWith(Number),
+          approvedOrders: sql<number>`COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' THEN 1 END)`.mapWith(Number),
+          rejectedOrders: sql<number>`COUNT(CASE WHEN UPPER(${orders.status}) IN ('REJECTED', 'CANCELLED') THEN 1 END)`.mapWith(Number),
+          refundedOrders: sql<number>`COUNT(CASE WHEN UPPER(${orders.status}) = 'REFUNDED' THEN 1 END)`.mapWith(Number),
+        }).from(orders).where(whereClause)
+        
+        // Last 7 days for chart (optional - only for trend visualization)
+        const chartFromDate = new Date()
+        chartFromDate.setDate(chartFromDate.getDate() - 6)
+        chartFromDate.setHours(0, 0, 0, 0)
+        const chartConditions = [...orderConditions, gte(orders.createdAt, chartFromDate)]
+        const chartWhereClause = and(...chartConditions)
         const dayExpr = sql`date_trunc('day', ${orders.createdAt})`
         const gmvRows = await tx
           .select({ day: dayExpr, totalCents: metricExpressions.revenue })
           .from(orders).leftJoin(branches, eq(orders.branchId, branches.id))
-          .where(whereClause).groupBy(dayExpr).orderBy(dayExpr)
+          .where(chartWhereClause).groupBy(dayExpr).orderBy(dayExpr)
 
         // SECURITY: Build branch filters - NEVER allow empty filters for restricted roles
         const branchFilters: any[] = []
@@ -154,8 +171,24 @@ export async function GET(req: NextRequest) {
           const key = new Date(row.day as any).toISOString().slice(0, 10)
           gmvMap[key] = (row.totalCents || 0) / 100
         })
+        
+        const kpis = kpiResult[0] || {
+          totalRevenue: 0, totalOrders: 0, fulfilledOrders: 0,
+          pendingOrders: 0, approvedOrders: 0, rejectedOrders: 0, refundedOrders: 0
+        }
 
         return {
+          // KPIs - all-time totals (what user sees on cards)
+          kpis: {
+            totalRevenue: Number((kpis.totalRevenue / 100).toFixed(2)),
+            totalOrders: kpis.totalOrders,
+            fulfilledOrders: kpis.fulfilledOrders,
+            pendingOrders: kpis.pendingOrders,
+            approvedOrders: kpis.approvedOrders,
+            rejectedOrders: kpis.rejectedOrders,
+            refundedOrders: kpis.refundedOrders,
+          },
+          // Chart data - last 7 days only
           gmvSeries: days.map(day => ({ label: day.label, value: Number(gmvMap[day.key]?.toFixed(2) || 0) })),
           branchSeries: branchRows.map((row: any) => ({ label: row.name || "Unnamed", value: Number(row.orderCount || 0) })),
           branchCount, pendingApprovals, ordersThisMonth,

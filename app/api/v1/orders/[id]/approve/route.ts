@@ -1,11 +1,12 @@
-import { db, withTenant } from "@/lib/db"
-import { orders } from "@/db/schema"
+import { db, withTenant, withSuperAdmin } from "@/lib/db"
+import { orders, users, roles } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { NextRequest, NextResponse } from "next/server"
 import { generateApprovalToken, hashApprovalToken } from "@/lib/approval-token"
 import { logTokenGenerated } from "@/lib/global-logger"
+import { sendOrderApprovedEmail } from "@/lib/email"
 
 export async function POST(
   req: NextRequest,
@@ -54,8 +55,21 @@ export async function POST(
         user.email || "unknown"
       )
 
-      return { plainToken }
+      return { plainToken, ord }
     })
+
+    // Fetch super admins and send email asynchronously
+    withSuperAdmin(async (saTx) => {
+      const superAdmins = await saTx.select({ email: users.email })
+        .from(users)
+        .innerJoin(roles, eq(users.roleId, roles.id))
+        .where(eq(roles.name, 'SUPER_ADMIN'))
+      
+      const saEmails = superAdmins.map(sa => sa.email).filter(Boolean)
+      if (saEmails.length > 0) {
+        await sendOrderApprovedEmail(saEmails, result.ord.tid, user.email || user.username || 'System Admin')
+      }
+    }).catch(err => console.error("Failed to notify super admins:", err))
 
     return NextResponse.json({
       message: "Order approved successfully",

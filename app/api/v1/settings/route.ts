@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { db, withTenant, withSuperAdmin } from "@/lib/db"
 import { organizationSettings, auditLogs } from "@/db/schema"
 import { eq, and } from "drizzle-orm"

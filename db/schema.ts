@@ -115,6 +115,8 @@ export const users = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     sessionVersion: integer("session_version").notNull().default(1),
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
+    passwordExpiresAt: timestamp("password_expires_at", { withTimezone: true }),
   },
   (t) => ({
     usernameIdx: uniqueIndex("users_username_idx").on(t.username),
@@ -345,6 +347,7 @@ export const orders = pgTable(
       .references(() => branches.id)
       .notNull(),
     status: varchar("status", { length: 32 }).notNull().default("PENDING"), // PENDING/APPROVED/REJECTED/FULFILLED/REFUNDED
+    deliveryStatus: varchar("delivery_status", { length: 32 }), // Confirmed, InProcess, Out For Delivery, Delivered
     subtotalCents: bigint("subtotal_cents", { mode: "number" }).notNull().default(0),
     taxCents: bigint("tax_cents", { mode: "number" }).notNull().default(0),
     totalCents: bigint("total_cents", { mode: "number" }).notNull().default(0),
@@ -870,6 +873,8 @@ export const employeeCredentials = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
     sessionVersion: integer("session_version").notNull().default(1),
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
+    passwordExpiresAt: timestamp("password_expires_at", { withTimezone: true }),
   },
   (t) => ({
     usernameUq: uniqueIndex("employee_creds_username_uq").on(t.username),

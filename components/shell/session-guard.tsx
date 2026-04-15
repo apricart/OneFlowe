@@ -2,7 +2,7 @@
 
 import { useSession, signOut } from "next-auth/react"
 import { useEffect, useRef } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 
 /**
  * SessionGuard - Monitors session status and automatically redirects
@@ -20,6 +20,7 @@ import { usePathname } from "next/navigation"
 export function SessionGuard({ children }: { children: React.ReactNode }) {
     const { data: session, status } = useSession()
     const pathname = usePathname()
+    const router = useRouter()
     const hasBeenAuthenticated = useRef(false)
     const lastKnownRole = useRef<string | null>(null)
     const isLoggingOut = useRef(false)
@@ -46,30 +47,31 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
         // AND we aren't already in the middle of a manual logout
         if (status === "unauthenticated" && hasBeenAuthenticated.current && !isLoggingOut.current) {
             console.log("[SessionGuard] Session invalidated, logging out...")
-
-            // Logic for redirecting to the correct portal login:
-            // 1. If they were an admin (any admin role), they ALWAYS go to /login
-            // 2. If they were an employee/order portal user, they go to /login
-            // 3. Fallback: use pathname logic
-            
             const loginPath = "/login"
-
             isLoggingOut.current = true
             
-            // Clean up and redirect using standard NextAuth flow
             signOut({ 
                 redirect: true, 
                 callbackUrl: loginPath 
             }).then(() => {
-                // Clear any stale local storage
                 try {
                     localStorage.removeItem("theme")
                     localStorage.removeItem("ctx.organizationId")
                     localStorage.removeItem("ctx.branchId")
                 } catch (_) { }
             })
+            return
         }
-    }, [status, pathname])
+
+        // ENFORCE PASSWORD CHANGE
+        // If the session indicates a change is required, and they aren't on the change page, redirect.
+        if (status === "authenticated" && session?.user && (session.user as any).requiresPasswordChange) {
+            if (pathname !== "/change-password") {
+                console.log("[SessionGuard] Password change required - redirecting...")
+                router.replace("/change-password")
+            }
+        }
+    }, [status, pathname, session, router])
 
     return <>{children}</>
 }

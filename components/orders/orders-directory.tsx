@@ -45,6 +45,14 @@ import {
 } from "@/components/ui/dialog"
 import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 import { Separator } from "@/components/ui/separator"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Save } from "lucide-react"
 
 type OrderItem = any // Avoiding strict type definition for speed, will rely on usage
 type OrdersDirectoryProps = {
@@ -145,6 +153,38 @@ export function OrdersDirectory({
     }
   }
 
+  const handleUpdateDeliveryStatus = async (orderId: number, status: string) => {
+    setIsProcessing(true)
+    try {
+      const res = await fetch("/api/v1/orders", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: orderId,
+          action: "update_delivery",
+          deliveryStatus: status
+        })
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to update delivery status")
+
+      toast({
+        title: "Success",
+        description: "Delivery status updated successfully",
+      })
+      onUpdate()
+    } catch (err: any) {
+      toast({
+        title: "Update Failed",
+        description: err.message,
+        variant: "destructive"
+      })
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Directory Tools */}
@@ -207,9 +247,16 @@ export function OrdersDirectory({
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">TID</p>
                       <p className="font-mono text-sm font-bold text-slate-800 dark:text-slate-100">{order.tid}</p>
                     </div>
-                    <Badge variant="outline" className={cn("rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border", statusColors.bg, statusColors.text, statusColors.border)}>
-                      {order.status}
-                    </Badge>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge variant="outline" className={cn("rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border", statusColors.bg, statusColors.text, statusColors.border)}>
+                        {order.status}
+                      </Badge>
+                      {order.deliveryStatus && (
+                        <Badge variant="secondary" className="text-[9px] font-bold uppercase px-1.5 py-0">
+                          {order.deliveryStatus}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-3 relative z-10">
@@ -249,6 +296,7 @@ export function OrdersDirectory({
                   <th className="text-left font-bold py-4 pl-6">TID</th>
                   <th className="text-left font-bold py-4">Branch</th>
                   <th className="text-left font-bold py-4">Status</th>
+                  <th className="text-left font-bold py-4">Delivery</th>
                   <th className="text-left font-bold py-4">Date</th>
                   <th className="text-right font-bold py-4 pr-6">Amount</th>
                 </tr>
@@ -278,6 +326,29 @@ export function OrdersDirectory({
                         <Badge variant="outline" className={cn("px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-lg border", statusColors.bg, statusColors.text, statusColors.border)}>
                           {order.status}
                         </Badge>
+                      </td>
+                      <td className="py-4" onClick={(e) => e.stopPropagation()}>
+                        {isSuperAdmin ? (
+                          <Select
+                            disabled={isProcessing}
+                            defaultValue={order.deliveryStatus || ""}
+                            onValueChange={(val) => handleUpdateDeliveryStatus(order.id, val)}
+                          >
+                            <SelectTrigger className="h-8 w-[140px] text-[11px] font-bold bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700">
+                              <SelectValue placeholder="Update Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Confirmed">Confirmed</SelectItem>
+                              <SelectItem value="InProcess">In Process</SelectItem>
+                              <SelectItem value="Out For Delivery">Out For Delivery</SelectItem>
+                              <SelectItem value="Delivered">Delivered</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-[11px] font-bold text-slate-500 uppercase">
+                            {order.deliveryStatus || "---"}
+                          </span>
+                        )}
                       </td>
                       <td className="py-4 font-medium text-slate-500 text-xs">
                         {format(new Date(order.createdAt), "dd MMM yyyy")}
@@ -374,16 +445,6 @@ export function OrdersDirectory({
                     <p className="text-sm text-rose-700 dark:text-rose-300 font-medium leading-relaxed">{viewingOrder.rejectionReason}</p>
                   </div>
                 )}
-
-                {isBranchAdmin && viewingOrder.approvalToken && (
-                  <div className="p-5 rounded-[2rem] bg-indigo-50/80 border border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-800/30 text-center space-y-2">
-                    <h4 className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest">Approval Token</h4>
-                    <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider mb-2">Share With H.O.</p>
-                    <div className="text-2xl font-mono font-black text-indigo-600 dark:text-indigo-400 tracking-[0.2em] bg-white dark:bg-slate-900 py-3 rounded-[1.5rem] border border-indigo-100 dark:border-indigo-800/50 shadow-sm">
-                      {viewingOrder.approvalToken}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Cute Action Footer */}
@@ -393,7 +454,8 @@ export function OrdersDirectory({
                 </div>
                 
                 <div className="flex gap-3">
-                  {viewingOrder.status.toLowerCase() === "pending" && (isBranchAdmin || isHeadOffice || isSuperAdmin) && (
+                  {/* Only BRANCH_ADMIN can approve/reject orders */}
+                  {viewingOrder.status.toLowerCase() === "pending" && isBranchAdmin && (
                     <>
                       <Button onClick={() => setActionType("reject")} variant="outline" className="flex-1 h-12 rounded-xl text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-900/20 dark:border-rose-800">
                         Reject

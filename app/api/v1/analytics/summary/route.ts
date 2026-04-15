@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse, type NextRequest } from "next/server"
 import { withTenant, withSuperAdmin } from "@/lib/db"
 import { orders, users, branches, organizations, groups, orderItems, refunds, refundItems } from "@/db/schema"
@@ -50,12 +51,27 @@ export async function GET(req: NextRequest) {
         else conditions.push(eq(sql`UPPER(${orders.status})`, statusParam.toUpperCase()))
       }
 
-      if (scope!.role === "SUPER_ADMIN" && organizationIdParam && organizationIdParam !== "null" && organizationIdParam !== "0") {
-        conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
+      // Apply organization/branch filters based on role and scope
+      if (scope!.role === "SUPER_ADMIN") {
+        if (organizationIdParam && organizationIdParam !== "null" && organizationIdParam !== "0") {
+          conditions.push(eq(orders.organizationId, Number(organizationIdParam)))
+        }
+        if (parsedBranchIds.length > 0) conditions.push(inArray(orders.branchId, parsedBranchIds))
+        else if (branchIdParam && branchIdParam !== "all" && branchIdParam !== "null") conditions.push(eq(orders.branchId, Number(branchIdParam)))
+      } else if (scope!.role === "HEAD_OFFICE") {
+        // HEAD_OFFICE: Can see all branches in their organization
+        conditions.push(eq(orders.organizationId, scope!.organizationId!))
+        if (parsedBranchIds.length > 0) conditions.push(inArray(orders.branchId, parsedBranchIds))
+        else if (branchIdParam && branchIdParam !== "all" && branchIdParam !== "null") conditions.push(eq(orders.branchId, Number(branchIdParam)))
+      } else if (scope!.role === "BRANCH_ADMIN") {
+        // BRANCH_ADMIN: Can only see their own branch
+        conditions.push(eq(orders.branchId, scope!.branchId!))
+        conditions.push(eq(orders.organizationId, scope!.organizationId!))
+      } else if (scope!.role === "ORDER_PORTAL") {
+        // ORDER_PORTAL: Can only see their own orders in their branch
+        conditions.push(eq(orders.branchId, scope!.branchId!))
+        conditions.push(eq(orders.createdByUserId, scope!.userId!))
       }
-      
-      if (parsedBranchIds.length > 0) conditions.push(inArray(orders.branchId, parsedBranchIds))
-      else if (branchIdParam && branchIdParam !== "all" && branchIdParam !== "null") conditions.push(eq(orders.branchId, Number(branchIdParam)))
 
       if (parsedGroupIds.length > 0) conditions.push(inArray(branches.groupId, parsedGroupIds))
       else if (groupIdParam && groupIdParam !== "all" && groupIdParam !== "null") conditions.push(eq(branches.groupId, Number(groupIdParam)))
@@ -87,7 +103,16 @@ export async function GET(req: NextRequest) {
       }
 
       const isFiltered = statusParam && statusParam.toLowerCase() !== "all"
-      const summaryResult = await tx.select({ totalSales: isFiltered ? sql<number>`COALESCE(SUM(${orders.totalCents}), 0)`.mapWith(Number) : metricExpressions.revenue, totalTax: sum(orders.taxCents), totalSubtotal: sum(orders.subtotalCents), orderCount: isFiltered ? count(orders.id) : metricExpressions.orderVolume, totalOrderCount: count(orders.id), totalRefunds: sum(orders.refundAmountCents) }).from(orders).leftJoin(branches, eq(orders.branchId, branches.id)).where(whereClause)
+      // For KPI cards: When no status filter, show ALL orders totals (like the table)
+      // When status filter applied, use metricExpressions for revenue-eligible calculations
+      const summaryResult = await tx.select({ 
+        totalSales: sql<number>`COALESCE(SUM(${orders.totalCents}), 0)`.mapWith(Number), 
+        totalTax: sum(orders.taxCents), 
+        totalSubtotal: sum(orders.subtotalCents), 
+        orderCount: count(orders.id), 
+        totalOrderCount: count(orders.id), 
+        totalRefunds: sum(orders.refundAmountCents) 
+      }).from(orders).leftJoin(branches, eq(orders.branchId, branches.id)).where(whereClause)
       const itemsRes = await tx.select({ totalItemsSold: sum(orderItems.quantity) }).from(orderItems).innerJoin(orders, eq(orderItems.orderId, orders.id)).leftJoin(branches, eq(orders.branchId, branches.id)).where(whereClause)
       const summary = { ...summaryResult[0], totalItemsSold: itemsRes[0]?.totalItemsSold || 0 }
 

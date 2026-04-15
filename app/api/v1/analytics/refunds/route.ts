@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from "next/server"
 import { withTenant, withSuperAdmin } from "@/lib/db"
 import { orders, branches, organizations } from "@/db/schema"

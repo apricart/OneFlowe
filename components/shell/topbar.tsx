@@ -19,7 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LogOut, Settings as SettingsIcon } from "lucide-react"
+import { LogOut, Settings as SettingsIcon, Lock } from "lucide-react"
 
 export function Topbar() {
   const { data: session } = useSession()
@@ -147,6 +147,13 @@ export function Topbar() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="mx-0 my-1" />
+            <DropdownMenuItem
+              onClick={() => (window.location.replace("/change-password"))}
+              className="gap-2 px-3 py-2 cursor-pointer"
+            >
+              <Lock className="h-4 w-4" />
+              Change Password
+            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => (window.location.replace("/settings"))}
               className="gap-2 px-3 py-2 cursor-pointer"
