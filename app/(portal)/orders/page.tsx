@@ -104,7 +104,7 @@ export default function OrdersManagementPage() {
     fetcher
   )
   
-  const groups = groupsData?.items || []
+  const groups = groupsData?.groups || []
   const allBranches = branchesData?.items || []
   
   const userRole = (session?.user as any)?.role

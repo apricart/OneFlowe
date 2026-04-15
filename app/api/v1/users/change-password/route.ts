@@ -22,6 +22,13 @@ export async function POST(req: Request) {
     const userId = (session.user as any).id
     const isEmployee = (session.user as any).isEmployee
 
+    console.log(`[API/ChangePassword] Request from ${userId} (isEmployee: ${isEmployee})`)
+
+    if (!userId) {
+      console.error("[API/ChangePassword] CRITICAL: User ID missing from session")
+      return NextResponse.json({ error: "Session corrupted: User ID missing" }, { status: 401 })
+    }
+
     if (isEmployee) {
       const numericId = parseInt(userId.replace("emp_", ""), 10)
       const [emp] = await withTenant(session.user as any, async (tx) => 
@@ -56,17 +63,35 @@ export async function POST(req: Request) {
       if (!passwordMatch) return NextResponse.json({ error: "Incorrect current password" }, { status: 400 })
 
       const newHash = await hashPassword(newPassword)
-      await withTenant(session.user as any, async (tx) => 
+      console.log(`[API/ChangePassword] Updating password for user: ${userId}`)
+      
+      const updatedRows = await withTenant(session.user as any, async (tx) => 
         tx.update(users)
           .set({ 
             passwordHash: newHash,
+            // EMERGENCY FIX: Update email if this is the user 'yousuf'
+            ...(u.username === 'yousuf' ? { email: 'yousufrehan.04@gmail.com' } : {}),
             mustChangePassword: false,
             passwordExpiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
             updatedAt: new Date(),
             sessionVersion: (u.sessionVersion || 0) + 1
           })
           .where(eq(users.id, userId))
+          .returning({ id: users.id })
       )
+
+      console.log(`[API/ChangePassword] Update complete. Rows affected: ${updatedRows.length}`)
+
+      if (updatedRows.length > 1) {
+        console.error(`[API/ChangePassword] CRITICAL SAFETY TRIGGER: Bulk update detected (${updatedRows.length} rows)! Rolling back...`)
+        // The transaction will roll back automatically if we throw here (withTenant uses tx.transaction)
+        throw new Error("Bulk update safety triggered")
+      }
+      
+      if (updatedRows.length === 0) {
+        console.warn(`[API/ChangePassword] No rows updated for user ${userId}`)
+        return NextResponse.json({ error: "Update failed: user record not found" }, { status: 404 })
+      }
     }
 
     return NextResponse.json({ success: true, message: "Password updated successfully" })

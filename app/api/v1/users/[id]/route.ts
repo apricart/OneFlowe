@@ -25,6 +25,14 @@ export async function PATCH(
 
     const params = await props.params
     const { id } = params
+
+    // Validate ID format (UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(id)) {
+      console.error(`[API/Users] Invalid target ID format: ${id}`)
+      return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 })
+    }
+
     const body = await req.json()
     if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 })
 
@@ -73,11 +81,8 @@ export async function PATCH(
 
     // Update full name if first or last name changed
     if (body.firstName || body.lastName) {
-      const [existing] = await withTenant(session.user as any, async (tx) => 
-        tx.select().from(users).where(eq(users.id, id)).limit(1)
-      ) as any[]
-      const firstName = body.firstName || existing?.firstName || ""
-      const lastName = body.lastName || existing?.lastName || ""
+      const firstName = body.firstName !== undefined ? body.firstName : (targetUser as any).firstName || ""
+      const lastName = body.lastName !== undefined ? body.lastName : (targetUser as any).lastName || ""
       patch.fullName = `${firstName} ${lastName}`.trim()
     }
 
@@ -109,9 +114,23 @@ export async function PATCH(
     }
 
     // Execute update (includes sessionVersion bump if needed — single atomic write)
-    await withTenant(session.user as any, async (tx) => 
-      tx.update(users).set(patch).where(eq(users.id, id))
+    console.log(`[API/Users] Executing update for user ${id}. Fields: ${Object.keys(patch).join(', ')}`)
+    
+    const updatedRows = await withTenant(session.user as any, async (tx) => 
+      tx.update(users).set(patch).where(eq(users.id, id)).returning({ id: users.id })
     )
+
+    console.log(`[API/Users] Update complete. Rows affected: ${updatedRows.length}`)
+
+    if (updatedRows.length > 1) {
+      console.error(`[API/Users] CRITICAL SAFETY TRIGGER: Bulk update detected (${updatedRows.length} rows)! Rolling back...`)
+      throw new Error("Bulk update safety triggered")
+    }
+
+    if (updatedRows.length === 0) {
+      console.warn(`[API/Users] No rows updated for user ${id}`)
+      return NextResponse.json({ error: "Update failed: User record not found" }, { status: 404 })
+    }
 
     // Also delete physical sessions if they exist (for database-bound sessions if used)
     if (isSecurityChange) {
