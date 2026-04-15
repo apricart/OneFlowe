@@ -129,8 +129,17 @@ export async function GET(req: NextRequest) {
       const productConditions: any[] = []
       if (parsedProductIds.length > 0) productConditions.push(inArray(globalProducts.id, parsedProductIds))
 
-      // Scope products
-      if (branchIds.length > 0) {
+      // SECURITY: Restricted roles (BRANCH_ADMIN, etc.) MUST have branchIds set
+      // If branchIds is empty for these roles, return empty result to prevent data leak
+      const restrictedRoles = ["BRANCH_ADMIN", "BRANCH_MANAGER", "ORDER_PORTAL"]
+      if (restrictedRoles.includes(scope!.role)) {
+        if (branchIds.length === 0) {
+          return NextResponse.json({ items: [], total: 0, _meta: { branchFiltered: true, role: scope!.role } })
+        }
+        // Force product filter to only show products available in their branch
+        productConditions.push(exists(tx.select().from(branchInventory).innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id)).where(and(eq(organizationInventory.globalProductId, globalProducts.id), inArray(branchInventory.branchId, branchIds)))))
+      } else if (branchIds.length > 0) {
+        // For non-restricted roles with branch filter
         productConditions.push(exists(tx.select().from(branchInventory).innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id)).where(and(eq(organizationInventory.globalProductId, globalProducts.id), inArray(branchInventory.branchId, branchIds)))))
       } else if (parsedOrgIds.length > 0) {
         productConditions.push(exists(tx.select().from(organizationInventory).where(and(eq(organizationInventory.globalProductId, globalProducts.id), inArray(organizationInventory.organizationId, parsedOrgIds)))))

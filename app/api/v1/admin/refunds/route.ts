@@ -27,6 +27,18 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url)
         const query = searchParams.get("q")?.trim()
 
+        // Get pending refunds count for notification badge
+        if (searchParams.get("count") === "pending") {
+            const countResult = await withSuperAdmin(async (tx) => {
+                const result = await tx
+                    .select({ count: sql<number>`count(*)::int` })
+                    .from(refunds)
+                    .where(eq(refunds.status, "PENDING"))
+                return result[0]?.count || 0
+            })
+            return NextResponse.json({ count: countResult })
+        }
+
         if (searchParams.has("status") && searchParams.get("status") === "pending") {
             const pendingRefunds = await withSuperAdmin(async (tx) => {
                 return tx

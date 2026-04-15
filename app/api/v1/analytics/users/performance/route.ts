@@ -88,6 +88,7 @@ export async function GET(req: NextRequest) {
           branchName: branches.name,
           organizationName: organizations.name,
           tids: sql<string>`STRING_AGG(${orders.tid}, ',')`,
+          roleName: roles.name,
           status: sql<string>`CASE WHEN ${users.deletedAt} IS NOT NULL THEN 'DELETED' WHEN ${users.isActive} = TRUE THEN 'ACTIVE' ELSE 'INACTIVE' END`,
           totalOrders: sql<number>`count(${orders.id})`,
           fulfilledOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END)`,
@@ -99,8 +100,8 @@ export async function GET(req: NextRequest) {
         .innerJoin(roles, eq(users.roleId, roles.id))
         .leftJoin(branches, eq(users.branchId, branches.id))
         .leftJoin(organizations, eq(orders.organizationId, organizations.id))
-        .where(and(...baseConditions, eq(roles.name, "ORDER_PORTAL")))
-        .groupBy(users.id, branches.name, organizations.name, users.deletedAt, users.isActive)
+        .where(and(...baseConditions))
+        .groupBy(users.id, branches.name, organizations.name, roles.name, users.deletedAt, users.isActive)
         .orderBy(desc(metricExpressions.revenue))
 
       let comparisonSummary = null
@@ -133,7 +134,7 @@ export async function GET(req: NextRequest) {
           .from(orders)
           .innerJoin(users, eq(orders.createdByUserId, users.id))
           .innerJoin(roles, eq(users.roleId, roles.id))
-          .where(and(inArray(orders.branchId, branchIds), eq(roles.name, "ORDER_PORTAL"), ...compCond))
+          .where(and(inArray(orders.branchId, branchIds), ...compCond))
 
         comparisonSummary = {
           totalOrders: Number(compStats?.compOrders || 0),
@@ -149,7 +150,7 @@ export async function GET(req: NextRequest) {
           .from(orders)
           .innerJoin(users, eq(orders.createdByUserId, users.id))
           .innerJoin(roles, eq(users.roleId, roles.id))
-          .where(and(inArray(orders.branchId, branchIds), eq(roles.name, "ORDER_PORTAL")))
+          .where(and(inArray(orders.branchId, branchIds)))
           .groupBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`)
           .orderBy(desc(sql`EXTRACT(YEAR FROM ${orders.createdAt})`))
 
@@ -180,7 +181,7 @@ export async function GET(req: NextRequest) {
           .from(orders)
           .innerJoin(users, eq(orders.createdByUserId, users.id))
           .innerJoin(roles, eq(users.roleId, roles.id))
-          .where(and(...baseConditions, eq(roles.name, "ORDER_PORTAL")))
+          .where(and(...baseConditions))
           .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
           .orderBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
 
@@ -205,7 +206,7 @@ export async function GET(req: NextRequest) {
             .from(orders)
             .innerJoin(users, eq(orders.createdByUserId, users.id))
             .innerJoin(roles, eq(users.roleId, roles.id))
-            .where(and(inArray(orders.branchId, branchIds), eq(roles.name, "ORDER_PORTAL"), ...compCond))
+            .where(and(inArray(orders.branchId, branchIds), ...compCond))
             .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
         }
 

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { withTenant, withSuperAdmin } from "@/lib/db"
-import { orders, orderItems, branches, users, globalProducts, categories, refundItems, groups, organizations } from "@/db/schema"
+import { orders, orderItems, branches, users, globalProducts, categories, refundItems, refunds, groups, organizations } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, sql } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 import { error, ok } from "@/lib/api"
@@ -99,7 +99,17 @@ export async function GET(req: NextRequest) {
       let refundQuantities: Record<number, { qty: number; amount: number }> = {}
 
       if (validOrderItemIds.length > 0) {
-        const refundsObj = await tx.select({ orderItemId: refundItems.orderItemId, qty: refundItems.quantity, amount: refundItems.amountCents }).from(refundItems).where(inArray(refundItems.orderItemId, validOrderItemIds))
+        // CRITICAL: Only count APPROVED refunds - join with refunds table to check parent status
+        const refundsObj = await tx.select({ 
+          orderItemId: refundItems.orderItemId, 
+          qty: refundItems.quantity, 
+          amount: refundItems.amountCents 
+        }).from(refundItems)
+          .innerJoin(refunds, eq(refundItems.refundId, refunds.id))
+          .where(and(
+            inArray(refundItems.orderItemId, validOrderItemIds),
+            eq(refunds.status, "APPROVED")
+          ))
         refundQuantities = refundsObj.reduce((acc: any, curr: any) => {
           if (curr.orderItemId) {
             acc[curr.orderItemId] = { qty: (acc[curr.orderItemId]?.qty || 0) + curr.qty, amount: (acc[curr.orderItemId]?.amount || 0) + (curr.amount || 0) }

@@ -28,20 +28,40 @@ export async function GET(req: NextRequest) {
       return await runner(scope as any, async (tx) => {
         let organizationId = scope.organizationId
         let branchId = scope.branchId
-        if (scope.role === "SUPER_ADMIN") {
-          if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") organizationId = Number(orgIdParam)
-          if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") branchId = Number(branchIdParam)
-        } else if (scope.role === "HEAD_OFFICE") {
-          if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") branchId = Number(branchIdParam)
-        }
-
+        
         const fromDate = new Date()
         fromDate.setDate(fromDate.getDate() - 6)
         fromDate.setHours(0, 0, 0, 0)
 
         const orderConditions: any[] = [gte(orders.createdAt, fromDate), REVENUE_ELIGIBLE_FILTER]
-        if (organizationId && scope.role === "SUPER_ADMIN") orderConditions.push(eq(orders.organizationId, organizationId))
-        if (branchId && (scope.role === "SUPER_ADMIN" || scope.role === "HEAD_OFFICE")) orderConditions.push(eq(orders.branchId, branchId))
+        
+        // Role-based filtering enforcement - CRITICAL: Restricted roles MUST be filtered
+        const RESTRICTED_ROLES = ["BRANCH_ADMIN", "ORDER_PORTAL"]
+        const isRestricted = RESTRICTED_ROLES.includes(scope.role)
+        
+        if (scope.role === "SUPER_ADMIN") {
+          // SUPER_ADMIN can optionally filter by org/branch
+          if (orgIdParam && orgIdParam !== "null" && orgIdParam !== "0") organizationId = Number(orgIdParam)
+          if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") branchId = Number(branchIdParam)
+          if (organizationId) orderConditions.push(eq(orders.organizationId, organizationId))
+          if (branchId) orderConditions.push(eq(orders.branchId, branchId))
+        } else if (scope.role === "HEAD_OFFICE") {
+          // HEAD_OFFICE can filter by branch within their org
+          if (branchIdParam && branchIdParam !== "null" && branchIdParam !== "0") branchId = Number(branchIdParam)
+          orderConditions.push(eq(orders.organizationId, organizationId!))
+          if (branchId) orderConditions.push(eq(orders.branchId, branchId))
+        } else if (scope.role === "BRANCH_ADMIN") {
+          // BRANCH_ADMIN is FORCED to their own branch - CANNOT see other branches
+          branchId = scope.branchId!
+          orderConditions.push(eq(orders.branchId, branchId))
+          if (organizationId) orderConditions.push(eq(orders.organizationId, organizationId))
+        } else if (scope.role === "ORDER_PORTAL") {
+          // ORDER_PORTAL is FORCED to their own branch AND own orders only
+          branchId = scope.branchId!
+          orderConditions.push(eq(orders.branchId, branchId))
+          orderConditions.push(eq(orders.createdByUserId, scope.userId!))
+          if (organizationId) orderConditions.push(eq(orders.organizationId, organizationId))
+        }
         if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") orderConditions.push(eq(branches.groupId, Number(groupIdParam)))
 
         const whereClause = and(...orderConditions)
@@ -51,10 +71,25 @@ export async function GET(req: NextRequest) {
           .from(orders).leftJoin(branches, eq(orders.branchId, branches.id))
           .where(whereClause).groupBy(dayExpr).orderBy(dayExpr)
 
+        // SECURITY: Build branch filters - NEVER allow empty filters for restricted roles
         const branchFilters: any[] = []
         if (organizationId && scope.role === "SUPER_ADMIN") branchFilters.push(eq(branches.organizationId, organizationId))
-        if (branchId) branchFilters.push(eq(branches.id, branchId))
+        
+        // CRITICAL: For restricted roles, ALWAYS enforce branch filter
+        if (isRestricted && branchId) {
+          branchFilters.push(eq(branches.id, branchId))
+        } else if (branchId) {
+          branchFilters.push(eq(branches.id, branchId))
+        }
+        
         if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") branchFilters.push(eq(branches.groupId, Number(groupIdParam)))
+
+        // SECURITY: If no filters and restricted role, force their branch only
+        const finalBranchWhere = branchFilters.length > 0 
+          ? and(...branchFilters)
+          : isRestricted && branchId 
+            ? eq(branches.id, branchId) 
+            : undefined
 
         const branchRows = await tx.select({
           id: branches.id,
@@ -62,18 +97,26 @@ export async function GET(req: NextRequest) {
           orderCount: sql<number>`coalesce(count(${orders.id}), 0)`.mapWith(Number),
         }).from(branches)
           .leftJoin(orders, and(eq(orders.branchId, branches.id), ...orderConditions))
-          .where(branchFilters.length ? and(...branchFilters) : undefined)
-          .groupBy(branches.id).orderBy(sql`coalesce(count(${orders.id}), 0) desc`).limit(scope.role === "BRANCH_ADMIN" ? 1 : 5)
+          .where(finalBranchWhere)
+          .groupBy(branches.id).orderBy(sql`coalesce(count(${orders.id}), 0) desc`).limit(scope.role === "BRANCH_ADMIN" || scope.role === "ORDER_PORTAL" ? 1 : 5)
 
         const branchCountRows = await tx.select({ count: sql<number>`coalesce(count(${branches.id}), 0)` }).from(branches)
-          .where(branchFilters.length ? and(...branchFilters) : undefined)
+          .where(finalBranchWhere)
         const branchCount = Number(branchCountRows[0]?.count || 0)
 
         let pendingApprovals = 0
         if (scope.role !== "SUPER_ADMIN") {
+          const pendingConditions: any[] = [eq(sql`UPPER(${orders.status})`, "PENDING")]
+          if (organizationId) pendingConditions.push(eq(orders.organizationId, organizationId))
+          // CRITICAL: Restricted roles MUST have branch filter
+          if (isRestricted && branchId) {
+            pendingConditions.push(eq(orders.branchId, branchId))
+          } else if (branchId) {
+            pendingConditions.push(eq(orders.branchId, branchId))
+          }
           const pendingRow = await tx.select({ count: sql<number>`coalesce(count(${orders.id}), 0)` }).from(orders)
             .leftJoin(branches, eq(orders.branchId, branches.id))
-            .where(and(or(eq(sql`UPPER(${orders.status})`, "PENDING")), organizationId ? eq(orders.organizationId, organizationId) : undefined, branchId ? eq(orders.branchId, branchId) : undefined))
+            .where(and(...pendingConditions))
           pendingApprovals = Number(pendingRow[0]?.count || 0)
         }
 
@@ -82,9 +125,22 @@ export async function GET(req: NextRequest) {
         startOfMonth.setHours(0, 0, 0, 0)
         const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 
+        const monthConditions: any[] = [
+          gte(orders.createdAt, startOfMonth), 
+          lt(orders.createdAt, startOfNextMonth), 
+          REVENUE_ELIGIBLE_FILTER
+        ]
+        if (organizationId && scope.role === "SUPER_ADMIN") monthConditions.push(eq(orders.organizationId, organizationId))
+        // CRITICAL: Restricted roles MUST have branch filter
+        if (isRestricted && branchId) {
+          monthConditions.push(eq(orders.branchId, branchId))
+        } else if (branchId) {
+          monthConditions.push(eq(orders.branchId, branchId))
+        }
+
         const ordersMonthRow = await tx.select({ count: sql<number>`coalesce(count(${orders.id}), 0)` }).from(orders)
           .leftJoin(branches, eq(orders.branchId, branches.id))
-          .where(and(gte(orders.createdAt, startOfMonth), lt(orders.createdAt, startOfNextMonth), REVENUE_ELIGIBLE_FILTER, organizationId && scope.role === "SUPER_ADMIN" ? eq(orders.organizationId, organizationId) : undefined, branchId ? eq(orders.branchId, branchId) : undefined))
+          .where(and(...monthConditions))
         const ordersThisMonth = Number(ordersMonthRow[0]?.count || 0)
 
         const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -102,7 +158,8 @@ export async function GET(req: NextRequest) {
         return {
           gmvSeries: days.map(day => ({ label: day.label, value: Number(gmvMap[day.key]?.toFixed(2) || 0) })),
           branchSeries: branchRows.map((row: any) => ({ label: row.name || "Unnamed", value: Number(row.orderCount || 0) })),
-          branchCount, pendingApprovals, ordersThisMonth
+          branchCount, pendingApprovals, ordersThisMonth,
+          userRole: scope.role
         }
       })
     }

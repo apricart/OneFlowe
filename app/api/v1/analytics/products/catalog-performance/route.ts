@@ -96,8 +96,13 @@ export async function GET(req: NextRequest) {
         const cats = await tx.select({ id: categories.id, name: categories.name, parentId: categories.parentId }).from(categories)
         cats.forEach((c: any) => categoriesMap.set(c.id, c))
 
+        // SECURITY: For restricted roles (BRANCH_ADMIN, etc.), enforce strict branch filtering
+        const restrictedRoles = ["BRANCH_ADMIN", "BRANCH_MANAGER", "ORDER_PORTAL"]
+        const isRestricted = restrictedRoles.includes(scope!.role)
+        
         let salesBranchIds = branchIds
-        if (salesBranchIds.length === 0 && scope!.organizationId) {
+        // Only allow org-wide fallback for non-restricted roles
+        if (!isRestricted && salesBranchIds.length === 0 && scope!.organizationId) {
           const orgBranches = await tx.select({ id: branches.id }).from(branches).where(eq(branches.organizationId, scope!.organizationId))
           salesBranchIds = orgBranches.map((b: any) => b.id)
         }

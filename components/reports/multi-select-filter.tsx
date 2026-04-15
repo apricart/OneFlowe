@@ -61,35 +61,29 @@ export function MultiSelectFilter({
     }, [items, searchQuery])
 
     const toggleItem = (id: string | number) => {
-        let newDraft: (string | number)[] = []
         setDraft(prev => {
             if (prev.includes(id)) {
-                newDraft = prev.filter(i => i !== id)
+                return prev.filter(i => i !== id)
             } else if (maxSelect === 1) {
-                newDraft = [id]
+                return [id]
             } else if (maxSelect && prev.length >= maxSelect) {
-                newDraft = prev
+                return prev
             } else {
-                newDraft = [...prev, id]
+                return [...prev, id]
             }
-            // Sync onChange immediately to match Global filters
-            setTimeout(() => onChange(newDraft), 0)
-            return newDraft
         })
     }
 
     const selectAll = () => {
-        const newDraft = items.map(i => i.id)
-        setDraft(newDraft)
-        onChange(newDraft)
+        setDraft(items.map(i => i.id))
     }
 
     const clearAll = () => {
         setDraft([])
-        onChange([])
     }
 
     const handleApply = () => {
+        onChange(draft)
         setOpen(false)
     }
 

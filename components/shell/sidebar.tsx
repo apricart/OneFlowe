@@ -90,7 +90,6 @@ const getNavigationByRole = (role: string) => {
         icon: BarChart3,
         subItems: [
           { href: "/reports/order-report", label: "Order Report" },
-          { href: "/reports/product-performance", label: "Product Report" },
           { href: "/reports/user-report", label: "User Report" },
           { href: "/reports/branch-reports", label: "Branch Report" },
         ]

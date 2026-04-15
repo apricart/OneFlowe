@@ -16,8 +16,8 @@ export async function POST(
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const user = session.user as any
-    const allowedRoles = ["HEAD_OFFICE", "SUPER_ADMIN"]
-    if (!allowedRoles.includes(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    // CRITICAL: Only SUPER_ADMIN can fulfill orders
+    if (user.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Forbidden - Only Super Admin can fulfill orders" }, { status: 403 })
 
     const body = await req.json().catch(() => ({}))
     const { approvalToken } = body

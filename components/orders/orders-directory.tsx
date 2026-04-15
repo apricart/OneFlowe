@@ -404,7 +404,7 @@ export function OrdersDirectory({
                     </>
                   )}
 
-                  {viewingOrder.status.toLowerCase() === "approved" && (isSuperAdmin || isHeadOffice) && (
+                  {viewingOrder.status.toLowerCase() === "approved" && isSuperAdmin && (
                     <Button onClick={() => setActionType("fulfill")} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-600/20">
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Fulfill Order

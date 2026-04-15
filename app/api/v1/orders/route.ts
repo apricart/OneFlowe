@@ -144,10 +144,9 @@ export async function GET(req: NextRequest) {
         : selectBase.orderBy(desc(orders.createdAt)))
 
       const sanitizedItemsSync = items.map(item => {
-        const canSeeToken =
-          item.approvedByUserId === userId ||
-          role === "SUPER_ADMIN" ||
-          role === "BRANCH_ADMIN";
+        // Only BRANCH_ADMIN can see the approval token
+        // The token is for Branch Admin to share with Head Office for verification
+        const canSeeToken = role === "BRANCH_ADMIN";
 
         return {
           ...item,
