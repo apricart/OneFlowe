@@ -347,11 +347,13 @@ export default function UserReportPage() {
     }, [trend, compareTrend, chartYears, chartMonths, chartData, isChartUserView])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
+        // Use "Purchased" for buyer roles (HEAD_OFFICE, BRANCH_ADMIN), "Spent" for others
+        const amountHeader = isBuyer ? "Purchased" : "Spent"
         const headers = role === "SUPER_ADMIN"
-            ? ["Employee ID", "Name", "Email", "Status", "Organization", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
+            ? ["Employee ID", "Name", "Email", "Status", "Organization", "Branch", "Orders", "Fulfilled", "Refunded", amountHeader]
             : role === "BRANCH_ADMIN"
-                ? ["Employee ID", "Name", "Email", "Status", "Orders", "Fulfilled", "Refunded", "Spent"]
-                : ["Employee ID", "Name", "Email", "Status", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
+                ? ["Employee ID", "Name", "Email", "Status", "Orders", "Fulfilled", "Refunded", amountHeader]
+                : ["Employee ID", "Name", "Email", "Status", "Branch", "Orders", "Fulfilled", "Refunded", amountHeader]
         const rows = filteredUsers.map((u: any) => [
             u.employeeId || "-", u.userName, u.userEmail, u.status || "active",
             ...(role === "SUPER_ADMIN" ? [u.organizationName || 'N/A'] : []),

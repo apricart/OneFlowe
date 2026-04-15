@@ -194,12 +194,6 @@ export default function BranchesPage() {
           variant="green"
         />
         <StatCard
-          label="Admin Coverage"
-          value={`${coverage}%`}
-          icon={<Users className="h-5 w-5" />}
-          variant="purple"
-        />
-        <StatCard
           label="Needs Attention"
           value={inactiveBranches}
           icon={<AlertCircle className="h-5 w-5" />}

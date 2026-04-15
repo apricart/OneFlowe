@@ -15,9 +15,10 @@ interface MultiBranchFilterProps {
     organizationId?: string | null
     selectedBranchIds: string[]
     onChange: (ids: string[]) => void
+    branches?: Branch[] // Optional: filtered branches from parent (e.g., filtered by group)
 }
 
-export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange }: MultiBranchFilterProps) {
+export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange, branches: propBranches }: MultiBranchFilterProps) {
     const [open, setOpen] = useState(false)
     const [searchQuery, setSearchQuery] = useState("")
     const dropdownRef = useRef<HTMLDivElement>(null)
@@ -39,7 +40,7 @@ export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange 
         }
     }, [open])
 
-    const url = organizationId
+    const url = organizationId && !propBranches
         ? `/api/v1/branches?organizationId=${organizationId}&limit=100`
         : null
 
@@ -47,7 +48,7 @@ export function MultiBranchFilter({ organizationId, selectedBranchIds, onChange 
         revalidateOnFocus: false,
     })
 
-    const branches = data?.items || []
+    const branches = propBranches || data?.items || []
 
     // Filter branches based on search query
     const filteredBranches = useMemo(() => {

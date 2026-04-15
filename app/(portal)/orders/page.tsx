@@ -11,6 +11,13 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Package,
   Search,
   Filter,
@@ -112,6 +119,9 @@ export default function OrdersManagementPage() {
   // Error dialog state
   const [showErrorDialog, setShowErrorDialog] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
+
+  // Group filter state
+  const [groupId, setGroupId] = useState<string>("")
 
   const handleBranchChange = useCallback((ids: string[]) => {
     setContextBranchIds(ids)
@@ -328,10 +338,22 @@ export default function OrdersManagementPage() {
     organizationId ? `/api/v1/branches?organizationId=${organizationId}` : null,
     fetcher
   )
+  const { data: groupsData } = useSWR(
+    organizationId ? `/api/v1/groups?organizationId=${organizationId}` : null,
+    fetcher
+  )
+
   const organizations = orgsData?.items || []
-  const branches = branchesData?.items || []
+  const allBranches = branchesData?.items || []
+  const groups = groupsData?.items || []
+
+  // Filter branches based on selected group
+  const filteredBranches = groupId
+    ? allBranches.filter((b: any) => b.groupId?.toString() === groupId)
+    : allBranches
+
   const selectedOrg = organizations.find((o: any) => o.id.toString() === organizationId)
-  const selectedBranch = branches.find((b: any) => b.id.toString() === branchId)
+  const selectedBranch = allBranches.find((b: any) => b.id.toString() === branchId)
 
   const statusCounts = {
     all: orders.length,
@@ -453,7 +475,33 @@ export default function OrdersManagementPage() {
                 <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
 
                 {organizationId && (isSuperAdmin || isHeadOffice) && (
-                  <MultiBranchFilter organizationId={organizationId} selectedBranchIds={branchIds} onChange={handleBranchChange} />
+                  <>
+                    {/* Group Filter - disabled when branches are selected */}
+                    <Select
+                      value={groupId}
+                      onValueChange={setGroupId}
+                      disabled={branchIds.length > 0}
+                    >
+                      <SelectTrigger className={`w-[180px] h-9 text-sm ${branchIds.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        <SelectValue placeholder="All Groups" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">All Groups</SelectItem>
+                        {groups.map((group: any) => (
+                          <SelectItem key={group.id} value={group.id.toString()}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <MultiBranchFilter
+                      organizationId={organizationId}
+                      selectedBranchIds={branchIds}
+                      onChange={handleBranchChange}
+                      branches={filteredBranches}
+                    />
+                  </>
                 )}
 
                 <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />

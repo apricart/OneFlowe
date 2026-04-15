@@ -159,9 +159,9 @@ export async function GET(req: NextRequest) {
       if (summaryOnly) {
         return NextResponse.json({
           data: {
-            totalOrders: results.reduce((sum, u) => sum + Number(u.totalOrders || 0), 0),
-            fulfilledOrders: results.reduce((sum, u) => sum + Number(u.fulfilledOrders || 0), 0),
-            totalSpentCents: results.reduce((sum, u) => sum + Number(u.totalSpentCents || 0), 0),
+            totalOrders: results.reduce((sum: number, u: any) => sum + Number(u.totalOrders || 0), 0),
+            fulfilledOrders: results.reduce((sum: number, u: any) => sum + Number(u.fulfilledOrders || 0), 0),
+            totalSpentCents: results.reduce((sum: number, u: any) => sum + Number(u.totalSpentCents || 0), 0),
             totalUsers: results.length
           },
           comparison: comparisonSummary
