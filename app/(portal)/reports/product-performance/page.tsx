@@ -100,7 +100,7 @@ export default function ProductPerformancePage() {
     const chartTitleLabel = isBuyer ? "Top Products by Purchase" : "Top Products by Revenue"
     const tableRevenueHeader = isBuyer ? "Purchased" : "Revenue"
     const drawerRevenueLabel = isBuyer ? "Amount Purchased" : "Revenue Generated"
-    const exportRevenueHeader = isBuyer ? "Purchased" : "Revenue"
+    const exportRevenueHeader = "Purchase"
     const barChartLegendLabel = isBuyer ? "PURCHASED" : "REVENUE"
     const revenueShortLabel = isBuyer ? "Purchased" : "Revenue"
     const analyticsSubtitleLabel = isBuyer ? "Consolidated purchase stream" : "Consolidated revenue stream"

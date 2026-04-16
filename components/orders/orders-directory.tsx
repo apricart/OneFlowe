@@ -125,7 +125,7 @@ export function OrdersDirectory({
         title: "Success",
         description: `Order successfully ${actionType}ed.`,
       })
-      
+
       setActionType(null)
       if (actionType !== "approve") {
         setViewingOrder(null)
@@ -201,7 +201,7 @@ export function OrdersDirectory({
                 >
                   {/* Subtle Background Accent */}
                   <div className={cn("absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full opacity-20 -translate-y-1/2 translate-x-1/2 transition-opacity group-hover:opacity-40", statusColors.bg.split(' ')[0])} />
-                  
+
                   <div className="flex justify-between items-start mb-4 relative z-10">
                     <div className="space-y-1">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">TID</p>
@@ -217,7 +217,7 @@ export function OrdersDirectory({
                       <Building2 className="h-4 w-4 opacity-70 text-indigo-500" />
                       <span className="truncate font-medium">{order.branchName || `#${order.branchId}`}</span>
                     </div>
-                    
+
                     <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
                       <CalendarIcon className="h-4 w-4 opacity-70 text-blue-500" />
                       <span className="truncate font-medium">{format(new Date(order.createdAt), "dd MMM yyyy, p")}</span>
@@ -304,7 +304,7 @@ export function OrdersDirectory({
                 {/* Decorative Blobs */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-pink-300/20 dark:bg-pink-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
                 <div className="absolute bottom-0 left-0 w-40 h-40 bg-blue-300/20 dark:bg-blue-500/10 rounded-full blur-2xl translate-y-1/2 -translate-x-1/4 pointer-events-none" />
-                
+
                 <div className="flex justify-between items-start mb-6 relative z-10">
                   <div className="flex items-center gap-4">
                     <div className="h-14 w-14 rounded-[1.2rem] bg-indigo-100/80 dark:bg-indigo-900/40 border border-white/50 dark:border-indigo-800/30 flex items-center justify-center text-indigo-500 dark:text-indigo-400 shadow-sm backdrop-blur-sm -rotate-3 transition-transform hover:rotate-0">
@@ -391,7 +391,7 @@ export function OrdersDirectory({
                 <div className="flex bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 h-14 rounded-2xl justify-center items-center border border-dashed border-slate-200 dark:border-slate-700 transition-colors">
                   <ReceiptIconButton orderId={viewingOrder.id} />
                 </div>
-                
+
                 <div className="flex gap-3">
                   {viewingOrder.status.toLowerCase() === "pending" && (isBranchAdmin || isHeadOffice || isSuperAdmin) && (
                     <>
@@ -404,7 +404,7 @@ export function OrdersDirectory({
                     </>
                   )}
 
-                  {viewingOrder.status.toLowerCase() === "approved" && (isSuperAdmin || isHeadOffice) && (
+                  {viewingOrder.status.toLowerCase() === "approved" && isSuperAdmin && (
                     <Button onClick={() => setActionType("fulfill")} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-600/20">
                       <CheckCircle className="mr-2 h-4 w-4" />
                       Fulfill Order
@@ -465,13 +465,13 @@ export function OrdersDirectory({
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setActionType(null)} disabled={isProcessing} className="h-11 rounded-xl">Cancel</Button>
-            <Button 
-              onClick={executeAction} 
+            <Button
+              onClick={executeAction}
               disabled={isProcessing || (actionType === 'reject' && !rejectReason) || (actionType === 'fulfill' && !fulfillToken)}
-              className={cn("h-11 rounded-xl font-bold px-6 text-white shadow-lg", 
-                actionType === 'reject' ? "bg-rose-600 hover:bg-rose-500 shadow-rose-600/20" : 
-                actionType === 'approve' ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20" : 
-                "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20"
+              className={cn("h-11 rounded-xl font-bold px-6 text-white shadow-lg",
+                actionType === 'reject' ? "bg-rose-600 hover:bg-rose-500 shadow-rose-600/20" :
+                  actionType === 'approve' ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20" :
+                    "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20"
               )}
             >
               {isProcessing ? "Processing..." : `Confirm ${actionType}`}
@@ -491,7 +491,7 @@ export function OrdersDirectory({
         <DialogContent className="max-w-md border-0 shadow-2xl bg-indigo-600 text-white rounded-[2rem] overflow-hidden p-0">
           <div className="p-8 space-y-6 relative">
             <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-            
+
             <div className="text-center space-y-2 relative z-10">
               <div className="h-16 w-16 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/30">
                 <CheckCircle className="h-10 w-10 text-white" />
@@ -506,7 +506,7 @@ export function OrdersDirectory({
               <p className="text-xs font-bold text-indigo-200/80 italic">⚠️ This token will not be shown again. Please copy it now.</p>
             </div>
 
-            <Button 
+            <Button
               onClick={() => {
                 setShowTokenDialog(false)
                 setViewingOrder(null)

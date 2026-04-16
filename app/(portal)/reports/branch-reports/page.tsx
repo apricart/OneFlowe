@@ -57,9 +57,9 @@ export default function BranchReportsPage() {
     const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
 
     // Role-based terminology
-    const revenueLabel = "Net Revenue"
+    const revenueLabel = "Purchase"
     const avgLabel = "Avg Order Value"
-    const revenueHeader = "Revenue"
+    const revenueHeader = "Purchase"
     const orderLabel = "Orders"
     const [hasMounted, setHasMounted] = useState(false)
 

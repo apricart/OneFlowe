@@ -19,26 +19,26 @@ import { BranchFilter } from "@/components/reports/branch-filter"
 import { DateRange } from "@/lib/hooks/use-sales-performance"
 import { startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
 import { Badge } from "@/components/ui/badge"
-import { 
-    ResponsiveContainer, 
-    ComposedChart, 
-    Bar, 
-    XAxis, 
-    YAxis, 
-    CartesianGrid, 
-    Tooltip, 
-    Legend, 
+import {
+    ResponsiveContainer,
+    ComposedChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    Legend,
     Cell,
     Line
 } from "recharts"
-import { 
-    Building2, 
-    Users, 
-    TrendingUp, 
-    RefreshCw, 
-    CheckCircle2, 
-    RotateCcw, 
-    BarChart3, 
+import {
+    Building2,
+    Users,
+    TrendingUp,
+    RefreshCw,
+    CheckCircle2,
+    RotateCcw,
+    BarChart3,
     ListOrdered,
     LayoutDashboard,
     LayoutGrid,
@@ -122,20 +122,20 @@ export default function OrganizationReportPage() {
     const startFromUrl = searchParams.get("startDate")
     const endFromUrl = searchParams.get("endDate")
     const [dateRange, setDateRange] = useState<DateRange | null>(
-        startFromUrl && endFromUrl 
+        startFromUrl && endFromUrl
             ? { startDate: new Date(startFromUrl), endDate: new Date(endFromUrl) }
             : null
     )
     const [activePreset, setActivePreset] = useState<FilterPreset>((searchParams.get("preset") as FilterPreset) || "all")
     const [compare, setCompare] = useState(searchParams.get("compare") === "true")
     const [compareRange, setCompareRange] = useState<DateRange | null>(null)
-    
+
     // Global Multi-Selects
     const [selectedMonths, setSelectedMonths] = useState<number[]>([])
     const [selectedYears, setSelectedYears] = useState<number[]>([])
     const [compareMonths, setCompareMonths] = useState<number[]>([])
     const [compareYears, setCompareYears] = useState<number[]>([])
-    
+
     // Branch/Organization Scope
     const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>([])
     const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
@@ -214,14 +214,14 @@ export default function OrganizationReportPage() {
     }, [])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Organization Name", "Status", "Active Branches", "Inactive Branches", "Managed Users", isBuyer ? "Purchased (PKR)" : "Revenue (PKR)", "Orders"]
+        const headers = ["Organization Name", "Status", "Active Branches", "Inactive Branches", "Managed Users", isBuyer ? "Purchased (PKR)" : "Purchase (PKR)", "Orders"]
         const rows = filteredStats.map((org: any) => [
-            org.organizationName, 
-            org.organizationStatus || "active", 
-            org.activeBranchCount, 
-            org.inactiveBranchCount, 
-            org.totalUserCount, 
-            org.revenue.toFixed(2), 
+            org.organizationName,
+            org.organizationStatus || "active",
+            org.activeBranchCount,
+            org.inactiveBranchCount,
+            org.totalUserCount,
+            org.revenue.toFixed(2),
             org.orderCount
         ])
 
@@ -277,10 +277,10 @@ export default function OrganizationReportPage() {
 
         // Case A: Multiple years -> Show Years on X-Axis
         if (chartYears.length > 1) {
-            return chartYears.sort((a,b) => a-b).map(year => {
+            return chartYears.sort((a, b) => a - b).map(year => {
                 const yearData = trend.filter((t: any) => t.period.startsWith(String(year)))
                 const compData = chartData?.comparisonTrend?.filter((t: any) => t.period.startsWith(String(year))) || []
-                
+
                 return {
                     period: String(year),
                     revenue: yearData.reduce((sum: number, t: any) => sum + (t.revenue || 0), 0),
@@ -292,9 +292,9 @@ export default function OrganizationReportPage() {
 
         // Case B: Single year (or default) -> Show Months on X-Axis
         const activeYear = chartYears.length === 1 ? chartYears[0] : currentYear
-        const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12 
-            ? [...chartMonths].sort((a,b) => a-b) 
-            : [1,2,3,4,5,6,7,8,9,10,11,12]
+        const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12
+            ? [...chartMonths].sort((a, b) => a - b)
+            : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
         return monthsToShow.map(m => {
             const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -303,7 +303,7 @@ export default function OrganizationReportPage() {
             const compData = chartData?.comparisonTrend?.find((t: any) => t.period === periodKey)
 
             return {
-                period: monthNames[m-1],
+                period: monthNames[m - 1],
                 revenue: monthData?.revenue || 0,
                 orders: monthData?.orders || 0,
                 prevRevenue: compData?.revenue || 0
@@ -339,7 +339,7 @@ export default function OrganizationReportPage() {
     }, [summary.orders, comparisonSummary.orders, compare])
 
     const filteredStats = useMemo(() => {
-        return stats.filter((s: any) => 
+        return stats.filter((s: any) =>
             s.organizationName.toLowerCase().includes(reportSearch.toLowerCase()) ||
             s.organizationId.toString().includes(reportSearch)
         )
@@ -365,16 +365,16 @@ export default function OrganizationReportPage() {
 
                     <div className="flex items-center gap-3">
                         <div className="hidden lg:flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-inner">
-                            <GlobalDateFilter 
-                                value={dateRange} 
-                                activePreset={activePreset} 
+                            <GlobalDateFilter
+                                value={dateRange}
+                                activePreset={activePreset}
                                 compare={compare}
                                 compareRange={compareRange}
                                 months={selectedMonths}
                                 years={selectedYears}
                                 compareMonths={compareMonths}
                                 compareYears={compareYears}
-                                onChange={handleDateChange} 
+                                onChange={handleDateChange}
                             />
                         </div>
                         <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => mutateGlobal()}>
@@ -387,7 +387,7 @@ export default function OrganizationReportPage() {
             <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
                 {/* ━━━ BENTO KPI GRID ━━━ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <KPICard 
+                    <KPICard
                         title={isBuyer ? "Total Purchased" : "Net Revenue"}
                         value={formatPKR(summary.revenue)}
                         icon={TrendingUp}
@@ -397,7 +397,7 @@ export default function OrganizationReportPage() {
                         comparisonLabel="Prior Period"
                         comparisonValue={compare ? formatPKR(comparisonSummary.revenue) : undefined}
                     />
-                    <KPICard 
+                    <KPICard
                         title="Total Orders"
                         value={summary.orders.toLocaleString()}
                         icon={ShoppingBag}
@@ -407,7 +407,7 @@ export default function OrganizationReportPage() {
                         comparisonLabel="Prior Period"
                         comparisonValue={compare ? comparisonSummary.orders.toLocaleString() : undefined}
                     />
-                    <KPICard 
+                    <KPICard
                         title="Total Users"
                         value={summary.users.toLocaleString()}
                         icon={Users}
@@ -415,7 +415,7 @@ export default function OrganizationReportPage() {
                         subtitle="Across all branches"
                     />
                     {role === "SUPER_ADMIN" && (
-                        <KPICard 
+                        <KPICard
                             title="Total Companies"
                             value={summary.orgs.toLocaleString()}
                             icon={Building2}
@@ -431,7 +431,7 @@ export default function OrganizationReportPage() {
                     params.set("tab", val)
                     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
                 }} className="space-y-8">
-                    
+
                     <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-1">
                         <TabsList className="bg-transparent h-auto p-0 gap-8">
                             <TabsTrigger value="analytics" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
@@ -459,7 +459,7 @@ export default function OrganizationReportPage() {
                                                 Growth & Comparison Trend
                                             </h3>
                                         </div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11">{isBuyer ? "Consolidated purchase stream" : "Consolidated revenue stream"}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11">{isBuyer ? "Consolidated purchase stream" : "Consolidated Purchase stream"}</p>
                                     </div>
                                     <Button variant="outline" size="sm" onClick={() => mutateChart()} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800">
                                         <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isChartLoading && "animate-spin")} />
@@ -474,21 +474,21 @@ export default function OrganizationReportPage() {
                                         <div className="flex items-center gap-2.5">
                                             <OrgFilter selectedIds={chartOrgIds} onChange={setChartOrgIds} />
                                             {chartOrgIds.length > 0 && (
-                                                <BranchFilter 
-                                                    selectedIds={chartBranchIds} 
-                                                    onChange={setChartBranchIds} 
+                                                <BranchFilter
+                                                    selectedIds={chartBranchIds}
+                                                    onChange={setChartBranchIds}
                                                     organizationIds={chartOrgIds}
-                                                    placeholder="Branches" 
+                                                    placeholder="Branches"
                                                 />
                                             )}
                                         </div>
                                     )}
                                     {role !== "SUPER_ADMIN" && userOrgId && (
-                                        <BranchFilter 
-                                            selectedIds={chartBranchIds} 
-                                            onChange={setChartBranchIds} 
+                                        <BranchFilter
+                                            selectedIds={chartBranchIds}
+                                            onChange={setChartBranchIds}
                                             organizationIds={[String(userOrgId)]}
-                                            placeholder="Branches" 
+                                            placeholder="Branches"
                                         />
                                     )}
                                 </div>
@@ -511,20 +511,20 @@ export default function OrganizationReportPage() {
                                                     </linearGradient>
                                                 </defs>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.3} />
-                                                <XAxis 
-                                                    dataKey="period" 
-                                                    axisLine={false} 
-                                                    tickLine={false} 
+                                                <XAxis
+                                                    dataKey="period"
+                                                    axisLine={false}
+                                                    tickLine={false}
                                                     tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
                                                     dy={10}
                                                 />
-                                                <YAxis 
-                                                    axisLine={false} 
-                                                    tickLine={false} 
+                                                <YAxis
+                                                    axisLine={false}
+                                                    tickLine={false}
                                                     tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
-                                                    tickFormatter={(v) => `₨${v >= 1000 ? (v/1000).toFixed(0)+'K' : v}`}
+                                                    tickFormatter={(v) => `₨${v >= 1000 ? (v / 1000).toFixed(0) + 'K' : v}`}
                                                 />
-                                                <Tooltip 
+                                                <Tooltip
                                                     content={({ active, payload, label }: any) => {
                                                         if (active && payload && payload.length) {
                                                             const d = payload[0].payload;
@@ -557,10 +557,10 @@ export default function OrganizationReportPage() {
                                                         return null;
                                                     }}
                                                 />
-                                                <Legend 
-                                                    verticalAlign="top" 
-                                                    align="right" 
-                                                    iconType="circle" 
+                                                <Legend
+                                                    verticalAlign="top"
+                                                    align="right"
+                                                    iconType="circle"
                                                     wrapperStyle={{ paddingBottom: 30, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}
                                                 />
                                                 <Bar dataKey="revenue" name={isBuyer ? "Total Purchased" : "Net Revenue"} fill="#6366f1" radius={[6, 6, 0, 0]} barSize={32} />
@@ -600,10 +600,10 @@ export default function OrganizationReportPage() {
                                                     <div className="flex items-center gap-4">
                                                         <div className={cn(
                                                             "h-10 w-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm",
-                                                            idx === 0 ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20" : 
-                                                            idx === 1 ? "bg-slate-200 text-slate-500 dark:bg-slate-700" :
-                                                            idx === 2 ? "bg-orange-100 text-orange-600 dark:bg-orange-500/20" :
-                                                            "bg-indigo-50 text-indigo-500 dark:bg-indigo-500/10"
+                                                            idx === 0 ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20" :
+                                                                idx === 1 ? "bg-slate-200 text-slate-500 dark:bg-slate-700" :
+                                                                    idx === 2 ? "bg-orange-100 text-orange-600 dark:bg-orange-500/20" :
+                                                                        "bg-indigo-50 text-indigo-500 dark:bg-indigo-500/10"
                                                         )}>
                                                             #{idx + 1}
                                                         </div>
@@ -658,8 +658,8 @@ export default function OrganizationReportPage() {
                                                     <div className="flex items-center gap-4">
                                                         <div className={cn(
                                                             "h-10 w-10 rounded-2xl flex items-center justify-center font-black text-sm shadow-sm",
-                                                            idx === 0 ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20" : 
-                                                            "bg-blue-50 text-blue-500 dark:bg-blue-500/10"
+                                                            idx === 0 ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20" :
+                                                                "bg-blue-50 text-blue-500 dark:bg-blue-500/10"
                                                         )}>
                                                             #{idx + 1}
                                                         </div>
@@ -695,7 +695,7 @@ export default function OrganizationReportPage() {
                         <div className="flex flex-wrap items-center gap-2.5 p-4 bg-white dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm">
                             <div className="relative flex-1 min-w-[240px]">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                                <Input 
+                                <Input
                                     placeholder="Search companies..."
                                     value={reportSearch}
                                     onChange={(e) => setReportSearch(e.target.value)}
@@ -709,9 +709,9 @@ export default function OrganizationReportPage() {
                                 <div className="flex items-center gap-2.5">
                                     <OrgFilter selectedIds={reportOrgIds} onChange={setReportOrgIds} />
                                     {reportOrgIds.length > 0 && (
-                                        <BranchFilter 
-                                            selectedIds={reportBranchIds} 
-                                            onChange={setReportBranchIds} 
+                                        <BranchFilter
+                                            selectedIds={reportBranchIds}
+                                            onChange={setReportBranchIds}
                                             organizationIds={reportOrgIds}
                                             placeholder="Branches"
                                         />
@@ -719,9 +719,9 @@ export default function OrganizationReportPage() {
                                 </div>
                             )}
                             {role !== "SUPER_ADMIN" && userOrgId && (
-                                <BranchFilter 
-                                    selectedIds={reportBranchIds} 
-                                    onChange={setReportBranchIds} 
+                                <BranchFilter
+                                    selectedIds={reportBranchIds}
+                                    onChange={setReportBranchIds}
                                     organizationIds={[String(userOrgId)]}
                                     placeholder="Branches"
                                 />
@@ -767,7 +767,7 @@ export default function OrganizationReportPage() {
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Branches (Act/Ina)</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Managed Users</TableHead>
-                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{isBuyer ? "Purchased (PKR)" : "Revenue (PKR)"}</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{isBuyer ? "Purchased (PKR)" : "Purchase (PKR)"}</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
                                             <TableHead className="px-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Fulfillment</TableHead>
                                         </TableRow>
@@ -825,7 +825,7 @@ export default function OrganizationReportPage() {
                                                         <div className="flex flex-col items-end">
                                                             <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">{formatPKR(org.revenue)}</span>
                                                             {compare && (
-                                                                <div className={cn("text-[8px] font-black uppercase tracking-widest flex items-center gap-1", 
+                                                                <div className={cn("text-[8px] font-black uppercase tracking-widest flex items-center gap-1",
                                                                     (org.comparison?.revenue > 0 && org.revenue > org.comparison?.revenue) ? "text-emerald-500" : "text-rose-500")}>
                                                                     {org.revenue > org.comparison?.revenue ? <ArrowUpRight className="h-2 w-2" /> : <ArrowDownRight className="h-2 w-2" />}
                                                                     SR {formatPKR(org.comparison?.revenue || 0)}
@@ -899,7 +899,7 @@ function OrgFilter({ selectedIds, onChange }: any) {
 function MonthFilter({ selected, onChange }: { selected: number[], onChange: (v: number[]) => void }) {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     const items = months.map((m, i) => ({ id: i + 1, label: m }))
-    
+
     return (
         <MultiSelectFilter
             title="Months"
