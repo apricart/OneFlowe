@@ -19,7 +19,10 @@ import {
   Building,
   AlertTriangle,
   Receipt,
-  FileCheck
+  FileCheck,
+  Lock,
+  Share2,
+  Copy
 } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "@/hooks/use-toast"
@@ -120,6 +123,11 @@ export function OrdersDirectory({
         title: "Success",
         description: `Order successfully ${actionType}ed.`,
       })
+
+      if (actionType === "approve" && isBranchAdmin && data.fulfillmentToken) {
+        setGeneratedToken(data.fulfillmentToken)
+        setShowTokenDialog(true)
+      }
 
       setActionType(null)
       setViewingOrder(null)
@@ -368,6 +376,37 @@ export function OrdersDirectory({
                   </div>
                 )}
 
+                {(isBranchAdmin && (viewingOrder.fulfillmentToken || viewingOrder.approvalToken) && viewingOrder.status.toLowerCase() === "approved") && (
+                  <div className="space-y-3">
+                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 pl-2">
+                       Fulfillment Token
+                    </h3>
+                    <div className="bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 p-5 rounded-[2rem] space-y-3 relative overflow-hidden group">
+                      <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider mb-2">Share With Super Admin</p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 font-mono text-lg font-black tracking-[0.2em] text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-950 px-4 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800 shadow-inner">
+                          {viewingOrder.fulfillmentToken || viewingOrder.approvalToken}
+                        </div>
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          className="h-11 w-11 rounded-xl bg-white dark:bg-slate-950 border border-indigo-100 dark:border-indigo-800 text-indigo-500 hover:bg-indigo-50 transition-all active:scale-90"
+                          onClick={() => {
+                            const tokenToCopy = viewingOrder.fulfillmentToken || viewingOrder.approvalToken || ""
+                            navigator.clipboard.writeText(tokenToCopy)
+                            toast({ title: "Copied", description: "Token copied to clipboard" })
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-[9px] font-bold text-slate-400 leading-tight">
+                        Provide this security token to the Super Admin to mark this order as fulfilled.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
 
               </div>
 
@@ -462,6 +501,48 @@ export function OrdersDirectory({
               {isProcessing ? "Processing..." : `Confirm ${actionType}`}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Token Dialog (Branch Admin Only) */}
+      <Dialog open={showTokenDialog} onOpenChange={setShowTokenDialog}>
+        <DialogContent className="max-w-md border-0 shadow-2xl bg-white/90 dark:bg-slate-900/95 backdrop-blur-xl rounded-[2rem] overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-emerald-400 to-indigo-500" />
+          <DialogHeader className="pt-8 items-center text-center">
+            <div className="h-20 w-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4">
+              <CheckCircle className="h-10 w-10 text-emerald-500" />
+            </div>
+            <DialogTitle className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Order Approved!</DialogTitle>
+            <p className="text-sm font-medium text-slate-500 mt-2">Security Token Generated</p>
+          </DialogHeader>
+
+          <div className="py-8 px-2 space-y-6">
+            <div className="relative p-6 rounded-[2rem] bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 text-center space-y-4 group">
+              <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">Share With Super Admin</p>
+              <div className="font-mono text-3xl font-black tracking-[0.3em] text-indigo-600 dark:text-indigo-400 select-all">
+                {generatedToken}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Button 
+                className="h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-xl shadow-indigo-600/20 gap-2"
+                onClick={() => {
+                  navigator.clipboard.writeText(generatedToken || "")
+                  toast({ title: "Copied", description: "Token copied to clipboard" })
+                }}
+              >
+                Copy Token
+              </Button>
+              <Button variant="ghost" onClick={() => setShowTokenDialog(false)} className="h-12 rounded-2xl text-slate-500 font-bold uppercase tracking-widest text-[10px]">
+                Dismiss
+              </Button>
+            </div>
+
+            <p className="text-[10px] text-center text-slate-400 font-bold uppercase leading-relaxed px-4">
+              IMPORTANT: COPY THIS TOKEN NOW. IT MUST BE GIVEN TO THE SUPER ADMIN TO COMPLETE THE FULFILLMENT PROCESS.
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
 
