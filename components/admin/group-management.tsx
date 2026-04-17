@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import useSWR, { mutate } from "swr"
-import { Plus, Pencil, Trash2, Building, ChevronRight, CheckCircle2, History, Users, AlertCircle, Eraser, Package, Loader2 } from "lucide-react"
+import { Plus, Pencil, Trash2, Building, ChevronRight, CheckCircle2, History, Users, AlertCircle, Eraser, Package, Loader2, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PremiumConfirmDialog } from "@/components/premium/premium-confirm-dialog"
 import {
@@ -90,6 +90,7 @@ export function GroupManagement({ role }: { role: string }) {
     const [description, setDescription] = useState("")
     const [organizationId, setOrganizationId] = useState<string>("")
     const [selectedBranchIds, setSelectedBranchIds] = useState<number[]>([])
+    const [branchSearch, setBranchSearch] = useState("")
 
     // Auto-select organization from global context when opening create dialog
     useEffect(() => {
@@ -321,6 +322,7 @@ export function GroupManagement({ role }: { role: string }) {
         setOriginalBranchIds([])
         setBranchProductCounts({})
         setTotalGroupProducts(0)
+        setBranchSearch("")
         setIsLoadingCounts(true)
         setIsBranchOpen(true)
 
@@ -543,8 +545,19 @@ export function GroupManagement({ role }: { role: string }) {
                         <DialogTitle className="text-xl font-bold">Assign Branches - {selectedGroup?.name}</DialogTitle>
                         <DialogDescription>Select branches to include in this group.</DialogDescription>
                     </DialogHeader>
-                    <div className="py-4">
-                        <Label className="mb-2 block font-semibold text-slate-700 dark:text-slate-300">Available Branches</Label>
+                    <div className="py-4 space-y-4">
+                        <div className="flex flex-col gap-2">
+                            <Label className="font-semibold text-slate-700 dark:text-slate-300">Available Branches</Label>
+                            <div className="relative group">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                                <Input 
+                                    placeholder="Search branches..." 
+                                    value={branchSearch}
+                                    onChange={(e) => setBranchSearch(e.target.value)}
+                                    className="pl-9 h-10 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 focus-visible:ring-blue-500/20"
+                                />
+                            </div>
+                        </div>
                         <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50/50 dark:bg-slate-900/50">
                             <ScrollArea className="h-[350px] p-4">
                                 {isLoadingCounts ? (
@@ -554,7 +567,7 @@ export function GroupManagement({ role }: { role: string }) {
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
-                                        {branchesData?.items?.map((branch: Branch) => {
+                                        {branchesData?.items?.filter((b: Branch) => b.name.toLowerCase().includes(branchSearch.toLowerCase())).map((branch: Branch) => {
                                             const isInThisGroup = branch.groupId === selectedGroup?.id
                                             const isInOtherGroup = !!(branch.groupId && branch.groupId !== selectedGroup?.id)
                                             const productCount = branchProductCounts[branch.id] || 0
@@ -647,6 +660,12 @@ export function GroupManagement({ role }: { role: string }) {
                                         })}
                                         {(!branchesData?.items || branchesData.items.length === 0) && (
                                             <div className="text-center py-12 text-slate-400">No branches found for this organization.</div>
+                                        )}
+                                        {branchesData?.items?.length > 0 && branchesData.items.filter((b: Branch) => b.name.toLowerCase().includes(branchSearch.toLowerCase())).length === 0 && (
+                                            <div className="text-center py-12 text-slate-400">
+                                                <p className="font-medium text-slate-500">No matches found for "{branchSearch}"</p>
+                                                <p className="text-xs">Try a different search term</p>
+                                            </div>
                                         )}
                                     </div>
                                 )}

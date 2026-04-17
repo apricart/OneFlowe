@@ -214,16 +214,20 @@ export default function OrganizationReportPage() {
     }, [])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Organization Name", "Status", "Active Branches", "Inactive Branches", "Managed Users", isBuyer ? "Purchase (PKR)" : "Revenue (PKR)", "Orders"]
-        const rows = filteredStats.map((org: any) => [
-            org.organizationName,
-            org.organizationStatus || "active",
-            org.activeBranchCount,
-            org.inactiveBranchCount,
-            org.totalUserCount,
-            org.revenue.toFixed(2),
-            org.orderCount
-        ])
+        // Structured columns matching the UI table exactly
+        const columns = [
+            { label: "Organization Name",  value: (org: any) => org.organizationName || "-" },
+            { label: "Status",             value: (org: any) => org.organizationStatus || "active" },
+            { label: "Active Branches",    value: (org: any) => org.activeBranchCount || 0 },
+            { label: "Inactive Branches",  value: (org: any) => org.inactiveBranchCount || 0 },
+            { label: "Managed Users",      value: (org: any) => org.totalUserCount || 0 },
+            { label: isBuyer ? "Purchase (PKR)" : "Revenue (PKR)", value: (org: any) => (org.revenue / 100).toFixed(2) },
+            { label: "Orders",             value: (org: any) => org.orderCount || 0 },
+            { label: "Fulfillment Rate",   value: (org: any) => org.fulfillmentRate ? `${org.fulfillmentRate.toFixed(1)}%` : "N/A" },
+        ]
+
+        const headers = columns.map(c => c.label)
+        const rows = filteredStats.map((org: any) => columns.map(c => c.value(org)))
 
         if (format === 'pdf') {
             const doc = new jsPDF()

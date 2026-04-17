@@ -72,42 +72,42 @@ export function KPICard({
             "border rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5",
             colors.gradient
         )}>
-            <CardContent className="p-5 flex items-center justify-between relative overflow-hidden h-full">
-                <div className="space-y-1.5 flex-1 max-w-[calc(100%-3rem)] z-10 flex flex-col justify-between h-full">
-                    <div>
-                        <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest truncate">
+            <CardContent className="p-6 flex items-start justify-between relative overflow-hidden h-full">
+                <div className="space-y-1.5 flex-1 max-w-[calc(100%-4rem)] pr-2 z-10 flex flex-col justify-between h-full">
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-bold opacity-80 uppercase tracking-[0.15em] mb-1 truncate">
                             {title}
                         </p>
-                        <h3 className="text-2xl font-black tracking-tight mt-1">
+                        <h3 className="text-2xl xl:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-none break-words min-w-0 sm:break-normal" style={{ overflowWrap: 'anywhere' }}>
                             {value}
                         </h3>
                     </div>
 
                     {/* Additional Sub info */}
                     {(trend !== undefined || comparisonValue || subtitle) && (
-                        <div className="pt-3 space-y-1 mt-auto">
+                        <div className="pt-4 space-y-1.5 mt-auto">
                             {trend !== undefined && Math.abs(trend).toFixed(1) !== "0.0" && (
                                 <div className="flex items-center gap-1.5 mt-1.5">
                                     <div className={cn(
-                                        "flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold shadow-sm",
-                                        trend > 0 ? "bg-emerald-50/90 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400" :
-                                            trend < 0 ? "bg-rose-50/90 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400" :
-                                                "bg-slate-50/90 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400"
+                                        "flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-black shadow-sm tracking-tight",
+                                        trend > 0 ? "bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400" :
+                                            trend < 0 ? "bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400" :
+                                                "bg-slate-500/10 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400"
                                     )}>
                                         {TrendIcon && <TrendIcon className="h-3 w-3" />}
                                         {Math.abs(trend).toFixed(1)}%
                                     </div>
-                                    <span className="text-[10px] opacity-70 italic font-medium">vs prior</span>
+                                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">{subtitle ? '' : 'vs prior'}</span>
                                 </div>
                             )}
 
                             {comparisonValue && (
-                                <p className="text-[10px] opacity-80 truncate font-medium">
-                                    {comparisonLabel}: <span className="font-bold">{comparisonValue}</span>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">
+                                    {comparisonLabel}: <span className="font-black text-slate-700 dark:text-slate-300">{comparisonValue}</span>
                                 </p>
                             )}
                             {subtitle && (
-                                <p className="text-[10px] opacity-70 italic truncate">
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">
                                     {subtitle}
                                 </p>
                             )}
@@ -115,8 +115,8 @@ export function KPICard({
                     )}
                 </div>
 
-                <div className={cn("flex shrink-0 h-12 w-12 items-center justify-center rounded-xl z-10 self-start", colors.iconBadge)}>
-                    <Icon className="h-5 w-5" />
+                <div className={cn("flex shrink-0 h-14 w-14 items-center justify-center rounded-2xl z-10", colors.iconBadge)}>
+                    <Icon className="h-6 w-6 stroke-[2.5]" />
                 </div>
 
                 {/* Sparkline background */}

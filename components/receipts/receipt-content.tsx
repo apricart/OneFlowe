@@ -376,7 +376,17 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                         </div>
                         <div className="detail-row">
                             <span className="detail-label">Status:</span>
-                            <span className="detail-value text-green-600 bg-green-50 px-1.5 rounded text-[10px]">VERIFIED PAID</span>
+                            <span className={`detail-value px-1.5 rounded text-[10px] uppercase ${
+                                (receiptData.status || "PENDING").toLowerCase() === "fulfilled" 
+                                    ? "text-emerald-600 bg-emerald-50" 
+                                    : (receiptData.status || "PENDING").toLowerCase() === "approved"
+                                    ? "text-blue-600 bg-blue-50"
+                                    : (receiptData.status || "PENDING").toLowerCase() === "pending"
+                                    ? "text-amber-600 bg-amber-50"
+                                    : "text-rose-600 bg-rose-50"
+                            }`}>
+                                {receiptData.status || "PENDING"}
+                            </span>
                         </div>
                     </div>
 
@@ -392,10 +402,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                             <span className="detail-label">Subtotal:</span>
                             <span className="detail-value">PKR {Number(receiptData.subtotal).toLocaleString()}</span>
                         </div>
-                        <div className="detail-row">
-                            <span className="detail-label">Method:</span>
-                            <span className="detail-value">Payment Gateway</span>
-                        </div>
+
                     </div>
                 </div>
 

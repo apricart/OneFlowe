@@ -96,11 +96,17 @@ export async function GET(
             }>
         }>)
 
+        // Dynamically override receipt data status with actual order status for accuracy
+        const finalReceiptData = order.receiptData ? {
+            ...(order.receiptData as any),
+            status: order.status
+        } : null
+
         return NextResponse.json({
             orderId: order.id,
             orderTid: order.tid,
             status: order.status,
-            receiptData: order.receiptData,
+            receiptData: finalReceiptData,
             refundHistory,
             totalRefundAmount: (order.refundAmountCents || 0) / 100,
         })

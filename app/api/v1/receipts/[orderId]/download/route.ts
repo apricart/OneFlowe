@@ -34,7 +34,10 @@ export async function GET(
             return NextResponse.json({ error: "Receipt not found" }, { status: 404 })
         }
 
-        const receiptData = order.receiptData as any
+        const receiptData = {
+            ...(order.receiptData as any),
+            status: order.status
+        }
 
         // Generate PDF (A4 size: 210mm x 297mm)
         const doc = new jsPDF()
@@ -88,10 +91,16 @@ export async function GET(
         doc.text(`#${receiptData.invoiceNumber}`, 190, 38, { align: "right" })
 
         doc.setFontSize(9)
-        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
         doc.text("DATE:", 155, 48)
         doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2])
         doc.text(receiptData.date, 190, 48, { align: "right" })
+
+        doc.setFontSize(9)
+        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
+        doc.text("STATUS:", 155, 54)
+        doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2])
+        doc.setFont("helvetica", "bold")
+        doc.text(String(receiptData.status || "PENDING").toUpperCase(), 190, 54, { align: "right" })
 
         // --- Billed To Box ---
         doc.setFillColor(colors.light[0], colors.light[1], colors.light[2])

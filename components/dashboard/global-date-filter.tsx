@@ -233,9 +233,7 @@ export function GlobalDateFilter({
         }
     }
 
-    const selectedLabel = (months.length > 0 || years.length > 0) 
-        ? "Custom Arrays" 
-        : getPresetLabel(activePreset, value)
+    const selectedLabel = getPresetLabel(activePreset, value)
 
     const currentYear = new Date().getFullYear()
     const startYear = earliestDate ? earliestDate.getFullYear() : currentYear

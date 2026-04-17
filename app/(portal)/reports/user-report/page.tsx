@@ -347,18 +347,22 @@ export default function UserReportPage() {
     }, [trend, compareTrend, chartYears, chartMonths, chartData, isChartUserView])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = role === "SUPER_ADMIN"
-            ? ["Employee ID", "Name", "Email", "Status", "Organization", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
-            : role === "BRANCH_ADMIN"
-                ? ["Employee ID", "Name", "Email", "Status", "Orders", "Fulfilled", "Refunded", "Spent"]
-                : ["Employee ID", "Name", "Email", "Status", "Branch", "Orders", "Fulfilled", "Refunded", "Spent"]
-        const rows = filteredUsers.map((u: any) => [
-            u.employeeId || "-", u.userName, u.userEmail, u.status || "active",
-            ...(role === "SUPER_ADMIN" ? [u.organizationName || 'N/A'] : []),
-            ...(role !== "BRANCH_ADMIN" ? [u.branchName || 'N/A'] : []),
-            u.totalOrders, u.fulfilledOrders, u.refundedOrders,
-            (u.totalSpentCents / 100).toFixed(2)
-        ])
+        // Structured columns — single source of truth matching the UI table
+        const columns = [
+            { label: "Employee ID",   value: (u: any) => u.employeeId || "-" },
+            { label: "Name",          value: (u: any) => u.userName || "-" },
+            { label: "Email",         value: (u: any) => u.userEmail || "-" },
+            { label: "Status",        value: (u: any) => u.status || "active" },
+            ...(role === "SUPER_ADMIN" ? [{ label: "Organization", value: (u: any) => u.organizationName || "N/A" }] : []),
+            ...(role !== "BRANCH_ADMIN" ? [{ label: role === "SUPER_ADMIN" ? "Domain / Branch" : "Branch", value: (u: any) => u.branchName || "N/A" }] : []),
+            { label: "Total Orders",     value: (u: any) => u.totalOrders || 0 },
+            { label: "Fulfilled",        value: (u: any) => u.fulfilledOrders || 0 },
+            { label: "Refunded",         value: (u: any) => u.refundedOrders || 0 },
+            { label: isBuyer ? "Purchased (PKR)" : "Revenue (PKR)", value: (u: any) => ((u.totalSpentCents || 0) / 100).toFixed(2) },
+        ]
+
+        const headers = columns.map(c => c.label)
+        const rows = filteredUsers.map((u: any) => columns.map(c => c.value(u)))
 
         if (format === 'pdf') {
             const doc = new jsPDF()
@@ -623,13 +627,13 @@ export default function UserReportPage() {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <div className="text-right flex flex-col items-end gap-1">
-                                                        <Badge variant="outline" className="text-[10px] font-black uppercase bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/30">
+                                                    <div className="text-right flex flex-col items-end gap-1.5 flex-shrink-0 ml-2">
+                                                        <Badge variant="outline" className="text-[10px] font-black uppercase bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/30 whitespace-nowrap px-2 py-0.5">
                                                             {user.totalProductsSold} Items
                                                         </Badge>
-                                                        <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest whitespace-nowrap">
-                                                            {user.totalProductsSold - user.refundedProductsSold} Fulfilled
-                                                        </p>
+                                                        <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full ring-1 ring-emerald-200/50 dark:ring-emerald-800/50">
+                                                            {user.totalProductsSold - user.refundedProductsSold} FULFILLED
+                                                        </span>
                                                     </div>
                                                 </div>
                                                 <CardContent className="p-0">
@@ -645,20 +649,15 @@ export default function UserReportPage() {
                                                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">{product.categoryName}</p>
                                                                     </div>
                                                                 </div>
-                                                                <div className="text-right flex flex-col items-end gap-1">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <p className="text-[11px] font-black text-slate-700 dark:text-slate-300 tracking-tight">{formatPKR(product.fulfilledRevenueCents / 100)}</p>
-                                                                        <div className="flex items-center gap-1">
-                                                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded cursor-help" title={`Total Items: ${product.quantity}`}>Qty: {product.quantity}</p>
-                                                                            <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded" title="Net Fulfilled (Total - Refunded)">Ful: {product.quantity - product.refundedQuantity}</p>
-                                                                        </div>
+                                                                <div className="text-right flex flex-col items-end gap-1.5 flex-shrink-0 ml-2">
+                                                                    <p className="text-[11px] font-black text-slate-700 dark:text-slate-300 tracking-tight mb-0.5">{formatPKR(product.fulfilledRevenueCents / 100)}</p>
+                                                                    <div className="flex flex-wrap justify-end gap-1 max-w-[140px]">
+                                                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shadow-sm">QTY: {product.quantity}</span>
+                                                                        <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded shadow-sm">FUL: {product.quantity - product.refundedQuantity}</span>
+                                                                        {product.refundedQuantity > 0 && (
+                                                                            <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest whitespace-nowrap bg-rose-50 dark:bg-rose-500/10 px-1.5 py-0.5 rounded shadow-sm">REF: {product.refundedQuantity}</span>
+                                                                        )}
                                                                     </div>
-                                                                    {product.refundedQuantity > 0 && (
-                                                                        <div className="flex items-center gap-2">
-                                                                            <p className="text-[9px] font-black text-rose-500 tracking-tight">-{formatPKR(product.refundedRevenueCents / 100)}</p>
-                                                                            <p className="text-[8px] font-bold text-rose-500 uppercase tracking-widest whitespace-nowrap bg-rose-50 dark:bg-rose-500/10 px-1.5 py-0.5 rounded" title={`Refunded Money: ${formatPKR(product.refundedRevenueCents / 100)}`}>Ref: {product.refundedQuantity}</p>
-                                                                        </div>
-                                                                    )}
                                                                 </div>
                                                             </div>
                                                         ))}

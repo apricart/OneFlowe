@@ -39,6 +39,9 @@ import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
 import { startOfDay, endOfDay } from "date-fns"
+import { BranchFilter } from "@/components/reports/branch-filter"
+import { GroupFilter } from "@/components/reports/group-filter"
+import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 
 type DateRange = {
   startDate: Date
@@ -94,12 +97,15 @@ export default function OrdersManagementPage() {
   const [activePreset, setActivePreset] = useState<FilterPreset>("all")
   // Sync with global context
   const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [refundFilter, setRefundFilter] = useState<string>("all")
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null)
   const [showApprovalDialog, setShowApprovalDialog] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+
+  // Local Hierarchical Filter State
+  const [reportBranchIds, setReportBranchIds] = useState<string[]>([])
+  const [reportGroupIds, setReportGroupIds] = useState<string[]>([])
 
   // Approval token state (shown once after approval)
   const [showTokenDialog, setShowTokenDialog] = useState(false)
@@ -113,14 +119,16 @@ export default function OrdersManagementPage() {
   const [showErrorDialog, setShowErrorDialog] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
 
-  const handleBranchChange = useCallback((ids: string[]) => {
-    setContextBranchIds(ids)
-  }, [setContextBranchIds])
 
   const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
     setDateRange(range)
     setActivePreset(preset)
   }, [])
+
+  // ━━━ CASCADING SELECTION CLEARING ━━━
+  useEffect(() => {
+    setReportBranchIds([])
+  }, [reportGroupIds])
 
   // Build orders endpoint with context parameters
   const ordersEndpoint = useMemo(() => {
@@ -130,10 +138,21 @@ export default function OrdersManagementPage() {
       params.set("organizationId", organizationId)
     }
 
-    if (branchIds.length > 0) {
-      params.set("branchIds", branchIds.join(","))
-    } else if (branchId) {
-      params.set("branchId", branchId)
+
+    // Local filters override global context if set
+    // If a group is selected but no branches, we leave branchIds empty so the API filters solely by Group
+    const effectiveBranchIds = reportBranchIds.length > 0 
+      ? reportBranchIds 
+      : (reportGroupIds.length > 0 
+          ? [] 
+          : (branchIds.length > 0 ? branchIds : (branchId ? [branchId] : [])))
+
+    if (effectiveBranchIds.length > 0) {
+      params.set("branchIds", effectiveBranchIds.join(","))
+    }
+
+    if (reportGroupIds.length > 0) {
+      params.set("groupIds", reportGroupIds.join(","))
     }
 
     if (dateRange) {
@@ -142,7 +161,7 @@ export default function OrdersManagementPage() {
     }
 
     return `/api/v1/orders${params.toString() ? `?${params.toString()}` : ""}`
-  }, [organizationId, branchId, branchIds, dateRange, isInitialized])
+  }, [organizationId, branchId, branchIds, reportBranchIds, reportGroupIds, dateRange, isInitialized])
 
   // Fetch orders scoped by context
   const { data: ordersData, mutate: mutateOrders, isLoading } = useSWR<any>(
@@ -159,8 +178,7 @@ export default function OrdersManagementPage() {
     if (statusFilter !== "all") {
       if (statusFilter === "refunded") {
         filtered = filtered.filter((o: OrderItem) =>
-          o.status.toLowerCase() === "refunded" ||
-          (o.refundAmountCents && o.refundAmountCents > 0)
+          o.status.toLowerCase() === "refunded"
         )
       } else if (statusFilter === "rejected") {
         filtered = filtered.filter((o: OrderItem) =>
@@ -171,27 +189,20 @@ export default function OrdersManagementPage() {
       }
     }
 
-    if (refundFilter !== "all") {
-      if (refundFilter === "full") {
-        filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === "refunded")
-      } else if (refundFilter === "partial") {
-        filtered = filtered.filter((o: OrderItem) =>
-          o.refundAmountCents && o.refundAmountCents > 0 && o.status.toLowerCase() !== "refunded"
-        )
-      }
-    }
 
     if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase()
       filtered = filtered.filter((o: OrderItem) =>
-        o.tid.includes(searchQuery) ||
-        o.id.toString().includes(searchQuery)
+        o.tid.toLowerCase().includes(lowerQuery) ||
+        o.id.toString().includes(lowerQuery) ||
+        (o.itemNames?.toLowerCase().includes(lowerQuery))
       )
     }
 
     return filtered.sort((a: OrderItem, b: OrderItem) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
-  }, [orders, statusFilter, refundFilter, searchQuery])
+  }, [orders, statusFilter, searchQuery])
 
   // Approve order
   const handleApproveOrder = async (orderId: number) => {
@@ -383,13 +394,20 @@ export default function OrdersManagementPage() {
       </section>
 
       {/* ═══ COMPACT STATS ROW ═══ */}
-      <section className="grid grid-cols-2 md:grid-cols-5 gap-3 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
+      <section className="grid grid-cols-2 md:grid-cols-6 gap-3 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
         <CompactStatCard
           label="Total Orders"
           value={statusCounts.all}
           icon={<Package className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-indigo-50 to-blue-50/50 dark:from-indigo-950/40 dark:to-blue-900/20 border-indigo-100 dark:border-indigo-900/50"
           iconBadge="bg-white/60 dark:bg-slate-900/50 text-indigo-600 dark:text-indigo-400"
+        />
+        <CompactStatCard
+          label="Pending"
+          value={statusCounts.pending}
+          icon={<Clock className="h-5 w-5" />}
+          gradient="bg-gradient-to-br from-yellow-50 to-amber-50/50 dark:from-yellow-950/40 dark:to-amber-900/20 border-yellow-100 dark:border-yellow-900/50"
+          iconBadge="bg-white/60 dark:bg-slate-900/50 text-yellow-600 dark:text-yellow-400"
         />
         <CompactStatCard
           label="Approved"
@@ -446,44 +464,64 @@ export default function OrdersManagementPage() {
                     </Button>
                   ))}
                 </div>
+                
+                <div className="relative group min-w-[200px] sm:min-w-[280px]">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
+                  <Input
+                    placeholder="Search by TID or ID..."
+                    className="pl-9 h-8 text-[11px] font-bold bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 rounded-xl focus:ring-1 focus:ring-indigo-500/30 transition-all shadow-sm"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
               </div>
 
               {/* Right Side: Environment Filters & Actions */}
               <div className="flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0 pb-1 lg:pb-0">
                 <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
 
-                {organizationId && (isSuperAdmin || isHeadOffice) && (
-                  <MultiBranchFilter organizationId={organizationId} selectedBranchIds={branchIds} onChange={handleBranchChange} />
-                )}
-
-                <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
+                <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
                 <OrderExport orders={filteredOrders} role={userRole} />
               </div>
             </div>
 
-            {/* Bottom Row: Secondary Filters (Refunds) */}
-            <div className="flex items-center gap-3 px-1 pt-2 border-t border-slate-100 dark:border-slate-800/50">
-              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1.5">
-                <Filter className="h-3 w-3" /> Refund Type
-              </span>
-              <div className="flex gap-1.5">
-                {["all", "partial", "full"].map((refund) => (
-                  <Button
-                    key={refund}
-                    onClick={() => setRefundFilter(refund)}
-                    variant={refundFilter === refund ? "default" : "ghost"}
-                    size="sm"
-                    className={`h-6 px-2.5 text-[10px] capitalize rounded-md font-bold transition-all ${refundFilter === refund
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shadow-sm"
-                      : "text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      }`}
+            {/* Bottom Row: Hierarchical Filters */}
+            {(isSuperAdmin || isHeadOffice) && (
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-800/50">
+                <span className="text-[9px] uppercase font-black text-slate-400 tracking-wider flex items-center gap-1.5 ml-1">
+                  <Filter className="h-3 w-3" /> Filters
+                </span>
+                
+                <GroupFilter
+                  selectedIds={reportGroupIds}
+                  onChange={setReportGroupIds}
+                  organizationIds={organizationId ? [organizationId] : undefined}
+                />
+                
+                <BranchFilter
+                  selectedIds={reportBranchIds}
+                  onChange={setReportBranchIds}
+                  organizationIds={organizationId ? [organizationId] : undefined}
+                  groupIds={reportGroupIds}
+                />
+
+                {(reportGroupIds.length > 0 || reportBranchIds.length > 0) && (
+                   <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      setReportGroupIds([]);
+                      setReportBranchIds([]);
+                    }}
+                    className="h-7 px-2 text-[9px] font-black text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 uppercase tracking-widest gap-1 rounded-lg transition-all"
                   >
-                    {refund}
+                    <RefreshCw className="h-3 w-3" /> Reset Filters
                   </Button>
-                ))}
+                )}
               </div>
+            )}
+
             </div>
-          </div>
 
           <div className="px-1 sm:px-4 pb-4 w-full">
             <OrdersDirectory

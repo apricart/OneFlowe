@@ -5,6 +5,7 @@ import { eq, inArray } from "drizzle-orm"
 export interface ReceiptData {
     invoiceNumber: string
     date: string
+    status: string
     buyerName: string
     buyerAddress: string
     buyerPhone?: string
@@ -44,6 +45,7 @@ export interface ReceiptData {
 export async function generateReceiptData(params: {
     orderId: number
     orderTid: string
+    status: string
     organizationId: number
     branchId: number
     orderItemsData: Array<{
@@ -131,6 +133,7 @@ export async function generateReceiptData(params: {
             day: "2-digit",
             year: "numeric",
         }),
+        status: params.status,
         buyerName: branch.name,
         buyerAddress: branch.code ? `Branch ${branch.code}` : `Branch ${branch.id}`,
         organizationName: org.name,

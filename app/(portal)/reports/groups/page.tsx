@@ -224,15 +224,19 @@ export default function GroupsReportPage() {
     }
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Group Name", "Organization", "Budget", "Units", "Total Orders", isBuyer ? "Purchased (PKR)" : "Revenue (PKR)"]
-        const rows = filteredGroups.map((group: any) => [
-            group.name, 
-            group.organizationName, 
-            (group.totalBudget / 100).toFixed(2), 
-            group.branchCount, 
-            group.totalOrders, 
-            (group.totalAmountCents / 100).toFixed(2)
-        ])
+        // Structured columns matching the UI table exactly
+        const columns = [
+            { label: "Group Name",     value: (g: any) => g.name || "-" },
+            ...(role === "SUPER_ADMIN" ? [{ label: "Organization", value: (g: any) => g.organizationName || "-" }] : []),
+            { label: "Budget (PKR)",   value: (g: any) => ((g.totalBudget || 0) / 100).toFixed(2) },
+            { label: "Managed Units",  value: (g: any) => g.branchCount || 0 },
+            { label: isBuyer ? "Purchased (PKR)" : "Revenue (PKR)", value: (g: any) => ((g.totalAmountCents || 0) / 100).toFixed(2) },
+            { label: "Refunds (PKR)",  value: (g: any) => ((g.totalRefundCents || 0) / 100).toFixed(2) },
+            { label: "Orders",         value: (g: any) => g.totalOrders || 0 },
+        ]
+
+        const headers = columns.map(c => c.label)
+        const rows = filteredGroups.map((group: any) => columns.map(c => c.value(group)))
 
         if (format === 'pdf') {
             const doc = new jsPDF()

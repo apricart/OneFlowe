@@ -71,7 +71,7 @@ const ALL_COLUMNS: ColumnDef[] = [
     { key: "netTotalValue", label: "Net Value", defaultVisible: true },
 ] as const;
 
-type StatusFilter = "all" | "approved" | "fulfilled" | "refunded" | "rejected"
+type StatusFilter = "all" | "pending" | "approved" | "fulfilled" | "refunded" | "rejected"
 
 const STATUS_COLORS: Record<string, string> = {
     FULFILLED: "#10b981",
@@ -379,31 +379,38 @@ export default function OrderReportPage() {
     }, [chartData, chartOrders])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ALL_COLUMNS.filter(c => {
+        // Build active column list — single source of truth for both headers and data
+        const activeColumns = ALL_COLUMNS.filter(c => {
             if (role === "BRANCH_ADMIN" && (c.key === "group" || c.key === "branchName")) return false;
             if (role !== "SUPER_ADMIN" && c.key === "organizationName") return false;
             return isVisible(c.key);
-        }).map(c => {
+        })
+
+        const headers = activeColumns.map(c => {
             if (c.key === "netTotalValue" && isBuyer) return "Net Purchased"
             return c.label
         })
-        const rows = filteredOrders.map((order: any) => {
-            const row: any[] = []
-            if (isVisible("orderDate")) row.push(new Date(order.createdAt).toLocaleDateString())
-            if (isVisible("userName")) row.push(order.userName || "-")
-            if (isVisible("tid")) row.push(order.tid)
-            if (isVisible("organizationName") && role === "SUPER_ADMIN") row.push(order.organizationName || "N/A")
-            if (isVisible("group") && role !== "BRANCH_ADMIN") row.push(order.groupName || "-")
-            if (isVisible("branchName") && role !== "BRANCH_ADMIN") row.push(order.branchName || "-")
-            if (isVisible("status")) row.push(order.status)
-            if (isVisible("quantityOrdered")) row.push(order.quantityOrdered || 0)
-            if (isVisible("quantityDelivered")) row.push((order.quantityOrdered || 0) - (order.quantityRefunded || 0))
-            if (isVisible("quantityRefunded")) row.push(order.quantityRefunded || 0)
-            if (isVisible("subtotalValue")) row.push(((order.subtotalCents || 0) / 100).toFixed(2))
-            if (isVisible("refundValue")) row.push(((order.refundAmountCents || 0) / 100).toFixed(2))
-            if (isVisible("netTotalValue")) row.push((( (order.totalCents || 0) - (order.refundAmountCents || 0)) / 100).toFixed(2))
-            return row
-        })
+
+        // Map each active column key to its data value — order guaranteed to match headers
+        const rows = filteredOrders.map((order: any) => activeColumns.map(c => {
+            switch (c.key) {
+                case "orderDate":        return new Date(order.createdAt).toLocaleDateString()
+                case "userName":         return order.userName || "-"
+                case "employeeId":       return order.employeeId || order.userId || "-"
+                case "tid":              return order.tid || "-"
+                case "organizationName": return order.organizationName || "N/A"
+                case "group":            return order.groupName || "-"
+                case "branchName":       return order.branchName || "-"
+                case "status":           return order.status || "-"
+                case "quantityOrdered":  return order.quantityOrdered || 0
+                case "quantityDelivered":return (order.quantityOrdered || 0) - (order.quantityRefunded || 0)
+                case "quantityRefunded": return order.quantityRefunded || 0
+                case "subtotalValue":    return ((order.subtotalCents || 0) / 100).toFixed(2)
+                case "refundValue":      return ((order.refundAmountCents || 0) / 100).toFixed(2)
+                case "netTotalValue":    return (((order.totalCents || 0) - (order.refundAmountCents || 0)) / 100).toFixed(2)
+                default:                 return "-"
+            }
+        }))
 
         if (format === 'pdf') {
             const doc = new jsPDF('landscape')
@@ -424,18 +431,21 @@ export default function OrderReportPage() {
     return (
         <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] transition-colors duration-500 pb-20">
             {/* ━━━ STICKY PREMIUM HEADER ━━━ */}
-            <div className="sticky top-0 z-30 w-full backdrop-blur-xl bg-white/80 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300">
-                <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center shadow-lg shadow-indigo-500/20 rotate-3 group hover:rotate-0 transition-all duration-500">
-                            <TrendingUp className="h-6 w-6 text-white" />
+            <div className="sticky top-0 z-40 w-full backdrop-blur-3xl bg-white/70 dark:bg-slate-950/70 border-b border-slate-200/60 dark:border-slate-800/60 shadow-[0_1px_20px_rgba(0,0,0,0.02)] transition-all duration-500">
+                <div className="max-w-[1600px] mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-6">
+                    <div className="flex items-center gap-5 group cursor-default">
+                        <div className="relative">
+                            <div className="absolute -inset-1 bg-gradient-to-tr from-indigo-500 to-blue-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                            <div className="relative h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 flex items-center justify-center shadow-indigo-500/20 group-hover:rotate-6 transition-all duration-500 ease-out">
+                                <TrendingUp className="h-6 w-6 text-white" />
+                            </div>
                         </div>
                         <div>
-                            <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">Order Intelligence</h1>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                                <LayoutGrid className="h-3 w-3" />
-                                Detailed audit of corporate transactions
-                            </p>
+                            <h1 className="text-xl font-black tracking-tighter text-slate-900 dark:text-white uppercase leading-none mb-1">Order Intelligence</h1>
+                            <div className="flex items-center gap-1.5 h-4">
+                                <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse" />
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Audit & Analytics Terminal</p>
+                            </div>
                         </div>
                     </div>
 
@@ -470,23 +480,41 @@ export default function OrderReportPage() {
             <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
                 {/* ━━━ KPI BENTO GRID ━━━ */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <KPICard title={kpiRevenueLabel} value={formatPKR(summary.totalSales / 100)} icon={TrendingUp} colorScheme="indigo" />
-                    <KPICard title="Refund Impact" value={formatPKR(summary.totalRefunds / 100)} icon={RotateCcw} colorScheme="rose" />
-                    <KPICard title="Total Orders" value={summary.totalOrderCount} icon={Package} colorScheme="blue" />
-                    <KPICard title={kpiAvgLabel} value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={Calculator} colorScheme="amber" />
+                    <div className="hover:scale-[1.02] transition-all duration-500">
+                        <KPICard title={kpiRevenueLabel} value={formatPKR(summary.totalSales / 100)} icon={TrendingUp} colorScheme="indigo" />
+                    </div>
+                    <div className="hover:scale-[1.02] transition-all duration-500">
+                        <KPICard title="Refund Impact" value={formatPKR(summary.totalRefunds / 100)} icon={RotateCcw} colorScheme="rose" />
+                    </div>
+                    <div className="hover:scale-[1.02] transition-all duration-500">
+                        <KPICard title="Total Orders" value={summary.totalOrderCount} icon={Package} colorScheme="blue" />
+                    </div>
+                    <div className="hover:scale-[1.02] transition-all duration-500">
+                        <KPICard title={kpiAvgLabel} value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={Calculator} colorScheme="amber" />
+                    </div>
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
                     
-                    <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-1">
-                        <TabsList className="bg-transparent h-auto p-0 gap-8">
-                            <TabsTrigger value="analytics" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
-                                <LayoutDashboard className="h-4 w-4 mr-2" />
-                                Analytics
+                    <div className="flex items-center justify-between gap-4 border-b border-slate-200/60 dark:border-slate-800/60 pb-1">
+                        <TabsList className="bg-transparent h-auto p-0 gap-10">
+                            <TabsTrigger 
+                                value="analytics" 
+                                className="group relative bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-[0.15em] text-slate-400 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 transition-all"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <LayoutDashboard className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" />
+                                    Analytics
+                                </div>
                             </TabsTrigger>
-                            <TabsTrigger value="reports" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
-                                <Database className="h-4 w-4 mr-2" />
-                                Reports
+                            <TabsTrigger 
+                                value="reports" 
+                                className="group relative bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-[0.15em] text-slate-400 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 transition-all"
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Database className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" />
+                                    Reports
+                                </div>
                             </TabsTrigger>
                         </TabsList>
                     </div>
@@ -534,8 +562,12 @@ export default function OrderReportPage() {
                                             <ComposedChart data={chartTrendData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                                 <defs>
                                                     <linearGradient id="revGradient" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8}/>
-                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
+                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05}/>
+                                                    </linearGradient>
+                                                    <linearGradient id="ordersGradient" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
                                                     </linearGradient>
                                                 </defs>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
@@ -566,14 +598,18 @@ export default function OrderReportPage() {
                                                 data={statusChartData}
                                                 cx="50%"
                                                 cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={80}
-                                                paddingAngle={5}
+                                                innerRadius={70}
+                                                outerRadius={90}
+                                                paddingAngle={8}
                                                 dataKey="value"
                                                 stroke="none"
                                             >
                                                 {statusChartData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                    <Cell 
+                                                        key={`cell-${index}`} 
+                                                        fill={entry.fill} 
+                                                        style={{ filter: `drop-shadow(0 0 8px ${entry.fill}40)` }}
+                                                    />
                                                 ))}
                                             </Pie>
                                             <RechartsTooltip 
@@ -612,21 +648,26 @@ export default function OrderReportPage() {
 
                     <TabsContent value="reports" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                         {/* Report Controls */}
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/50 dark:bg-slate-900/40 p-4 rounded-[2rem] border border-slate-200 dark:border-slate-800 backdrop-blur-xl">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <button onClick={() => setStatusFilter("all")} className={cn("px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", statusFilter === "all" ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20" : "bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200")}>All</button>
-                                <button onClick={() => setStatusFilter("fulfilled")} className={cn("px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", statusFilter === "fulfilled" ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/20" : "bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200")}>Fulfilled</button>
-                                <button onClick={() => setStatusFilter("refunded")} className={cn("px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", statusFilter === "refunded" ? "bg-rose-600 text-white shadow-lg shadow-rose-600/20" : "bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200")}>Refunds</button>
+                        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white dark:bg-slate-900/40 p-5 rounded-[2.5rem] border border-slate-200/60 dark:border-slate-800/60 shadow-sm backdrop-blur-xl">
+                            <div className="flex flex-wrap items-center gap-2.5 p-1 bg-slate-50 dark:bg-slate-950/50 rounded-[1.25rem] border border-slate-100 dark:border-slate-800/50">
+                                <button onClick={() => setStatusFilter("all")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "all" ? "bg-white dark:bg-slate-800 text-indigo-600 shadow-md ring-1 ring-slate-200 dark:ring-slate-700" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>All</button>
+                                <button onClick={() => setStatusFilter("pending")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "pending" ? "bg-white dark:bg-slate-800 text-slate-700 shadow-md ring-1 ring-slate-200 dark:ring-slate-700" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>Pending</button>
+                                <button onClick={() => setStatusFilter("approved")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "approved" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>Approved</button>
+                                <button onClick={() => setStatusFilter("fulfilled")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "fulfilled" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>Fulfilled</button>
+                                <button onClick={() => setStatusFilter("refunded")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "refunded" ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>Refunds</button>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <div className="relative group">
-                                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                                    <Input
-                                        placeholder="Search TID, Employee #, or User..."
-                                        className="pl-11 h-11 w-64 bg-slate-100 dark:bg-slate-800 border-none rounded-2xl text-xs font-bold placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-indigo-500/20"
-                                        value={reportSearch}
-                                        onChange={(e) => setReportSearch(e.target.value)}
-                                    />
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="relative group/search">
+                                    <div className="absolute inset-0 bg-indigo-500/5 rounded-2xl blur-md opacity-0 group-focus-within/search:opacity-100 transition-opacity"></div>
+                                    <div className="relative">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within/search:text-indigo-500 transition-colors" />
+                                        <Input
+                                            placeholder="Search Transaction..."
+                                            className="pl-11 h-11 w-[280px] bg-slate-100 dark:bg-slate-800/80 border-transparent rounded-2xl text-[11px] font-bold placeholder:text-slate-400 focus-visible:bg-white dark:focus-visible:bg-slate-900 focus-visible:ring-2 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500/30 transition-all"
+                                            value={reportSearch}
+                                            onChange={(e) => setReportSearch(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
                                 <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
                                 <MonthFilter selected={reportMonths} onChange={setReportMonths} />
@@ -687,24 +728,47 @@ export default function OrderReportPage() {
 
                         {/* Report Table */}
                         <Card className="rounded-[2.5rem] border-slate-200 dark:border-slate-800 shadow-2xl bg-white dark:bg-slate-900/40 overflow-hidden min-h-[600px] flex flex-col">
-                            <div className="overflow-x-auto flex-1">
+                            <div className="overflow-x-auto flex-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800 scrollbar-track-transparent">
+                                <style jsx global>{`
+                                    .scrollbar-thin::-webkit-scrollbar {
+                                        height: 6px;
+                                        width: 6px;
+                                    }
+                                    .scrollbar-thin::-webkit-scrollbar-thumb {
+                                        background-color: rgb(226, 232, 240);
+                                        border-radius: 20px;
+                                    }
+                                    .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+                                        background-color: rgb(30, 41, 59);
+                                    }
+                                    .scrollbar-thin::-webkit-scrollbar-track {
+                                        background-color: transparent;
+                                    }
+                                `}</style>
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 hover:bg-transparent">
-                                            {isVisible("orderDate") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Calendar className="h-3 w-3" /> Date</div></TableHead>}
-                                            {isVisible("userName") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">User</TableHead>}
-                                            {isVisible("employeeId") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Employee #</TableHead>}
-                                            {isVisible("tid") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Hash className="h-3 w-3" /> TID</div></TableHead>}
-                                            {isVisible("organizationName") && role === "SUPER_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Org</TableHead>}
-                                            {isVisible("group") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Group</TableHead>}
-                                            {isVisible("branchName") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500"><div className="flex items-center gap-2"><Store className="h-3 w-3" /> Branch</div></TableHead>}
-                                            {isVisible("status") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Status</TableHead>}
-                                            {isVisible("quantityOrdered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center">Qty Ordered</TableHead>}
-                                            {isVisible("quantityDelivered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-emerald-600">Qty Delivered</TableHead>}
-                                            {isVisible("quantityRefunded") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-rose-500">Qty Refunded</TableHead>}
-                                            {isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Subtotal</TableHead>}
-                                            {isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500">Refund</TableHead>}
-                                            {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">{isBuyer ? "Net Purchased" : "Net Revenue"}</TableHead>}
+                                            {isVisible("tid") && (
+                                                <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 sticky left-0 z-20 bg-slate-50/100 dark:bg-slate-900/100 backdrop-blur-md border-r border-slate-200/60 dark:border-slate-800/60 shadow-[4px_0_12px_rgba(0,0,0,0.03)]">
+                                                    <div className="flex items-center gap-2">
+                                                        <Hash className="h-3.5 w-3.5 text-indigo-500" /> 
+                                                        Transaction ID
+                                                    </div>
+                                                </TableHead>
+                                            )}
+                                            {isVisible("orderDate") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap"><div className="flex items-center gap-2"><Calendar className="h-3 w-3" /> Date</div></TableHead>}
+                                            {isVisible("userName") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">User</TableHead>}
+                                            {isVisible("employeeId") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">Employee #</TableHead>}
+                                            {isVisible("organizationName") && role === "SUPER_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">Org</TableHead>}
+                                            {isVisible("group") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">Group</TableHead>}
+                                            {isVisible("branchName") && role !== "BRANCH_ADMIN" && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap"><div className="flex items-center gap-2"><Store className="h-3 w-3" /> Branch</div></TableHead>}
+                                            {isVisible("status") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center whitespace-nowrap">Status</TableHead>}
+                                            {isVisible("quantityOrdered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center whitespace-nowrap">Qty Ordered</TableHead>}
+                                            {isVisible("quantityDelivered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-emerald-600 whitespace-nowrap">Qty Delivered</TableHead>}
+                                            {isVisible("quantityRefunded") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-rose-500 whitespace-nowrap">Qty Refunded</TableHead>}
+                                            {isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right whitespace-nowrap">Subtotal</TableHead>}
+                                            {isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500 whitespace-nowrap">Refund</TableHead>}
+                                            {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right whitespace-nowrap">{isBuyer ? "Net Purchased" : "Net Revenue"}</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -714,33 +778,72 @@ export default function OrderReportPage() {
                                             <TableRow><TableCell colSpan={ALL_COLUMNS.length} className="h-64 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">No records found</TableCell></TableRow>
                                         ) : (
                                             filteredOrders.map((order: any) => (
-                                                <TableRow key={order.id} className="group border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50/50 dark:hover:bg-indigo-500/5 transition-colors duration-200">
-                                                    {isVisible("orderDate") && <TableCell className="px-8 py-5 text-[11px] font-bold text-slate-500 uppercase tracking-tighter" suppressHydrationWarning>{new Date(order.createdAt).toLocaleDateString()}</TableCell>}
-                                                    {isVisible("userName") && <TableCell className="px-8 py-5"><span className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-tighter">{order.userName || "Guest System"}</span></TableCell>}
+                                                <TableRow key={order.id} className="group border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50/80 dark:hover:bg-indigo-500/5 transition-all duration-300">
+                                                    {isVisible("tid") && (
+                                                        <TableCell className="px-8 py-5 sticky left-0 z-20 bg-white/100 dark:bg-[#0c1222]/100 group-hover:bg-slate-50/100 dark:group-hover:bg-slate-900/100 border-r border-slate-200/60 dark:border-slate-800/60 shadow-[4px_0_12px_rgba(0,0,0,0.03)] transition-colors duration-300">
+                                                            <div className="flex flex-col gap-1.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Hash className="h-3 w-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                                    <span className="text-[11px] font-black text-slate-900 dark:text-white font-mono tracking-tight tabular-nums">{order.tid}</span>
+                                                                </div>
+                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                                                    <div className="h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+                                                                    Audit Receipt
+                                                                </span>
+                                                            </div>
+                                                        </TableCell>
+                                                    )}
+                                                    {isVisible("orderDate") && (
+                                                        <TableCell className="px-8 py-5" suppressHydrationWarning>
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className="text-[11px] font-black text-slate-700 dark:text-slate-200 tabular-nums">{new Date(order.createdAt).toLocaleDateString()}</span>
+                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter tabular-nums">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                    )}
+                                                    {isVisible("userName") && <TableCell className="px-8 py-5"><span className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-tighter whitespace-nowrap">{order.userName || "Guest System"}</span></TableCell>}
                                                     {isVisible("employeeId") && (
                                                         <TableCell className="px-8 py-5">
-                                                            <span className="px-2 py-1 rounded bg-indigo-50 dark:bg-indigo-500/10 text-[10px] font-black text-indigo-600 dark:text-indigo-400 font-mono">
+                                                            <div className="inline-flex items-center px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/50 text-[10px] font-black text-slate-600 dark:text-slate-400 font-mono ring-1 ring-slate-200 dark:ring-slate-700/50">
                                                                 #{order.employeeId || (order.userId ? order.userId.split('-')[0] : 'N/A')}
-                                                            </span>
+                                                            </div>
                                                         </TableCell>
                                                     )}
-                                                    {isVisible("tid") && <TableCell className="px-8 py-5"><span className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-black text-slate-600 dark:text-slate-400 font-mono italic">{order.tid}</span></TableCell>}
-                                                    {isVisible("organizationName") && role === "SUPER_ADMIN" && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.organizationName || "N/A"}</TableCell>}
-                                                    {isVisible("group") && role !== "BRANCH_ADMIN" && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{order.groupName || "-"}</TableCell>}
-                                                    {isVisible("branchName") && role !== "BRANCH_ADMIN" && <TableCell className="px-8 py-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter">{order.branchName}</TableCell>}
+                                                    {isVisible("organizationName") && role === "SUPER_ADMIN" && <TableCell className="px-8 py-5 text-[10px] font-bold text-slate-500 uppercase tracking-tighter whitespace-nowrap">{order.organizationName || "N/A"}</TableCell>}
+                                                    {isVisible("group") && role !== "BRANCH_ADMIN" && <TableCell className="px-8 py-5 text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest tabular-nums">{order.groupName || "-"}</TableCell>}
+                                                    {isVisible("branchName") && role !== "BRANCH_ADMIN" && <TableCell className="px-8 py-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter whitespace-nowrap">{order.branchName}</TableCell>}
                                                     {isVisible("status") && (
                                                         <TableCell className="px-8 py-5 text-center">
-                                                            <Badge variant="outline" style={{ backgroundColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}15`, color: STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8', borderColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}30` }} className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg border">
-                                                                {order.status}
-                                                            </Badge>
+                                                            <div className="inline-flex">
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    style={{ 
+                                                                        backgroundColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}15`, 
+                                                                        color: STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8', 
+                                                                        borderColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}30` 
+                                                                    }} 
+                                                                    className="text-[9px] font-black uppercase tracking-[0.15em] px-3 py-1 rounded-xl border shadow-sm transition-transform group-hover:scale-105 duration-300"
+                                                                >
+                                                                    {order.status}
+                                                                </Badge>
+                                                            </div>
                                                         </TableCell>
                                                     )}
-                                                    {isVisible("quantityOrdered") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold font-mono text-slate-600 dark:text-slate-400">{order.quantityOrdered || 0}</TableCell>}
-                                                    {isVisible("quantityDelivered") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold font-mono text-emerald-600 dark:text-emerald-400">{(order.quantityOrdered || 0) - (order.quantityRefunded || 0)}</TableCell>}
-                                                    {isVisible("quantityRefunded") && <TableCell className="px-8 py-5 text-center text-[11px] font-bold font-mono text-rose-500 dark:text-rose-400">{order.quantityRefunded || 0}</TableCell>}
-                                                    {isVisible("subtotalValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-bold font-mono">{formatPKR(order.subtotalCents / 100)}</TableCell>}
-                                                    {isVisible("refundValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-rose-500">{order.refundAmountCents > 0 ? `-${formatPKR(order.refundAmountCents / 100)}` : "—"}</TableCell>}
-                                                    {isVisible("netTotalValue") && <TableCell className="px-8 py-5 text-right text-xs font-black font-mono text-slate-900 dark:text-white leading-none">{formatPKR((order.totalCents - (order.refundAmountCents || 0)) / 100)}</TableCell>}
+                                                    {isVisible("quantityOrdered") && <TableCell className="px-8 py-5 text-center text-[12px] font-black font-mono text-slate-900 dark:text-white tabular-nums">{order.quantityOrdered || 0}</TableCell>}
+                                                    {isVisible("quantityDelivered") && <TableCell className="px-8 py-5 text-center text-[12px] font-black font-mono text-emerald-600 dark:text-emerald-400 tabular-nums">{(order.quantityOrdered || 0) - (order.quantityRefunded || 0)}</TableCell>}
+                                                    {isVisible("quantityRefunded") && <TableCell className="px-8 py-5 text-center text-[12px] font-black font-mono text-rose-500 dark:text-rose-400 tabular-nums">{order.quantityRefunded || 0}</TableCell>}
+                                                    {isVisible("subtotalValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-slate-700 dark:text-slate-200 tabular-nums">{formatPKR(order.subtotalCents / 100)}</TableCell>}
+                                                    {isVisible("refundValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-rose-500 tabular-nums">{order.refundAmountCents > 0 ? `-${formatPKR(order.refundAmountCents / 100)}` : "—"}</TableCell>}
+                                                    {isVisible("netTotalValue") && (
+                                                        <TableCell className="px-8 py-5 text-right">
+                                                            <div className="inline-flex flex-col items-end">
+                                                                <span className="text-[13px] font-black font-mono text-indigo-600 dark:text-indigo-400 tabular-nums leading-none mb-1">
+                                                                    {formatPKR((order.totalCents - (order.refundAmountCents || 0)) / 100)}
+                                                                </span>
+                                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Net Revenue</span>
+                                                            </div>
+                                                        </TableCell>
+                                                    )}
                                                 </TableRow>
                                             ))
                                         )}

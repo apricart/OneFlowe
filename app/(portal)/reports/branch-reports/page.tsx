@@ -249,14 +249,20 @@ export default function BranchReportsPage() {
     }, [chartData, chartMonths, chartYears])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = role === "BRANCH_ADMIN" 
-            ? ["Branch Name", "Status", "Orders", revenueLabel]
-            : ["Branch Name", "Group", "Status", "Orders", revenueLabel]
-        
-        const rows = filteredBranches.map((b: any) => role === "BRANCH_ADMIN" 
-            ? [b.name || "-", b.status || "active", b.totalOrders, (b.revenue / 100).toFixed(2)]
-            : [b.name || "-", b.groupName || "-", b.status || "active", b.totalOrders, (b.revenue / 100).toFixed(2)]
-        )
+        // Unified column definition matching the UI Table exactly
+        const columns = [
+            { label: "Rank",               value: (b: any, idx: number) => idx + 1 },
+            { label: "Branch Name",        value: (b: any) => b.name || "-" },
+            { label: "Status",             value: (b: any) => b.status?.toLowerCase() === 'active' ? 'Active' : b.status?.toLowerCase() === 'deleted' ? 'Deleted' : 'Inactive' },
+            ...(role !== "BRANCH_ADMIN" ? [{ label: "Cluster / Group", value: (b: any) => b.groupName || "UNGROUPED" }] : []),
+            { label: `${revenueHeader} (PKR)`, value: (b: any) => (b.revenue / 100).toFixed(2) },
+            { label: "Refunds (PKR)",      value: (b: any) => (b.refunds / 100).toFixed(2) },
+            { label: "Orders",             value: (b: any) => b.totalOrders || 0 },
+            { label: "Fulfillment",        value: (b: any) => `${b.fulfilledOrders} / ${b.totalOrders}` }
+        ]
+
+        const headers = columns.map(c => c.label)
+        const rows = filteredBranches.map((b: any, idx: number) => columns.map(c => c.value(b, idx)))
 
         if (format === 'pdf') {
             const doc = new jsPDF()

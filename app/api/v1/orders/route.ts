@@ -5,7 +5,9 @@ import { db } from "@/lib/db"
 import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds, systemLogs, groupAuditLogs, organizations, refundItems } from "@/db/schema"
 import { headers } from "next/headers"
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
-import { logOrderActivity } from "@/lib/global-logger"
+import { logOrderActivity, logTokenGenerated, logFulfillmentAttempt } from "@/lib/global-logger"
+import { generateApprovalToken, hashApprovalToken, verifyApprovalToken } from "@/lib/approval-token"
+import { generateReceiptData } from "@/lib/receipt-generator"
 
 
 
@@ -51,10 +53,16 @@ export async function GET(req: NextRequest) {
     const idParam = searchParams.get("id") || undefined
     const mode = searchParams.get("mode") || undefined // weeklySales | monthlySales
     const groupId = searchParams.get("groupId") || undefined
+    const groupIdsRaw = searchParams.get("groupIds") || undefined
 
     // Parsing branchIds
     const parsedBranchIds = branchIdsRaw
       ? branchIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id))
+      : []
+
+    // Parsing groupIds
+    const parsedGroupIds = groupIdsRaw
+      ? groupIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id))
       : []
 
     const conditions: any[] = []
@@ -92,7 +100,12 @@ export async function GET(req: NextRequest) {
       conditions.push(eq(orders.branchId, Number(branchId)))
     }
 
-    if (groupId && /^\d+$/.test(groupId)) conditions.push(eq(branches.groupId, Number(groupId)))
+    // Group filtering
+    if (parsedGroupIds.length > 0) {
+      conditions.push(inArray(branches.groupId, parsedGroupIds))
+    } else if (groupId && /^\d+$/.test(groupId)) {
+      conditions.push(eq(branches.groupId, Number(groupId)))
+    }
 
     // Date range filtering (standardized)
     if (startDate) conditions.push(gte(orders.createdAt, new Date(startDate)))
@@ -364,13 +377,13 @@ export async function POST(req: NextRequest) {
     let currentBudget = budget
     if (!currentBudget) {
       // Check if branch has a baseline budget to auto-initialize
-      const [branchData] = await db.select({ 
+      const [branchData] = await db.select({
         baselineBudgetCents: branches.baselineBudgetCents,
-        organizationId: branches.organizationId 
+        organizationId: branches.organizationId
       })
-      .from(branches)
-      .where(eq(branches.id, branchId))
-      .limit(1)
+        .from(branches)
+        .where(eq(branches.id, branchId))
+        .limit(1)
 
       if (branchData?.baselineBudgetCents && branchData.baselineBudgetCents > 0) {
         // Auto-initialize budget from baseline
@@ -430,7 +443,6 @@ export async function POST(req: NextRequest) {
       }
 
       // Generate token for instant approval
-      const { generateApprovalToken, hashApprovalToken } = await import('@/lib/approval-token')
       const plainToken = generateApprovalToken(10)
       const tokenHash = await hashApprovalToken(plainToken)
 
@@ -465,11 +477,11 @@ export async function POST(req: NextRequest) {
       }
 
       // 6. Generate and store receipt data
-      const { generateReceiptData } = await import('@/lib/receipt-generator')
       try {
         const receiptData = await generateReceiptData({
           orderId: ord.id,
           orderTid: tid,
+          status: 'pending',
           organizationId: Number(organizationId),
           branchId: Number(branchId),
           orderItemsData: calculatedItems,
@@ -529,7 +541,6 @@ export async function POST(req: NextRequest) {
       })
 
       // Log token generation
-      const { logTokenGenerated } = await import('@/lib/global-logger')
       logTokenGenerated(
         ord.id,
         tid,
@@ -610,21 +621,32 @@ export async function PUT(req: NextRequest) {
     let generatedApprovalToken: string | null = null
 
     await db.transaction(async (tx) => {
+      // ─── Status and Receipt Update Preparation ───
+      const targetStatus = action === 'cancel' ? 'cancelled' :
+        action === 'reject' ? 'rejected' :
+          action === 'approve' ? 'approved' : 'fulfilled'
+
+      const updatedReceiptData = ord.receiptData ? {
+        ...(ord.receiptData as any),
+        status: targetStatus
+      } : null
+
       if (action === 'cancel' || action === 'reject') {
-        const targetStatus = action === 'cancel' ? 'cancelled' : 'rejected'
-        // Only release budget if it was reserved (pending or approved)
-        // We already checked it's not terminal, so it must be pending/approved.
-        // For reject, create reason
+        // 1. Update Order Status
         await tx.update(orders).set({
           status: targetStatus,
           rejectedByUserId: action === 'reject' ? (session.user as any).id : null,
           rejectedAt: action === 'reject' ? new Date() : null,
-          rejectionReason: action === 'reject' ? rejectionReason : null
+          rejectionReason: action === 'reject' ? rejectionReason : null,
+          receiptData: updatedReceiptData as any
         }).where(eq(orders.id, id))
 
-        await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}` }).where(eq(budgets.id, (budget as any).id))
+        // 2. Release Budget
+        await tx.update(budgets).set({
+          amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`
+        }).where(eq(budgets.id, budget.id))
 
-        // Restore stock for cancelled/rejected orders
+        // 3. Restore Stock
         const orderItemsList = await tx.select().from(orderItems).where(eq(orderItems.orderId, id))
         for (const item of orderItemsList) {
           await tx.update(globalProducts)
@@ -639,10 +661,6 @@ export async function PUT(req: NextRequest) {
           throw new Error(`Cannot approve order in ${currentStatus} state`)
         }
 
-        // Generate secure approval token
-        const { generateApprovalToken, hashApprovalToken } = await import('@/lib/approval-token')
-        const { logTokenGenerated } = await import('@/lib/global-logger')
-
         const plainToken = generateApprovalToken(10)
         const tokenHash = await hashApprovalToken(plainToken)
 
@@ -650,81 +668,47 @@ export async function PUT(req: NextRequest) {
           status: 'approved',
           approvedByUserId: (session.user as any).id,
           approvedAt: new Date(),
-          approvalToken: plainToken, // Stored for approver to view later
+          approvalToken: plainToken,
           approvalTokenHash: tokenHash,
-          approvalTokenCreatedAt: new Date()
+          approvalTokenCreatedAt: new Date(),
+          receiptData: updatedReceiptData as any
         }).where(eq(orders.id, id))
 
-        // Log token generation (without plaintext token)
-        logTokenGenerated(
-          id,
-          ord.tid,
-          (session.user as any).id,
-          (session.user as any).email || 'unknown'
-        )
-
-        // Store token to return after transaction completes
+        logTokenGenerated(id, ord.tid, (session.user as any).id, (session.user as any).email || 'unknown')
         generatedApprovalToken = plainToken
+
       } else if (action === 'fulfill') {
-        // SECURITY: Require approval token for fulfillment
-        if (!approvalToken) {
-          throw new Error('Approval token required to fulfill order')
-        }
-
-        if (!ord.approvalTokenHash) {
-          throw new Error('Order has no approval token - cannot fulfill')
-        }
-
-        const { verifyApprovalToken } = await import('@/lib/approval-token')
-        const { logFulfillmentAttempt } = await import('@/lib/global-logger')
+        if (!approvalToken) throw new Error('Approval token required to fulfill order')
+        if (!ord.approvalTokenHash) throw new Error('Order has no approval token - cannot fulfill')
 
         const isValid = await verifyApprovalToken(approvalToken, ord.approvalTokenHash)
 
         if (!isValid) {
-          // Log failed attempt
-          logFulfillmentAttempt(
-            id,
-            ord.tid,
-            (session.user as any).id,
-            (session.user as any).email || 'unknown',
-            role,
-            false,
-            'Invalid token provided'
-          )
+          logFulfillmentAttempt(id, ord.tid, (session.user as any).id, (session.user as any).email || 'unknown', role, false, 'Invalid token provided')
           throw new Error('Invalid approval token - fulfillment denied')
         }
 
-        // Token valid - proceed with fulfillment
         await tx.update(orders).set({
           status: 'fulfilled',
           fulfilledAt: sql`NOW()`,
-          fulfilledByUserId: (session.user as any).id
+          fulfilledByUserId: (session.user as any).id,
+          receiptData: updatedReceiptData as any
         }).where(eq(orders.id, id))
 
         await tx.update(budgets).set({
           amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,
           amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
-        }).where(eq(budgets.id, (budget as any).id))
+        }).where(eq(budgets.id, budget.id))
 
-        // Log successful fulfillment
-        logFulfillmentAttempt(
-          id,
-          ord.tid,
-          (session.user as any).id,
-          (session.user as any).email || 'unknown',
-          role,
-          true
-        )
-        // Stock already deducted on order creation, no additional action needed
+        logFulfillmentAttempt(id, ord.tid, (session.user as any).id, (session.user as any).email || 'unknown', role, true)
       }
 
       // --- NEW: Detailed File Logging for Updates ---
       try {
-        // Fetch order with items for full archival snapshot
         const currentOrderItems = await tx.select().from(orderItems).where(eq(orderItems.orderId, id))
         logOrderActivity(action.toUpperCase() as any, {
           ...ord,
-          status: action === 'approve' ? 'approved' : (action === 'fulfill' ? 'fulfilled' : (action === 'cancel' ? 'cancelled' : 'rejected')),
+          status: targetStatus,
           orderItems: currentOrderItems
         }, {
           id: (session.user as any).id,
@@ -766,7 +750,8 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ message: 'Order updated' })
   } catch (e: any) {
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    console.error("PUT order error:", e)
+    return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 })
   }
 }
 

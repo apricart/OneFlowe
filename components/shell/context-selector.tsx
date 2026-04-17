@@ -1,6 +1,7 @@
 "use client"
 
-import { Building2, GitBranch, RotateCcw } from "lucide-react"
+import { useState } from "react"
+import { Building2, GitBranch, RotateCcw, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -10,8 +11,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Check } from "lucide-react"
 import { useAppContext } from "@/components/context/app-context"
 import useSWR from "swr"
+import { cn } from "@/lib/utils"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
@@ -26,6 +42,9 @@ export function ContextSelector() {
     resetContext,
     isInitialized,
   } = useAppContext()
+
+  const [orgOpen, setOrgOpen] = useState(false)
+  const [branchOpen, setBranchOpen] = useState(false)
 
   // Fetch organizations
   const { data: orgsData, isLoading: orgsLoading } = useSWR(
@@ -91,63 +110,142 @@ export function ContextSelector() {
   const selectedBranch = branches.find((b: any) => b.id.toString() === branchId)
 
   return (
-    <div className="flex items-center gap-2">
-      {/* Organization Selector */}
+    <div className="flex items-center gap-3">
+      {/* Organization Selector - Searchable Popover */}
       <div className="flex items-center gap-2">
         <div className="relative">
-          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
-          <Select
-            value={organizationId || "all"}
-            onValueChange={(val) => setOrganizationId(val === "all" ? null : val)}
-          >
-            <SelectTrigger className="w-[200px] pl-9">
-              <SelectValue>
-                {orgsLoading ? "Loading..." : selectedOrg?.name || "All Organizations"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="all">All Organizations</SelectItem>
-                {organizations.map((org: any) => (
-                  <SelectItem key={org.id} value={org.id.toString()}>
-                    {org.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          <Popover open={orgOpen} onOpenChange={setOrgOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={orgOpen}
+                className={cn(
+                  "w-[220px] justify-between px-3.5 h-10 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 font-bold text-xs shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900 transition-all focus-within:ring-2 focus-within:ring-indigo-500/20",
+                  !organizationId && "text-slate-400"
+                )}
+              >
+                <div className="flex items-center gap-2.5 truncate mr-2">
+                    <Building2 className={cn("h-4 w-4 shrink-0", organizationId ? "text-blue-600" : "text-slate-400")} />
+                    <span className="truncate">
+                      {orgsLoading ? "Loading..." : selectedOrg?.name || "All Organizations"}
+                    </span>
+                </div>
+                <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 opacity-50 transition-transform duration-200", orgOpen && "rotate-180")} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[220px] p-0 rounded-2xl border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden" align="start">
+              <Command className="bg-white dark:bg-slate-950">
+                <CommandInput placeholder="Search organization..." className="h-10 text-xs font-bold" />
+                <CommandList className="max-h-[300px]">
+                  <CommandEmpty className="py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">No organization found.</CommandEmpty>
+                  <CommandGroup className="p-1.5">
+                    <CommandItem
+                      value="all"
+                      onSelect={() => {
+                        setOrganizationId(null)
+                        setOrgOpen(false)
+                      }}
+                      className="flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-tight cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Check className={cn("h-3.5 w-3.5 text-indigo-600", !organizationId ? "opacity-100" : "opacity-0")} />
+                        <span>All Organizations</span>
+                      </div>
+                    </CommandItem>
+                    {organizations.map((org: any) => (
+                      <CommandItem
+                        key={org.id}
+                        value={org.name}
+                        onSelect={() => {
+                          setOrganizationId(org.id.toString())
+                          setOrgOpen(false)
+                        }}
+                        className="flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-tight cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Check className={cn("h-3.5 w-3.5 text-indigo-600", organizationId === org.id.toString() ? "opacity-100" : "opacity-0")} />
+                          <span>{org.name}</span>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
-      {/* Branch Selector */}
+      {/* Branch Selector - Searchable Popover */}
       <div className="flex items-center gap-2">
         <div className="relative">
-          <GitBranch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
-          <Select
-            value={branchId || "all"}
-            onValueChange={(val) => setBranchId(val === "all" ? null : val)}
-            disabled={!organizationId}
-          >
-            <SelectTrigger className="w-[200px] pl-9">
-              <SelectValue>
-                {branchesLoading
-                  ? "Loading..."
-                  : !organizationId
-                    ? "Select Organization"
-                    : selectedBranch?.name || "All Branches"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="all">All Branches</SelectItem>
-                {branches.map((branch: any) => (
-                  <SelectItem key={branch.id} value={branch.id.toString()}>
-                    {branch.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+          <Popover open={branchOpen} onOpenChange={setBranchOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={branchOpen}
+                disabled={!organizationId}
+                className={cn(
+                  "w-[220px] justify-between px-3.5 h-10 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 font-bold text-xs shadow-sm hover:bg-slate-50 dark:hover:bg-slate-900 transition-all focus-within:ring-2 focus-within:ring-indigo-500/20",
+                  !branchId && "text-slate-400",
+                  !organizationId && "opacity-60 cursor-not-allowed bg-slate-50 dark:bg-slate-900 border-dashed"
+                )}
+              >
+                <div className="flex items-center gap-2.5 truncate mr-2">
+                    <GitBranch className={cn("h-4 w-4 shrink-0", branchId ? "text-indigo-600" : "text-slate-400")} />
+                    <span className="truncate">
+                      {branchesLoading
+                        ? "Loading..."
+                        : !organizationId
+                          ? "Select Organization"
+                          : selectedBranch?.name || "All Branches"}
+                    </span>
+                </div>
+                <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 opacity-50 transition-transform duration-200", branchOpen && "rotate-180")} />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[220px] p-0 rounded-2xl border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden" align="start">
+              <Command className="bg-white dark:bg-slate-950">
+                <CommandInput placeholder="Search branch..." className="h-10 text-xs font-bold" />
+                <CommandList className="max-h-[300px]">
+                  <CommandEmpty className="py-4 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">No branch found.</CommandEmpty>
+                  <CommandGroup className="p-1.5">
+                    <CommandItem
+                      value="all"
+                      onSelect={() => {
+                        setBranchId(null)
+                        setBranchOpen(false)
+                      }}
+                      className="flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-tight cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Check className={cn("h-3.5 w-3.5 text-indigo-600", !branchId ? "opacity-100" : "opacity-0")} />
+                        <span>All Branches</span>
+                      </div>
+                    </CommandItem>
+                    {branches.map((branch: any) => (
+                      <CommandItem
+                        key={branch.id}
+                        value={branch.name}
+                        onSelect={() => {
+                          setBranchId(branch.id.toString())
+                          setBranchOpen(false)
+                        }}
+                        className="flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-tight cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Check className={cn("h-3.5 w-3.5 text-indigo-600", branchId === branch.id.toString() ? "opacity-100" : "opacity-0")} />
+                          <span>{branch.name}</span>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -158,6 +256,7 @@ export function ContextSelector() {
           size="icon"
           onClick={resetContext}
           title="Reset to global scope"
+          className="rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/10 text-slate-400 hover:text-indigo-600 transition-all"
         >
           <RotateCcw className="h-4 w-4" />
         </Button>

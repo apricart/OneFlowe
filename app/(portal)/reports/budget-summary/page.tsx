@@ -618,11 +618,23 @@ export default function BudgetSummaryPage() {
     }
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Category Name", "Total Spent (PKR)"]
-        const rows = filteredCategories.map((c: any) => [
-            c.categoryName || 'Uncategorized',
-            (c.spentCents / 100).toFixed(2)
-        ])
+        // Export the full branch breakdown table to match the UI report
+        const columns = [
+            { label: "Branch Name",        value: (b: any) => b.branchName || "-" },
+            { label: "Monthly Base (PKR)", value: (b: any) => ((b.baselineAmount || 0) / 100).toFixed(2) },
+            { label: "Add-On Credit (PKR)",value: (b: any) => ((b.credited || 0) / 100).toFixed(2) },
+            { label: "Total Budget (PKR)", value: (b: any) => (((b.baselineAmount || 0) + (b.credited || 0)) / 100).toFixed(2) },
+            { label: "Spent (PKR)",        value: (b: any) => ((b.spent || 0) / 100).toFixed(2) },
+            { label: "Remaining (PKR)",    value: (b: any) => ((((b.baselineAmount || 0) + (b.credited || 0)) - (b.spent || 0)) / 100).toFixed(2) },
+            { label: "Utilization %",      value: (b: any) => {
+                const total = (b.baselineAmount || 0) + (b.credited || 0)
+                return total > 0 ? `${((b.spent || 0) / total * 100).toFixed(1)}%` : "0%"
+            }},
+        ]
+
+        const headers = columns.map(c => c.label)
+        const exportSource = filteredReportBranches.length > 0 ? filteredReportBranches : filteredBranches
+        const rows = exportSource.map((b: any) => columns.map(c => c.value(b)))
 
         if (format === 'pdf') {
             const doc = new jsPDF()
@@ -1432,43 +1444,29 @@ export default function BudgetSummaryPage() {
                                                             onChange={(e) => setSearchTerm(e.target.value)}
                                                         />
                                                     </div>
-                                                    <Button
-                                                        variant="outline"
-                                                        className="h-12 border-indigo-100/50 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] gap-3 bg-indigo-50/30 dark:bg-slate-950/30 hover:bg-white dark:hover:bg-slate-900 shadow-sm transition-all rounded-2xl px-6 border-2"
-                                                        onClick={() => {
-                                                            const csvData = [
-                                                                ["Branch Name", "Monthly Base", "Add-On", "Total Budget", "Spent", "Remaining", "Utilization"],
-                                                                ...filteredReportBranches.map(b => {
-                                                                    const baseline = b.baselineAmount || 0;
-                                                                    const addon = b.credited || 0;
-                                                                    const totalLimit = baseline + addon;
-                                                                    const spent = b.spent || 0;
-                                                                    const remaining = totalLimit - spent;
-                                                                    const utilization = totalLimit > 0 ? (spent / totalLimit) * 100 : 0;
-
-                                                                    return [
-                                                                        b.branchName,
-                                                                        (baseline / 100).toFixed(2),
-                                                                        (addon / 100).toFixed(2),
-                                                                        (totalLimit / 100).toFixed(2),
-                                                                        (spent / 100).toFixed(2),
-                                                                        (remaining / 100).toFixed(2),
-                                                                        utilization.toFixed(1) + "%"
-                                                                    ]
-                                                                })
-                                                            ]
-                                                            const csvContent = "data:text/csv;charset=utf-8," + csvData.map(e => e.join(",")).join("\n")
-                                                            const encodedUri = encodeURI(csvContent)
-                                                            const link = document.createElement("a")
-                                                            link.setAttribute("href", encodedUri)
-                                                            link.setAttribute("download", `audit_report_${format(new Date(), 'yyyy-MM-dd')}.csv`)
-                                                            document.body.appendChild(link)
-                                                            link.click()
-                                                            document.body.removeChild(link)
-                                                        }}
-                                                    >
-                                                        <DownloadIcon className="h-5 w-5 text-indigo-600" /> Export CSV
-                                                    </Button>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button
+                                                                variant="outline"
+                                                                className="h-12 border-indigo-100/50 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] gap-3 bg-indigo-50/30 dark:bg-slate-950/30 hover:bg-white dark:hover:bg-slate-900 shadow-sm transition-all rounded-2xl px-6 border-2 group"
+                                                            >
+                                                                <DownloadIcon className="h-5 w-5 text-indigo-600 transition-transform group-hover:-translate-y-0.5" /> 
+                                                                Export Options
+                                                                <ChevronDown className="h-3 w-3 opacity-50 ml-1" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end" className="w-48 rounded-xl p-2 shadow-xl border-slate-200 dark:border-slate-800">
+                                                            <DropdownMenuItem onClick={() => handleExport('pdf')} className="cursor-pointer gap-3 p-3 rounded-lg font-black text-[11px] uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-rose-50 focus:text-rose-600 dark:focus:bg-rose-500/10 dark:focus:text-rose-400">
+                                                                <FileText className="h-4 w-4" /> Export as PDF
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleExport('excel')} className="cursor-pointer gap-3 p-3 rounded-lg font-black text-[11px] uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-emerald-50 focus:text-emerald-600 dark:focus:bg-emerald-500/10 dark:focus:text-emerald-400">
+                                                                <Database className="h-4 w-4" /> Export as Excel
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleExport('csv')} className="cursor-pointer gap-3 p-3 rounded-lg font-black text-[11px] uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-indigo-50 focus:text-indigo-600 dark:focus:bg-indigo-500/10 dark:focus:text-indigo-400">
+                                                                <DownloadIcon className="h-4 w-4" /> Export as CSV
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </div>
                                             </div>
                                         </div>

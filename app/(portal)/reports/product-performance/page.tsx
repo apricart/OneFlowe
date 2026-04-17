@@ -582,66 +582,41 @@ export default function ProductPerformancePage() {
         const isReports = activeTab === "reports"
         const exportData = isReports ? filteredLedger : filteredProducts
 
-        const headers = isReports
-            ? (role === "SUPER_ADMIN"
-                ? ["Organization", "Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"]
-                : role === "BRANCH_ADMIN"
-                    ? ["Order ID", "Trans ID", "Order Date", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"]
-                    : ["Branch", "Order ID", "Trans ID", "Order Date", "Group", "Discount", "User Info (Email)", "Item Details", "Qty Ordered", "Item Refunded", "Net Items", "Unit Price", "Grand Total"])
-            : ["Product Code", "Product Name", "Category", "Sub-category", "Status", "Qty Ordered", "Fulfilled", "Refunded", isBuyer ? "Unit Price" : "Base Price", exportRevenueHeader]
+        // ── Performance tab columns (all roles same, simple product summary) ──
+        const performanceColumns = [
+            { label: "Product Code",   value: (p: any) => p.productCode || "-" },
+            { label: "Product Name",   value: (p: any) => p.productName || "-" },
+            { label: "Category",       value: (p: any) => p.category || "-" },
+            { label: "Sub-category",   value: (p: any) => p.subCategory || "-" },
+            { label: "Status",         value: (p: any) => p.status || "active" },
+            { label: "Qty Ordered",    value: (p: any) => p.qtyOrdered || 0 },
+            { label: "Fulfilled",      value: (p: any) => p.qtyFulfilled || 0 },
+            { label: "Refunded",       value: (p: any) => p.qtyRefunded || 0 },
+            { label: isBuyer ? "Unit Price (PKR)" : "Base Price (PKR)", value: (p: any) => ((p.unitPriceCents || p.basePriceCents || 0) / 100).toFixed(2) },
+            { label: exportRevenueHeader, value: (p: any) => ((p.revenueGeneratedCents || 0) / 100).toFixed(2) },
+        ]
 
-        const rows = exportData.map((p: any) => isReports ? (
-            role === "SUPER_ADMIN"
-                ? [
-                    p.organizationName || 'N/A',
-                    p.branchName,
-                    p.orderId || p.tid,
-                    p.tid,
-                    new Date(p.orderCreatedAt).toLocaleDateString(),
-                    p.group || 'N/A',
-                    "0",
-                    `${p.userName || ''} (${p.userEmail || ''})`.trim(),
-                    `${p.itemDetails} (${p.itemCode})`,
-                    p.qtyOrdered,
-                    p.qtyOrdered - p.qtyDelivered,
-                    p.qtyDelivered,
-                    (p.priceCents / 100).toFixed(2),
-                    (p.netTotalCents / 100).toFixed(2)
-                ]
-                : role === "BRANCH_ADMIN" 
-                    ? [
-                        p.orderId || p.tid,
-                        p.tid,
-                        new Date(p.orderCreatedAt).toLocaleDateString(),
-                        "0",
-                        `${p.userName || ''} (${p.userEmail || ''})`.trim(),
-                        `${p.itemDetails} (${p.itemCode})`,
-                        p.qtyOrdered,
-                        p.qtyOrdered - p.qtyDelivered,
-                        p.qtyDelivered,
-                        (p.priceCents / 100).toFixed(2),
-                        (p.netTotalCents / 100).toFixed(2)
-                    ]
-                    : [
-                        p.branchName,
-                        p.orderId || p.tid,
-                        p.tid,
-                        new Date(p.orderCreatedAt).toLocaleDateString(),
-                        p.group || 'N/A',
-                        "0",
-                        `${p.userName || ''} (${p.userEmail || ''})`.trim(),
-                        `${p.itemDetails} (${p.itemCode})`,
-                        p.qtyOrdered,
-                        p.qtyOrdered - p.qtyDelivered,
-                        p.qtyDelivered,
-                        (p.priceCents / 100).toFixed(2),
-                        (p.netTotalCents / 100).toFixed(2)
-                    ]
-        ) : [
-            p.productCode, p.productName, p.category, p.subCategory, p.status || 'active', p.qtyOrdered, p.qtyFulfilled, p.qtyRefunded,
-            ((p.unitPriceCents || p.basePriceCents) / 100).toFixed(2),
-            (p.revenueGeneratedCents / 100).toFixed(2)
-        ])
+        // ── Reports/Ledger tab columns (role-aware) ──
+        const ledgerColumns = [
+            ...(role === "SUPER_ADMIN" ? [{ label: "Organization", value: (p: any) => p.organizationName || "N/A" }] : []),
+            ...(role !== "BRANCH_ADMIN" ? [{ label: "Branch",      value: (p: any) => p.branchName || "-" }] : []),
+            { label: "Order ID",       value: (p: any) => p.orderId || p.tid || "-" },
+            { label: "Trans ID",       value: (p: any) => p.tid || "-" },
+            { label: "Order Date",     value: (p: any) => new Date(p.orderCreatedAt).toLocaleDateString() },
+            ...(role !== "BRANCH_ADMIN" ? [{ label: "Group",       value: (p: any) => p.group || "N/A" }] : []),
+            { label: "Discount",       value: (_p: any) => "0" },
+            { label: "User Info",      value: (p: any) => `${p.userName || ""}${p.userEmail ? ` (${p.userEmail})` : ""}`.trim() || "-" },
+            { label: "Item Details",   value: (p: any) => `${p.itemDetails || "-"}${p.itemCode ? ` (${p.itemCode})` : ""}` },
+            { label: "Qty Ordered",    value: (p: any) => p.qtyOrdered || 0 },
+            { label: "Item Refunded",  value: (p: any) => (p.qtyOrdered || 0) - (p.qtyDelivered || 0) },
+            { label: "Net Items",      value: (p: any) => p.qtyDelivered || 0 },
+            { label: "Unit Price (PKR)", value: (p: any) => ((p.priceCents || 0) / 100).toFixed(2) },
+            { label: exportRevenueHeader, value: (p: any) => ((p.netTotalCents || 0) / 100).toFixed(2) },
+        ]
+
+        const columns = isReports ? ledgerColumns : performanceColumns
+        const headers = columns.map(c => c.label)
+        const rows = exportData.map((p: any) => columns.map(c => c.value(p)))
 
         if (format === 'pdf') {
             const doc = new jsPDF('landscape')
