@@ -206,7 +206,7 @@ export default function BudgetSummaryPage() {
 
     // Build query string
     const queryParams = new URLSearchParams()
-    
+
     // Security Isolation: Force branch/org if BRANCH_ADMIN
     if (role === "BRANCH_ADMIN") {
         const adminBranchId = contextBranchId || (session?.user as any)?.branchId
@@ -246,7 +246,7 @@ export default function BudgetSummaryPage() {
 
     // ━━━ CHART DATA (All-Time Independent) ━━━
     const chartQueryParams = new URLSearchParams()
-    
+
     // Security Isolation: Force branch/org if BRANCH_ADMIN
     if (role === "BRANCH_ADMIN") {
         const adminBranchId = contextBranchId || (session?.user as any)?.branchId
@@ -737,7 +737,7 @@ export default function BudgetSummaryPage() {
                         subtitle={`Base: ${formatPKR(summary.totalAllocated / 100)} | Addon: ${formatPKR(summary.totalCredited / 100)}`}
                     />
                     <KPICard
-                        title="Total Spent (Purchases)"
+                        title="Total Spent"
                         value={formatPKR(summary.totalSpent / 100)}
                         icon={ReceiptText}
                         colorScheme="blue"
@@ -757,7 +757,7 @@ export default function BudgetSummaryPage() {
                     params.set("tab", val)
                     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
                 }} className="space-y-8">
-                    
+
                     <div className="flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-1">
                         <TabsList className="bg-transparent h-auto p-0 gap-8">
                             <TabsTrigger value="analytics" className="bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-widest text-slate-400 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white transition-all">
@@ -1289,7 +1289,7 @@ export default function BudgetSummaryPage() {
                             </Card>
                         ) : (
                             hasMounted && (
-                                <motion.div 
+                                <motion.div
                                     initial={{ opacity: 0, scale: 0.98, y: 10 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
                                     transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
@@ -1312,164 +1312,164 @@ export default function BudgetSummaryPage() {
                                                     </p>
                                                 </div>
 
-                                                    <div className="flex flex-wrap items-center gap-3">
-                                                        {/* Report Year Filter */}
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <Button variant="outline" size="sm" className={cn(
-                                                                    "h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
-                                                                    reportYears.length > 0 ? "border-indigo-500/50 bg-indigo-50/50 text-indigo-600 shadow-sm" : "hover:bg-slate-50"
-                                                                )}>
-                                                                    <Calendar className="h-3.5 w-3.5" />
-                                                                    {reportYears.length > 0 ? `Year (${reportYears.length})` : "Year"}
-                                                                    <ChevronDown className="h-3 w-3 opacity-50" />
-                                                                </Button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-52 p-3 rounded-2xl shadow-2xl border-slate-200 dark:border-slate-800" align="end">
-                                                                <div className="flex items-center justify-between px-1 pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Select Years</p>
-                                                                    <div className="flex gap-2">
-                                                                        <button onClick={() => setReportYears(availableChartYears)} className="text-[9px] font-bold text-indigo-500 hover:text-indigo-600 uppercase">All</button>
-                                                                        <span className="text-slate-200">|</span>
-                                                                        <button onClick={() => setReportYears([])} className="text-[9px] font-bold text-rose-500 hover:text-rose-600 uppercase">None</button>
-                                                                    </div>
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    {/* Report Year Filter */}
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="outline" size="sm" className={cn(
+                                                                "h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
+                                                                reportYears.length > 0 ? "border-indigo-500/50 bg-indigo-50/50 text-indigo-600 shadow-sm" : "hover:bg-slate-50"
+                                                            )}>
+                                                                <Calendar className="h-3.5 w-3.5" />
+                                                                {reportYears.length > 0 ? `Year (${reportYears.length})` : "Year"}
+                                                                <ChevronDown className="h-3 w-3 opacity-50" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-52 p-3 rounded-2xl shadow-2xl border-slate-200 dark:border-slate-800" align="end">
+                                                            <div className="flex items-center justify-between px-1 pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                                                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Select Years</p>
+                                                                <div className="flex gap-2">
+                                                                    <button onClick={() => setReportYears(availableChartYears)} className="text-[9px] font-bold text-indigo-500 hover:text-indigo-600 uppercase">All</button>
+                                                                    <span className="text-slate-200">|</span>
+                                                                    <button onClick={() => setReportYears([])} className="text-[9px] font-bold text-rose-500 hover:text-rose-600 uppercase">None</button>
                                                                 </div>
-                                                                <div className="space-y-1 max-h-48 overflow-y-auto">
-                                                                    {availableChartYears.map(year => (
-                                                                        <label key={year} className={cn(
-                                                                            "flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition-colors",
-                                                                            reportYears.includes(year) ? "bg-indigo-50 dark:bg-indigo-950/30" : "hover:bg-slate-50"
-                                                                        )}>
-                                                                            <Checkbox checked={reportYears.includes(year)} onCheckedChange={() => toggleReportYear(year)} />
-                                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{year}</span>
-                                                                        </label>
-                                                                    ))}
-                                                                </div>
-                                                            </PopoverContent>
-                                                        </Popover>
+                                                            </div>
+                                                            <div className="space-y-1 max-h-48 overflow-y-auto">
+                                                                {availableChartYears.map(year => (
+                                                                    <label key={year} className={cn(
+                                                                        "flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition-colors",
+                                                                        reportYears.includes(year) ? "bg-indigo-50 dark:bg-indigo-950/30" : "hover:bg-slate-50"
+                                                                    )}>
+                                                                        <Checkbox checked={reportYears.includes(year)} onCheckedChange={() => toggleReportYear(year)} />
+                                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{year}</span>
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
 
-                                                        {/* Report Month Filter */}
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <Button variant="outline" size="sm" className={cn(
-                                                                    "h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
-                                                                    reportMonths.length > 0 ? "border-emerald-500/50 bg-emerald-50/50 text-emerald-600 shadow-sm" : "hover:bg-slate-50"
-                                                                )}>
-                                                                    <Filter className="h-3.5 w-3.5" />
-                                                                    {reportMonths.length > 0 ? `Month (${reportMonths.length})` : "Month"}
-                                                                    <ChevronDown className="h-3 w-3 opacity-50" />
-                                                                </Button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-52 p-3 rounded-2xl shadow-2xl border-slate-200 dark:border-slate-800" align="end">
-                                                                <div className="flex items-center justify-between px-1 pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Select Months</p>
-                                                                    <div className="flex gap-2">
-                                                                        <button onClick={() => setReportMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])} className="text-[9px] font-bold text-emerald-500 hover:text-emerald-600 uppercase">All</button>
-                                                                        <span className="text-slate-200">|</span>
-                                                                        <button onClick={() => setReportMonths([])} className="text-[9px] font-bold text-rose-500 hover:text-rose-600 uppercase">None</button>
-                                                                    </div>
+                                                    {/* Report Month Filter */}
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="outline" size="sm" className={cn(
+                                                                "h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
+                                                                reportMonths.length > 0 ? "border-emerald-500/50 bg-emerald-50/50 text-emerald-600 shadow-sm" : "hover:bg-slate-50"
+                                                            )}>
+                                                                <Filter className="h-3.5 w-3.5" />
+                                                                {reportMonths.length > 0 ? `Month (${reportMonths.length})` : "Month"}
+                                                                <ChevronDown className="h-3 w-3 opacity-50" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-52 p-3 rounded-2xl shadow-2xl border-slate-200 dark:border-slate-800" align="end">
+                                                            <div className="flex items-center justify-between px-1 pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                                                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Select Months</p>
+                                                                <div className="flex gap-2">
+                                                                    <button onClick={() => setReportMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])} className="text-[9px] font-bold text-emerald-500 hover:text-emerald-600 uppercase">All</button>
+                                                                    <span className="text-slate-200">|</span>
+                                                                    <button onClick={() => setReportMonths([])} className="text-[9px] font-bold text-rose-500 hover:text-rose-600 uppercase">None</button>
                                                                 </div>
-                                                                <div className="grid grid-cols-3 gap-1">
-                                                                    {CHART_MONTH_NAMES.map((name, idx) => (
-                                                                        <button
-                                                                            key={idx}
-                                                                            onClick={() => toggleReportMonth(idx + 1)}
-                                                                            className={cn(
-                                                                                "px-2 py-2 rounded-lg text-[10px] font-black transition-all text-center uppercase tracking-tighter",
-                                                                                reportMonths.includes(idx + 1) ? "bg-emerald-500 text-white shadow-md shadow-emerald-200" : "bg-slate-50 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600"
-                                                                            )}
-                                                                        >
-                                                                            {name}
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </PopoverContent>
-                                                        </Popover>
+                                                            </div>
+                                                            <div className="grid grid-cols-3 gap-1">
+                                                                {CHART_MONTH_NAMES.map((name, idx) => (
+                                                                    <button
+                                                                        key={idx}
+                                                                        onClick={() => toggleReportMonth(idx + 1)}
+                                                                        className={cn(
+                                                                            "px-2 py-2 rounded-lg text-[10px] font-black transition-all text-center uppercase tracking-tighter",
+                                                                            reportMonths.includes(idx + 1) ? "bg-emerald-500 text-white shadow-md shadow-emerald-200" : "bg-slate-50 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600"
+                                                                        )}
+                                                                    >
+                                                                        {name}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
 
-                                                        {/* Report Branch Filter */}
-                                                        <Popover>
-                                                            <PopoverTrigger asChild>
-                                                                <Button variant="outline" size="sm" className={cn(
-                                                                    "h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
-                                                                    reportBranchIds.length > 0 ? "border-amber-500/50 bg-amber-50/50 text-amber-600 shadow-sm" : "hover:bg-slate-50"
-                                                                )}>
-                                                                    <Building2 className="h-3.5 w-3.5" />
-                                                                    {reportBranchIds.length > 0 ? `Branch (${reportBranchIds.length})` : "Branch"}
-                                                                    <ChevronDown className="h-3 w-3 opacity-50" />
-                                                                </Button>
-                                                            </PopoverTrigger>
-                                                            <PopoverContent className="w-60 p-3 rounded-2xl shadow-2xl border-slate-200 dark:border-slate-800" align="end">
-                                                                <div className="flex items-center justify-between px-1 pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Select Branches</p>
-                                                                    <div className="flex gap-2">
-                                                                        <button onClick={() => setReportBranchIds(uniqueBranches.map(b => b.id))} className="text-[9px] font-bold text-amber-500 hover:text-amber-600 uppercase">All</button>
-                                                                        <span className="text-slate-200">|</span>
-                                                                        <button onClick={() => setReportBranchIds([])} className="text-[9px] font-bold text-rose-500 hover:text-rose-600 uppercase">None</button>
-                                                                    </div>
+                                                    {/* Report Branch Filter */}
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="outline" size="sm" className={cn(
+                                                                "h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
+                                                                reportBranchIds.length > 0 ? "border-amber-500/50 bg-amber-50/50 text-amber-600 shadow-sm" : "hover:bg-slate-50"
+                                                            )}>
+                                                                <Building2 className="h-3.5 w-3.5" />
+                                                                {reportBranchIds.length > 0 ? `Branch (${reportBranchIds.length})` : "Branch"}
+                                                                <ChevronDown className="h-3 w-3 opacity-50" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-60 p-3 rounded-2xl shadow-2xl border-slate-200 dark:border-slate-800" align="end">
+                                                            <div className="flex items-center justify-between px-1 pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                                                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Select Branches</p>
+                                                                <div className="flex gap-2">
+                                                                    <button onClick={() => setReportBranchIds(uniqueBranches.map(b => b.id))} className="text-[9px] font-bold text-amber-500 hover:text-amber-600 uppercase">All</button>
+                                                                    <span className="text-slate-200">|</span>
+                                                                    <button onClick={() => setReportBranchIds([])} className="text-[9px] font-bold text-rose-500 hover:text-rose-600 uppercase">None</button>
                                                                 </div>
-                                                                <div className="space-y-1 max-h-56 overflow-y-auto">
-                                                                    {uniqueBranches.map(branch => (
-                                                                        <label key={branch.id} className={cn(
-                                                                            "flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition-colors",
-                                                                            reportBranchIds.includes(String(branch.id)) ? "bg-amber-50 dark:bg-amber-950/30" : "hover:bg-slate-50"
-                                                                        )}>
-                                                                            <Checkbox checked={reportBranchIds.includes(String(branch.id))} onCheckedChange={() => toggleReportBranch(String(branch.id))} />
-                                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{branch.name}</span>
-                                                                        </label>
-                                                                    ))}
-                                                                </div>
-                                                            </PopoverContent>
-                                                        </Popover>
+                                                            </div>
+                                                            <div className="space-y-1 max-h-56 overflow-y-auto">
+                                                                {uniqueBranches.map(branch => (
+                                                                    <label key={branch.id} className={cn(
+                                                                        "flex items-center gap-3 px-3 py-2 rounded-xl cursor-pointer transition-colors",
+                                                                        reportBranchIds.includes(String(branch.id)) ? "bg-amber-50 dark:bg-amber-950/30" : "hover:bg-slate-50"
+                                                                    )}>
+                                                                        <Checkbox checked={reportBranchIds.includes(String(branch.id))} onCheckedChange={() => toggleReportBranch(String(branch.id))} />
+                                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{branch.name}</span>
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
 
-                                                        <div className="h-8 w-px bg-slate-100 dark:bg-slate-800 mx-2" />
+                                                    <div className="h-8 w-px bg-slate-100 dark:bg-slate-800 mx-2" />
 
-                                                        <div className="relative group">
-                                                            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-400 group-focus-within:text-indigo-600 transition-all" />
-                                                            <Input
-                                                                placeholder="SEARCH BRANCHES..."
-                                                                className="pl-12 h-12 w-64 text-[11px] font-black bg-white/50 dark:bg-slate-950/50 border-slate-200/60 dark:border-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/40 rounded-2xl transition-all uppercase tracking-tighter placeholder:text-slate-400 placeholder:font-bold"
-                                                                value={searchTerm}
-                                                                onChange={(e) => setSearchTerm(e.target.value)}
-                                                            />
-                                                        </div>
-                                                        <Button 
-                                                            variant="outline" 
-                                                            className="h-12 border-indigo-100/50 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] gap-3 bg-indigo-50/30 dark:bg-slate-950/30 hover:bg-white dark:hover:bg-slate-900 shadow-sm transition-all rounded-2xl px-6 border-2"
-                                                            onClick={() => {
-                                                                const csvData = [
-                                                                    ["Branch Name", "Monthly Base", "Add-On", "Total Budget", "Spent", "Remaining", "Utilization"],
-                                                                    ...filteredReportBranches.map(b => {
-                                                                        const baseline = b.baselineAmount || 0;
-                                                                        const addon = b.credited || 0;
-                                                                        const totalLimit = baseline + addon;
-                                                                        const spent = b.spent || 0;
-                                                                        const remaining = totalLimit - spent;
-                                                                        const utilization = totalLimit > 0 ? (spent / totalLimit) * 100 : 0;
-                                                                        
-                                                                        return [
-                                                                            b.branchName,
-                                                                            (baseline / 100).toFixed(2),
-                                                                            (addon / 100).toFixed(2),
-                                                                            (totalLimit / 100).toFixed(2),
-                                                                            (spent / 100).toFixed(2),
-                                                                            (remaining / 100).toFixed(2),
-                                                                            utilization.toFixed(1) + "%"
-                                                                        ]
-                                                                    })
-                                                                ]
-                                                                const csvContent = "data:text/csv;charset=utf-8," + csvData.map(e => e.join(",")).join("\n")
-                                                                const encodedUri = encodeURI(csvContent)
-                                                                const link = document.createElement("a")
-                                                                link.setAttribute("href", encodedUri)
-                                                                link.setAttribute("download", `audit_report_${format(new Date(), 'yyyy-MM-dd')}.csv`)
-                                                                document.body.appendChild(link)
-                                                                link.click()
-                                                                document.body.removeChild(link)
-                                                            }}
-                                                        >
-                                                            <DownloadIcon className="h-5 w-5 text-indigo-600" /> Export CSV
-                                                        </Button>
+                                                    <div className="relative group">
+                                                        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-400 group-focus-within:text-indigo-600 transition-all" />
+                                                        <Input
+                                                            placeholder="SEARCH BRANCHES..."
+                                                            className="pl-12 h-12 w-64 text-[11px] font-black bg-white/50 dark:bg-slate-950/50 border-slate-200/60 dark:border-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/40 rounded-2xl transition-all uppercase tracking-tighter placeholder:text-slate-400 placeholder:font-bold"
+                                                            value={searchTerm}
+                                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                                        />
                                                     </div>
+                                                    <Button
+                                                        variant="outline"
+                                                        className="h-12 border-indigo-100/50 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] gap-3 bg-indigo-50/30 dark:bg-slate-950/30 hover:bg-white dark:hover:bg-slate-900 shadow-sm transition-all rounded-2xl px-6 border-2"
+                                                        onClick={() => {
+                                                            const csvData = [
+                                                                ["Branch Name", "Monthly Base", "Add-On", "Total Budget", "Spent", "Remaining", "Utilization"],
+                                                                ...filteredReportBranches.map(b => {
+                                                                    const baseline = b.baselineAmount || 0;
+                                                                    const addon = b.credited || 0;
+                                                                    const totalLimit = baseline + addon;
+                                                                    const spent = b.spent || 0;
+                                                                    const remaining = totalLimit - spent;
+                                                                    const utilization = totalLimit > 0 ? (spent / totalLimit) * 100 : 0;
+
+                                                                    return [
+                                                                        b.branchName,
+                                                                        (baseline / 100).toFixed(2),
+                                                                        (addon / 100).toFixed(2),
+                                                                        (totalLimit / 100).toFixed(2),
+                                                                        (spent / 100).toFixed(2),
+                                                                        (remaining / 100).toFixed(2),
+                                                                        utilization.toFixed(1) + "%"
+                                                                    ]
+                                                                })
+                                                            ]
+                                                            const csvContent = "data:text/csv;charset=utf-8," + csvData.map(e => e.join(",")).join("\n")
+                                                            const encodedUri = encodeURI(csvContent)
+                                                            const link = document.createElement("a")
+                                                            link.setAttribute("href", encodedUri)
+                                                            link.setAttribute("download", `audit_report_${format(new Date(), 'yyyy-MM-dd')}.csv`)
+                                                            document.body.appendChild(link)
+                                                            link.click()
+                                                            document.body.removeChild(link)
+                                                        }}
+                                                    >
+                                                        <DownloadIcon className="h-5 w-5 text-indigo-600" /> Export CSV
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="p-2 sm:p-10">

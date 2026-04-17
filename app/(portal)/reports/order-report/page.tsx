@@ -68,7 +68,7 @@ const ALL_COLUMNS: ColumnDef[] = [
     { key: "quantityRefunded", label: "Qty Refunded", defaultVisible: true },
     { key: "subtotalValue", label: "Subtotal", defaultVisible: true },
     { key: "refundValue", label: "Refund", defaultVisible: true },
-    { key: "netTotalValue", label: "Net Total", defaultVisible: true },
+    { key: "netTotalValue", label: "Net Value", defaultVisible: true },
 ] as const;
 
 type StatusFilter = "all" | "approved" | "fulfilled" | "refunded" | "rejected"
@@ -704,7 +704,7 @@ export default function OrderReportPage() {
                                             {isVisible("quantityRefunded") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-rose-500">Qty Refunded</TableHead>}
                                             {isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">Subtotal</TableHead>}
                                             {isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500">Refund</TableHead>}
-                                            {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">{isBuyer ? "Net Purchased" : "Net Total"}</TableHead>}
+                                            {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right">{isBuyer ? "Net Purchased" : "Net Revenue"}</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>

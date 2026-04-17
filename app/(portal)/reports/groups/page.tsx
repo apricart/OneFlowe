@@ -224,7 +224,7 @@ export default function GroupsReportPage() {
     }
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Group Name", "Organization", "Budget", "Units", "Total Orders", isBuyer ? "Purchased (PKR)" : "Purchase (PKR)"]
+        const headers = ["Group Name", "Organization", "Budget", "Units", "Total Orders", isBuyer ? "Purchased (PKR)" : "Revenue (PKR)"]
         const rows = filteredGroups.map((group: any) => [
             group.name, 
             group.organizationName, 
@@ -533,7 +533,7 @@ export default function GroupsReportPage() {
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Group Name</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Budget</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Managed Units</TableHead>
-                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{isBuyer ? "Purchased (PKR)" : "Purchase (PKR)"}</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{isBuyer ? "Purchased (PKR)" : "Revenue (PKR)"}</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
                                         </TableRow>

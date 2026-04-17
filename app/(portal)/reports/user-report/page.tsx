@@ -423,7 +423,7 @@ export default function UserReportPage() {
                     <KPICard title="Active Employees" value={totalUsers.toLocaleString()} icon={Users} colorScheme="indigo" trend={usersTrend} subtitle="Distinct transacting profiles." comparisonLabel="Prior" comparisonValue={comparison?.totalUsers} />
                     <KPICard title="Gross Orders" value={totalOrders.toLocaleString()} icon={Package} colorScheme="blue" trend={ordersTrend} subtitle="Total volume initiated." comparisonLabel="Prior" comparisonValue={comparison?.totalOrders} />
                     <KPICard title="Order Success" value={`${currentSuccess.toFixed(1)}%`} icon={CheckCircle} colorScheme="emerald" trend={successTrend} subtitle={`${totalFulfilled} fulfilled orders.`} comparisonLabel="Prior" comparisonValue={`${prevSuccess.toFixed(1)}%`} />
-                    <KPICard title={isBuyer ? "Total Purchased" : "Total spent"} value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle={isBuyer ? "Net value of purchases." : "Net value of fulfillment."} comparisonLabel="Prior" comparisonValue={formatPKR(comparison?.totalSpentCents / 100)} />
+                    <KPICard title={isBuyer ? "Total Purchased" : "Total Revenue"} value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle={isBuyer ? "Net value of purchases." : "Net value of fulfillments."} comparisonLabel="Prior" comparisonValue={formatPKR(comparison?.totalSpentCents / 100)} />
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
@@ -764,7 +764,7 @@ export default function UserReportPage() {
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Orders {compare && "(A/B)"}</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Fulfilled</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Refunded</TableHead>
-                                            <TableHead className="text-right pr-8 h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{isBuyer ? "Purchased" : "Yield"} {compare && "(A/B)"}</TableHead>
+                                            <TableHead className="text-right pr-8 h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{isBuyer ? "Purchased" : "Revenue"} {compare && "(A/B)"}</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>

@@ -214,7 +214,7 @@ export default function OrganizationReportPage() {
     }, [])
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        const headers = ["Organization Name", "Status", "Active Branches", "Inactive Branches", "Managed Users", isBuyer ? "Purchased (PKR)" : "Purchase (PKR)", "Orders"]
+        const headers = ["Organization Name", "Status", "Active Branches", "Inactive Branches", "Managed Users", isBuyer ? "Purchase (PKR)" : "Revenue (PKR)", "Orders"]
         const rows = filteredStats.map((org: any) => [
             org.organizationName,
             org.organizationStatus || "active",
@@ -388,12 +388,12 @@ export default function OrganizationReportPage() {
                 {/* ━━━ BENTO KPI GRID ━━━ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <KPICard
-                        title={isBuyer ? "Total Purchased" : "Net Revenue"}
+                        title={isBuyer ? "Total Purchase" : "Net Revenue"}
                         value={formatPKR(summary.revenue)}
                         icon={TrendingUp}
                         colorScheme="indigo"
                         trend={revenueTrend?.value ? Number(revenueTrend.value) * (revenueTrend.isUp ? 1 : -1) : undefined}
-                        subtitle={isBuyer ? "Consolidated net purchases" : "Consolidated net sales"}
+                        subtitle={isBuyer ? "Consolidated net purchases" : "Consolidated net revenue"}
                         comparisonLabel="Prior Period"
                         comparisonValue={compare ? formatPKR(comparisonSummary.revenue) : undefined}
                     />
@@ -459,7 +459,7 @@ export default function OrganizationReportPage() {
                                                 Growth & Comparison Trend
                                             </h3>
                                         </div>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11">{isBuyer ? "Consolidated purchase stream" : "Consolidated Purchase stream"}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11"></p>
                                     </div>
                                     <Button variant="outline" size="sm" onClick={() => mutateChart()} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800">
                                         <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isChartLoading && "animate-spin")} />
@@ -534,7 +534,7 @@ export default function OrganizationReportPage() {
                                                                     <div className="space-y-3">
                                                                         <div className="flex items-center justify-between gap-10">
                                                                             <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                                                                <div className="h-2 w-2 rounded-full bg-indigo-500" /> {isBuyer ? "Total Purchased" : "Net Revenue"}
+                                                                                <div className="h-2 w-2 rounded-full bg-indigo-500" /> {isBuyer ? "Total Purchase" : "Net Revenue"}
                                                                             </span>
                                                                             <span className="text-xs font-black text-slate-900 dark:text-white">{formatPKR(payload[0].value as number)}</span>
                                                                         </div>
@@ -563,7 +563,7 @@ export default function OrganizationReportPage() {
                                                     iconType="circle"
                                                     wrapperStyle={{ paddingBottom: 30, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}
                                                 />
-                                                <Bar dataKey="revenue" name={isBuyer ? "Total Purchased" : "Net Revenue"} fill="#6366f1" radius={[6, 6, 0, 0]} barSize={32} />
+                                                <Bar dataKey="revenue" name={isBuyer ? "Total Purchase" : "Net Revenue"} fill="#6366f1" radius={[6, 6, 0, 0]} barSize={32} />
                                                 {compare && (
                                                     <Bar dataKey="prevRevenue" name="Prior Period" fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />
                                                 )}
@@ -674,7 +674,7 @@ export default function OrganizationReportPage() {
                                                         <p className="font-black text-lg text-slate-900 dark:text-white tracking-tight">
                                                             {formatPKR(org.revenue)}
                                                         </p>
-                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isBuyer ? "Total Purchased" : "Net Revenue"}</p>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isBuyer ? "Total Purchase" : "Net Revenue"}</p>
                                                     </div>
                                                 </div>
                                             ))}
@@ -767,7 +767,7 @@ export default function OrganizationReportPage() {
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Branches (Act/Ina)</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Managed Users</TableHead>
-                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{isBuyer ? "Purchased (PKR)" : "Purchase (PKR)"}</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{isBuyer ? "Purchase (PKR)" : "Revenue (PKR)"}</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
                                             <TableHead className="px-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Fulfillment</TableHead>
                                         </TableRow>

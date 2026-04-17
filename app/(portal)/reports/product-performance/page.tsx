@@ -100,7 +100,7 @@ export default function ProductPerformancePage() {
     const chartTitleLabel = isBuyer ? "Top Products by Purchase" : "Top Products by Revenue"
     const tableRevenueHeader = isBuyer ? "Purchased" : "Revenue"
     const drawerRevenueLabel = isBuyer ? "Amount Purchased" : "Revenue Generated"
-    const exportRevenueHeader = "Purchase"
+    const exportRevenueHeader = isBuyer ? "Purchased" : "Revenue"
     const barChartLegendLabel = isBuyer ? "PURCHASED" : "REVENUE"
     const revenueShortLabel = isBuyer ? "Purchased" : "Revenue"
     const analyticsSubtitleLabel = isBuyer ? "Consolidated purchase stream" : "Consolidated revenue stream"
@@ -1340,7 +1340,7 @@ export default function ProductPerformancePage() {
                                             <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center text-rose-500">Refunded</TableHead>
                                             <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center text-emerald-600">Net Items</TableHead>
                                             <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Unit Price</TableHead>
-                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right pr-6">Grand Total</TableHead>
+                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right pr-6">{exportRevenueHeader}</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>

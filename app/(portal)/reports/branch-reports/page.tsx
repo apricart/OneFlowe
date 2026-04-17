@@ -57,9 +57,9 @@ export default function BranchReportsPage() {
     const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
 
     // Role-based terminology
-    const revenueLabel = "Purchase"
+    const revenueLabel = isBuyer ? "Purchase" : "Revenue"
     const avgLabel = "Avg Order Value"
-    const revenueHeader = "Purchase"
+    const revenueHeader = isBuyer ? "Purchase" : "Revenue"
     const orderLabel = "Orders"
     const [hasMounted, setHasMounted] = useState(false)
 
@@ -456,7 +456,7 @@ export default function BranchReportsPage() {
                                                 <Tooltip content={(props) => <CustomTooltip {...props} compare={compare} revenueLabel={revenueLabel} />} />
                                                 <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 30, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }} />
                                                 <Bar dataKey="revenue" name={revenueLabel} fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
-                                                {compare && <Bar dataKey="prevRevenue" name={`Prior ${revenueLabel.includes("Purchased") ? "Purchase" : "Revenue"}`} fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />}
+                                                {compare && <Bar dataKey="prevRevenue" name={`Prior ${revenueLabel}`} fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />}
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -647,7 +647,7 @@ function CustomTooltip({ active, payload, label, compare, revenueLabel }: any) {
                     {compare && (
                         <div className="flex items-center justify-between gap-10">
                             <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" /> Prior {revenueLabel.includes("Purchased") ? "Purchase" : "Revenue"}
+                                <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" /> Prior {revenueLabel}
                             </span>
                             <span className="text-xs font-black text-slate-500">{formatPKR(d.prevRevenue)}</span>
                         </div>

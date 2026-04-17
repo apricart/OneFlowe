@@ -116,20 +116,13 @@ export function OrdersDirectory({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Action failed")
 
-      if (actionType === "approve" && data.approvalToken) {
-        setGeneratedToken(data.approvalToken)
-        setShowTokenDialog(true)
-      }
-
       toast({
         title: "Success",
         description: `Order successfully ${actionType}ed.`,
       })
 
       setActionType(null)
-      if (actionType !== "approve") {
-        setViewingOrder(null)
-      }
+      setViewingOrder(null)
       setRejectReason("")
       setFulfillToken("")
       onUpdate()
@@ -375,15 +368,7 @@ export function OrdersDirectory({
                   </div>
                 )}
 
-                {isBranchAdmin && viewingOrder.approvalToken && (
-                  <div className="p-5 rounded-[2rem] bg-indigo-50/80 border border-indigo-100 dark:bg-indigo-900/20 dark:border-indigo-800/30 text-center space-y-2">
-                    <h4 className="text-[11px] font-bold text-indigo-500 uppercase tracking-widest">Approval Token</h4>
-                    <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider mb-2">Share With H.O.</p>
-                    <div className="text-2xl font-mono font-black text-indigo-600 dark:text-indigo-400 tracking-[0.2em] bg-white dark:bg-slate-900 py-3 rounded-[1.5rem] border border-indigo-100 dark:border-indigo-800/50 shadow-sm">
-                      {viewingOrder.approvalToken}
-                    </div>
-                  </div>
-                )}
+
               </div>
 
               {/* Cute Action Footer */}
@@ -393,7 +378,7 @@ export function OrdersDirectory({
                 </div>
 
                 <div className="flex gap-3">
-                  {viewingOrder.status.toLowerCase() === "pending" && (isBranchAdmin || isHeadOffice || isSuperAdmin) && (
+                  {viewingOrder.status.toLowerCase() === "pending" && isBranchAdmin && (
                     <>
                       <Button onClick={() => setActionType("reject")} variant="outline" className="flex-1 h-12 rounded-xl text-rose-600 border-rose-200 hover:bg-rose-50 dark:hover:bg-rose-900/20 dark:border-rose-800">
                         Reject
@@ -443,7 +428,7 @@ export function OrdersDirectory({
               </div>
             )}
             {actionType === "approve" && (
-              <p className="text-sm font-medium text-slate-500">Are you sure you want to approve TID {viewingOrder?.tid}? This will notify Head Office.</p>
+              <p className="text-sm font-medium text-slate-500">Are you sure you want to approve TID {viewingOrder?.tid}? This will notify Super Admin.</p>
             )}
             {actionType === "fulfill" && (
               <div className="space-y-4">
@@ -480,45 +465,7 @@ export function OrdersDirectory({
         </DialogContent>
       </Dialog>
 
-      {/* Approval Token Display (Shown only once after approval) */}
-      <Dialog open={showTokenDialog} onOpenChange={(open) => {
-        if (!open) {
-          setShowTokenDialog(false)
-          setViewingOrder(null)
-          setGeneratedToken(null)
-        }
-      }}>
-        <DialogContent className="max-w-md border-0 shadow-2xl bg-indigo-600 text-white rounded-[2rem] overflow-hidden p-0">
-          <div className="p-8 space-y-6 relative">
-            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="text-center space-y-2 relative z-10">
-              <div className="h-16 w-16 bg-white/20 backdrop-blur-xl rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/30">
-                <CheckCircle className="h-10 w-10 text-white" />
-              </div>
-              <DialogTitle className="text-2xl font-black tracking-tight text-white">Order Approved!</DialogTitle>
-              <p className="text-indigo-100 font-medium">Please share this token with Head Office for fulfillment.</p>
-            </div>
-
-            <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-6 rounded-3xl space-y-4 text-center relative z-10">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-200">Secure Approval Token</p>
-              <div className="text-4xl font-mono font-black tracking-[0.3em] select-all py-2">{generatedToken}</div>
-              <p className="text-xs font-bold text-indigo-200/80 italic">⚠️ This token will not be shown again. Please copy it now.</p>
-            </div>
-
-            <Button
-              onClick={() => {
-                setShowTokenDialog(false)
-                setViewingOrder(null)
-                setGeneratedToken(null)
-              }}
-              className="w-full h-14 rounded-2xl bg-white text-indigo-600 hover:bg-indigo-50 font-black text-lg shadow-xl shadow-black/10 transition-all active:scale-95"
-            >
-              Done
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
