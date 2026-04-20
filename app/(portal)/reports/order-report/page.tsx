@@ -6,8 +6,8 @@ import useSWR from "swr"
 import { useAppContext } from "@/components/context/app-context"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { 
-    RefreshCw, Search, Download, FileText, FileSpreadsheet, Package, TrendingUp, Loader2, AlertOctagon, RotateCcw, Calculator, 
+import {
+    RefreshCw, Search, Download, FileText, FileSpreadsheet, Package, TrendingUp, Loader2, AlertOctagon, RotateCcw, Calculator,
     ChevronDown, BarChart3, ListOrdered, Calendar, Hash, Store, Layers, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, Filter, LayoutGrid
 } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
@@ -118,7 +118,7 @@ export default function OrderReportPage() {
     const [activePreset, setActivePreset] = useState<FilterPreset>("all")
     const [compare, setCompare] = useState(false)
     const [compareRange, setCompareRange] = useState<DateRange | null>(null)
-    
+
     // Global Multi-Selects
     const [selectedMonths, setSelectedMonths] = useState<number[]>([])
     const [selectedYears, setSelectedYears] = useState<number[]>([])
@@ -154,10 +154,10 @@ export default function OrderReportPage() {
     const { visibleKeys, isVisible, setVisibleKeys } = useColumnSelector(ALL_COLUMNS, "order-report-v2")
 
     // ━━━ DATA FETCHING (3-TIER) ━━━
-    
+
     // Tier 1: Global Summary
     const globalParams = new URLSearchParams()
-    
+
     // Security Isolation: Force branch/org if BRANCH_ADMIN
     if (role === "BRANCH_ADMIN") {
         const adminBranchId = contextBranchId || (session?.user as any)?.branchId
@@ -184,7 +184,7 @@ export default function OrderReportPage() {
 
     // Tier 2: Chart/Trend Data
     const chartParams = new URLSearchParams()
-    
+
     // Security Isolation: Force branch/org if BRANCH_ADMIN
     if (role === "BRANCH_ADMIN") {
         const adminBranchId = contextBranchId || (session?.user as any)?.branchId
@@ -206,7 +206,7 @@ export default function OrderReportPage() {
 
     // Tier 3: Report Table Data
     const reportParams = new URLSearchParams()
-    
+
     // Security Isolation: Force branch/org if BRANCH_ADMIN
     if (role === "BRANCH_ADMIN") {
         const adminBranchId = contextBranchId || (session?.user as any)?.branchId
@@ -279,18 +279,18 @@ export default function OrderReportPage() {
     // ━━━ CHART TREND DATA: Normalized X-Axis ━━━
     const chartTrendData = useMemo(() => {
         const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        
+
         // Use backend aggregated trend if available (covers ALL orders in period)
         if (chartData?.trend?.length > 0) {
             const activeYear = chartYears.length === 1 ? chartYears[0] : new Date().getFullYear()
-            const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12 
-                ? [...chartMonths].sort((a,b) => a-b) 
-                : [1,2,3,4,5,6,7,8,9,10,11,12]
+            const monthsToShow = chartMonths.length > 0 && chartMonths.length < 12
+                ? [...chartMonths].sort((a, b) => a - b)
+                : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
             return monthsToShow.map(m => {
                 const dataPoint = chartData.trend.find((t: any) => Number(t.month) === m && (chartYears.length > 1 || Number(t.year) === activeYear))
                 return {
-                    label: monthNames[m-1],
+                    label: monthNames[m - 1],
                     revenue: dataPoint ? Math.round(dataPoint.revenue / 100) : 0,
                     orders: dataPoint ? Number(dataPoint.orders) : 0,
                     prevRevenue: 0, // Comparison support could be added here later
@@ -300,25 +300,25 @@ export default function OrderReportPage() {
         }
 
         // --- FALLBACK: Client-side calculation (limited to current page/chartOrders) ---
-        const trend = (chartOrders || []).filter((o: any) => 
+        const trend = (chartOrders || []).filter((o: any) =>
             ['FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes((o.status || "").toUpperCase())
         )
         const currentYear = new Date().getFullYear()
-        
+
         // Case A: Multiple years -> Show Years on X-Axis
         if (chartYears.length > 1) {
-            return chartYears.sort((a,b) => a-b).map(year => {
+            return chartYears.sort((a, b) => a - b).map(year => {
                 const yearOrders = trend.filter((o: any) => new Date(o.createdAt || o.orderDate).getFullYear() === year)
-                const compOrders = (chartData?.comparisonOrders || []).filter((o: any) => 
+                const compOrders = (chartData?.comparisonOrders || []).filter((o: any) =>
                     ['FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes((o.status || "").toUpperCase()) &&
                     new Date(o.createdAt || o.orderDate).getFullYear() === year
                 )
-                
+
                 return {
                     label: String(year),
-                    revenue: Math.round(yearOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0))/100, 0)),
+                    revenue: Math.round(yearOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0)),
                     orders: yearOrders.length,
-                    prevRevenue: Math.round(compOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0))/100, 0)),
+                    prevRevenue: Math.round(compOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0)),
                     prevOrders: compOrders.length
                 }
             })
@@ -326,9 +326,9 @@ export default function OrderReportPage() {
 
         // Case B: Single year (or default) -> Show Months on X-Axis
         const activeYearForFallback = chartYears.length === 1 ? chartYears[0] : currentYear
-        const monthsToShowForFallback = chartMonths.length > 0 && chartMonths.length < 12 
-            ? [...chartMonths].sort((a,b) => a-b) 
-            : [1,2,3,4,5,6,7,8,9,10,11,12]
+        const monthsToShowForFallback = chartMonths.length > 0 && chartMonths.length < 12
+            ? [...chartMonths].sort((a, b) => a - b)
+            : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
         return monthsToShowForFallback.map(m => {
             const monthOrders = trend.filter((o: any) => {
@@ -338,14 +338,14 @@ export default function OrderReportPage() {
             const compOrders = (chartData?.comparisonOrders || []).filter((o: any) => {
                 const d = new Date(o.createdAt || o.orderDate)
                 return ['FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes((o.status || "").toUpperCase()) &&
-                       d.getFullYear() === activeYearForFallback && (d.getMonth() + 1) === m
+                    d.getFullYear() === activeYearForFallback && (d.getMonth() + 1) === m
             })
 
             return {
-                label: monthNames[m-1],
-                revenue: Math.round(monthOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0))/100, 0)),
+                label: monthNames[m - 1],
+                revenue: Math.round(monthOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0)),
                 orders: monthOrders.length,
-                prevRevenue: Math.round(compOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0))/100, 0)),
+                prevRevenue: Math.round(compOrders.reduce((sum: number, o: any) => sum + (o.totalCents - (o.refundAmountCents || 0)) / 100, 0)),
                 prevOrders: compOrders.length
             }
         })
@@ -367,7 +367,7 @@ export default function OrderReportPage() {
                 fill: STATUS_COLORS[d.name] || "#94a3b8"
             }))
         }
-        
+
         // Fallback for legacy or edge cases
         if (!chartOrders.length) return []
         const counts: Record<string, number> = {}
@@ -394,21 +394,21 @@ export default function OrderReportPage() {
         // Map each active column key to its data value — order guaranteed to match headers
         const rows = filteredOrders.map((order: any) => activeColumns.map(c => {
             switch (c.key) {
-                case "orderDate":        return new Date(order.createdAt).toLocaleDateString()
-                case "userName":         return order.userName || "-"
-                case "employeeId":       return order.employeeId || order.userId || "-"
-                case "tid":              return order.tid || "-"
+                case "orderDate": return new Date(order.createdAt).toLocaleDateString()
+                case "userName": return order.userName || "-"
+                case "employeeId": return order.employeeId || order.userId || "-"
+                case "tid": return order.tid || "-"
                 case "organizationName": return order.organizationName || "N/A"
-                case "group":            return order.groupName || "-"
-                case "branchName":       return order.branchName || "-"
-                case "status":           return order.status || "-"
-                case "quantityOrdered":  return order.quantityOrdered || 0
-                case "quantityDelivered":return (order.quantityOrdered || 0) - (order.quantityRefunded || 0)
+                case "group": return order.groupName || "-"
+                case "branchName": return order.branchName || "-"
+                case "status": return order.status || "-"
+                case "quantityOrdered": return order.quantityOrdered || 0
+                case "quantityDelivered": return (order.quantityOrdered || 0) - (order.quantityRefunded || 0)
                 case "quantityRefunded": return order.quantityRefunded || 0
-                case "subtotalValue":    return ((order.subtotalCents || 0) / 100).toFixed(2)
-                case "refundValue":      return ((order.refundAmountCents || 0) / 100).toFixed(2)
-                case "netTotalValue":    return (((order.totalCents || 0) - (order.refundAmountCents || 0)) / 100).toFixed(2)
-                default:                 return "-"
+                case "subtotalValue": return ((order.subtotalCents || 0) / 100).toFixed(2)
+                case "refundValue": return ((order.refundAmountCents || 0) / 100).toFixed(2)
+                case "netTotalValue": return (((order.totalCents || 0) - (order.refundAmountCents || 0)) / 100).toFixed(2)
+                default: return "-"
             }
         }))
 
@@ -495,11 +495,11 @@ export default function OrderReportPage() {
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-                    
+
                     <div className="flex items-center justify-between gap-4 border-b border-slate-200/60 dark:border-slate-800/60 pb-1">
                         <TabsList className="bg-transparent h-auto p-0 gap-10">
-                            <TabsTrigger 
-                                value="analytics" 
+                            <TabsTrigger
+                                value="analytics"
                                 className="group relative bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-[0.15em] text-slate-400 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 transition-all"
                             >
                                 <div className="flex items-center gap-2">
@@ -507,8 +507,8 @@ export default function OrderReportPage() {
                                     Analytics
                                 </div>
                             </TabsTrigger>
-                            <TabsTrigger 
-                                value="reports" 
+                            <TabsTrigger
+                                value="reports"
                                 className="group relative bg-transparent border-b-2 border-transparent data-[state=active]:border-indigo-500 data-[state=active]:bg-transparent rounded-none px-0 pb-4 text-sm font-black uppercase tracking-[0.15em] text-slate-400 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 transition-all"
                             >
                                 <div className="flex items-center gap-2">
@@ -538,16 +538,16 @@ export default function OrderReportPage() {
                                         )}
                                         {((role === "SUPER_ADMIN" && (chartOrgIds.length > 0 || organizationId)) || (role !== "SUPER_ADMIN" && role !== "BRANCH_ADMIN" && organizationId)) && (
                                             <>
-                                                <GroupFilter 
-                                                    selectedIds={chartGroupIds} 
-                                                    onChange={setChartGroupIds} 
+                                                <GroupFilter
+                                                    selectedIds={chartGroupIds}
+                                                    onChange={setChartGroupIds}
                                                     organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [String(organizationId)] : [])}
                                                     disabled={chartBranchIds.length > 0}
                                                 />
-                                                <BranchFilter 
-                                                    selectedIds={chartBranchIds} 
-                                                    onChange={setChartBranchIds} 
-                                                    organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [organizationId] : [])} 
+                                                <BranchFilter
+                                                    selectedIds={chartBranchIds}
+                                                    onChange={setChartBranchIds}
+                                                    organizationIds={chartOrgIds.length > 0 ? chartOrgIds : (organizationId ? [organizationId] : [])}
                                                     groupIds={chartGroupIds}
                                                 />
                                             </>
@@ -562,17 +562,17 @@ export default function OrderReportPage() {
                                             <ComposedChart data={chartTrendData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                                 <defs>
                                                     <linearGradient id="revGradient" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
-                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05}/>
+                                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
+                                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
                                                     </linearGradient>
                                                     <linearGradient id="ordersGradient" x1="0" y1="0" x2="0" y2="1">
-                                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                                                     </linearGradient>
                                                 </defs>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
                                                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} dy={10} />
-                                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} tickFormatter={(v) => `₨${v/1000}k`} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} tickFormatter={(v) => `₨${v / 1000}k`} />
                                                 <RechartsTooltip content={<BarTooltip compare={compare} revenueLabel={chartRevenueLabel} />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
                                                 <Bar dataKey="revenue" fill="url(#revGradient)" radius={[6, 6, 0, 0]} barSize={32} name={`Current ${chartRevenueLabel}`} />
                                                 {compare && <Bar dataKey="prevRevenue" fill="#94a3b8" opacity={0.3} radius={[6, 6, 0, 0]} barSize={32} name={`Prior ${chartRevenueLabel}`} />}
@@ -605,14 +605,14 @@ export default function OrderReportPage() {
                                                 stroke="none"
                                             >
                                                 {statusChartData.map((entry, index) => (
-                                                    <Cell 
-                                                        key={`cell-${index}`} 
-                                                        fill={entry.fill} 
+                                                    <Cell
+                                                        key={`cell-${index}`}
+                                                        fill={entry.fill}
                                                         style={{ filter: `drop-shadow(0 0 8px ${entry.fill}40)` }}
                                                     />
                                                 ))}
                                             </Pie>
-                                            <RechartsTooltip 
+                                            <RechartsTooltip
                                                 content={({ active, payload }) => {
                                                     if (active && payload && payload.length) {
                                                         const d = payload[0].payload;
@@ -677,16 +677,16 @@ export default function OrderReportPage() {
                                         <OrganizationFilter selectedIds={reportOrgIds} onChange={setReportOrgIds} />
                                         {(reportOrgIds.length > 0 || organizationId) && (
                                             <>
-                                                <GroupFilter 
-                                                    selectedIds={reportGroupIds} 
-                                                    onChange={setReportGroupIds} 
+                                                <GroupFilter
+                                                    selectedIds={reportGroupIds}
+                                                    onChange={setReportGroupIds}
                                                     organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [String(organizationId)] : [])}
                                                     disabled={reportBranchIds.length > 0}
                                                 />
-                                                <BranchFilter 
-                                                    selectedIds={reportBranchIds} 
-                                                    onChange={setReportBranchIds} 
-                                                    organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [organizationId] : [])} 
+                                                <BranchFilter
+                                                    selectedIds={reportBranchIds}
+                                                    onChange={setReportBranchIds}
+                                                    organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [organizationId] : [])}
                                                     groupIds={reportGroupIds}
                                                 />
                                             </>
@@ -695,16 +695,16 @@ export default function OrderReportPage() {
                                 )}
                                 {role !== "SUPER_ADMIN" && role !== "BRANCH_ADMIN" && organizationId && (
                                     <>
-                                        <GroupFilter 
-                                            selectedIds={reportGroupIds} 
-                                            onChange={setReportGroupIds} 
+                                        <GroupFilter
+                                            selectedIds={reportGroupIds}
+                                            onChange={setReportGroupIds}
                                             organizationIds={[String(organizationId)]}
                                             disabled={reportBranchIds.length > 0}
                                         />
-                                        <BranchFilter 
-                                            selectedIds={reportBranchIds} 
-                                            onChange={setReportBranchIds} 
-                                            organizationIds={[organizationId]} 
+                                        <BranchFilter
+                                            selectedIds={reportBranchIds}
+                                            onChange={setReportBranchIds}
+                                            organizationIds={[organizationId]}
                                             groupIds={reportGroupIds}
                                         />
                                     </>
@@ -751,7 +751,7 @@ export default function OrderReportPage() {
                                             {isVisible("tid") && (
                                                 <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 sticky left-0 z-20 bg-slate-50/100 dark:bg-slate-900/100 backdrop-blur-md border-r border-slate-200/60 dark:border-slate-800/60 shadow-[4px_0_12px_rgba(0,0,0,0.03)]">
                                                     <div className="flex items-center gap-2">
-                                                        <Hash className="h-3.5 w-3.5 text-indigo-500" /> 
+                                                        <Hash className="h-3.5 w-3.5 text-indigo-500" />
                                                         Transaction ID
                                                     </div>
                                                 </TableHead>
@@ -815,13 +815,13 @@ export default function OrderReportPage() {
                                                     {isVisible("status") && (
                                                         <TableCell className="px-8 py-5 text-center">
                                                             <div className="inline-flex">
-                                                                <Badge 
-                                                                    variant="outline" 
-                                                                    style={{ 
-                                                                        backgroundColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}15`, 
-                                                                        color: STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8', 
-                                                                        borderColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}30` 
-                                                                    }} 
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    style={{
+                                                                        backgroundColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}15`,
+                                                                        color: STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8',
+                                                                        borderColor: `${STATUS_COLORS[order.status?.toUpperCase()] || '#94a3b8'}30`
+                                                                    }}
                                                                     className="text-[9px] font-black uppercase tracking-[0.15em] px-3 py-1 rounded-xl border shadow-sm transition-transform group-hover:scale-105 duration-300"
                                                                 >
                                                                     {order.status}
@@ -837,10 +837,9 @@ export default function OrderReportPage() {
                                                     {isVisible("netTotalValue") && (
                                                         <TableCell className="px-8 py-5 text-right">
                                                             <div className="inline-flex flex-col items-end">
-                                                                <span className="text-[13px] font-black font-mono text-indigo-600 dark:text-indigo-400 tabular-nums leading-none mb-1">
+                                                                <span className="text-[13px] font-black font-mono text-indigo-600 dark:text-indigo-400 tabular-nums leading-none">
                                                                     {formatPKR((order.totalCents - (order.refundAmountCents || 0)) / 100)}
                                                                 </span>
-                                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Net Revenue</span>
                                                             </div>
                                                         </TableCell>
                                                     )}
