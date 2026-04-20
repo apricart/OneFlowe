@@ -208,12 +208,12 @@ export default function OrderPortalPage() {
     else if (sortBy === "rating") filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0))
     else filtered.sort((a, b) => a.name.localeCompare(b.name))
     return filtered
-  }, [products, searchQuery, sortBy])
+  }, [products, searchQuery, sortBy, activeCategory, inventoryData])
 
   // Reset to first page when filters change
   React.useEffect(() => {
     setCurrentPage(1)
-  }, [searchQuery, sortBy])
+  }, [searchQuery, sortBy, activeCategory])
 
   const totalProducts = filteredProducts.length
   const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize))
@@ -489,7 +489,7 @@ export default function OrderPortalPage() {
             <Button
               onClick={async () => {
                 const targetUrl = "/login"
-                await signOut({ 
+                await signOut({
                   redirect: true,
                   callbackUrl: targetUrl
                 })
@@ -709,7 +709,7 @@ export default function OrderPortalPage() {
                               <p className="font-semibold text-slate-900 dark:text-white">Order {order.tid}</p>
                               <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
                                 <StatusIcon className="h-3 w-3 mr-1" />
-                                 {order.status?.toUpperCase() || "PENDING"}
+                                {order.status?.toUpperCase() || "PENDING"}
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">
