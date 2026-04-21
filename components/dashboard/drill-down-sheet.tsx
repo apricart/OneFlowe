@@ -330,14 +330,14 @@ export function DrillDownSheet({
                                 <>
                                     <BIInsightCard
                                         title="Refunded Orders"
-                                        value={summary.refundedOrdersCount || 0}
-                                        subvalue="Completely Refunded"
+                                        value={refundType === "full" ? (summary.refundedOrdersCount || 0) : (summary.refundRelatedOrdersCount || 0)}
+                                        subvalue={refundType === "partial" ? "Partially Refunded" : refundType === "all" ? "Refunded Transactions" : "Completely Refunded"}
                                         icon={RotateCcw}
                                         colorClass="border-rose-50 dark:border-rose-950/20"
                                     />
                                     <BIInsightCard
                                         title="Refunded Value"
-                                        value={formatPKR(Math.abs(summary.grossRevenue))}
+                                        value={formatPKR(Math.abs(summary.refundedValue || 0))}
                                         subvalue="Total Money Returned"
                                         icon={TrendingDown}
                                         colorClass="border-rose-50 dark:border-rose-950/20"
@@ -433,7 +433,7 @@ export function DrillDownSheet({
                                                         <div className="text-right">
                                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">Value</p>
                                                             <p className="text-sm font-semibold text-slate-900 dark:text-white tabular-nums">
-                                                                {formatPKR(item.netValue)}
+                                                                {formatPKR(type === "REFUNDED" ? item.refundAmount : item.netValue)}
                                                             </p>
                                                         </div>
                                                         <div className={cn("transition-transform duration-500", expandedRow === item.id ? "rotate-90 text-indigo-500" : "rotate-0 text-slate-300")}>
@@ -503,7 +503,10 @@ export function DrillDownSheet({
                                                                                 </div>
                                                                                 <div className="text-right shrink-0">
                                                                                     <p className="text-[12px] font-bold text-slate-900 dark:text-white">
-                                                                                        {formatPKR((prod.price * (prod.quantity - (prod.refundQuantity || 0))))}
+                                                                                        {formatPKR(type === "REFUNDED" && (prod.refundAmount || 0) > 0
+                                                                                            ? prod.refundAmount
+                                                                                            : (prod.price * (prod.quantity - (prod.refundQuantity || 0)))
+                                                                                        )}
                                                                                     </p>
                                                                                     <p className="text-[9px] font-medium text-slate-400 mt-1 opacity-70">@ {formatPKR(prod.price)}</p>
                                                                                 </div>

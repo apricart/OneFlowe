@@ -170,7 +170,19 @@ export async function GET(req: NextRequest) {
     } else if (type === "ORDERS") {
         conditions.push(sql`UPPER(${orders.status}) IN ('PENDING', 'APPROVED', 'FULFILLED', 'REFUNDED', 'REJECTED', 'CANCELLED', 'PARTIAL', 'PARTIALLY_FULFILLED')`)
     } else if (type === "REFUNDED") {
-        conditions.push(eq(sql`UPPER(${orders.status})`, "REFUNDED"))
+        if (refundType === "full") {
+            conditions.push(eq(sql`UPPER(${orders.status})`, "REFUNDED"))
+        } else if (refundType === "partial") {
+            conditions.push(and(
+                gt(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0),
+                sql`UPPER(${orders.status}) <> 'REFUNDED'`
+            ))
+        } else {
+            conditions.push(or(
+                eq(sql`UPPER(${orders.status})`, "REFUNDED"),
+                gt(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0)
+            ))
+        }
     } else if (type === "PARTIAL") {
         conditions.push(
             or(
@@ -287,6 +299,8 @@ export async function GET(req: NextRequest) {
         let totalItems = 0
         let fulfilledOrderCount = 0
         let refundedOrdersCount = 0
+        let refundRelatedOrdersCount = 0
+        let refundedValue = 0
         rawData.forEach(order => {
             totalItems += (itemCounts[order.id] || 0)
             const total = (order.totalCents || 0) / 100
@@ -308,6 +322,10 @@ export async function GET(req: NextRequest) {
             // Refunded Orders in dashboard: strictly completely REFUNDED status
             if (status === 'REFUNDED') {
                 refundedOrdersCount++
+            }
+            if (refund > 0) {
+                refundRelatedOrdersCount++
+                refundedValue += refund
             }
 
             if (status === "REJECTED" || status === "CANCELLED") {
@@ -365,6 +383,8 @@ export async function GET(req: NextRequest) {
             totalItems,
             fulfilledOrderCount,
             refundedOrdersCount,
+            refundRelatedOrdersCount,
+            refundedValue,
             peakPeriod: peakHourRange,
             topBranch,
             problematicBranch
