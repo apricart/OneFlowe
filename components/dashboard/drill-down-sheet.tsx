@@ -181,7 +181,7 @@ export function DrillDownSheet({
         }
         if (months.length > 0) params.set("months", months.join(","))
         if (years.length > 0) params.set("years", years.join(","))
-        
+
         if (compare) {
             params.set("compare", "true")
             if (localCompareRange) {
@@ -208,15 +208,15 @@ export function DrillDownSheet({
     const items = useMemo(() => {
         const rawItems = data?.items || []
         if (!searchQuery.trim()) return rawItems
-        
+
         const query = searchQuery.toLowerCase()
-        return rawItems.filter((item: any) => 
+        return rawItems.filter((item: any) =>
             (item.tid || "").toLowerCase().includes(query) ||
             (item.branchName || "").toLowerCase().includes(query) ||
             (item.buyerName || "").toLowerCase().includes(query) ||
             (item.creatorEmployeeId || "").toLowerCase().includes(query) ||
             (item.organizationName || "").toLowerCase().includes(query) ||
-            (item.items || []).some((prod: any) => 
+            (item.items || []).some((prod: any) =>
                 (prod.name || "").toLowerCase().includes(query) ||
                 (prod.productCode || "").toLowerCase().includes(query)
             )
@@ -235,9 +235,9 @@ export function DrillDownSheet({
     }, [])
 
     const handleDateChange = useCallback((
-        range: DateRange | null, 
-        preset: FilterPreset, 
-        compareMode?: boolean, 
+        range: DateRange | null,
+        preset: FilterPreset,
+        compareMode?: boolean,
         compRange?: DateRange | null,
         m?: number[],
         y?: number[],
@@ -290,7 +290,7 @@ export function DrillDownSheet({
                         </div>
                     </div>
 
-                    {!isLoading && items.length > 0 && (
+                    {!isLoading && (
                         <div className="flex items-center gap-3 mb-4">
                             <div className="relative flex-1 max-w-sm">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -308,55 +308,55 @@ export function DrillDownSheet({
                         <div className="grid grid-cols-2 gap-3 mb-2 animate-in fade-in slide-in-from-top-4 duration-500">
                             {type === "REVENUE" && (
                                 <>
-                                    <BIInsightCard 
-                                        title={isBuyer ? "Net Purchased" : "Net Revenue"} 
-                                        value={formatPKR(summary.netRevenue)} 
-                                        subvalue={`Gross: ${formatPKR(summary.grossRevenue)}`} 
-                                        icon={TrendingUp} 
+                                    <BIInsightCard
+                                        title={isBuyer ? "Net Purchased" : "Net Revenue"}
+                                        value={formatPKR(summary.netRevenue)}
+                                        subvalue={`Gross: ${formatPKR(summary.grossRevenue)}`}
+                                        icon={TrendingUp}
                                         trend={comparison ? getTrend(summary.netRevenue, comparison.netRevenue) : undefined}
-                                        colorClass="border-emerald-100 dark:border-emerald-900/30" 
+                                        colorClass="border-emerald-100 dark:border-emerald-900/30"
                                     />
-                                    <BIInsightCard 
-                                        title="Refund Rate" 
-                                        value={`${summary.refundRate.toFixed(1)}%`} 
+                                    <BIInsightCard
+                                        title="Refund Rate"
+                                        value={`${summary.refundRate.toFixed(1)}%`}
                                         subvalue={`Total: ${formatPKR(summary.grossRevenue - summary.netRevenue)}`}
-                                        trend={summary.refundRate > 5 ? undefined : "- Healthy"} 
-                                        icon={AlertCircle} 
-                                        colorClass={summary.refundRate > 5 ? "border-rose-100 dark:border-rose-900/30" : ""} 
+                                        trend={summary.refundRate > 5 ? undefined : "- Healthy"}
+                                        icon={AlertCircle}
+                                        colorClass={summary.refundRate > 5 ? "border-rose-100 dark:border-rose-900/30" : ""}
                                     />
                                 </>
                             )}
                             {type === "REFUNDED" && (
                                 <>
-                                    <BIInsightCard 
-                                        title="Refunded Orders" 
-                                        value={summary.refundedOrdersCount || 0} 
-                                        subvalue="Completely Refunded" 
-                                        icon={RotateCcw} 
+                                    <BIInsightCard
+                                        title="Refunded Orders"
+                                        value={summary.refundedOrdersCount || 0}
+                                        subvalue="Completely Refunded"
+                                        icon={RotateCcw}
                                         colorClass="border-rose-50 dark:border-rose-950/20"
                                     />
-                                    <BIInsightCard 
-                                        title="Refunded Value" 
-                                        value={formatPKR(Math.abs(summary.grossRevenue))} 
-                                        subvalue="Total Money Returned" 
-                                        icon={TrendingDown} 
+                                    <BIInsightCard
+                                        title="Refunded Value"
+                                        value={formatPKR(Math.abs(summary.grossRevenue))}
+                                        subvalue="Total Money Returned"
+                                        icon={TrendingDown}
                                         colorClass="border-rose-50 dark:border-rose-950/20"
                                     />
                                 </>
                             )}
                             {(type === "ORDERS" || type === "FULFILLED" || type === "REJECTED" || type === "PARTIAL") && (
                                 <>
-                                    <BIInsightCard 
-                                        title={isBuyer ? "Total Purchased" : "Total Revenue"} 
-                                        value={formatPKR(summary.netRevenue)} 
-                                        subvalue={isBuyer ? "Net Purchased" : "Net Net Revenue"} 
-                                        icon={TrendingUp} 
+                                    <BIInsightCard
+                                        title={isBuyer ? "Total Purchased" : "Total Revenue"}
+                                        value={formatPKR(summary.netRevenue)}
+                                        subvalue={isBuyer ? "Net Purchased" : "Net Net Revenue"}
+                                        icon={TrendingUp}
                                     />
-                                    <BIInsightCard 
-                                        title={type === "PARTIAL" ? "Partial Orders" : "Fulfilled Orders"} 
-                                        value={summary.fulfilledOrderCount || 0} 
-                                        subvalue={type === "PARTIAL" ? "Partially Fulfilled" : "Total Orders Fulfilled"} 
-                                        icon={type === "PARTIAL" ? Package : CheckCircle2} 
+                                    <BIInsightCard
+                                        title={type === "PARTIAL" ? "Partial Orders" : "Fulfilled Orders"}
+                                        value={summary.fulfilledOrderCount || 0}
+                                        subvalue={type === "PARTIAL" ? "Partially Fulfilled" : "Total Orders Fulfilled"}
+                                        icon={type === "PARTIAL" ? Package : CheckCircle2}
                                         colorClass={type === "PARTIAL" ? "border-indigo-50 dark:border-indigo-950/20" : "border-emerald-50 dark:border-emerald-950/20"}
                                     />
                                 </>
@@ -381,7 +381,7 @@ export function DrillDownSheet({
                                     {searchQuery.trim() ? "No Matching Transactions" : "No Transactions Found"}
                                 </h3>
                                 <p className="text-sm text-slate-500 mt-2 max-w-xs">
-                                    {searchQuery.trim() 
+                                    {searchQuery.trim()
                                         ? `No transactions match your search for "${searchQuery}". Try different keywords.`
                                         : "There are no orders matching your selected filters."
                                     }
@@ -459,7 +459,7 @@ export function DrillDownSheet({
                                                                         </div>
                                                                         <div className="min-w-0">
                                                                             <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{item.buyerName}</p>
-<p className="text-[10px] text-slate-500 font-medium">{item.buyerPhone}</p>
+                                                                            <p className="text-[10px] text-slate-500 font-medium">{item.buyerPhone}</p>
                                                                             <p className="text-[9px] font-black text-indigo-500 font-mono mt-1">#{item.creatorEmployeeId || "UNSET"}</p>
                                                                         </div>
                                                                     </div>
@@ -566,8 +566,8 @@ export function DrillDownSheet({
                                                                             </div>
                                                                             <Badge className={cn(
                                                                                 "font-bold text-[9px] px-2.5 py-0.5 border-none shadow-none",
-                                                                                item.status === 'FULFILLED' ? "bg-emerald-500 text-white" : 
-                                                                                item.status === 'REJECTED' ? "bg-rose-500 text-white" : "bg-amber-500 text-white"
+                                                                                item.status === 'FULFILLED' ? "bg-emerald-500 text-white" :
+                                                                                    item.status === 'REJECTED' ? "bg-rose-500 text-white" : "bg-amber-500 text-white"
                                                                             )}>
                                                                                 {item.status}
                                                                             </Badge>
