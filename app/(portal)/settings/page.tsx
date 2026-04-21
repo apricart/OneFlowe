@@ -11,6 +11,7 @@ import { useAppContext } from "@/components/context/app-context"
 
 export default function SettingsPage() {
   const { data: session } = useSession()
+  console.log(session, "session from settings page", (session?.user as any)?.fullName)
   const userEmail = (session?.user as any)?.email
   const username = (session?.user as any)?.username
   const { organizationId: contextOrgId, branchId: contextBranchId } = useAppContext()

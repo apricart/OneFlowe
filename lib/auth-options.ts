@@ -87,6 +87,7 @@ export const authOptions: NextAuthOptions = {
         return {
           id: u.id,
           email: u.email,
+          username: u.username,
           role: r?.name || "BRANCH_ADMIN",
           organizationId: u.organizationId,
           branchId: u.branchId,
@@ -179,6 +180,7 @@ export const authOptions: NextAuthOptions = {
         return {
           id: u.id,
           email: u.email,
+          username: u.username,
           role: r?.name || "BRANCH_ADMIN",
           organizationId: u.organizationId,
           branchId: u.branchId,
@@ -260,6 +262,7 @@ export const authOptions: NextAuthOptions = {
         return {
           id: `emp_${emp.id}`,
           email: emp.email,
+          username: emp.username,
           role: "EMPLOYEE",
           organizationId: emp.organizationId,
           branchId: emp.branchId,
@@ -338,6 +341,7 @@ export const authOptions: NextAuthOptions = {
         return {
           id: `emp_${emp.id}`,
           email: emp.email,
+          username: emp.username,
           role: "EMPLOYEE",
           organizationId: emp.organizationId,
           branchId: emp.branchId,
