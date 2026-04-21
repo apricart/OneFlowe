@@ -11,6 +11,7 @@ import { formatPKR } from "@/lib/utils"
 import { buildStatusTimeline } from "@/lib/order-utils"
 import { ArrowLeft, Clock, TrendingDown, CheckCircle, RefreshCw, Package, Receipt, Ban, Copy } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { RefundManagement } from "@/components/refund-management"
 
 // ... (existing imports)
 
@@ -183,7 +184,7 @@ export default function SuperAdminOrderDetailsPage() {
 
       {/* Refund Information Card */}
       {order && (order.refundAmountCents && order.refundAmountCents > 0) && (
-        <Card className="border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-950/20 p-6">
+        <Card id="refund-details" className="scroll-mt-6 border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-950/20 p-6">
           <div className="flex items-start gap-4">
             <div className="rounded-full bg-yellow-100 dark:bg-yellow-900 p-2 text-yellow-600 dark:text-yellow-400">
               <TrendingDown className="h-5 w-5" />
@@ -347,46 +348,81 @@ export default function SuperAdminOrderDetailsPage() {
 
 
                 {/* Order Items */}
-                {visibleItems.length > 0 && (
+                {orderItems.length > 0 && (
                   <div className="mx-6 mb-6 space-y-4">
                     <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Order Items</h3>
                     <div className="space-y-3">
-                      {visibleItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center gap-4 rounded-lg border bg-white dark:bg-slate-800 dark:border-slate-700 p-4"
-                        >
-                          <div className="flex h-16 w-16 items-center justify-center rounded-lg border bg-slate-50 dark:bg-slate-600 dark:border-slate-500">
-                            {item.imageUrl ? (
-                              <img
-                                src={item.imageUrl}
-                                alt={item.productName}
-                                className="h-full w-full rounded-lg object-cover"
-                              />
-                            ) : (
-                              <Package className="h-8 w-8 text-slate-400 dark:text-slate-300" />
-                            )}
+                      {orderItems.map((item) => {
+                        const quantityRefunded = item.quantityRefunded || 0
+                        const isFullyRefunded = quantityRefunded >= item.quantity
+                        const isPartiallyRefunded = quantityRefunded > 0 && !isFullyRefunded
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={`flex items-center gap-4 rounded-lg border bg-white dark:bg-slate-800 dark:border-slate-700 p-4 ${isFullyRefunded ? "opacity-70" : ""}`}
+                          >
+                            <div className="flex h-16 w-16 items-center justify-center rounded-lg border bg-slate-50 dark:bg-slate-600 dark:border-slate-500">
+                              {item.imageUrl ? (
+                                <img
+                                  src={item.imageUrl}
+                                  alt={item.productName}
+                                  className="h-full w-full rounded-lg object-cover"
+                                />
+                              ) : (
+                                <Package className="h-8 w-8 text-slate-400 dark:text-slate-300" />
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className={`font-semibold text-slate-900 dark:text-white ${isFullyRefunded ? "line-through text-muted-foreground dark:text-slate-400" : ""}`}>
+                                  {item.productName}
+                                </p>
+                                {isFullyRefunded && <Badge variant="destructive" className="text-[10px]">Refunded</Badge>}
+                                {isPartiallyRefunded && <Badge variant="outline" className="border-yellow-500 text-yellow-600 text-[10px]">Partial refund</Badge>}
+                              </div>
+                              {item.productCode && (
+                                <p className="text-xs text-muted-foreground font-mono">{item.productCode}</p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {formatPKR(item.priceCents / 100)} per {item.unit}
+                                {quantityRefunded > 0 && (
+                                  <span className="ml-2 font-semibold text-red-600 dark:text-red-400">
+                                    {quantityRefunded} refunded
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white">Qty: {item.quantity}</p>
+                              <p className={`text-sm font-bold ${isFullyRefunded ? "line-through text-muted-foreground" : "text-indigo-600 dark:text-indigo-400"}`}>
+                                {formatPKR((item.priceCents * item.quantity) / 100)}
+                              </p>
+                              {quantityRefunded > 0 && (
+                                <p className="text-[11px] font-bold text-red-600 dark:text-red-400">
+                                  - {formatPKR((item.priceCents * quantityRefunded) / 100)}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex-1">
-                            <p className="font-semibold text-slate-900 dark:text-white">{item.productName}</p>
-                            {item.productCode && (
-                              <p className="text-xs text-muted-foreground font-mono">{item.productCode}</p>
-                            )}
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {formatPKR(item.priceCents / 100)} per {item.unit}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-semibold text-slate-900 dark:text-white">Qty: {item.quantity}</p>
-                            <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                              {formatPKR((item.priceCents * item.quantity) / 100)}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}
+
+                <div id={order.refundAmountCents && order.refundAmountCents > 0 ? undefined : "refund-details"} className="mx-6 mb-6 scroll-mt-6">
+                  <RefundManagement
+                    orderId={order.id}
+                    orderTotalCents={order.totalCents}
+                    orderStatus={order.status}
+                    createdAt={order.createdAt}
+                    onRefundSuccess={() => mutate()}
+                    refundAmountCents={order.refundAmountCents}
+                    refundedAt={order.refundedAt}
+                    refundReason={order.refundReason}
+                  />
+                </div>
               </Card>
 
               {/* SECURITY: Approval token is NEVER shown on Super Admin view.

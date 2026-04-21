@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Package,
@@ -67,6 +68,7 @@ export function OrdersDirectory({
   isHeadOffice,
   onUpdate
 }: OrdersDirectoryProps) {
+  const router = useRouter()
   const [viewMode, setViewMode] = useState<"grid" | "table">("table")
   const [viewingOrder, setViewingOrder] = useState<OrderItem | null>(null)
 
@@ -88,6 +90,10 @@ export function OrdersDirectory({
       case "rejected": return { bg: "bg-rose-500/10 dark:bg-rose-500/20", text: "text-rose-600 dark:text-rose-400", border: "border-rose-200 dark:border-rose-800", icon: <XCircle className="h-4 w-4" /> }
       default: return { bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-200", icon: <Package className="h-4 w-4" /> }
     }
+  }
+
+  const openFullDetails = (order: OrderItem) => {
+    router.push(`/orders/${order.id}#refund-details`)
   }
 
   // Handlers
@@ -299,6 +305,12 @@ export function OrdersDirectory({
       <Sheet open={!!viewingOrder && !actionType} onOpenChange={(open) => !open && setViewingOrder(null)}>
         <SheetContent className="w-full sm:max-w-md border-l-0 shadow-[0_0_50px_rgba(0,0,0,0.1)] p-0 bg-[#fdfdfd] dark:bg-[#0b0f19] overflow-y-auto">
           {viewingOrder && (
+            (() => {
+              const isRefundRelated =
+                viewingOrder.status?.toLowerCase() === "refunded" ||
+                Number(viewingOrder.refundAmountCents || 0) > 0
+
+              return (
             <div className="flex flex-col h-full font-sans">
               {/* Cute Header Section */}
               <div className="p-6 md:p-8 bg-gradient-to-br from-indigo-50/80 to-purple-50/50 dark:from-indigo-950/20 dark:to-purple-950/10 border-b border-indigo-100/50 dark:border-indigo-900/30 rounded-b-[2.5rem] relative overflow-hidden shrink-0">
@@ -412,6 +424,17 @@ export function OrdersDirectory({
 
               {/* Cute Action Footer */}
               <div className="p-6 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 rounded-t-[2.5rem] mt-auto shrink-0 space-y-3 pb-safe">
+                {isRefundRelated && (
+                  <Button
+                    type="button"
+                    onClick={() => openFullDetails(viewingOrder)}
+                    className="w-full h-12 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-bold shadow-lg shadow-amber-500/20 gap-2"
+                  >
+                    <TrendingDown className="h-4 w-4" />
+                    View Refund Details
+                  </Button>
+                )}
+
                 <div className="flex bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 h-14 rounded-2xl justify-center items-center border border-dashed border-slate-200 dark:border-slate-700 transition-colors">
                   <ReceiptIconButton orderId={viewingOrder.id} />
                 </div>
@@ -437,6 +460,8 @@ export function OrdersDirectory({
                 </div>
               </div>
             </div>
+              )
+            })()
           )}
         </SheetContent>
       </Sheet>
