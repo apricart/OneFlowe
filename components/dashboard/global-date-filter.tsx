@@ -143,6 +143,18 @@ export function GlobalDateFilter({
     const [compareMonthsOpen, setCompareMonthsOpen] = useState(false)
     const [compareYearsOpen, setCompareYearsOpen] = useState(false)
 
+    const getMainSelectionChange = (nextMonths: number[], nextYears: number[]) => {
+        const hasArbitraryPeriod = nextMonths.length > 0 || nextYears.length > 0
+        const allTimeRange = earliestDate
+            ? { startDate: startOfDay(earliestDate), endDate: endOfDay(new Date()) }
+            : getPresetRange("all")
+
+        return {
+            nextRange: hasArbitraryPeriod ? null : allTimeRange,
+            nextPreset: hasArbitraryPeriod ? "custom" as FilterPreset : "all" as FilterPreset,
+        }
+    }
+
     const handleSelectPreset = (preset: FilterPreset) => {
         if (preset === "custom") {
             setCalendarOpen(true)
@@ -159,28 +171,6 @@ export function GlobalDateFilter({
 
     const toggleCompare = (checked: boolean) => {
         onChange(value, activePreset, checked, compareRange, months, years, compareMonths, compareYears)
-    }
-
-    const toggleArraySelection = (type: 'months' | 'years' | 'compareMonths' | 'compareYears', val: number) => {
-        const isSelected = type === 'months' ? months.includes(val) :
-                           type === 'years' ? years.includes(val) :
-                           type === 'compareMonths' ? compareMonths.includes(val) :
-                           compareYears.includes(val);
-                           
-        const newArr = isSelected 
-            ? (type === 'months' ? months : type === 'years' ? years : type === 'compareMonths' ? compareMonths : compareYears).filter(v => v !== val)
-            : [...(type === 'months' ? months : type === 'years' ? years : type === 'compareMonths' ? compareMonths : compareYears), val];
-
-        onChange(
-            null, // Clear DateRange
-            "custom", // Force custom mode 
-            compare, 
-            compareRange,
-            type === 'months' ? newArr : months,
-            type === 'years' ? newArr : years,
-            type === 'compareMonths' ? newArr : compareMonths,
-            type === 'compareYears' ? newArr : compareYears
-        )
     }
 
     const [tempMonths, setTempMonths] = useState<number[]>(months)
@@ -205,16 +195,18 @@ export function GlobalDateFilter({
     }, [compareYears])
 
     const applyArraySelection = (type: 'months' | 'years' | 'compareMonths' | 'compareYears') => {
-        onChange(
-            null, 
-            "custom", 
-            compare, 
-            compareRange,
-            type === 'months' ? tempMonths : months,
-            type === 'years' ? tempYears : years,
-            type === 'compareMonths' ? tempCompareMonths : compareMonths,
-            type === 'compareYears' ? tempCompareYears : compareYears
-        )
+        const nextMonths = type === 'months' ? tempMonths : months
+        const nextYears = type === 'years' ? tempYears : years
+        const nextCompareMonths = type === 'compareMonths' ? tempCompareMonths : compareMonths
+        const nextCompareYears = type === 'compareYears' ? tempCompareYears : compareYears
+
+        if (type === 'compareMonths' || type === 'compareYears') {
+            onChange(value, activePreset, compare, compareRange, months, years, nextCompareMonths, nextCompareYears)
+        } else {
+            const { nextRange, nextPreset } = getMainSelectionChange(nextMonths, nextYears)
+            onChange(nextRange, nextPreset, compare, compareRange, nextMonths, nextYears, compareMonths, compareYears)
+        }
+
         setMonthsOpen(false)
         setYearsOpen(false)
         setCompareMonthsOpen(false)
@@ -222,14 +214,26 @@ export function GlobalDateFilter({
     }
 
     const toggleTempSelection = (type: 'months' | 'years' | 'compareMonths' | 'compareYears', val: number) => {
+        const toggleValue = (current: number[]) => current.includes(val) ? current.filter(v => v !== val) : [...current, val]
+
         if (type === 'months') {
-            setTempMonths(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+            const next = toggleValue(tempMonths)
+            const { nextRange, nextPreset } = getMainSelectionChange(next, years)
+            setTempMonths(next)
+            onChange(nextRange, nextPreset, compare, compareRange, next, years, compareMonths, compareYears)
         } else if (type === 'years') {
-            setTempYears(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+            const next = toggleValue(tempYears)
+            const { nextRange, nextPreset } = getMainSelectionChange(months, next)
+            setTempYears(next)
+            onChange(nextRange, nextPreset, compare, compareRange, months, next, compareMonths, compareYears)
         } else if (type === 'compareMonths') {
-            setTempCompareMonths(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+            const next = toggleValue(tempCompareMonths)
+            setTempCompareMonths(next)
+            onChange(value, activePreset, compare, compareRange, months, years, next, compareYears)
         } else if (type === 'compareYears') {
-            setTempCompareYears(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val])
+            const next = toggleValue(tempCompareYears)
+            setTempCompareYears(next)
+            onChange(value, activePreset, compare, compareRange, months, years, compareMonths, next)
         }
     }
 
@@ -297,19 +301,22 @@ export function GlobalDateFilter({
                                 avoidCollisions={false}
                             >
                                 <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
-                                    {monthPresets.map((m, i) => (
+                                    {monthPresets.map((m, i) => {
+                                        const monthValue = i + 1
+                                        return (
                                         <div 
                                             key={m.id} 
                                             className={cn(
                                                 "flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-colors",
-                                                tempMonths.includes(i) ? "bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                                tempMonths.includes(monthValue) ? "bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                                             )}
-                                            onClick={() => toggleTempSelection('months', i)}
+                                            onClick={() => toggleTempSelection('months', monthValue)}
                                         >
                                             {m.label}
-                                            {tempMonths.includes(i) && <Check className="h-3.5 w-3.5" />}
+                                            {tempMonths.includes(monthValue) && <Check className="h-3.5 w-3.5" />}
                                         </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                                 <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                                     <Button 
@@ -416,19 +423,22 @@ export function GlobalDateFilter({
                                                         avoidCollisions={false}
                                                     >
                                                         <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
-                                                            {monthPresets.map((m, i) => (
+                                                            {monthPresets.map((m, i) => {
+                                                                const monthValue = i + 1
+                                                                return (
                                                                 <div 
                                                                     key={m.id} 
                                                                     className={cn(
                                                                         "flex items-center justify-between px-2 py-1.5 rounded-lg text-xs cursor-pointer transition-colors",
-                                                                        tempCompareMonths.includes(i) ? "bg-rose-50 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                                                        tempCompareMonths.includes(monthValue) ? "bg-rose-50 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400" : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                                                                     )}
-                                                                    onClick={() => toggleTempSelection('compareMonths', i)}
+                                                                    onClick={() => toggleTempSelection('compareMonths', monthValue)}
                                                                 >
                                                                     {m.label}
-                                                                    {tempCompareMonths.includes(i) && <Check className="h-3.5 w-3.5" />}
+                                                                    {tempCompareMonths.includes(monthValue) && <Check className="h-3.5 w-3.5" />}
                                                                 </div>
-                                                            ))}
+                                                                )
+                                                            })}
                                                         </div>
                                                         <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                                                             <Button 

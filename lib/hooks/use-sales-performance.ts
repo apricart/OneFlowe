@@ -50,6 +50,17 @@ export type DateRange = {
 
 export type DashboardStatus = "all" | "PENDING" | "FULFILLED" | "REFUNDED" | "REJECTED" | "APPROVED" | "PARTIAL"
 
+const normalizeMonthsForApi = (selectedMonths?: number[]) => {
+    if (!selectedMonths || selectedMonths.length === 0) return []
+
+    const isLegacyZeroBased = selectedMonths.some(month => month === 0)
+    const normalized = selectedMonths
+        .map(month => isLegacyZeroBased ? month + 1 : month)
+        .filter(month => Number.isInteger(month) && month >= 1 && month <= 12)
+
+    return Array.from(new Set(normalized)).sort((a, b) => a - b)
+}
+
 export function useSalesPerformance(
     organizationId?: string | null,
     branchId?: string | null,
@@ -103,8 +114,9 @@ export function useSalesPerformance(
             params.set("endDate", end.toISOString())
         }
 
-        if (months && months.length > 0) {
-            params.set("months", months.map(m => m + 1).join(",")) // Javascript 0-11 mapping to PostgreSQL 1-12
+        const apiMonths = normalizeMonthsForApi(months)
+        if (apiMonths.length > 0) {
+            params.set("months", apiMonths.join(","))
         }
 
         if (years && years.length > 0) {
@@ -121,8 +133,9 @@ export function useSalesPerformance(
                 params.set("compareStartDate", compareRange.startDate.toISOString())
                 params.set("compareEndDate", compareRange.endDate.toISOString())
             }
-            if (compareMonths && compareMonths.length > 0) {
-                params.set("compareMonths", compareMonths.map(m => m + 1).join(","))
+            const apiCompareMonths = normalizeMonthsForApi(compareMonths)
+            if (apiCompareMonths.length > 0) {
+                params.set("compareMonths", apiCompareMonths.join(","))
             }
             if (compareYears && compareYears.length > 0) {
                 params.set("compareYears", compareYears.join(","))

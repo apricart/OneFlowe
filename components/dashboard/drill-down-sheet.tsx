@@ -31,7 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 
-import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { GlobalDateFilter, getPresetRange, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import type { DateRange } from "@/lib/hooks/use-sales-performance"
 import { useAppContext } from "@/components/context/app-context"
 
@@ -53,6 +53,17 @@ interface DrillDownSheetProps {
     years?: number[]
     compareMonths?: number[]
     compareYears?: number[]
+}
+
+const normalizeMonthsForApi = (selectedMonths?: number[]) => {
+    if (!selectedMonths || selectedMonths.length === 0) return []
+
+    const isLegacyZeroBased = selectedMonths.some(month => month === 0)
+    const normalized = selectedMonths
+        .map(month => isLegacyZeroBased ? month + 1 : month)
+        .filter(month => Number.isInteger(month) && month >= 1 && month <= 12)
+
+    return Array.from(new Set(normalized)).sort((a, b) => a - b)
 }
 
 const TYPE_CONFIG = {
@@ -147,9 +158,9 @@ export function DrillDownSheet({
     const { userRole } = useAppContext()
     const isBuyer = userRole === "HEAD_OFFICE" || userRole === "BRANCH_ADMIN"
 
-    const [localDateRange, setLocalDateRange] = useState<DateRange | null>(null)
+    const [localDateRange, setLocalDateRange] = useState<DateRange | null>(getPresetRange("all"))
     const [localCompareRange, setLocalCompareRange] = useState<DateRange | null>(null)
-    const [activePreset, setActivePreset] = useState<FilterPreset>("today")
+    const [activePreset, setActivePreset] = useState<FilterPreset>("all")
     const [months, setMonths] = useState<number[]>([])
     const [years, setYears] = useState<number[]>([])
     const [compareMonths, setCompareMonths] = useState<number[]>([])
@@ -160,9 +171,9 @@ export function DrillDownSheet({
 
     useEffect(() => {
         if (isOpen) {
-            setLocalDateRange(defaultDateRange || null)
+            setLocalDateRange(defaultDateRange || getPresetRange("all"))
             setLocalCompareRange(compareRange || null)
-            setActivePreset(parentActivePreset || (defaultDateRange ? "custom" : "today"))
+            setActivePreset(parentActivePreset || "all")
             setMonths(parentMonths || [])
             setYears(parentYears || [])
             setCompareMonths(parentCompareMonths || [])
@@ -179,7 +190,8 @@ export function DrillDownSheet({
             params.set("startDate", localDateRange.startDate.toISOString())
             params.set("endDate", localDateRange.endDate.toISOString())
         }
-        if (months.length > 0) params.set("months", months.join(","))
+        const apiMonths = normalizeMonthsForApi(months)
+        if (apiMonths.length > 0) params.set("months", apiMonths.join(","))
         if (years.length > 0) params.set("years", years.join(","))
 
         if (compare) {
@@ -188,7 +200,8 @@ export function DrillDownSheet({
                 params.set("compareStartDate", localCompareRange.startDate.toISOString())
                 params.set("compareEndDate", localCompareRange.endDate.toISOString())
             }
-            if (compareMonths.length > 0) params.set("compareMonths", compareMonths.join(","))
+            const apiCompareMonths = normalizeMonthsForApi(compareMonths)
+            if (apiCompareMonths.length > 0) params.set("compareMonths", apiCompareMonths.join(","))
             if (compareYears.length > 0) params.set("compareYears", compareYears.join(","))
         }
         if (type === "REFUNDED") params.set("refundType", refundType)

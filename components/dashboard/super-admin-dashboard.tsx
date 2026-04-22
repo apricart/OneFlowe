@@ -245,7 +245,9 @@ export function SuperAdminDashboard() {
   const { data: pendingData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "PENDING", compare, compareRange
+    undefined, dateRange, "PENDING", compare, compareRange,
+    months, years, compareMonths, compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
   const { data: fulfilledData } = useSalesPerformance(
@@ -283,7 +285,9 @@ export function SuperAdminDashboard() {
   const { data: partialData } = useSalesPerformance(
     organizationId, branchId,
     selectedBranchIds.length > 0 ? selectedBranchIds : undefined,
-    undefined, dateRange, "PARTIAL", compare, compareRange
+    undefined, dateRange, "PARTIAL", compare, compareRange,
+    months, years, compareMonths, compareYears,
+    activePreset === "all" ? "yearly" : undefined
   )
 
 

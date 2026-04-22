@@ -189,12 +189,12 @@ export function BranchAdminDashboard() {
   }, [chartPerfData, chartQuickFilter, chartMonths, chartYears, activePreset, months, years, hasChartFilters])
 
   // KPI Breakdown Queries
-  const { data: pendingData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "PENDING", compare, compareRange)
-  const { data: fulfilledData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "FULFILLED", compare, compareRange)
-  const { data: refundedData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "REFUNDED", compare, compareRange)
-  const { data: rejectedData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "REJECTED", compare, compareRange)
-  const { data: approvedData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "APPROVED", compare, compareRange)
-  const { data: partialData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "PARTIAL", compare, compareRange)
+  const { data: pendingData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "PENDING", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
+  const { data: fulfilledData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "FULFILLED", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
+  const { data: refundedData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "REFUNDED", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
+  const { data: rejectedData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "REJECTED", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
+  const { data: approvedData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "APPROVED", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
+  const { data: partialData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "PARTIAL", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
 
   const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean, compRange?: DateRange | null, m?: number[], y?: number[], cm?: number[], cy?: number[]) => {
     setDateRange(range)
