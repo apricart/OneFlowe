@@ -51,6 +51,33 @@ type HeadOfficeUsersTableProps = {
   onUserUpdate: () => void
 }
 
+const normalizeSearchValue = (value: string | null | undefined) =>
+  (value || "").toLowerCase().trim().replace(/\s+/g, " ")
+
+const userMatchesSearch = (user: UserRow, rawQuery: string) => {
+  const query = normalizeSearchValue(rawQuery)
+  if (!query) return true
+
+  const displayName = user.fullName || `${user.firstName || ""} ${user.lastName || ""}`
+  const searchableText = normalizeSearchValue([
+    displayName,
+    user.firstName,
+    user.lastName,
+    user.email,
+    user.username,
+  ].filter(Boolean).join(" "))
+
+  const queryWithoutSpaces = query.replace(/\s/g, "")
+  const searchableWithoutSpaces = searchableText.replace(/\s/g, "")
+  const queryTokens = query.split(" ").filter(Boolean)
+
+  return (
+    searchableText.includes(query) ||
+    searchableWithoutSpaces.includes(queryWithoutSpaces) ||
+    queryTokens.every(token => searchableText.includes(token))
+  )
+}
+
 export function HeadOfficeUsersTable({ users, branches, organizations, userRole, onUserUpdate }: HeadOfficeUsersTableProps) {
   const PAGE_SIZE = 20
   const [viewMode, setViewMode] = useState<"grid" | "table">("table")
@@ -95,13 +122,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
 
     // Apply search
     if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(user =>
-        user.firstName?.toLowerCase().includes(query) ||
-        user.lastName?.toLowerCase().includes(query) ||
-        user.email?.toLowerCase().includes(query) ||
-        user.fullName?.toLowerCase().includes(query)
-      )
+      filtered = filtered.filter(user => userMatchesSearch(user, searchQuery))
     }
 
     return filtered
