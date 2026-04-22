@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function UsersPage() {
-  const { organizationId, branchId, userRole } = useAppContext()
+  const { organizationId, branchId, branchIds, userRole } = useAppContext()
 
   const { data: usersData, mutate: mutateUsers } = useSWR(
     "/api/v1/users",
@@ -33,6 +33,15 @@ export default function UsersPage() {
   const organizations = organizationsData?.items || []
   const organizationFilterId = organizationId ? parseInt(organizationId, 10) : null
   const branchFilterId = branchId ? parseInt(branchId, 10) : null
+  const branchFilterIds = branchIds
+    .map(id => parseInt(id, 10))
+    .filter(id => Number.isFinite(id))
+  const effectiveBranchFilterIds = branchFilterIds.length > 0
+    ? branchFilterIds
+    : branchFilterId
+      ? [branchFilterId]
+      : []
+  const effectiveBranchFilterSet = new Set(effectiveBranchFilterIds)
 
   // Filter users based on role and organization
   const filteredUsers = users.filter((user: any) => {
@@ -46,8 +55,8 @@ export default function UsersPage() {
       return false
     }
 
-    if (branchFilterId) {
-      return user.branchId === branchFilterId
+    if (effectiveBranchFilterSet.size > 0) {
+      return user.branchId != null && effectiveBranchFilterSet.has(Number(user.branchId))
     }
 
     return true
