@@ -7,6 +7,7 @@ import { ok, error, requireApiRole, readJson } from "@/lib/api"
 import { getRequestScope } from "@/lib/auth"
 import { invalidateByPrefix } from "@/lib/cache-utils"
 import { headers } from "next/headers"
+import { assertUniqueUserFields, normalizeEmail, normalizeOptionalText, UserUniqueFieldError } from "@/lib/user-uniqueness"
 
 export async function PATCH(
   req: NextRequest,
@@ -44,19 +45,33 @@ export async function PATCH(
       }
     }
 
+    const nextEmail = body.email !== undefined ? normalizeEmail(body.email) : targetUser.email
+    const nextPhone = body.phone !== undefined ? normalizeOptionalText(body.phone) : undefined
+    const nextEmployeeId = body.employeeId !== undefined ? normalizeOptionalText(body.employeeId) : undefined
+
+    if (body.email !== undefined && !nextEmail) {
+      return error("Email is required", 400)
+    }
+
+    await assertUniqueUserFields({
+      email: nextEmail,
+      phone: nextPhone,
+      employeeId: nextEmployeeId,
+    }, id)
+
     const patch: any = { updatedAt: new Date() }
 
     // Determine if email actually changed (avoid unnecessary session invalidation)
-    const emailActuallyChanged = body.email && body.email !== targetUser.email
+    const emailActuallyChanged = body.email !== undefined && nextEmail !== targetUser.email
 
     // Update basic fields
-    if (emailActuallyChanged) patch.email = body.email
+    if (emailActuallyChanged) patch.email = nextEmail
     if (body.firstName !== undefined) patch.firstName = body.firstName
     if (body.lastName !== undefined) patch.lastName = body.lastName
-    if (body.phone !== undefined) patch.phone = body.phone
+    if (body.phone !== undefined) patch.phone = nextPhone
     if (typeof body.isActive === "boolean") patch.isActive = body.isActive
     if (typeof body.mfaEnabled === "boolean") patch.mfaEnabled = body.mfaEnabled
-    if (body.employeeId !== undefined) patch.employeeId = body.employeeId || null
+    if (body.employeeId !== undefined) patch.employeeId = nextEmployeeId
     if (body.imprestHolder !== undefined) patch.imprestHolder = body.imprestHolder || null
     if (body.contactPerson !== undefined) patch.contactPerson = body.contactPerson || null
     if (body.address !== undefined) patch.address = body.address || null
@@ -138,6 +153,11 @@ export async function PATCH(
     return ok({ success: true })
   } catch (criticalErr: any) {
     const errorMessage = criticalErr.message || "Failed to update user"
+
+    if (criticalErr instanceof UserUniqueFieldError) {
+      return error(criticalErr.message, 400)
+    }
+
     console.error("[API/Users] ERROR IN PATCH:", criticalErr)
 
     if (criticalErr.code === '23505' || errorMessage.includes('unique constraint') || errorMessage.includes('already exists')) {

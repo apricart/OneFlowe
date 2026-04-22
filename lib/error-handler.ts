@@ -161,13 +161,37 @@ export function parseError(error: any): ErrorDetails {
     }
   }
 
-  // Duplicate errors (username and email are unique in some parts)
-  if (errorMsg.includes('already exists') || errorMsg.includes('unique')) {
+  // Duplicate errors (username, email, phone, and employee number)
+  if (errorMsg.includes('already exists') || errorMsg.includes('already registered') || errorMsg.includes('unique')) {
     if (errorMsg.includes('username') && (errorMsg.includes('taken') || errorMsg.includes('use') || errorMsg.includes('exists') || errorMsg.includes('idx') || errorMsg.includes('uq'))) {
       return {
         type: 'DUPLICATE_ERROR',
         message: 'This username already exists. Please choose a different username.',
         field: 'username',
+        statusCode: 400
+      }
+    }
+    if (errorMsg.includes('email')) {
+      return {
+        type: 'DUPLICATE_ERROR',
+        message: 'This email is already registered with this app. Please use another email.',
+        field: 'email',
+        statusCode: 400
+      }
+    }
+    if (errorMsg.includes('phone')) {
+      return {
+        type: 'DUPLICATE_ERROR',
+        message: 'This phone number is already registered with this app. Please use another phone number.',
+        field: 'phone',
+        statusCode: 400
+      }
+    }
+    if (errorMsg.includes('employee')) {
+      return {
+        type: 'DUPLICATE_ERROR',
+        message: 'This employee number is already registered with this app. Please use another employee number.',
+        field: 'employeeId',
         statusCode: 400
       }
     }

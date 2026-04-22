@@ -7,11 +7,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getRequestScope } from "@/lib/auth";
+import { assertUniqueUserFields, normalizeEmail, UserUniqueFieldError } from "@/lib/user-uniqueness";
 
 async function POST(req: NextRequest) {
   try {
     const body = await readJson(req)
-    const { email, password, firstName, lastName, mfaEnabled } = body
+    const { password, firstName, lastName, mfaEnabled } = body
+    const email = normalizeEmail(body.email)
 
     if (!email || !password) {
       return error("Email and password required", 400)
@@ -30,16 +32,7 @@ async function POST(req: NextRequest) {
       return error("Branch admin must be assigned to a branch", 403)
     }
 
-    // Check if email already exists
-    const existing = await db
-      .select()
-      .from(employeeCredentials)
-      .where(eq(employeeCredentials.email, email))
-      .limit(1)
-
-    if (existing.length > 0) {
-      return error("Email already in use", 400)
-    }
+    await assertUniqueUserFields({ email })
 
     // Hash password
     const passwordHash = await hash(password, 10)
@@ -74,6 +67,9 @@ async function POST(req: NextRequest) {
 
     return ok({ credential: credential }, { status: 201 })
   } catch (err: any) {
+    if (err instanceof UserUniqueFieldError) {
+      return error(err.message, 400)
+    }
     console.error("POST /employee-credentials error:", err)
     return error("Internal Server Error", 500)
   }
@@ -122,7 +118,8 @@ async function GET(req: NextRequest) {
 async function PUT(req: NextRequest) {
   try {
     const body = await readJson(req)
-    const { id, isActive, firstName, lastName, password, email } = body
+    const { id, isActive, firstName, lastName, password } = body
+    const email = body.email !== undefined ? normalizeEmail(body.email) : undefined
 
     if (!id) {
       return error("ID required", 400)
@@ -166,15 +163,7 @@ async function PUT(req: NextRequest) {
 
     // Handle email update
     if (email && email !== cred.email) {
-      // Check if email already exists
-      const existing = await db
-        .select()
-        .from(employeeCredentials)
-        .where(eq(employeeCredentials.email, email))
-        .limit(1)
-      if (existing.length > 0) {
-        return error("Email already in use", 400)
-      }
+      await assertUniqueUserFields({ email }, undefined, credId)
       updates.email = email
     }
 
@@ -202,6 +191,9 @@ async function PUT(req: NextRequest) {
 
     return ok({ credential: updated, sessionInvalidated: securityChange }, { status: 200 })
   } catch (err: any) {
+    if (err instanceof UserUniqueFieldError) {
+      return error(err.message, 400)
+    }
     console.error("PUT /employee-credentials error:", err)
     return error("Internal Server Error", 500)
   }

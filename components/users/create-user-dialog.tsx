@@ -220,6 +220,9 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     } else if (form.phone && (form.phone.length < 7 || form.phone.length > 15)) {
       newErrors.phone = "Phone number must be between 7 and 15 digits"
     }
+    if (form.employeeId && !form.employeeId.trim()) {
+      newErrors.employeeId = "Employee number cannot be blank"
+    }
 
     if (!form.password) newErrors.password = "Password is required"
     if (form.password) {
@@ -242,7 +245,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     console.debug("[DEBUG] Validation result:", { isValid, errors: newErrors })
 
     if (!isValid && autoJump) {
-      if (newErrors.firstName || newErrors.lastName || newErrors.email || newErrors.password || newErrors.phone) {
+      if (newErrors.firstName || newErrors.lastName || newErrors.email || newErrors.password || newErrors.phone || newErrors.employeeId) {
         setStep(1)
       } else if (newErrors.role || newErrors.organizationId || newErrors.branchId) {
         setStep(2)
@@ -571,9 +574,20 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                       id="employeeId"
                       name="employeeId"
                       value={form.employeeId}
-                      onChange={e => setForm({ ...form, employeeId: e.target.value })}
+                      onChange={e => {
+                        setForm({ ...form, employeeId: e.target.value })
+                        setErrors(prev => {
+                          const next = { ...prev }
+                          delete next.employeeId
+                          return next
+                        })
+                      }}
                       placeholder="Enter employee number"
+                      className={errors.employeeId ? 'border-red-500' : ''}
                     />
+                    {errors.employeeId && (
+                      <p className="text-xs text-red-600">{errors.employeeId}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="contactPerson">Contact Person</Label>

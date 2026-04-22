@@ -22,6 +22,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
+import { handleError } from "@/lib/error-handler"
 
 type UserRow = {
   id: string
@@ -86,6 +87,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   const [page, setPage] = useState(1)
   const [editingUser, setEditingUser] = useState<UserRow | null>(null)
   const [viewingUser, setViewingUser] = useState<UserRow | null>(null)
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({})
   const [submittingUserId, setSubmittingUserId] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<UserRow | null>(null)
 
@@ -188,6 +190,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   // Open edit dialog
   const openEditDialog = (user: UserRow) => {
     setEditingUser(user)
+    setEditErrors({})
     setShowPasswordReset(false)
     setEditForm({
       firstName: user.firstName || "",
@@ -211,6 +214,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   // Close edit dialog
   const closeEditDialog = () => {
     setEditingUser(null)
+    setEditErrors({})
     setShowPasswordReset(false)
     setEditForm({
       firstName: "",
@@ -235,6 +239,22 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   const saveUser = async () => {
     if (!editingUser) return
 
+    const nextErrors: Record<string, string> = {}
+    if (!editForm.email.trim()) {
+      nextErrors.email = "Email is required"
+    } else if (!/\S+@\S+\.\S+/.test(editForm.email)) {
+      nextErrors.email = "Please enter a valid email"
+    }
+    if (editForm.phone && !/^\d+$/.test(editForm.phone)) {
+      nextErrors.phone = "Phone number must contain only digits"
+    } else if (editForm.phone && (editForm.phone.length < 7 || editForm.phone.length > 15)) {
+      nextErrors.phone = "Phone number must be between 7 and 15 digits"
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setEditErrors(nextErrors)
+      return
+    }
+
     // Validate password if reset is enabled
     if (showPasswordReset && editForm.password) {
       if (editForm.password !== editForm.confirmPassword) {
@@ -253,6 +273,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
 
     setSubmittingUserId(editingUser.id)
     try {
+      setEditErrors({})
       const body: any = {
         firstName: editForm.firstName,
         lastName: editForm.lastName,
@@ -283,7 +304,11 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       closeEditDialog()
     } catch (error: any) {
       console.error("Error updating user:", error)
-      alert("Failed to update user: " + error.message)
+      const parsed = handleError(error, "update user")
+      if (parsed.field) {
+        setEditErrors({ [parsed.field]: parsed.message })
+      }
+      alert(parsed.message || "Failed to update user")
     } finally {
       setSubmittingUserId(null)
     }
@@ -960,21 +985,45 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                 <Label htmlFor="email">Email Address *</Label>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
                   value={editForm.email}
-                  onChange={e => setEditForm({ ...editForm, email: e.target.value })}
+                  onChange={e => {
+                    setEditForm({ ...editForm, email: e.target.value })
+                    setEditErrors(prev => {
+                      const next = { ...prev }
+                      delete next.email
+                      return next
+                    })
+                  }}
                   placeholder="Enter email address"
                   autoComplete="off"
+                  className={editErrors.email ? "border-red-500" : ""}
                 />
+                {editErrors.email && (
+                  <p className="text-xs text-red-600">{editErrors.email}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone Number</Label>
                 <Input
                   id="phone"
+                  name="phone"
                   value={editForm.phone}
-                  onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
+                  onChange={e => {
+                    setEditForm({ ...editForm, phone: e.target.value })
+                    setEditErrors(prev => {
+                      const next = { ...prev }
+                      delete next.phone
+                      return next
+                    })
+                  }}
                   placeholder="Enter phone number"
+                  className={editErrors.phone ? "border-red-500" : ""}
                 />
+                {editErrors.phone && (
+                  <p className="text-xs text-red-600">{editErrors.phone}</p>
+                )}
               </div>
               {/* New Fields: Employee #, Imprest Holder, Contact Person */}
               <div className="grid grid-cols-2 gap-4">
@@ -982,10 +1031,22 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                   <Label htmlFor="edit-employeeId">Employee #</Label>
                   <Input
                     id="edit-employeeId"
+                    name="employeeId"
                     value={editForm.employeeId}
-                    onChange={e => setEditForm({ ...editForm, employeeId: e.target.value })}
+                    onChange={e => {
+                      setEditForm({ ...editForm, employeeId: e.target.value })
+                      setEditErrors(prev => {
+                        const next = { ...prev }
+                        delete next.employeeId
+                        return next
+                      })
+                    }}
                     placeholder="Enter employee number"
+                    className={editErrors.employeeId ? "border-red-500" : ""}
                   />
+                  {editErrors.employeeId && (
+                    <p className="text-xs text-red-600">{editErrors.employeeId}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-contactPerson">Contact Person</Label>

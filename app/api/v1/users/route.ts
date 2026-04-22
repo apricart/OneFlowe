@@ -7,6 +7,7 @@ import { headers } from "next/headers"
 type Role = "SUPER_ADMIN" | "HEAD_OFFICE" | "BRANCH_ADMIN" | "ORDER_PORTAL"
 import { hashPassword } from "@/lib/password"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { assertUniqueUserFields, normalizeEmail, normalizeOptionalText, UserUniqueFieldError } from "@/lib/user-uniqueness"
 
 
 export async function GET(req: Request) {
@@ -84,11 +85,13 @@ export async function POST(req: Request) {
 
   const firstName = String(body.firstName || "")
   const lastName = String(body.lastName || "")
-  const email = String(body.email || "")
+  const email = normalizeEmail(body.email)
   const username = String(body.username || "").toLowerCase()
   const location = String(body.location || "")
   const password = String(body.password || "")
   const role = String(body.role || "") as Role
+  const phone = normalizeOptionalText(body.phone)
+  const employeeId = normalizeOptionalText(body.employeeId)
   const parseId = (val: any) => {
     if (val === null || val === undefined || val === "") return null
     const n = Number(val)
@@ -165,6 +168,8 @@ export async function POST(req: Request) {
       return error("Username already exists. Please choose a different username.", 400)
     }
 
+    await assertUniqueUserFields({ email, phone, employeeId })
+
     const [item] = await db
       .insert(usersTable)
       .values({
@@ -174,13 +179,13 @@ export async function POST(req: Request) {
         roleId: roleRow.id,
         firstName,
         lastName,
-        phone: body.phone ? String(body.phone) : null,
+        phone,
         mfaEnabled: Boolean(body.mfaEnabled),
         isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
         organizationId,
         branchId,
         fullName: `${firstName} ${lastName}`,
-        employeeId: body.employeeId ? String(body.employeeId) : null,
+        employeeId,
         imprestHolder: body.imprestHolder ? String(body.imprestHolder) : null,
         contactPerson: body.contactPerson ? String(body.contactPerson) : null,
         location: location || null,
@@ -225,6 +230,10 @@ export async function POST(req: Request) {
 
     return ok({ item: createdUser }, { status: 201 })
   } catch (err: any) {
+    if (err instanceof UserUniqueFieldError) {
+      return error(err.message, 400)
+    }
+
     // Catch validation errors from password hashing or unique constraints
     const errorCode = String(err.code || err.cause?.code || "")
     const errorMsg = String(err.message || "").toLowerCase()
