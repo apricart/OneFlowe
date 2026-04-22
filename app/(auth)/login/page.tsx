@@ -116,7 +116,7 @@ function LoginForm() {
             return
           }
           if (result.error === "CredentialsSignin") {
-            throw new Error("Invalid credentials. Please check your username and password.")
+            throw new Error("Invalid credentials. Please check your username/email and password.")
           }
           if (result.error === "ORGANIZATION_INACTIVE") {
             throw new Error("Company has been de-activated by the Admin.")
@@ -219,7 +219,7 @@ function LoginForm() {
           <form onSubmit={onSubmit} className="grid gap-4" suppressHydrationWarning>
             <div className="grid gap-2">
               <label htmlFor="username" className="text-sm font-medium text-slate-700">
-                Username
+                Username or Email
               </label>
               <Input
                 id="username"
@@ -227,7 +227,7 @@ function LoginForm() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                placeholder="Enter your username"
+                placeholder="Enter your username or email"
                 className="bg-white/80 border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-blue-500"
                 suppressHydrationWarning
               />

@@ -2,7 +2,7 @@ import type { NextAuthOptions } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { db } from "@/lib/db"
 import { users, roles, mfaCodes, employeeCredentials, organizations, branches } from "@/db/schema"
-import { eq, and, gt, isNull, sql } from "drizzle-orm"
+import { eq, and, gt, isNull, sql, or } from "drizzle-orm"
 import { verifyPassword } from "@/lib/password"
 import { checkMfaCooldown, verifyOTP, clearDailyCount } from "@/lib/mfa"
 import { compare } from "bcryptjs"
@@ -13,11 +13,11 @@ export const authOptions: NextAuthOptions = {
     Credentials({
       name: "credentials",
       credentials: {
-        username: { label: "Username", type: "text" },
+        username: { label: "Username or Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const username = String(credentials?.username || "").toLowerCase()
+        const username = String(credentials?.username || "").trim().toLowerCase()
         const password = String(credentials?.password || "")
         if (!username || !password) return null
 
@@ -36,7 +36,7 @@ export const authOptions: NextAuthOptions = {
             sessionVersion: users.sessionVersion
           })
           .from(users)
-          .where(and(eq(users.username, username), isNull(users.deletedAt)))
+          .where(and(or(eq(users.username, username), sql`lower(${users.email}) = ${username}`), isNull(users.deletedAt)))
         if (!u) return null
 
         const ok = await verifyPassword(password, u.hash)
@@ -101,12 +101,12 @@ export const authOptions: NextAuthOptions = {
       id: "mfa-credentials",
       name: "mfa-credentials",
       credentials: {
-        username: { label: "Username", type: "text" },
+        username: { label: "Username or Email", type: "text" },
         password: { label: "Password", type: "password" },
         otp: { label: "OTP Code", type: "text" },
       },
       async authorize(credentials) {
-        const username = String(credentials?.username || "").toLowerCase()
+        const username = String(credentials?.username || "").trim().toLowerCase()
         const password = String(credentials?.password || "")
         const otp = String(credentials?.otp || "")
 
@@ -128,7 +128,7 @@ export const authOptions: NextAuthOptions = {
             sessionVersion: users.sessionVersion
           })
           .from(users)
-          .where(and(eq(users.username, username), isNull(users.deletedAt)))
+          .where(and(or(eq(users.username, username), sql`lower(${users.email}) = ${username}`), isNull(users.deletedAt)))
         if (!u) return null
 
         const ok = await verifyPassword(password, u.hash)
@@ -195,11 +195,11 @@ export const authOptions: NextAuthOptions = {
       id: "employee-credentials",
       name: "employee-credentials",
       credentials: {
-        username: { label: "Username", type: "text" },
+        username: { label: "Username or Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const username = String(credentials?.username || "").toLowerCase()
+        const username = String(credentials?.username || "").trim().toLowerCase()
         const password = String(credentials?.password || "")
         if (!username || !password) {
           return null
@@ -208,7 +208,7 @@ export const authOptions: NextAuthOptions = {
         const [emp] = await db
           .select()
           .from(employeeCredentials)
-          .where(and(eq(employeeCredentials.username, username), eq(employeeCredentials.isActive, true)))
+          .where(and(or(eq(employeeCredentials.username, username), sql`lower(${employeeCredentials.email}) = ${username}`), eq(employeeCredentials.isActive, true)))
 
         if (!emp) {
           return null
@@ -278,12 +278,12 @@ export const authOptions: NextAuthOptions = {
       id: "employee-mfa-credentials",
       name: "employee-mfa-credentials",
       credentials: {
-        username: { label: "Username", type: "text" },
+        username: { label: "Username or Email", type: "text" },
         password: { label: "Password", type: "password" },
         otp: { label: "OTP Code", type: "text" },
       },
       async authorize(credentials) {
-        const username = String(credentials?.username || "").toLowerCase()
+        const username = String(credentials?.username || "").trim().toLowerCase()
         const password = String(credentials?.password || "")
         const otp = String(credentials?.otp || "")
 
@@ -292,7 +292,7 @@ export const authOptions: NextAuthOptions = {
         const [emp] = await db
           .select()
           .from(employeeCredentials)
-          .where(and(eq(employeeCredentials.username, username), eq(employeeCredentials.isActive, true)))
+          .where(and(or(eq(employeeCredentials.username, username), sql`lower(${employeeCredentials.email}) = ${username}`), eq(employeeCredentials.isActive, true)))
 
         if (!emp) return null
 

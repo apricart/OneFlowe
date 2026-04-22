@@ -9,8 +9,9 @@ export async function POST(req: NextRequest) {
 
     const { username, code, type = 'LOGIN' } = body
     if (!username || !code) {
-      return error("Username and code are required", 400)
+      return error("Username or email and code are required", 400)
     }
+    const identifier = String(username).trim().toLowerCase()
 
     if (code.length !== 6) {
       return error("Please enter a valid 6-digit OTP code", 400)
@@ -18,17 +19,17 @@ export async function POST(req: NextRequest) {
 
     const { db } = await import("@/lib/db")
     const { users, employeeCredentials } = await import("@/db/schema")
-    const { eq, and, isNull } = await import("drizzle-orm")
+    const { eq, and, isNull, sql, or } = await import("drizzle-orm")
 
     // 1. Try Users table
-    let [user] = await db
+    let [user]: any[] = await db
       .select({
         id: users.id,
         email: users.email,
         mfaEnabled: users.mfaEnabled
       })
       .from(users)
-      .where(and(eq(users.username, username.toLowerCase()), isNull(users.deletedAt)))
+      .where(and(or(eq(users.username, identifier), sql`lower(${users.email}) = ${identifier}`), isNull(users.deletedAt)))
       .limit(1)
 
     // 2. Try Employee Credentials table
@@ -40,11 +41,11 @@ export async function POST(req: NextRequest) {
           mfaEnabled: employeeCredentials.mfaEnabled
         })
         .from(employeeCredentials)
-        .where(eq(employeeCredentials.username, username.toLowerCase()))
+        .where(or(eq(employeeCredentials.username, identifier), sql`lower(${employeeCredentials.email}) = ${identifier}`))
         .limit(1)
       
       if (emp) {
-        user = emp as any
+        user = { ...emp, id: `emp_${emp.id}` } as any
       }
     }
 
