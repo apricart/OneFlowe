@@ -21,6 +21,11 @@ import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
+const parseProductRating = (rating: unknown) => {
+  const numericRating = typeof rating === "number" ? rating : Number(rating)
+  return Number.isFinite(numericRating) ? numericRating : 0
+}
+
 interface Product {
   id: number
   name: string
@@ -175,7 +180,7 @@ export default function OrderPortalPage() {
       unit: item.unit,
       imageUrl: item.productImageUrl,
       stock: item.stockQuantity,
-      rating: ((item.organizationInventoryId * 7) % 20) / 10 + 3.0, // Deterministic rating based on ID to fix hydration
+      rating: parseProductRating(item.rating),
       description: item.customDescription || item.productDescription,
       discountType: item.discountType,
       discountValue: item.discountValue,
