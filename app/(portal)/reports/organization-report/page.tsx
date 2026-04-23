@@ -223,6 +223,8 @@ export default function OrganizationReportPage() {
             { label: "Managed Users",      value: (org: any) => org.totalUserCount || 0 },
             { label: isBuyer ? "Purchase (PKR)" : "Revenue (PKR)", value: (org: any) => (org.revenue / 100).toFixed(2) },
             { label: "Orders",             value: (org: any) => org.orderCount || 0 },
+            { label: "Fulfilled Orders",   value: (org: any) => org.fulfilledCount || 0 },
+            { label: "Refunded Orders",    value: (org: any) => org.refundedCount || 0 },
             { label: "Fulfillment Rate",   value: (org: any) => org.fulfillmentRate ? `${org.fulfillmentRate.toFixed(1)}%` : "N/A" },
         ]
 
