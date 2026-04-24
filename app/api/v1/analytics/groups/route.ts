@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
 
         const parsedGroupIds = groupIdsParam ? groupIdsParam.split(',').map(Number).filter(id => !isNaN(id)) : []
         const parsedBranchIds = branchIdsParam ? branchIdsParam.split(',').map(Number).filter(id => !isNaN(id)) : []
+        const nonDeletedGroupCondition = sql`${groups.status} != 'deleted'`
 
         // ━━━ Mode: All Time (Year Selection) ━━━
         if (allTime) {
@@ -58,7 +59,8 @@ export async function GET(req: NextRequest) {
                 .innerJoin(groups, eq(branches.groupId, groups.id))
                 .where(and(
                     REVENUE_ELIGIBLE_FILTER,
-                    orgId ? eq(groups.organizationId, orgId) : undefined
+                    orgId ? eq(groups.organizationId, orgId) : undefined,
+                    nonDeletedGroupCondition
                 ))
                 .groupBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`)
                 .orderBy(desc(sql`EXTRACT(YEAR FROM ${orders.createdAt})`))
@@ -118,6 +120,7 @@ export async function GET(req: NextRequest) {
         if (orgId) {
             groupConditions.push(eq(groups.organizationId, orgId))
         }
+        groupConditions.push(nonDeletedGroupCondition)
         if (parsedGroupIds.length > 0) {
             groupConditions.push(sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})`)
         }
@@ -136,6 +139,7 @@ export async function GET(req: NextRequest) {
                 .where(and(
                     orderWhere,
                     orgId ? eq(groups.organizationId, orgId) : undefined,
+                    nonDeletedGroupCondition,
                     parsedGroupIds.length > 0 ? sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})` : undefined,
                     parsedBranchIds.length > 0 ? sql`${branches.id} IN (${sql.join(parsedBranchIds, sql`, `)})` : undefined
                 ))
@@ -166,6 +170,7 @@ export async function GET(req: NextRequest) {
                     .where(and(
                         REVENUE_ELIGIBLE_FILTER,
                         orgId ? eq(groups.organizationId, orgId) : undefined,
+                        nonDeletedGroupCondition,
                         parsedGroupIds.length > 0 ? sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})` : undefined,
                         parsedBranchIds.length > 0 ? sql`${branches.id} IN (${sql.join(parsedBranchIds, sql`, `)})` : undefined,
                         (() => {
@@ -388,6 +393,7 @@ export async function GET(req: NextRequest) {
                 .where(and(
                     REVENUE_ELIGIBLE_FILTER,
                     orgId ? eq(branches.organizationId, orgId) : undefined,
+                    nonDeletedGroupCondition,
                     parsedGroupIds.length > 0 ? sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})` : undefined,
                     parsedBranchIds.length > 0 ? sql`${branches.id} IN (${sql.join(parsedBranchIds, sql`, `)})` : undefined,
                     (() => {
