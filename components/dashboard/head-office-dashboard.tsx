@@ -338,7 +338,7 @@ export function HeadOfficeDashboard() {
           comparisonLabel="VS LAST"
         />
         <BankingKPICard
-          icon={Package} title="Partial"
+          icon={Package} title="PARTIALLY FULFILLED"
           value={partialCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-indigo-500 to-purple-600" iconBg="text-indigo-600 bg-indigo-600" delay={135}
