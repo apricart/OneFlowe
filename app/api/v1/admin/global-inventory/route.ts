@@ -33,6 +33,31 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get("id")
+    const idsParam = searchParams.get("ids")
+    const imagesOnly = searchParams.get("imagesOnly") === "true"
+
+    if (imagesOnly) {
+      const productIds = idsParam
+        ? idsParam.split(",").map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0)
+        : []
+
+      if (productIds.length === 0) {
+        return NextResponse.json({ items: [] })
+      }
+
+      const items = await db
+        .select({
+          id: globalProducts.id,
+          imageUrl: globalProducts.imageUrl,
+        })
+        .from(globalProducts)
+        .where(and(
+          inArray(globalProducts.id, productIds),
+          isNull(globalProducts.deletedAt)
+        ))
+
+      return NextResponse.json({ items })
+    }
 
     // If an ID is provided, return a single product record
     if (id) {
@@ -100,6 +125,7 @@ export async function GET(req: NextRequest) {
     const search = searchRaw ? escapeLikePattern(searchRaw) : "" // Sanitize LIKE patterns
     const category = searchParams.get("category") || ""
     const status = searchParams.get("status") || ""
+    const lite = searchParams.get("lite") === "true"
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
@@ -167,26 +193,26 @@ export async function GET(req: NextRequest) {
     const parentCategories = alias(categories, "parentCategories")
 
     // Fetch products with pagination and category information
-    const [items, totalResult] = await Promise.all([
+    const [items, totalResult, overallSummary] = await Promise.all([
       db.select({
         id: globalProducts.id,
         productCode: globalProducts.productCode,
         name: globalProducts.name,
-        description: globalProducts.description,
+        description: lite ? sql<string | null>`NULL` : globalProducts.description,
         categoryId: globalProducts.categoryId,
-        imageUrl: globalProducts.imageUrl,
+        imageUrl: lite ? sql<string | null>`NULL` : globalProducts.imageUrl,
         basePrice: globalProducts.basePrice,
         unit: globalProducts.unit,
         status: globalProducts.status,
         stockQuantity: globalProducts.stockQuantity,
-        metadata: globalProducts.metadata,
-        discountType: globalProducts.discountType,
-        discountValue: globalProducts.discountValue,
-        discountStartAt: globalProducts.discountStartAt,
-        discountEndAt: globalProducts.discountEndAt,
-        discountActive: globalProducts.discountActive,
-        createdAt: globalProducts.createdAt,
-        updatedAt: globalProducts.updatedAt,
+        metadata: lite ? sql<Record<string, any> | null>`NULL` : globalProducts.metadata,
+        discountType: lite ? sql<string | null>`NULL` : globalProducts.discountType,
+        discountValue: lite ? sql<number | null>`NULL` : globalProducts.discountValue,
+        discountStartAt: lite ? sql<Date | null>`NULL` : globalProducts.discountStartAt,
+        discountEndAt: lite ? sql<Date | null>`NULL` : globalProducts.discountEndAt,
+        discountActive: lite ? sql<boolean | null>`NULL` : globalProducts.discountActive,
+        createdAt: lite ? sql<Date | null>`NULL` : globalProducts.createdAt,
+        updatedAt: lite ? sql<Date | null>`NULL` : globalProducts.updatedAt,
         categoryName: subCategories.name,
         parentCategoryName: parentCategories.name,
       })
@@ -197,7 +223,14 @@ export async function GET(req: NextRequest) {
         .orderBy(desc(globalProducts.createdAt))
         .limit(limit)
         .offset(offset),
-      db.select({ count: sql<number>`count(*)::int` }).from(globalProducts).where(whereClause)
+      db.select({ count: sql<number>`count(*)::int` }).from(globalProducts).where(whereClause),
+      db.select({
+        totalProducts: sql<number>`COUNT(*)::int`,
+        activeProducts: sql<number>`COUNT(CASE WHEN ${globalProducts.status} = 'active' THEN 1 END)::int`,
+        inactiveProducts: sql<number>`COUNT(CASE WHEN ${globalProducts.status} = 'inactive' THEN 1 END)::int`,
+      })
+        .from(globalProducts)
+        .where(isNull(globalProducts.deletedAt))
     ])
 
     const total = totalResult[0]?.count || 0
@@ -233,6 +266,11 @@ export async function GET(req: NextRequest) {
 
     return {
       items: itemsWithAssignments,
+      summary: {
+        totalProducts: overallSummary[0]?.totalProducts || 0,
+        activeProducts: overallSummary[0]?.activeProducts || 0,
+        inactiveProducts: overallSummary[0]?.inactiveProducts || 0,
+      },
       pagination: {
         page,
         limit,

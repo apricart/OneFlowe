@@ -1,5 +1,5 @@
 "use client"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import useSWR from "swr"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,6 +35,20 @@ type GlobalInventoryItem = {
     updatedAt: string
 }
 
+type GlobalInventoryFormItem = GlobalInventoryItem & {
+    metadata?: Record<string, any> | null
+    discountType?: string | null
+    discountValue?: number | null
+    discountStartAt?: string | null
+    discountEndAt?: string | null
+    discountActive?: boolean | null
+}
+
+type GlobalInventoryImageItem = {
+    id: number
+    imageUrl?: string | null
+}
+
 export default function GlobalInventoryView() {
     const router = useRouter()
     const [searchQuery, setSearchQuery] = useState("")
@@ -46,14 +60,36 @@ export default function GlobalInventoryView() {
     const [dialogMode, setDialogMode] = useState<"create" | "edit" | "delete" | null>(null)
     const [selectedProduct, setSelectedProduct] = useState<GlobalInventoryItem | null>(null)
     const [isDeleting, setIsDeleting] = useState(false)
+    const [loadingProductId, setLoadingProductId] = useState<number | null>(null)
     const { toast } = useToast()
 
     // Fetch ALL products once — no filter params in URL
+    const queryParams = useMemo(() => {
+        const params = new URLSearchParams()
+        params.set("page", page.toString())
+        params.set("limit", PAGE_SIZE.toString())
+        if (debouncedSearch) params.set("search", debouncedSearch)
+        if (statusFilter && statusFilter !== "all") params.set("status", statusFilter)
+        if (categoryFilter) params.set("category", categoryFilter)
+        if (subCategoryFilter) params.set("subCategory", subCategoryFilter)
+        params.set("lite", "true")
+        return params.toString()
+    }, [page, debouncedSearch, statusFilter, categoryFilter, subCategoryFilter])
+
     const { data, isLoading, mutate } = useSWR<{
         items: GlobalInventoryItem[]
+        summary?: {
+            totalProducts: number
+            activeProducts: number
+            inactiveProducts: number
+        }
         pagination: { page: number; limit: number; total: number; totalPages: number }
-    }>(`/api/v1/admin/global-inventory?limit=5000`, fetcher, {
-        fallbackData: { items: [], pagination: { page: 1, limit: 5000, total: 0, totalPages: 0 } },
+    }>(`/api/v1/admin/global-inventory?${queryParams}`, fetcher, {
+        fallbackData: {
+            items: [],
+            summary: { totalProducts: 0, activeProducts: 0, inactiveProducts: 0 },
+            pagination: { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 0 }
+        },
         revalidateOnFocus: false,
         dedupingInterval: 30000,
     })
@@ -70,60 +106,50 @@ export default function GlobalInventoryView() {
         { fallbackData: { items: [] }, revalidateOnFocus: false, dedupingInterval: 60000 }
     )
 
-    const allProducts = data?.items ?? []
+    const paginatedProducts = data?.items ?? []
+    const summary = data?.summary || { totalProducts: 0, activeProducts: 0, inactiveProducts: 0 }
+    const visibleProductIds = useMemo(
+        () => paginatedProducts.map((product) => product.id).filter((id) => Number.isInteger(id) && id > 0),
+        [paginatedProducts]
+    )
 
-    // Client-side filtering — instant, no API calls
-    const filteredProducts = useMemo(() => {
-        let filtered = allProducts
+    const imageQuery = useMemo(() => {
+        if (visibleProductIds.length === 0) return null
+        const params = new URLSearchParams()
+        params.set("imagesOnly", "true")
+        params.set("ids", visibleProductIds.join(","))
+        return `/api/v1/admin/global-inventory?${params.toString()}`
+    }, [visibleProductIds])
 
-        // Status filter
-        if (statusFilter && statusFilter !== "all") {
-            filtered = filtered.filter((p) => p.status === statusFilter)
+    const { data: imageData } = useSWR<{ items: GlobalInventoryImageItem[] }>(
+        imageQuery,
+        fetcher,
+        {
+            fallbackData: { items: [] },
+            revalidateOnFocus: false,
+            dedupingInterval: 30000,
         }
+    )
 
-        // Category filter (parent category)
-        if (categoryFilter) {
-            const catId = parseInt(categoryFilter)
-            // Find subcategory IDs belonging to this parent
-            const subCatIds = (subcategoriesData?.items ?? []).map(sc => sc.id)
-            if (subCatIds.length > 0) {
-                filtered = filtered.filter((p) => p.categoryId && subCatIds.includes(p.categoryId))
+    const imageMap = useMemo(() => {
+        const map = new Map<number, string>()
+        for (const item of imageData?.items || []) {
+            if (item.id && item.imageUrl) {
+                map.set(item.id, item.imageUrl)
             }
         }
+        return map
+    }, [imageData?.items])
 
-        // Subcategory filter
-        if (subCategoryFilter) {
-            const subCatId = parseInt(subCategoryFilter)
-            filtered = filtered.filter((p) => p.categoryId === subCatId)
-        }
+    // Client-side filtering — instant, no API calls
+    useEffect(() => {
+        setPage(1)
+    }, [statusFilter, categoryFilter, subCategoryFilter, debouncedSearch])
 
-        // Debounced search filter
-        if (debouncedSearch) {
-            const q = debouncedSearch.toLowerCase()
-            filtered = filtered.filter(
-                (p) =>
-                    p.name.toLowerCase().includes(q) ||
-                    p.productCode.toLowerCase().includes(q) ||
-                    (p.description?.toLowerCase().includes(q))
-            )
-        }
-
-        return filtered
-    }, [allProducts, statusFilter, categoryFilter, subCategoryFilter, debouncedSearch, subcategoriesData?.items])
-
-    // Reset page when filters change
-    useMemo(() => { setPage(1) }, [statusFilter, categoryFilter, subCategoryFilter, debouncedSearch])
-
-    // Paginate the filtered results
-    const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE))
-    const paginatedProducts = useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE
-        return filteredProducts.slice(start, start + PAGE_SIZE)
-    }, [filteredProducts, page])
-
-    const totalProducts = allProducts.length
-    const activeProducts = useMemo(() => allProducts.filter((p) => p.status === "active").length, [allProducts])
-    const totalAssignments = useMemo(() => allProducts.reduce((sum, p) => sum + p.assignedOrganizations, 0), [allProducts])
+    const totalPages = Math.max(1, data?.pagination?.totalPages || 1)
+    const totalProducts = summary.totalProducts
+    const activeProducts = summary.activeProducts
+    const inactiveProducts = summary.inactiveProducts
 
     const handleDelete = async () => {
         if (!selectedProduct) return
@@ -158,6 +184,29 @@ export default function GlobalInventoryView() {
             })
         } finally {
             setIsDeleting(false)
+        }
+    }
+
+    const handleEditProduct = async (productId: number) => {
+        setLoadingProductId(productId)
+        try {
+            const res = await fetch(`/api/v1/admin/global-inventory?id=${productId}`)
+            const payload = await res.json()
+
+            if (!res.ok || !payload?.item) {
+                throw new Error(payload?.error || "Failed to load product details")
+            }
+
+            setSelectedProduct(payload.item as GlobalInventoryFormItem)
+            setDialogMode("edit")
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message || "Failed to load product details",
+                variant: "destructive"
+            })
+        } finally {
+            setLoadingProductId(null)
         }
     }
 
@@ -202,7 +251,7 @@ export default function GlobalInventoryView() {
                 />
                 <StatCard
                     label="Inactive Products"
-                    value={totalProducts - activeProducts}
+                    value={inactiveProducts}
                     icon={<XCircle className="h-5 w-5" />}
                     variant="red"
                 />
@@ -286,7 +335,7 @@ export default function GlobalInventoryView() {
                                 ) : paginatedProducts.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-                                            {filteredProducts.length === 0 && allProducts.length > 0
+                                            {(debouncedSearch || categoryFilter || subCategoryFilter || (statusFilter && statusFilter !== "all"))
                                                 ? "No products match your filters."
                                                 : "No products found. Create your first global product to get started."}
                                         </TableCell>
@@ -296,9 +345,9 @@ export default function GlobalInventoryView() {
                                         <TableRow key={product.id} className="hover:bg-muted/40">
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
-                                                    {product.imageUrl ? (
+                                                    {imageMap.get(product.id) ? (
                                                         <img
-                                                            src={product.imageUrl}
+                                                            src={imageMap.get(product.id)}
                                                             alt={product.name}
                                                             className="h-12 w-12 rounded-lg border object-cover"
                                                         />
@@ -338,12 +387,14 @@ export default function GlobalInventoryView() {
                                                         variant="ghost"
                                                         size="sm"
                                                         className="h-8 w-8 p-0"
-                                                        onClick={() => {
-                                                            setSelectedProduct(product)
-                                                            setDialogMode("edit")
-                                                        }}
+                                                        disabled={loadingProductId === product.id}
+                                                        onClick={() => handleEditProduct(product.id)}
                                                     >
-                                                        <Edit className="h-3 w-3" />
+                                                        {loadingProductId === product.id ? (
+                                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                                        ) : (
+                                                            <Edit className="h-3 w-3" />
+                                                        )}
                                                     </Button>
                                                     <Button
                                                         variant="ghost"
@@ -369,11 +420,11 @@ export default function GlobalInventoryView() {
                         <span>
                             Showing{" "}
                             <span className="font-medium text-foreground">
-                                {filteredProducts.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
+                                {(data?.pagination?.total || 0) === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
                                 –
-                                {Math.min(filteredProducts.length, page * PAGE_SIZE)}
+                                {Math.min(data?.pagination?.total || 0, page * PAGE_SIZE)}
                             </span>{" "}
-                            of <span className="font-medium text-foreground">{filteredProducts.length}</span> products
+                            of <span className="font-medium text-foreground">{data?.pagination?.total || 0}</span> products
                         </span>
                         <div className="inline-flex items-center gap-2">
                             <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((prev) => Math.max(1, prev - 1))}>
@@ -385,7 +436,7 @@ export default function GlobalInventoryView() {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                disabled={page === totalPages || filteredProducts.length === 0}
+                                disabled={page === totalPages || (data?.pagination?.total || 0) === 0}
                                 onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
                             >
                                 Next
