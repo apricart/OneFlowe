@@ -83,6 +83,26 @@ export async function GET(req: NextRequest) {
         if (startDate) startDate.setHours(0, 0, 0, 0)
         if (endDate) endDate.setHours(23, 59, 59, 999)
 
+        const applyDateFilters = (
+            conditions: any[],
+            months: number[],
+            years: number[],
+            start?: Date,
+            end?: Date
+        ) => {
+            if (months.length > 0) {
+                conditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(months, sql`, `)})`)
+            }
+            if (years.length > 0) {
+                conditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(years, sql`, `)})`)
+            }
+
+            if (months.length === 0 && years.length === 0) {
+                if (start) conditions.push(gte(orders.createdAt, start))
+                if (end) conditions.push(lte(orders.createdAt, end))
+            }
+        }
+
         const baseConditions: any[] = [
             inArray(orders.branchId, branchIds),
             sql`UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED')`
@@ -92,17 +112,7 @@ export async function GET(req: NextRequest) {
             baseConditions.push(inArray(globalProducts.id, parsedProductIds))
         }
 
-        if (parsedMonths.length > 0) {
-            baseConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
-        }
-        if (parsedYears.length > 0) {
-            baseConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
-        }
-
-        if (parsedMonths.length === 0 && parsedYears.length === 0) {
-            if (startDate) baseConditions.push(gte(orders.createdAt, startDate))
-            if (endDate) baseConditions.push(lte(orders.createdAt, endDate))
-        }
+        applyDateFilters(baseConditions, parsedMonths, parsedYears, startDate, endDate)
 
         // Find all order items matching filters
         const q = db
@@ -152,6 +162,34 @@ export async function GET(req: NextRequest) {
                 return acc
             }, {} as Record<number, number>)
         }
+
+        const fullRefundConditions: any[] = [
+            inArray(orders.branchId, branchIds),
+            eq(sql`UPPER(${orders.status})`, 'REFUNDED')
+        ]
+
+        if (parsedProductIds.length > 0) {
+            fullRefundConditions.push(inArray(globalProducts.id, parsedProductIds))
+        }
+
+        applyDateFilters(fullRefundConditions, parsedMonths, parsedYears, startDate, endDate)
+
+        const refundedResults = await db
+            .select({
+                createdAt: orders.createdAt,
+                globalProductId: orderItems.globalProductId,
+                refundQty: refundItems.quantity,
+                refundAmountCents: refundItems.amountCents,
+            })
+            .from(refundItems)
+            .innerJoin(refunds, eq(refundItems.refundId, refunds.id))
+            .innerJoin(orderItems, eq(refundItems.orderItemId, orderItems.id))
+            .innerJoin(orders, eq(orderItems.orderId, orders.id))
+            .innerJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
+            .where(and(
+                ...fullRefundConditions,
+                inArray(sql`UPPER(${refunds.status})`, ['APPROVED', 'COMPLETED'])
+            )) as any[]
 
         // 1. Fetch relevant global products based on filtering and scoping
         const productConditions: any[] = []
@@ -266,6 +304,14 @@ export async function GET(req: NextRequest) {
             }
         })
 
+        refundedResults.forEach(row => {
+            if (productMap[row.globalProductId]) {
+                const pInfo = productMap[row.globalProductId]
+                pInfo.qtyRefunded += row.refundQty || 0
+                pInfo.refundLossCents += row.refundAmountCents || 0
+            }
+        })
+
         // Format mapping back to array and sort
         const aggregated = Object.values(productMap).map(p => ({
             ...p,
@@ -328,6 +374,35 @@ export async function GET(req: NextRequest) {
                     )
                 )
 
+            const compFullRefundConditions: any[] = [
+                inArray(orders.branchId, branchIds),
+                eq(sql`UPPER(${orders.status})`, 'REFUNDED')
+            ]
+
+            if (parsedProductIds.length > 0) {
+                compFullRefundConditions.push(inArray(globalProducts.id, parsedProductIds))
+            }
+
+            if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {
+                applyDateFilters(compFullRefundConditions, parsedCompMonths, parsedCompYears)
+            } else {
+                applyDateFilters(compFullRefundConditions, [], [], prevStart, prevEnd)
+            }
+
+            const compRefundedResults = await db
+                .select({
+                    refundQty: refundItems.quantity,
+                })
+                .from(refundItems)
+                .innerJoin(refunds, eq(refundItems.refundId, refunds.id))
+                .innerJoin(orderItems, eq(refundItems.orderItemId, orderItems.id))
+                .innerJoin(orders, eq(orderItems.orderId, orders.id))
+                .innerJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
+                .where(and(
+                    ...compFullRefundConditions,
+                    inArray(sql`UPPER(${refunds.status})`, ['APPROVED', 'COMPLETED'])
+                ))
+
             const compOrderItemIds = compResults.map(r => r.orderItemId)
             let compRefundQuantities: Record<number, number> = {}
             if (compOrderItemIds.length > 0) {
@@ -357,6 +432,10 @@ export async function GET(req: NextRequest) {
                     compVol += Math.max(0, r.qtyOrdered - refQ)
                     compRev += (Math.max(0, r.qtyOrdered - refQ) * r.priceCents)
                 }
+            })
+
+            compRefundedResults.forEach(r => {
+                compRef += r.refundQty || 0
             })
 
             comparisonSummary = {
@@ -436,6 +515,23 @@ export async function GET(req: NextRequest) {
                 trend[key].qtyFulfilled += fulfilledCount
                 trend[key].revenue += (fulfilledCount * row.priceCents)
             }
+        })
+
+        refundedResults.forEach(row => {
+            const d = new Date(row.createdAt)
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+            if (!trend[key]) {
+                trend[key] = {
+                    date: key,
+                    revenue: 0,
+                    compareRevenue: 0,
+                    qtyOrdered: 0,
+                    qtyFulfilled: 0,
+                    qtyRefunded: 0
+                }
+            }
+
+            trend[key].qtyRefunded += row.refundQty || 0
         })
         
         // If comparison results exist, we need to map them to the same "months" relatively 
