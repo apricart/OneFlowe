@@ -305,7 +305,7 @@ export function DrillDownSheet({
 
                     {!isLoading && (
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="relative flex-1 max-w-sm">
+                            <div className="relative flex-1 max-w-xl">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                                 <Input
                                     placeholder="Search by transaction ID, employee number, product, branch..."
