@@ -42,6 +42,7 @@ import { startOfDay, endOfDay } from "date-fns"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
 import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
+import { getOrderFulfillmentVariant, getOrderRefundVariant, type OrderSplitFilter } from "@/lib/order-status"
 
 type DateRange = {
   startDate: Date
@@ -95,8 +96,8 @@ export default function OrdersManagementPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [dateRange, setDateRange] = useState<DateRange | null>(null)
   const [activePreset, setActivePreset] = useState<FilterPreset>("all")
-  // Sync with global context
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [splitFilter, setSplitFilter] = useState<OrderSplitFilter>("all")
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null)
   const [showApprovalDialog, setShowApprovalDialog] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
@@ -170,6 +171,13 @@ export default function OrdersManagementPage() {
   )
 
   const orders = ordersData?.items || []
+  const showSplitFilter = statusFilter === "fulfilled" || statusFilter === "refunded"
+
+  useEffect(() => {
+    if (!showSplitFilter && splitFilter !== "all") {
+      setSplitFilter("all")
+    }
+  }, [showSplitFilter, splitFilter])
 
   // Filter and search orders
   const filteredOrders = useMemo(() => {
@@ -177,9 +185,9 @@ export default function OrdersManagementPage() {
 
     if (statusFilter !== "all") {
       if (statusFilter === "refunded") {
-        filtered = filtered.filter((o: OrderItem) =>
-          o.status.toLowerCase() === "refunded"
-        )
+        filtered = filtered.filter((o: OrderItem) => getOrderRefundVariant(o) !== "none")
+      } else if (statusFilter === "fulfilled") {
+        filtered = filtered.filter((o: OrderItem) => getOrderFulfillmentVariant(o) !== "none")
       } else if (statusFilter === "rejected") {
         filtered = filtered.filter((o: OrderItem) =>
           o.status.toLowerCase() === "rejected" || o.status.toLowerCase() === "cancelled"
@@ -187,6 +195,16 @@ export default function OrdersManagementPage() {
       } else {
         filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === statusFilter)
       }
+    }
+
+    if (showSplitFilter && splitFilter !== "all") {
+      filtered = filtered.filter((o: OrderItem) => {
+        const variant = statusFilter === "refunded"
+          ? getOrderRefundVariant(o)
+          : getOrderFulfillmentVariant(o)
+
+        return variant === splitFilter
+      })
     }
 
 
@@ -202,7 +220,7 @@ export default function OrdersManagementPage() {
     return filtered.sort((a: OrderItem, b: OrderItem) =>
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
-  }, [orders, statusFilter, searchQuery])
+  }, [orders, searchQuery, showSplitFilter, splitFilter, statusFilter])
 
   // Approve order
   const handleApproveOrder = async (orderId: number) => {
@@ -348,8 +366,8 @@ export default function OrdersManagementPage() {
     all: orders.length,
     pending: orders.filter((o: OrderItem) => o.status.toLowerCase() === "pending").length,
     approved: orders.filter((o: OrderItem) => o.status.toLowerCase() === "approved").length,
-    fulfilled: orders.filter((o: OrderItem) => o.status.toLowerCase() === "fulfilled").length,
-    refunded: orders.filter((o: OrderItem) => o.status.toLowerCase() === "refunded").length,
+    fulfilled: orders.filter((o: OrderItem) => getOrderFulfillmentVariant(o) !== "none").length,
+    refunded: orders.filter((o: OrderItem) => getOrderRefundVariant(o) !== "none").length,
     rejected: orders.filter((o: OrderItem) => o.status.toLowerCase() === "rejected" || o.status.toLowerCase() === "cancelled").length,
   }
 
@@ -464,7 +482,7 @@ export default function OrdersManagementPage() {
                     </Button>
                   ))}
                 </div>
-                
+
                 <div className="relative group min-w-[200px] sm:min-w-[280px]">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
                   <Input
@@ -484,6 +502,30 @@ export default function OrdersManagementPage() {
                 <OrderExport orders={filteredOrders} role={userRole} />
               </div>
             </div>
+
+            {showSplitFilter && (
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-2 dark:border-slate-800/50">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                  {statusFilter === "refunded" ? "Refund Type" : "Fulfillment Type"}
+                </span>
+                {(["all", "partial", "full"] as OrderSplitFilter[]).map((value) => (
+                  <Button
+                    key={value}
+                    onClick={() => setSplitFilter(value)}
+                    variant={splitFilter === value ? "secondary" : "ghost"}
+                    size="sm"
+                    className={cn(
+                      "h-7 rounded-lg px-2.5 text-[10px] font-bold capitalize",
+                      splitFilter === value
+                        ? "bg-slate-100 text-slate-900 dark:bg-slate-700 dark:text-white"
+                        : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+                    )}
+                  >
+                    {value}
+                  </Button>
+                ))}
+              </div>
+            )}
 
             {/* Bottom Row: Hierarchical Filters */}
             {(isSuperAdmin || isHeadOffice) && (
@@ -526,6 +568,7 @@ export default function OrdersManagementPage() {
           <div className="px-1 sm:px-4 pb-4 w-full">
             <OrdersDirectory
               orders={filteredOrders}
+              statusContext={showSplitFilter ? (statusFilter as "fulfilled" | "refunded") : "default"}
               userRole={userRole}
               isSuperAdmin={isSuperAdmin}
               isBranchAdmin={isBranchAdmin}

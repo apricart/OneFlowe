@@ -49,10 +49,12 @@ import {
 } from "@/components/ui/dialog"
 import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 import { Separator } from "@/components/ui/separator"
+import { getOrderDerivedStatus, type DerivedOrderStatusKey, type OrderStatusContext } from "@/lib/order-status"
 
 type OrderItem = any // Avoiding strict type definition for speed, will rely on usage
 type OrdersDirectoryProps = {
   orders: OrderItem[]
+  statusContext?: OrderStatusContext
   userRole: string | undefined
   isSuperAdmin: boolean
   isBranchAdmin: boolean
@@ -62,6 +64,7 @@ type OrdersDirectoryProps = {
 
 export function OrdersDirectory({
   orders,
+  statusContext = "default",
   userRole,
   isSuperAdmin,
   isBranchAdmin,
@@ -81,14 +84,25 @@ export function OrdersDirectory({
   const [isProcessing, setIsProcessing] = useState(false)
 
   // Helpers
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "refunded": return { bg: "bg-amber-500/10 dark:bg-amber-500/20", text: "text-amber-600 dark:text-amber-400", border: "border-amber-200 dark:border-amber-800", icon: <TrendingDown className="h-4 w-4" /> }
-      case "fulfilled": return { bg: "bg-emerald-500/10 dark:bg-emerald-500/20", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-800", icon: <CheckCircle className="h-4 w-4" /> }
-      case "approved": return { bg: "bg-blue-500/10 dark:bg-blue-500/20", text: "text-blue-600 dark:text-blue-400", border: "border-blue-200 dark:border-blue-800", icon: <FileCheck className="h-4 w-4" /> }
-      case "pending": return { bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300", border: "border-slate-200 dark:border-slate-700", icon: <Clock className="h-4 w-4" /> }
-      case "rejected": return { bg: "bg-rose-500/10 dark:bg-rose-500/20", text: "text-rose-600 dark:text-rose-400", border: "border-rose-200 dark:border-rose-800", icon: <XCircle className="h-4 w-4" /> }
-      default: return { bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-200", icon: <Package className="h-4 w-4" /> }
+  const getStatusColor = (statusKey: DerivedOrderStatusKey) => {
+    switch (statusKey) {
+      case "partially_refunded":
+        return { bg: "bg-amber-500/10 dark:bg-amber-500/20", text: "text-amber-600 dark:text-amber-400", border: "border-amber-200 dark:border-amber-800", icon: <TrendingDown className="h-4 w-4" /> }
+      case "refunded":
+        return { bg: "bg-rose-500/10 dark:bg-rose-500/20", text: "text-rose-600 dark:text-rose-400", border: "border-rose-200 dark:border-rose-800", icon: <TrendingDown className="h-4 w-4" /> }
+      case "partially_fulfilled":
+        return { bg: "bg-teal-500/10 dark:bg-teal-500/20", text: "text-teal-600 dark:text-teal-400", border: "border-teal-200 dark:border-teal-800", icon: <CheckCircle className="h-4 w-4" /> }
+      case "fulfilled":
+        return { bg: "bg-emerald-500/10 dark:bg-emerald-500/20", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-800", icon: <CheckCircle className="h-4 w-4" /> }
+      case "approved":
+        return { bg: "bg-blue-500/10 dark:bg-blue-500/20", text: "text-blue-600 dark:text-blue-400", border: "border-blue-200 dark:border-blue-800", icon: <FileCheck className="h-4 w-4" /> }
+      case "pending":
+        return { bg: "bg-slate-100 dark:bg-slate-800", text: "text-slate-600 dark:text-slate-300", border: "border-slate-200 dark:border-slate-700", icon: <Clock className="h-4 w-4" /> }
+      case "rejected":
+      case "cancelled":
+        return { bg: "bg-rose-500/10 dark:bg-rose-500/20", text: "text-rose-600 dark:text-rose-400", border: "border-rose-200 dark:border-rose-800", icon: <XCircle className="h-4 w-4" /> }
+      default:
+        return { bg: "bg-slate-100", text: "text-slate-600", border: "border-slate-200", icon: <Package className="h-4 w-4" /> }
     }
   }
 
@@ -196,7 +210,8 @@ export function OrdersDirectory({
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
           >
             {orders.map((order, idx) => {
-              const statusColors = getStatusColor(order.status)
+              const derivedStatus = getOrderDerivedStatus(order, statusContext)
+              const statusColors = getStatusColor(derivedStatus.key)
               return (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -215,7 +230,7 @@ export function OrdersDirectory({
                       <p className="font-mono text-sm font-bold text-slate-800 dark:text-slate-100">{order.tid}</p>
                     </div>
                     <Badge variant="outline" className={cn("rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border", statusColors.bg, statusColors.text, statusColors.border)}>
-                      {order.status}
+                      {derivedStatus.label}
                     </Badge>
                   </div>
 
@@ -262,7 +277,8 @@ export function OrdersDirectory({
               </thead>
               <tbody>
                 {orders.map((order, idx) => {
-                  const statusColors = getStatusColor(order.status)
+                  const derivedStatus = getOrderDerivedStatus(order, statusContext)
+                  const statusColors = getStatusColor(derivedStatus.key)
                   return (
                     <motion.tr
                       initial={{ opacity: 0, x: -10 }}
@@ -283,7 +299,7 @@ export function OrdersDirectory({
                       </td>
                       <td className="py-4">
                         <Badge variant="outline" className={cn("px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-lg border", statusColors.bg, statusColors.text, statusColors.border)}>
-                          {order.status}
+                          {derivedStatus.label}
                         </Badge>
                       </td>
                       <td className="py-4 font-medium text-slate-500 text-xs">
@@ -331,10 +347,11 @@ export function OrdersDirectory({
                     </div>
                   </div>
                   {(() => {
-                    const c = getStatusColor(viewingOrder.status)
+                    const derivedStatus = getOrderDerivedStatus(viewingOrder, statusContext)
+                    const c = getStatusColor(derivedStatus.key)
                     return (
                       <Badge variant="outline" className={cn("px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-xl border-dashed shadow-sm backdrop-blur-sm", c.bg, c.text, c.border)}>
-                        {viewingOrder.status}
+                        {derivedStatus.label}
                       </Badge>
                     )
                   })()}
