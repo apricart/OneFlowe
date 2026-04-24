@@ -228,10 +228,74 @@ export async function GET(req: NextRequest) {
             .orderBy(desc(metricExpressions.revenue))
 
         const groupIdsList = groupStats.map(g => g.id)
+        const refundByGroupMap: Record<number, number> = {}
+        const refundByBranchMap: Record<number, number> = {}
         const branchStatsMap: Record<number, any[]> = {}
         const groupBudgetMap: Record<number, number> = {}
 
         if (groupIdsList.length > 0) {
+            const refundConditions: any[] = [
+                sql`COALESCE(${orders.refundAmountCents}, 0) > 0`,
+                nonDeletedGroupCondition,
+                inArray(groups.id, groupIdsList)
+            ]
+
+            if (orgId) {
+                refundConditions.push(eq(groups.organizationId, orgId))
+            }
+            if (parsedBranchIds.length > 0) {
+                refundConditions.push(inArray(branches.id, parsedBranchIds))
+            }
+            if (parsedMonths.length > 0) {
+                refundConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
+            }
+            if (parsedYears.length > 0) {
+                refundConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
+            }
+            if (parsedMonths.length === 0 && parsedYears.length === 0) {
+                if (startDate) {
+                    const start = new Date(startDate)
+                    start.setHours(0, 0, 0, 0)
+                    refundConditions.push(gte(orders.createdAt, start))
+                }
+                if (endDate) {
+                    const end = new Date(endDate)
+                    end.setHours(23, 59, 59, 999)
+                    refundConditions.push(lte(orders.createdAt, end))
+                }
+            }
+
+            const [groupRefundStats, branchRefundStats] = await Promise.all([
+                db
+                    .select({
+                        groupId: groups.id,
+                        totalRefundCents: sql<number>`COALESCE(SUM(${orders.refundAmountCents}), 0)::int`,
+                    })
+                    .from(orders)
+                    .innerJoin(branches, eq(orders.branchId, branches.id))
+                    .innerJoin(groups, eq(branches.groupId, groups.id))
+                    .where(and(...refundConditions))
+                    .groupBy(groups.id),
+                db
+                    .select({
+                        branchId: branches.id,
+                        totalRefundCents: sql<number>`COALESCE(SUM(${orders.refundAmountCents}), 0)::int`,
+                    })
+                    .from(orders)
+                    .innerJoin(branches, eq(orders.branchId, branches.id))
+                    .innerJoin(groups, eq(branches.groupId, groups.id))
+                    .where(and(...refundConditions))
+                    .groupBy(branches.id)
+            ])
+
+            groupRefundStats.forEach(row => {
+                refundByGroupMap[row.groupId] = row.totalRefundCents || 0
+            })
+
+            branchRefundStats.forEach(row => {
+                refundByBranchMap[row.branchId] = row.totalRefundCents || 0
+            })
+
             // Calculate group budgets separately to ensure we sum baseline for missing periods correctly
             // For each branch in each group, we want:
             // SUM(budget record for period OR baseline)
@@ -325,6 +389,7 @@ export async function GET(req: NextRequest) {
 
                     branchStatsMap[bs.groupId].push({
                         ...bs,
+                        refunds: refundByBranchMap[bs.id] || 0,
                         totalBudget: totalBranchBudget
                     })
                 }
@@ -333,6 +398,7 @@ export async function GET(req: NextRequest) {
 
         const groupsWithBranches = groupStats.map(group => ({
             ...group,
+            totalRefundCents: refundByGroupMap[group.id] || 0,
             totalBudget: groupBudgetMap[group.id] || 0,
             branches: branchStatsMap[group.id] || []
         }))
@@ -385,7 +451,6 @@ export async function GET(req: NextRequest) {
                 .select({
                     totalOrders: metricExpressions.totalOrderCount,
                     totalAmountCents: metricExpressions.revenue,
-                    totalRefunds: metricExpressions.totalRefundAmount,
                 })
                 .from(orders)
                 .innerJoin(branches, eq(orders.branchId, branches.id))
@@ -408,11 +473,38 @@ export async function GET(req: NextRequest) {
                     })()
                 ))
 
+            const compRefundConditions: any[] = [
+                sql`COALESCE(${orders.refundAmountCents}, 0) > 0`,
+                nonDeletedGroupCondition,
+                orgId ? eq(branches.organizationId, orgId) : undefined,
+                parsedGroupIds.length > 0 ? sql`${groups.id} IN (${sql.join(parsedGroupIds, sql`, `)})` : undefined,
+                parsedBranchIds.length > 0 ? sql`${branches.id} IN (${sql.join(parsedBranchIds, sql`, `)})` : undefined,
+                (() => {
+                    const compCond: any[] = []
+                    if (parsedCompMonths.length > 0 || parsedCompYears.length > 0) {
+                        if (parsedCompMonths.length > 0) compCond.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
+                        if (parsedCompYears.length > 0) compCond.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
+                    } else {
+                        compCond.push(gte(orders.createdAt, prevStart), lte(orders.createdAt, prevEnd))
+                    }
+                    return and(...compCond)
+                })()
+            ]
+
+            const compRefundStats = await db
+                .select({
+                    totalRefunds: sql<number>`COALESCE(SUM(${orders.refundAmountCents}), 0)::int`,
+                })
+                .from(orders)
+                .innerJoin(branches, eq(orders.branchId, branches.id))
+                .leftJoin(groups, eq(branches.groupId, groups.id))
+                .where(and(...compRefundConditions))
+
             const compSummary = compStats[0]
             comparisonSummary = {
                 totalOrders: compSummary?.totalOrders || 0,
                 totalRevenue: compSummary?.totalAmountCents || 0,
-                totalRefunds: compSummary?.totalRefunds || 0
+                totalRefunds: compRefundStats[0]?.totalRefunds || 0
             }
         }
 
