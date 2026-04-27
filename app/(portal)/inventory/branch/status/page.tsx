@@ -37,6 +37,7 @@ export default function ProductStatusPage() {
 
     const selectedOrgId = contextOrgId || localOrgId
     const showOrgSelector = !contextOrgId
+    const hasSearchQuery = Boolean(searchQuery.trim())
 
     // Fetch organizations
     const { data: orgsData } = useSWR<{ items: { id: number; name: string }[] }>(
@@ -223,9 +224,13 @@ export default function ProductStatusPage() {
                                     ) : filteredProducts.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
-                                                {orgProducts.length === 0
-                                                    ? "No products assigned to this organization yet."
-                                                    : "No products match your search."}
+                                                {hasSearchQuery
+                                                    ? "No products match your search."
+                                                    : statusFilter === "active"
+                                                        ? "No active products."
+                                                        : statusFilter === "inactive"
+                                                            ? "No inactive products."
+                                                            : "No products found."}
                                             </TableCell>
                                         </TableRow>
                                     ) : (
