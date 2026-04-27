@@ -632,7 +632,7 @@ function OrganizationListItem({
           : "border-transparent bg-slate-50/50 hover:bg-white hover:border-slate-200 hover:shadow-lg hover:shadow-slate-200/40 dark:bg-slate-950/40 dark:hover:bg-slate-800/60 dark:hover:border-slate-700 dark:hover:shadow-none"
       )}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-start gap-4 sm:flex-nowrap sm:items-center">
         <div
           className={cn(
             "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-[13px] font-semibold transition-all duration-500",
@@ -645,7 +645,7 @@ function OrganizationListItem({
         >
           {badgeLabel === "Global" ? "∞" : initials || "?"}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-auto">
           <div className="flex items-center gap-2 mb-0.5">
             <p className={cn("font-semibold truncate tracking-tight", isActive ? "text-indigo-950 dark:text-indigo-100" : "text-slate-700 dark:text-slate-200")}>{title}</p>
             {typeof status === "boolean" && (
@@ -659,7 +659,7 @@ function OrganizationListItem({
           </div>
           <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{subtitle}</p>
         </div>
-        <div className="flex flex-col items-end gap-2 shrink-0">
+        <div className="flex w-full items-center justify-between gap-2 pt-1 sm:w-auto sm:flex-col sm:items-end sm:justify-start sm:pt-0 shrink-0">
           {typeof status === "boolean" ? (
             <Badge variant={status ? "outline" : "secondary"} className={cn(
               "text-[9px] uppercase font-semibold tracking-widest px-2 py-0.5 rounded-md",
@@ -675,7 +675,10 @@ function OrganizationListItem({
             </Badge>
           ) : null}
           {children && (
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all" onClick={(event) => event.stopPropagation()}>
+            <div
+              className="flex items-center gap-1 opacity-100 transition-all sm:translate-x-2 sm:opacity-0 sm:group-hover:translate-x-0 sm:group-hover:opacity-100"
+              onClick={(event) => event.stopPropagation()}
+            >
               {children}
             </div>
           )}
@@ -1003,7 +1006,12 @@ function EditOrgDialog({ org, onSave }: { org: Organization; onSave: (payload: P
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Edit">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Edit"
+          className="h-8 w-8 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+        >
           <Pencil size={16} />
         </Button>
       </DialogTrigger>
