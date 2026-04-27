@@ -178,26 +178,49 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
     const username = form.username.trim().toLowerCase()
     if (username.length < 3) {
       setUsernameStatus({ available: null, loading: false, suggestions: [] })
+      setErrors(prev => {
+        if (prev.username !== "This username is already taken") return prev
+        const next = { ...prev }
+        delete next.username
+        return next
+      })
       return
     }
 
+    let isCurrent = true
     const timer = setTimeout(async () => {
       setUsernameStatus(prev => ({ ...prev, loading: true }))
       try {
         const res = await fetch(`/api/v1/users/check-username?username=${username}`)
         const data = await res.json()
+        if (!isCurrent) return
+
         setUsernameStatus({
           available: data.available ?? false,
           suggestions: data.suggestions ?? [],
           loading: false
         })
+
+        setErrors(prev => {
+          const next = { ...prev }
+          if (data.available === false) {
+            next.username = "This username is already taken"
+          } else if (next.username === "This username is already taken") {
+            delete next.username
+          }
+          return next
+        })
       } catch (err) {
         console.error("Failed to check username:", err)
+        if (!isCurrent) return
         setUsernameStatus(prev => ({ ...prev, loading: false }))
       }
     }, 500)
 
-    return () => clearTimeout(timer)
+    return () => {
+      isCurrent = false
+      clearTimeout(timer)
+    }
   }, [form.username])
 
   // Validate form
