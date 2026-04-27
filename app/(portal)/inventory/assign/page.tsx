@@ -110,6 +110,7 @@ export default function AssignProductPage() {
     const allProducts = productsData?.items ?? []
     const assignedProducts = assignmentsData?.items ?? []
     const assignedProductIds = new Set(assignedProducts.map(a => a.globalProductId))
+    const hasActiveSearchOrFilters = Boolean(searchQuery.trim()) || categoryFilter !== "all" || subCategoryFilter !== "all"
 
     // Filter products: Not assigned = products not in assignedProductIds
     const notAssignedProducts = useMemo(() => {
@@ -323,9 +324,9 @@ export default function AssignProductPage() {
                                             ) : filteredNotAssigned.length === 0 ? (
                                                 <TableRow>
                                                     <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                                                        {notAssignedProducts.length === 0
-                                                            ? "All products are assigned to this organization."
-                                                            : "No products match your search."}
+                                                        {allProducts.length === 0 && hasActiveSearchOrFilters
+                                                            ? "No products match your search."
+                                                            : "Product is already assigned. Please check assigned product tab."}
                                                     </TableCell>
                                                 </TableRow>
                                             ) : (
