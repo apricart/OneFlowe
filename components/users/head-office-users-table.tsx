@@ -418,14 +418,25 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
 
   // Toggle user status
   const toggleUserStatus = async (user: UserRow) => {
+    const nextIsActive = !user.isActive
     setSubmittingUserId(user.id)
+    setViewingUser(prev => (
+      prev && prev.id === user.id
+        ? { ...prev, isActive: nextIsActive }
+        : prev
+    ))
     try {
       await jsonFetcher(`/api/v1/users/${user.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ isActive: !user.isActive })
+        body: JSON.stringify({ isActive: nextIsActive })
       })
       onUserUpdate()
     } catch (error: any) {
+      setViewingUser(prev => (
+        prev && prev.id === user.id
+          ? { ...prev, isActive: user.isActive }
+          : prev
+      ))
       console.error("Error toggling user status:", error)
       alert("Failed to update user status: " + error.message)
     } finally {
