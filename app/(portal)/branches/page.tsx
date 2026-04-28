@@ -35,8 +35,8 @@ type User = {
 export default function BranchesPage() {
   const router = useRouter()
   const { organizationId, userRole, isInitialized, setBranchId } = useAppContext()
-  const { data: branchesRes, isLoading, mutate: refetchBranches } = useBranches(organizationId || undefined)
-  const { data: usersRes, mutate: refetchUsers } = useUsers(organizationId || undefined)
+  const { data: branchesRes, isLoading, isValidating: isRefreshingBranches, mutate: refetchBranches } = useBranches(organizationId || undefined)
+  const { data: usersRes, isValidating: isRefreshingUsers, mutate: refetchUsers } = useUsers(organizationId || undefined)
 
   const PAGE_SIZE = 20
   const [search, setSearch] = useState("")
@@ -91,9 +91,13 @@ export default function BranchesPage() {
   const branchesWithAdmins = Object.keys(adminByBranch).length
   const coverage = totalBranches ? Math.round((branchesWithAdmins / totalBranches) * 100) : 0
 
-  const handleRefresh = () => {
-    refetchBranches()
-    refetchUsers()
+  const isRefreshing = isRefreshingBranches || isRefreshingUsers
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      refetchBranches(),
+      refetchUsers(),
+    ])
   }
 
   const handleStatusToggle = async (branchId: number, currentStatus?: string | null) => {
@@ -172,8 +176,8 @@ export default function BranchesPage() {
           <Badge variant="outline" className="h-8 px-3 rounded-full border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:border-blue-800/60 dark:text-blue-400 font-semibold uppercase tracking-wider text-[10px]">
             {totalBranches} Branches
           </Badge>
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading} className="h-9 gap-2 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 shadow-sm">
-            <RefreshCcw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="h-9 gap-2 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 shadow-sm">
+            <RefreshCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
         </div>
