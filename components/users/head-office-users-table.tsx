@@ -858,7 +858,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Mailing Address</p>
+                      <p className="text-xs text-muted-foreground">Address</p>
                       <div className="flex items-start gap-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-sm font-medium min-h-[60px]">
                         <MapPin className="h-3.5 w-3.5 opacity-50 text-indigo-500 mt-0.5" />
                         <span className="leading-tight">{viewingUser.address || "No address provided"}</span>
