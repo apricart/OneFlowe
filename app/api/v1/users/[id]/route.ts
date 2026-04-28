@@ -26,26 +26,44 @@ export async function PATCH(
     const [targetUser] = await db.select({
       organizationId: users.organizationId,
       branchId: users.branchId,
-      email: users.email
+      email: users.email,
+      username: users.username
     }).from(users).where(eq(users.id, id)).limit(1)
     if (!targetUser) return error("User not found", 404)
 
     const hasAccess = await verifyResourceAccess(targetUser.organizationId)
     if (!hasAccess) return error("Unauthorized to assign user to this resource", 403)
 
-    // Check uniqueness if email or username changed
-    if (body.username) {
+    const currentUsername = String(targetUser.username || "").trim().toLowerCase()
+    const nextUsername = body.username !== undefined ? String(body.username).trim().toLowerCase() : currentUsername
+
+    if (body.username !== undefined && !nextUsername) {
+      return error("Username is required", 400)
+    }
+
+    // Check uniqueness if username changed
+    if (body.username !== undefined) {
       const [existing] = await db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.username, body.username))
+        .where(eq(users.username, nextUsername))
         .limit(1)
       if (existing && existing.id !== id) {
         return error("Username already in use by another user", 400)
       }
+
+      const [employeeUsernameMatch] = await db
+        .select({ id: employeeCredentials.id })
+        .from(employeeCredentials)
+        .where(eq(employeeCredentials.username, nextUsername))
+        .limit(1)
+      if (employeeUsernameMatch) {
+        return error("Username already in use by another user", 400)
+      }
     }
 
-    const nextEmail = body.email !== undefined ? normalizeEmail(body.email) : targetUser.email
+    const currentEmail = normalizeEmail(targetUser.email)
+    const nextEmail = body.email !== undefined ? normalizeEmail(body.email) : currentEmail
     const nextPhone = body.phone !== undefined ? normalizeOptionalText(body.phone) : undefined
     const nextEmployeeId = body.employeeId !== undefined ? normalizeOptionalText(body.employeeId) : undefined
 
@@ -53,19 +71,29 @@ export async function PATCH(
       return error("Email is required", 400)
     }
 
-    await assertUniqueUserFields({
-      email: nextEmail,
-      phone: nextPhone,
-      employeeId: nextEmployeeId,
-    }, id)
+    const uniqueFieldsToValidate: {
+      email?: string | null
+      phone?: string | null
+      employeeId?: string | null
+    } = {}
+
+    if (body.email !== undefined) uniqueFieldsToValidate.email = nextEmail
+    if (body.phone !== undefined) uniqueFieldsToValidate.phone = nextPhone
+    if (body.employeeId !== undefined) uniqueFieldsToValidate.employeeId = nextEmployeeId
+
+    if (Object.keys(uniqueFieldsToValidate).length > 0) {
+      await assertUniqueUserFields(uniqueFieldsToValidate, id)
+    }
 
     const patch: any = { updatedAt: new Date() }
 
     // Determine if email actually changed (avoid unnecessary session invalidation)
-    const emailActuallyChanged = body.email !== undefined && nextEmail !== targetUser.email
+    const emailActuallyChanged = body.email !== undefined && nextEmail !== currentEmail
+    const usernameActuallyChanged = body.username !== undefined && nextUsername !== currentUsername
 
     // Update basic fields
     if (emailActuallyChanged) patch.email = nextEmail
+    if (usernameActuallyChanged) patch.username = nextUsername
     if (body.firstName !== undefined) patch.firstName = body.firstName
     if (body.lastName !== undefined) patch.lastName = body.lastName
     if (body.phone !== undefined) patch.phone = nextPhone
@@ -102,7 +130,7 @@ export async function PATCH(
     // If password, email, organization, or branch actually changed, bump sessionVersion atomically in the same update
     const orgChanged = body.organizationId !== undefined && body.organizationId !== String(targetUser.organizationId)
     const branchChanged = body.branchId !== undefined && body.branchId !== String(targetUser.branchId)
-    const isSecurityChange = !!body.password || emailActuallyChanged || orgChanged || branchChanged
+    const isSecurityChange = !!body.password || emailActuallyChanged || usernameActuallyChanged || orgChanged || branchChanged
     if (isSecurityChange) {
       console.log(`[API/Users] Security-relevant change for user ${id}. Incrementing session version...`)
       const [currentUser] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, id)).limit(1)

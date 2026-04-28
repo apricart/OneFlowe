@@ -1,5 +1,5 @@
 "use client"
-import { useState, useMemo } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { jsonFetcher } from "@/lib/fetcher"
 import { Button } from "@/components/ui/button"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command"
-import { Edit, Trash2, Search, User, Mail, Phone, Shield, ShieldCheck, Building2, MapPin, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff, Upload, FileText, Table as TableIcon, FileJson, Info, MoreHorizontal, ShieldAlert, KeyRound, UserMinus, UserCheck, Calendar, LayoutGrid, List, Check, ChevronsUpDown } from "lucide-react"
+import { Edit, Trash2, Search, User, Mail, Phone, Shield, ShieldCheck, Building2, MapPin, AlertCircle, CheckCircle, ChevronLeft, ChevronRight, RefreshCw, Power, Eye, EyeOff, Upload, FileText, Table as TableIcon, FileJson, Info, MoreHorizontal, ShieldAlert, KeyRound, UserMinus, UserCheck, Calendar, LayoutGrid, List, Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { Switch } from "@/components/ui/switch"
@@ -95,10 +95,20 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [branchOpen, setBranchOpen] = useState(false)
+  const [editUsernameStatus, setEditUsernameStatus] = useState<{
+    available: boolean | null
+    loading: boolean
+    suggestions: string[]
+  }>({
+    available: null,
+    loading: false,
+    suggestions: []
+  })
   const [editForm, setEditForm] = useState({
     firstName: "",
     lastName: "",
     email: "",
+    username: "",
     phone: "",
     role: "",
     organizationId: "",
@@ -196,6 +206,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       email: user.email || "",
+      username: user.username || "",
       phone: user.phone || "",
       role: user.role || "",
       organizationId: user.organizationId ? String(user.organizationId) : "",
@@ -209,6 +220,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       contactPerson: user.contactPerson || "",
       address: user.address || ""
     })
+    setEditUsernameStatus({ available: null, loading: false, suggestions: [] })
   }
 
   // Close edit dialog
@@ -220,6 +232,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       firstName: "",
       lastName: "",
       email: "",
+      username: "",
       phone: "",
       role: "",
       organizationId: "",
@@ -233,13 +246,74 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       contactPerson: "",
       address: ""
     })
+    setEditUsernameStatus({ available: null, loading: false, suggestions: [] })
   }
+
+  useEffect(() => {
+    if (!editingUser) return
+
+    const username = editForm.username.trim().toLowerCase()
+    const originalUsername = (editingUser.username || "").trim().toLowerCase()
+
+    if (username.length < 3 || username === originalUsername) {
+      setEditUsernameStatus({ available: null, loading: false, suggestions: [] })
+      setEditErrors(prev => {
+        if (prev.username !== "This username is already taken") return prev
+        const next = { ...prev }
+        delete next.username
+        return next
+      })
+      return
+    }
+
+    let isCurrent = true
+    const timer = setTimeout(async () => {
+      setEditUsernameStatus(prev => ({ ...prev, loading: true }))
+      try {
+        const res = await fetch(`/api/v1/users/check-username?username=${username}`)
+        const data = await res.json()
+        if (!isCurrent) return
+
+        setEditUsernameStatus({
+          available: data.available ?? false,
+          loading: false,
+          suggestions: data.suggestions ?? []
+        })
+
+        setEditErrors(prev => {
+          const next = { ...prev }
+          if (data.available === false) {
+            next.username = "This username is already taken"
+          } else if (next.username === "This username is already taken") {
+            delete next.username
+          }
+          return next
+        })
+      } catch (error) {
+        console.error("Failed to check username:", error)
+        if (!isCurrent) return
+        setEditUsernameStatus(prev => ({ ...prev, loading: false }))
+      }
+    }, 500)
+
+    return () => {
+      isCurrent = false
+      clearTimeout(timer)
+    }
+  }, [editForm.username, editingUser])
 
   // Save user changes
   const saveUser = async () => {
     if (!editingUser) return
 
     const nextErrors: Record<string, string> = {}
+    if (!editForm.username.trim()) {
+      nextErrors.username = "Username is required"
+    } else if (editForm.username.trim().length < 3) {
+      nextErrors.username = "Username must be at least 3 characters"
+    } else if (editUsernameStatus.available === false) {
+      nextErrors.username = "This username is already taken"
+    }
     if (!editForm.email.trim()) {
       nextErrors.email = "Email is required"
     } else if (!/\S+@\S+\.\S+/.test(editForm.email)) {
@@ -274,21 +348,34 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
     setSubmittingUserId(editingUser.id)
     try {
       setEditErrors({})
-      const body: any = {
-        firstName: editForm.firstName,
-        lastName: editForm.lastName,
-        email: editForm.email,
-        phone: editForm.phone || null,
-        role: editForm.role,
-        organizationId: editForm.organizationId ? parseInt(editForm.organizationId) : null,
-        branchId: editForm.branchId ? parseInt(editForm.branchId) : null,
-        mfaEnabled: editForm.mfaEnabled,
-        isActive: editForm.isActive,
-        employeeId: editForm.employeeId.trim() || null,
-        imprestHolder: editForm.imprestHolder.trim() || null,
-        contactPerson: editForm.contactPerson.trim() || null,
-        address: editForm.address.trim() || null
-      }
+      const body: any = {}
+
+      const nextFirstName = editForm.firstName.trim()
+      const nextLastName = editForm.lastName.trim()
+      const nextEmail = editForm.email.trim()
+      const nextUsername = editForm.username.trim().toLowerCase()
+      const nextPhone = editForm.phone.trim() || null
+      const nextOrganizationId = editForm.organizationId ? parseInt(editForm.organizationId) : null
+      const nextBranchId = editForm.branchId ? parseInt(editForm.branchId) : null
+      const nextEmployeeId = editForm.employeeId.trim() || null
+      const nextImprestHolder = editForm.imprestHolder.trim() || null
+      const nextContactPerson = editForm.contactPerson.trim() || null
+      const nextAddress = editForm.address.trim() || null
+
+      if (nextFirstName !== (editingUser.firstName || "").trim()) body.firstName = nextFirstName
+      if (nextLastName !== (editingUser.lastName || "").trim()) body.lastName = nextLastName
+      if (nextEmail !== (editingUser.email || "").trim()) body.email = nextEmail
+      if (nextUsername !== ((editingUser.username || "").trim().toLowerCase())) body.username = nextUsername
+      if (nextPhone !== (editingUser.phone?.trim() || null)) body.phone = nextPhone
+      if (editForm.role !== (editingUser.role || "")) body.role = editForm.role
+      if (nextOrganizationId !== (editingUser.organizationId ?? null)) body.organizationId = nextOrganizationId
+      if (nextBranchId !== (editingUser.branchId ?? null)) body.branchId = nextBranchId
+      if (editForm.mfaEnabled !== Boolean(editingUser.mfaEnabled)) body.mfaEnabled = editForm.mfaEnabled
+      if (editForm.isActive !== editingUser.isActive) body.isActive = editForm.isActive
+      if (nextEmployeeId !== (editingUser.employeeId?.trim() || null)) body.employeeId = nextEmployeeId
+      if (nextImprestHolder !== (editingUser.imprestHolder?.trim() || null)) body.imprestHolder = nextImprestHolder
+      if (nextContactPerson !== (editingUser.contactPerson?.trim() || null)) body.contactPerson = nextContactPerson
+      if (nextAddress !== (editingUser.address?.trim() || null)) body.address = nextAddress
 
       // Include password if password reset is enabled
       if (showPasswordReset && editForm.password) {
@@ -1005,6 +1092,71 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                 )}
               </div>
               <div className="space-y-2">
+                <Label htmlFor="edit-username">Username *</Label>
+                <div className="relative">
+                  <Input
+                    id="edit-username"
+                    name="username"
+                    value={editForm.username}
+                    onChange={e => {
+                      const value = e.target.value.toLowerCase()
+                      setEditForm({ ...editForm, username: value })
+                      setEditErrors(prev => {
+                        const next = { ...prev }
+                        if (!value.trim()) {
+                          next.username = "Username is required"
+                        } else if (value.trim().length < 3) {
+                          next.username = "Username must be at least 3 characters"
+                        } else if (next.username !== "This username is already taken") {
+                          delete next.username
+                        }
+                        return next
+                      })
+                    }}
+                    placeholder="Enter unique username"
+                    autoComplete="off"
+                    className={editErrors.username ? "border-red-500 pr-10" : "pr-10"}
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {editUsernameStatus.loading ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                    ) : editUsernameStatus.available === true ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : editUsernameStatus.available === false ? (
+                      <AlertCircle className="h-4 w-4 text-red-500" />
+                    ) : null}
+                  </div>
+                </div>
+                {editErrors.username && (
+                  <p className="text-xs text-red-600">{editErrors.username}</p>
+                )}
+                {editUsernameStatus.available === false && editUsernameStatus.suggestions.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Suggested Lookups:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {editUsernameStatus.suggestions.map((suggestion) => (
+                        <Badge
+                          key={suggestion}
+                          variant="outline"
+                          className="cursor-pointer hover:bg-blue-50 hover:text-blue-700 transition-colors border-blue-200"
+                          onClick={() => {
+                            setEditForm({ ...editForm, username: suggestion })
+                            setEditUsernameStatus(prev => ({ ...prev, available: true, suggestions: [] }))
+                            setEditErrors(prev => {
+                              const next = { ...prev }
+                              delete next.username
+                              return next
+                            })
+                          }}
+                        >
+                          {suggestion}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="phone">Phone Number</Label>
                 <Input
                   id="phone"
@@ -1292,6 +1444,8 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                 !editForm.firstName ||
                 !editForm.lastName ||
                 !editForm.email ||
+                !editForm.username ||
+                editUsernameStatus.available === false ||
                 !editForm.role ||
                 ((editForm.role === "BRANCH_ADMIN" || editForm.role === "ORDER_PORTAL") && !editForm.branchId) ||
                 (showPasswordReset && (
