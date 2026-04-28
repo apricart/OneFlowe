@@ -208,7 +208,7 @@ export const authOptions: NextAuthOptions = {
         const [emp] = await db
           .select()
           .from(employeeCredentials)
-          .where(and(or(eq(employeeCredentials.username, username), sql`lower(${employeeCredentials.email}) = ${username}`), eq(employeeCredentials.isActive, true)))
+          .where(or(eq(employeeCredentials.username, username), sql`lower(${employeeCredentials.email}) = ${username}`))
 
         if (!emp) {
           return null
@@ -292,7 +292,7 @@ export const authOptions: NextAuthOptions = {
         const [emp] = await db
           .select()
           .from(employeeCredentials)
-          .where(and(or(eq(employeeCredentials.username, username), sql`lower(${employeeCredentials.email}) = ${username}`), eq(employeeCredentials.isActive, true)))
+          .where(or(eq(employeeCredentials.username, username), sql`lower(${employeeCredentials.email}) = ${username}`))
 
         if (!emp) return null
 

@@ -48,6 +48,22 @@ function isUrlConstructorError(err: any): boolean {
   return msg.includes("url") && (msg.includes("invalid") || msg.includes("undefined") || msg.includes("failed to construct"))
 }
 
+function getLoginErrorMessage(errorCode: string) {
+  if (errorCode === "CredentialsSignin") {
+    return "Invalid credentials. Please check your username/email and password."
+  }
+  if (errorCode === "ORGANIZATION_INACTIVE") {
+    return "Company has been de-activated by the Admin."
+  }
+  if (errorCode === "BRANCH_INACTIVE") {
+    return "Branch has been de-activated by the Admin."
+  }
+  if (errorCode === "USER_INACTIVE") {
+    return "Your account has been deactivated. Please contact support."
+  }
+  return errorCode
+}
+
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -103,11 +119,16 @@ function LoginForm() {
           return
         }
 
-        // Try employee login fallback
-        console.log("Standard login failed, trying employee login fallback...")
+        if (result.error !== "CredentialsSignin") {
+          throw new Error(getLoginErrorMessage(result.error))
+        }
+
+        // Try employee login fallback only for true credential misses
+        console.log("Standard login failed with CredentialsSignin, trying employee login fallback...")
         result = await signIn("employee-credentials", { redirect: false, username, password })
 
         if (result?.error) {
+          console.log(result.error, "resuult error login")
           if (result.error === "MFA_REQUIRED") {
             console.log("Login: MFA required for employee", username)
             setPendingUser({ username, password })
@@ -115,19 +136,7 @@ function LoginForm() {
             setIsEmployee(true)
             return
           }
-          if (result.error === "CredentialsSignin") {
-            throw new Error("Invalid credentials. Please check your username/email and password.")
-          }
-          if (result.error === "ORGANIZATION_INACTIVE") {
-            throw new Error("Company has been de-activated by the Admin.")
-          }
-          if (result.error === "BRANCH_INACTIVE") {
-            throw new Error("Branch has been de-activated by the Admin.")
-          }
-          if (result.error === "USER_INACTIVE") {
-            throw new Error("Your account has been deactivated. Please contact support.")
-          }
-          throw new Error(result.error)
+          throw new Error(getLoginErrorMessage(result.error))
         }
       }
 
