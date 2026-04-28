@@ -95,7 +95,7 @@ export default function UsersPage() {
       {/* Ultra-compact Colorful Light Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <CompactStatCard
-          label="Total Active Users"
+          label="Total Users"
           value={stats.total}
           icon={<Users className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-indigo-50/80 to-blue-50/80 border-indigo-100/50 text-indigo-700 dark:from-indigo-900/20 dark:to-blue-900/20 dark:border-indigo-800/30 dark:text-indigo-400"
