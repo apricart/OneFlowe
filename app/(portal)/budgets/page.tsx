@@ -831,16 +831,16 @@ function CompactStatCard({
 }) {
   return (
     <Card className={cn("border rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5", gradient)}>
-      <CardContent className="p-5 flex items-center justify-between">
-        <div className="space-y-1.5">
+      <CardContent className="flex items-center justify-between gap-3 p-5">
+        <div className="min-w-0 flex-1 space-y-1.5">
           <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">
             {label}
           </p>
-          <p className="text-2xl font-black tracking-tight">
+          <p className="break-all text-lg font-black leading-tight tracking-tight sm:text-2xl">
             {value}
           </p>
         </div>
-        <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl", iconBadge)}>
+        <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", iconBadge)}>
            {icon}
         </div>
       </CardContent>
