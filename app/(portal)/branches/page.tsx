@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
-import { Building2, Users, RefreshCcw, Search, Boxes, UserCog, Sparkles, Loader2, ShieldCheck, ChevronLeft, ChevronRight, AlertCircle, CheckCircle, XCircle } from "lucide-react"
+import { Building2, Users, RefreshCcw, Search, Boxes, UserCog, Sparkles, Loader2, ShieldCheck, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -374,21 +374,26 @@ export default function BranchesPage() {
                         </Button>
                         
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
                           className={cn(
-                            "h-10 w-10 p-0 rounded-xl transition-all",
-                            isActive ? "text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30" : "text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                            "h-10 px-4 gap-2 rounded-xl border-slate-200 dark:border-slate-800 shadow-sm transition-all",
+                            isActive
+                              ? "text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                              : "text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
                           )}
                           disabled={!!updatingBranchId}
                           onClick={() => handleStatusToggle(branch.id, branch.status)}
                         >
                           {updatingBranchId === branch.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Updating
+                            </>
                           ) : isActive ? (
-                            <XCircle className="h-5 w-5" />
+                            "Deactivate"
                           ) : (
-                            <CheckCircle className="h-5 w-5" />
+                            "Activate"
                           )}
                         </Button>
                       </div>
