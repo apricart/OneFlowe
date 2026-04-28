@@ -1025,10 +1025,10 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                           <KeyRound className="h-4 w-4 text-amber-500" />
                           Reset Password
                        </DropdownMenuItem>
-                       <DropdownMenuItem className="gap-2 cursor-pointer">
+                       {/* <DropdownMenuItem className="gap-2 cursor-pointer">
                           <ShieldAlert className="h-4 w-4 text-red-500" />
                           Revoke Access
-                       </DropdownMenuItem>
+                       </DropdownMenuItem> */}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
