@@ -224,12 +224,20 @@ export function OrdersDirectory({
                   {/* Subtle Background Accent */}
                   <div className={cn("absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full opacity-20 -translate-y-1/2 translate-x-1/2 transition-opacity group-hover:opacity-40", statusColors.bg.split(' ')[0])} />
 
-                  <div className="flex justify-between items-start mb-4 relative z-10">
-                    <div className="space-y-1">
+                  <div className="relative z-10 mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">TID</p>
-                      <p className="font-mono text-sm font-bold text-slate-800 dark:text-slate-100">{order.tid}</p>
+                      <p className="truncate font-mono text-sm font-bold text-slate-800 dark:text-slate-100">{order.tid}</p>
                     </div>
-                    <Badge variant="outline" className={cn("rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border", statusColors.bg, statusColors.text, statusColors.border)}>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "max-w-full whitespace-normal break-words rounded-lg border px-2 py-0.5 text-right text-[10px] font-bold uppercase leading-tight tracking-wider",
+                        statusColors.bg,
+                        statusColors.text,
+                        statusColors.border
+                      )}
+                    >
                       {derivedStatus.label}
                     </Badge>
                   </div>
