@@ -175,7 +175,7 @@ export default function BranchInventoryPage() {
                 <TableHead className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Category Path</TableHead>
                 <TableHead className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Pricing</TableHead>
                 <TableHead className="px-6 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Stock Status</TableHead>
-                <TableHead className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Action</TableHead>
+                {/* <TableHead className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Action</TableHead> */}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -283,11 +283,11 @@ export default function BranchInventoryPage() {
                         </div>
                       </TableCell>
 
-                      <TableCell className="px-6 py-4 text-right">
+                      {/* <TableCell className="px-6 py-4 text-right">
                         <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-500 transition-all">
                           <ChevronRight className="h-5 w-5" />
                         </Button>
-                      </TableCell>
+                      </TableCell> */}
                     </motion.tr>
                   ))
                 )}
