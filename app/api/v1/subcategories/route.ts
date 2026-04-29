@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { categories, globalProducts } from "@/db/schema"
-import { eq, and, like, desc, sql, isNotNull } from "drizzle-orm"
+import { eq, and, ilike, desc, sql, isNotNull } from "drizzle-orm"
 import { getCached, invalidateByPrefix, CACHE_TTL } from "@/lib/cache-utils"
 
 // GET /api/v1/subcategories - List subcategories
@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url)
-    const search = searchParams.get("search") || ""
+    const searchRaw = searchParams.get("search") || ""
+    const search = searchRaw.trim().toLowerCase()
     const categoryId = searchParams.get("categoryId")
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       const { escapeLikePattern } = await import("@/lib/utils")
-      conditions.push(like(categories.name, `%${escapeLikePattern(search)}%`))
+      conditions.push(ilike(categories.name, `%${escapeLikePattern(search)}%`))
     }
 
     if (categoryId) {
