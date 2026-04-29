@@ -664,11 +664,12 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
               </div>
             </CardContent>
           ) : (
-            <CardContent>
-              <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                Activate discounts to configure promotional windows without leaving this form.
-              </div>
-            </CardContent>
+            <></>
+            // <CardContent>
+            //   <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+            //     Activate discounts to configure promotional windows without leaving this form.
+            //   </div>
+            // </CardContent>
           )}
         </Card>
 
