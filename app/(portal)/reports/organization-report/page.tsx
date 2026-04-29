@@ -260,6 +260,16 @@ export default function OrganizationReportPage() {
         return Array.from(years).sort((a, b = a) => b - a)
     }, [allTimeData])
 
+    const resetChartFilters = useCallback(() => {
+        const defaultMonths = activePreset === "all" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : []
+        const defaultYears = activePreset === "all" ? allYears : []
+
+        setChartMonths(defaultMonths)
+        setChartYears(defaultYears)
+        setChartOrgIds([])
+        setChartBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+    }, [activePreset, allYears, contextBranchIds])
+
     useEffect(() => {
         if (hasMounted && isInitialLoad.current && allYears.length > 0) {
             if (activePreset === "all") {
@@ -497,6 +507,16 @@ export default function OrganizationReportPage() {
                                             placeholder="Branches"
                                         />
                                     )}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={resetChartFilters}
+                                        className="h-11 gap-2 rounded-xl border-slate-200 px-4 text-[11px] font-bold uppercase tracking-wider text-slate-600 shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                                    >
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                        Reset Filters
+                                    </Button>
                                 </div>
                             </div>
 
