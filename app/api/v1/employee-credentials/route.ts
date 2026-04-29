@@ -179,9 +179,11 @@ async function PUT(req: NextRequest) {
       updates.passwordHash = await hash(password, 10)
     }
 
-    // Always increment session version to force re-auth if password or email changed
-    const securityChange = !!(password || (email && email !== cred.email))
-    const nextVersion = (cred.sessionVersion || 0) + (securityChange ? 1 : 1)
+    // Only password changes should invalidate the current session.
+    const securityChange = !!password
+    const nextVersion = securityChange
+      ? (cred.sessionVersion || 0) + 1
+      : (cred.sessionVersion || 0)
 
     const [updated] = await db
       .update(employeeCredentials)

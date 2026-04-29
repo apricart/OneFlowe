@@ -127,12 +127,10 @@ export async function PATCH(
       patch.passwordHash = await hashPassword(body.password)
     }
 
-    // If password, email, organization, or branch actually changed, bump sessionVersion atomically in the same update
-    const orgChanged = body.organizationId !== undefined && body.organizationId !== String(targetUser.organizationId)
-    const branchChanged = body.branchId !== undefined && body.branchId !== String(targetUser.branchId)
-    const isSecurityChange = !!body.password || emailActuallyChanged || usernameActuallyChanged || orgChanged || branchChanged
+    // Only password changes should invalidate the current session.
+    const isSecurityChange = !!body.password
     if (isSecurityChange) {
-      console.log(`[API/Users] Security-relevant change for user ${id}. Incrementing session version...`)
+      console.log(`[API/Users] Password changed for user ${id}. Incrementing session version...`)
       const [currentUser] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, id)).limit(1)
       patch.sessionVersion = (currentUser?.sessionVersion || 0) + 1
     }
