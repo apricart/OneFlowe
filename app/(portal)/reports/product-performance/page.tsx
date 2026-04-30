@@ -607,6 +607,7 @@ export default function ProductPerformancePage() {
             ...(role !== "BRANCH_ADMIN" ? [{ label: "Group",       value: (p: any) => p.group || "N/A" }] : []),
             { label: "Discount",       value: (_p: any) => "0" },
             { label: "User Info",      value: (p: any) => `${p.userName || ""}${p.userEmail ? ` (${p.userEmail})` : ""}`.trim() || "-" },
+            { label: "Employee ID",    value: (p: any) => p.employeeId || (p.userId ? String(p.userId).split('-')[0] : "N/A") },
             { label: "Item Details",   value: (p: any) => `${p.itemDetails || "-"}${p.itemCode ? ` (${p.itemCode})` : ""}` },
             { label: "Qty Ordered",    value: (p: any) => p.qtyOrdered || 0 },
             { label: "Item Refunded",  value: (p: any) => (p.qtyOrdered || 0) - (p.qtyDelivered || 0) },
