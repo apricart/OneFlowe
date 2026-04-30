@@ -531,7 +531,7 @@ export default function OrderReportPage() {
                                         </div>
                                         <h3 className="text-sm font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">Order Velocity</h3>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
                                         <MonthFilter selected={chartMonths} onChange={setChartMonths} />
                                         <YearFilter selected={chartYears} onChange={setChartYears} allTimeData={allTimeData} />
                                         {role === "SUPER_ADMIN" && (
