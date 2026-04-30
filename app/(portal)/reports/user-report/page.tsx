@@ -711,11 +711,11 @@ export default function UserReportPage() {
                                     <h3 className="font-black text-slate-900 dark:text-white text-xs uppercase tracking-[0.2em]">Transaction Ledger</h3>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3">
-                                    <div className="relative group">
+                                    <div className="relative group w-full sm:w-auto">
                                         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
                                         <Input
                                             placeholder="Audit user by name, email, or employee #..."
-                                            className="pl-10 h-10 w-72 text-[11px] font-bold bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500/50 rounded-xl shadow-sm transition-all"
+                                            className="pl-10 h-10 w-full sm:w-[24rem] text-[11px] font-bold bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus:ring-1 focus:ring-indigo-500/50 rounded-xl shadow-sm transition-all"
                                             value={reportSearch}
                                             onChange={(e) => setReportSearch(e.target.value)}
                                         />
