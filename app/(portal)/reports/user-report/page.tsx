@@ -305,6 +305,7 @@ export default function UserReportPage() {
     const totalSpent = summary.totalSpentCents || 0
 
     const comparison = globalData?.comparison
+    console.log(comparison, "comparisions")
     const getTrend = (current: number, prev: number) => {
         if (!prev || prev === 0) return undefined
         return ((current - prev) / prev) * 100
@@ -439,8 +440,8 @@ export default function UserReportPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     <KPICard title="Active Employees" value={totalUsers.toLocaleString()} icon={Users} colorScheme="indigo" trend={usersTrend} subtitle="Distinct transacting profiles." comparisonLabel="Prior" comparisonValue={comparison?.totalUsers} />
                     <KPICard title="Gross Orders" value={totalOrders.toLocaleString()} icon={Package} colorScheme="blue" trend={ordersTrend} subtitle="Total volume initiated." comparisonLabel="Prior" comparisonValue={comparison?.totalOrders} />
-                    <KPICard title="Order Success" value={`${currentSuccess.toFixed(1)}%`} icon={CheckCircle} colorScheme="emerald" trend={successTrend} subtitle={`${totalFulfilled} fulfilled orders.`} comparisonLabel="Prior" comparisonValue={`${prevSuccess.toFixed(1)}%`} />
-                    <KPICard title={isBuyer ? "Total Purchased" : "Total Revenue"} value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle={isBuyer ? "Net value of purchases." : "Net value of fulfillments."} comparisonLabel="Prior" comparisonValue={formatPKR(comparison?.totalSpentCents / 100)} />
+                    <KPICard title="Order Success" value={`${currentSuccess.toFixed(1)}%`} icon={CheckCircle} colorScheme="emerald" trend={successTrend} subtitle={`${totalFulfilled} fulfilled orders.`} />
+                    <KPICard title={isBuyer ? "Total Purchased" : "Total Revenue"} value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle={isBuyer ? "Net value of purchases." : "Net value of fulfillments."}  />
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
