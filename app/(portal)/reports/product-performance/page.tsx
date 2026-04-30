@@ -1155,7 +1155,7 @@ export default function ProductPerformancePage() {
                                     )}
                                 </div>
 
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
                                     {/* ── Report Filters ── */}
                                     <div className="flex flex-wrap items-center gap-3">
                                         <MultiSelectFilter
@@ -1234,12 +1234,12 @@ export default function ProductPerformancePage() {
                                         />
                                     </div>
 
-                                    <div className="flex items-center gap-2">
-                                        <div className="relative">
+                                    <div className="flex flex-wrap items-center justify-end gap-2">
+                                        <div className="relative w-full sm:w-[34rem] max-w-full">
                                             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                                             <Input 
                                             placeholder="Search by employee #, code, product, user..."
-                                            className="pl-8 h-8 w-56 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 rounded-lg"
+                                            className="pl-8 h-8 w-full text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-700 rounded-lg"
                                             value={reportSearchTerm}
                                             onChange={(e) => setReportSearchTerm(e.target.value)}
                                         />    
