@@ -72,6 +72,7 @@ export default function UserReportPage() {
     const [activeTab, setActiveTab] = useState("analytics")
     const [reportSearch, setReportSearch] = useState("")
     const [generatedDate, setGeneratedDate] = useState("")
+    const [visibleUserProductCounts, setVisibleUserProductCounts] = useState<Record<string, number>>({})
 
     // ━━━ 1. GLOBAL STATE (Sticky Header) ━━━
     const [dateRange, setDateRange] = useState<DateRange | null>(null)
@@ -269,6 +270,17 @@ export default function UserReportPage() {
         if (y !== undefined) setSelectedYears(y)
         if (cm !== undefined) setCompareMonths(cm)
         if (cy !== undefined) setCompareYears(cy)
+    }, [])
+
+    const showNextUserProduct = useCallback((userId: string | number, totalProducts: number) => {
+        setVisibleUserProductCounts((prev) => {
+            const key = String(userId)
+            const current = prev[key] || 3
+            return {
+                ...prev,
+                [key]: Math.min(current + 1, totalProducts),
+            }
+        })
     }, [])
 
     // ━━━ DATA PROCESSING ━━━
@@ -607,7 +619,12 @@ export default function UserReportPage() {
                                             u.userId.toString().includes(reportSearch)
                                         )
                                         .slice(0, 6)
-                                        .map((user: any, idx: number) => (
+                                        .map((user: any, idx: number) => {
+                                            const visibleProductCount = visibleUserProductCounts[String(user.userId)] || 3
+                                            const visibleProducts = user.products.slice(0, visibleProductCount)
+                                            const remainingProductCount = Math.max(user.products.length - visibleProductCount, 0)
+
+                                            return (
                                             <Card key={user.userId} className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900/40 backdrop-blur-3xl rounded-[2rem] transition-all hover:-translate-y-1 hover:shadow-indigo-500/10">
                                                 <div className="p-5 border-b border-slate-100 dark:border-slate-800/50 flex justify-between items-center gap-3 bg-slate-50/50 dark:bg-slate-800/20">
                                                     <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -639,7 +656,7 @@ export default function UserReportPage() {
                                                 </div>
                                                 <CardContent className="p-0">
                                                     <div className="divide-y divide-slate-100 dark:divide-slate-800 mt-2">
-                                                        {user.products.slice(0, 3).map((product: any, pIdx: number) => (
+                                                        {visibleProducts.map((product: any, pIdx: number) => (
                                                             <div key={product.productId} className="flex justify-between items-center gap-3 px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
                                                                 <div className="flex items-start gap-3 min-w-0 flex-1">
                                                                     <span className="text-[10px] font-black text-slate-300 dark:text-slate-600 mt-0.5 w-3 shrink-0 text-right">{pIdx + 1}.</span>
@@ -662,15 +679,22 @@ export default function UserReportPage() {
                                                                 </div>
                                                             </div>
                                                         ))}
-                                                        {user.products.length > 3 && (
+                                                        {remainingProductCount > 0 && (
                                                             <div className="px-6 py-3 text-center bg-slate-50/30 dark:bg-slate-900/30">
-                                                                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors">+{user.products.length - 3} more items...</p>
+                                                                <button
+                                                                    type="button"
+                                                                    className="text-[9px] font-black text-indigo-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors"
+                                                                    onClick={() => showNextUserProduct(user.userId, user.products.length)}
+                                                                >
+                                                                    +{remainingProductCount} more items...
+                                                                </button>
                                                             </div>
                                                         )}
                                                     </div>
                                                 </CardContent>
                                             </Card>
-                                        ))}
+                                            )
+                                        })}
                                 </div>
                             )}
                         </div>
