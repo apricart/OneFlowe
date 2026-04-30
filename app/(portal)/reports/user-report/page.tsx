@@ -609,10 +609,10 @@ export default function UserReportPage() {
                                         .slice(0, 6)
                                         .map((user: any, idx: number) => (
                                             <Card key={user.userId} className="overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900/40 backdrop-blur-3xl rounded-[2rem] transition-all hover:-translate-y-1 hover:shadow-indigo-500/10">
-                                                <div className="p-5 border-b border-slate-100 dark:border-slate-800/50 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/20">
-                                                    <div className="flex items-center gap-3">
+                                                <div className="p-5 border-b border-slate-100 dark:border-slate-800/50 flex justify-between items-center gap-3 bg-slate-50/50 dark:bg-slate-800/20">
+                                                    <div className="flex items-center gap-3 min-w-0 flex-1">
                                                         <div className={cn(
-                                                            "h-10 w-10 flex items-center justify-center rounded-2xl font-black shadow-sm",
+                                                            "h-10 w-10 flex shrink-0 items-center justify-center rounded-2xl font-black shadow-sm",
                                                             idx === 0 ? "bg-amber-100 text-amber-600 dark:bg-amber-500/20" :
                                                                 idx === 1 ? "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300" :
                                                                     idx === 2 ? "bg-orange-100 text-orange-600 dark:bg-orange-500/20" :
@@ -620,19 +620,19 @@ export default function UserReportPage() {
                                                         )}>
                                                             #{idx + 1}
                                                         </div>
-                                                        <div>
-                                                            <h4 className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate max-w-[120px]">{user.userName}</h4>
-                                                            <div className="flex items-center gap-1.5 mt-0.5">
-                                                                <span className="text-[9px] font-black text-indigo-500 font-mono">#{user.employeeId || (user.userId ? user.userId.toString().split('-')[0] : 'N/A')}</span>
-                                                                <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest"><span className="text-slate-900 dark:text-white font-black">{formatPKR(user.fulfilledProductRevenueCents / 100)}</span> Total</p>
+                                                        <div className="min-w-0 flex-1">
+                                                            <h4 className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate" title={user.userName}>{user.userName}</h4>
+                                                            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 min-w-0">
+                                                                <span className="text-[9px] font-black text-indigo-500 font-mono truncate max-w-[90px]">#{user.employeeId || (user.userId ? user.userId.toString().split('-')[0] : 'N/A')}</span>
+                                                                <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate max-w-full"><span className="text-slate-900 dark:text-white font-black">{formatPKR(user.fulfilledProductRevenueCents / 100)}</span> Total</p>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <div className="text-right flex flex-col items-end gap-1.5 flex-shrink-0 ml-2">
-                                                        <Badge variant="outline" className="text-[10px] font-black uppercase bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/30 whitespace-nowrap px-2 py-0.5">
+                                                    <div className="text-right flex flex-col items-end gap-1.5 shrink-0 max-w-[34%]">
+                                                        <Badge variant="outline" className="max-w-full truncate text-[10px] font-black uppercase bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-500/30 whitespace-nowrap px-2 py-0.5">
                                                             {user.totalProductsSold} Items
                                                         </Badge>
-                                                        <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full ring-1 ring-emerald-200/50 dark:ring-emerald-800/50">
+                                                        <span className="max-w-full truncate text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded-full ring-1 ring-emerald-200/50 dark:ring-emerald-800/50">
                                                             {user.totalProductsSold - user.refundedProductsSold} FULFILLED
                                                         </span>
                                                     </div>
@@ -640,23 +640,23 @@ export default function UserReportPage() {
                                                 <CardContent className="p-0">
                                                     <div className="divide-y divide-slate-100 dark:divide-slate-800 mt-2">
                                                         {user.products.slice(0, 3).map((product: any, pIdx: number) => (
-                                                            <div key={product.productId} className="flex justify-between items-center px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
-                                                                <div className="flex items-start gap-3 w-1/2">
-                                                                    <span className="text-[10px] font-black text-slate-300 dark:text-slate-600 mt-0.5 w-3 text-right">{pIdx + 1}.</span>
-                                                                    <div className="min-w-0">
+                                                            <div key={product.productId} className="flex justify-between items-center gap-3 px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors">
+                                                                <div className="flex items-start gap-3 min-w-0 flex-1">
+                                                                    <span className="text-[10px] font-black text-slate-300 dark:text-slate-600 mt-0.5 w-3 shrink-0 text-right">{pIdx + 1}.</span>
+                                                                    <div className="min-w-0 flex-1">
                                                                         <p className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight truncate break-words" title={product.productName}>
                                                                             {product.productName}
                                                                         </p>
                                                                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">{product.categoryName}</p>
                                                                     </div>
                                                                 </div>
-                                                                <div className="text-right flex flex-col items-end gap-1.5 flex-shrink-0 ml-2">
-                                                                    <p className="text-[11px] font-black text-slate-700 dark:text-slate-300 tracking-tight mb-0.5">{formatPKR(product.fulfilledRevenueCents / 100)}</p>
-                                                                    <div className="flex flex-wrap justify-end gap-1 max-w-[140px]">
-                                                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shadow-sm">QTY: {product.quantity}</span>
-                                                                        <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded shadow-sm">FUL: {product.quantity - product.refundedQuantity}</span>
+                                                                <div className="text-right flex flex-col items-end gap-1.5 shrink-0 min-w-0 w-[42%] max-w-[150px]">
+                                                                    <p className="max-w-full truncate text-[11px] font-black text-slate-700 dark:text-slate-300 tracking-tight mb-0.5" title={formatPKR(product.fulfilledRevenueCents / 100)}>{formatPKR(product.fulfilledRevenueCents / 100)}</p>
+                                                                    <div className="flex flex-wrap justify-end gap-1 max-w-full">
+                                                                        <span className="max-w-full truncate text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shadow-sm">QTY: {product.quantity}</span>
+                                                                        <span className="max-w-full truncate text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded shadow-sm">FUL: {product.quantity - product.refundedQuantity}</span>
                                                                         {product.refundedQuantity > 0 && (
-                                                                            <span className="text-[9px] font-bold text-rose-500 uppercase tracking-widest whitespace-nowrap bg-rose-50 dark:bg-rose-500/10 px-1.5 py-0.5 rounded shadow-sm">REF: {product.refundedQuantity}</span>
+                                                                            <span className="max-w-full truncate text-[9px] font-bold text-rose-500 uppercase tracking-widest whitespace-nowrap bg-rose-50 dark:bg-rose-500/10 px-1.5 py-0.5 rounded shadow-sm">REF: {product.refundedQuantity}</span>
                                                                         )}
                                                                     </div>
                                                                 </div>
