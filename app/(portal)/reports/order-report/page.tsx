@@ -51,6 +51,7 @@ import { OrganizationFilter } from "@/components/reports/organization-filter"
 import { MultiBranchFilter } from "@/components/dashboard/multi-branch-filter"
 import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 import { KPICard } from "@/components/reports/kpi-card"
+import { Upload } from "lucide-react"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -713,7 +714,7 @@ export default function OrderReportPage() {
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="outline" size="sm" className="h-11 text-[11px] font-black underline decoration-slate-200 gap-2 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm px-5">
-                                            <Download className="h-3.5 w-3.5" />
+                                            <Upload className="h-3.5 w-3.5" />
                                             EXPORT
                                         </Button>
                                     </DropdownMenuTrigger>

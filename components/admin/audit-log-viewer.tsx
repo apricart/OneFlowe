@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
+import { Upload } from "lucide-react"
 
 export function AuditLogViewer() {
   const { organizationId, branchId } = useAppContext()
@@ -173,7 +174,7 @@ export function AuditLogViewer() {
                 disabled={logs.length === 0}
                 className="h-9 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-2 px-4 shadow-lg shadow-indigo-500/20"
               >
-                <Download className="h-3.5 w-3.5" />
+                <Upload className="h-3.5 w-3.5" />
                 Export PDF
               </Button>
             </div>

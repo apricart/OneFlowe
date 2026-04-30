@@ -45,6 +45,7 @@ import { ColumnSelector, useColumnSelector, type ColumnDef } from "@/components/
 import { ProductFilter } from "@/components/reports/product-filter"
 import { OrganizationFilter } from "@/components/reports/organization-filter"
 import { KPICard } from "@/components/reports/kpi-card"
+import { Upload } from "lucide-react"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -1033,7 +1034,7 @@ export default function ProductPerformancePage() {
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                             <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg shadow-lg shadow-indigo-600/20" disabled={isGlobalPerfLoading}>
-                                                <Download className="h-3.5 w-3.5" /> EXPORT
+                                                <Upload className="h-3.5 w-3.5" /> EXPORT
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-40 rounded-xl">
@@ -1246,7 +1247,7 @@ export default function ProductPerformancePage() {
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button size="sm" className="h-8 text-[11px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 px-3 rounded-lg shadow-lg shadow-indigo-600/20" disabled={isLedgerLoading}>
-                                                    <Download className="h-3.5 w-3.5" /> EXPORT
+                                                    <Upload className="h-3.5 w-3.5" /> EXPORT
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" className="w-40 rounded-xl">
