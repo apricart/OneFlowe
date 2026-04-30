@@ -539,7 +539,7 @@ export default function GroupsReportPage() {
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Managed Units</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{isBuyer ? "Purchased (PKR)" : "Revenue (PKR)"}</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
-                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
+                                            <TableHead className="h-14 pr-8 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -580,7 +580,7 @@ export default function GroupsReportPage() {
                                                             <TableCell className="text-right">
                                                                 <span className="text-sm font-bold text-rose-500 tracking-tight">{formatPKR(group.totalRefundCents / 100)}</span>
                                                             </TableCell>
-                                                            <TableCell className="text-right font-black text-sm text-slate-900 dark:text-white tracking-tight">
+                                                            <TableCell className="pr-6 text-right font-black text-sm text-slate-900 dark:text-white tracking-tight">
                                                                 {group.totalOrders.toLocaleString()}
                                                             </TableCell>
                                                         </TableRow>
@@ -603,7 +603,7 @@ export default function GroupsReportPage() {
                                                                 </TableCell>
                                                                 <TableCell className="text-right text-xs font-bold text-slate-500">{formatPKR(branch.revenue / 100)}</TableCell>
                                                                 <TableCell className="text-right text-xs font-bold text-rose-400/70">{formatPKR(branch.refunds / 100)}</TableCell>
-                                                                <TableCell className="text-right text-xs font-bold text-slate-500">{branch.orders.toLocaleString()}</TableCell>
+                                                                <TableCell className="pr-6 text-right text-xs font-bold text-slate-500">{branch.orders.toLocaleString()}</TableCell>
                                                             </TableRow>
                                                         ))}
                                                     </Fragment>
