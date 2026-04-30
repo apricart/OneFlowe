@@ -343,22 +343,22 @@ export default function GlobalInventoryView() {
                                 ) : (
                                     paginatedProducts.map((product) => (
                                         <TableRow key={product.id} className="hover:bg-muted/40">
-                                            <TableCell>
-                                                <div className="flex items-center gap-3">
+                                            <TableCell className="max-w-[280px]">
+                                                <div className="flex min-w-0 items-center gap-3">
                                                     {imageMap.get(product.id) ? (
                                                         <img
                                                             src={imageMap.get(product.id)}
                                                             alt={product.name}
-                                                            className="h-12 w-12 rounded-lg border object-cover"
+                                                            className="h-12 w-12 shrink-0 rounded-lg border object-cover"
                                                         />
                                                     ) : (
-                                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg border bg-muted/40">
+                                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
                                                             <Package className="h-5 w-5 text-muted-foreground" />
                                                         </div>
                                                     )}
-                                                    <div>
-                                                        <p className="font-medium text-slate-900 dark:text-white">{product.name}</p>
-                                                        <p className="text-xs text-muted-foreground">{product.productCode}</p>
+                                                    <div className="min-w-0">
+                                                        <p className="truncate font-medium text-slate-900 dark:text-white" title={product.name}>{product.name}</p>
+                                                        <p className="truncate text-xs text-muted-foreground" title={product.productCode}>{product.productCode}</p>
                                                     </div>
                                                 </div>
                                             </TableCell>
