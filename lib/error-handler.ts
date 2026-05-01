@@ -83,7 +83,7 @@ export const ERROR_MESSAGES = {
   // MFA errors
   DAILY_LIMIT_EXCEEDED: 'Daily OTP request limit exceeded. Please try again tomorrow.',
   COOLDOWN_ACTIVE: 'Please wait before requesting another OTP.',
-  INVALID_OTP: 'Invalid OTP code. Please try again.',
+  INVALID_OTP: 'Invalid OTP code. Please check your email and try again.',
   OTP_EXPIRED: 'OTP has expired. Please request a new one.',
 
   // Rate limiting
@@ -241,6 +241,40 @@ export function parseError(error: any): ErrorDetails {
     }
   }
 
+  // MFA errors must be checked before generic "Invalid ... email" validation,
+  // because the user-facing invalid OTP message asks users to check their email.
+  if (errorMsg.includes('Daily OTP request limit exceeded') || errorMsg.includes('daily limit')) {
+    return {
+      type: 'MFA_ERROR',
+      message: ERROR_MESSAGES.DAILY_LIMIT_EXCEEDED,
+      statusCode: 400
+    }
+  }
+
+  if (errorMsg.includes('cooldown') || errorMsg.includes('wait before requesting')) {
+    return {
+      type: 'MFA_ERROR',
+      message: ERROR_MESSAGES.COOLDOWN_ACTIVE,
+      statusCode: 400
+    }
+  }
+
+  if (errorMsg.includes('Invalid OTP') || errorMsg.includes('Invalid or expired OTP code') || errorMsg.includes('invalid code')) {
+    return {
+      type: 'MFA_ERROR',
+      message: ERROR_MESSAGES.INVALID_OTP,
+      statusCode: 400
+    }
+  }
+
+  if (errorMsg.includes('expired') || errorMsg.includes('OTP has expired')) {
+    return {
+      type: 'MFA_ERROR',
+      message: ERROR_MESSAGES.OTP_EXPIRED,
+      statusCode: 400
+    }
+  }
+
   // Invalid format errors
   if (errorMsg.includes('Invalid')) {
     if (errorMsg.includes('email')) {
@@ -266,39 +300,6 @@ export function parseError(error: any): ErrorDetails {
       type: 'VALIDATION_ERROR',
       message: ERROR_MESSAGES.INVALID_PASSWORD,
       field: 'password',
-      statusCode: 400
-    }
-  }
-
-  // MFA errors
-  if (errorMsg.includes('Daily OTP request limit exceeded') || errorMsg.includes('daily limit')) {
-    return {
-      type: 'MFA_ERROR',
-      message: ERROR_MESSAGES.DAILY_LIMIT_EXCEEDED,
-      statusCode: 400
-    }
-  }
-
-  if (errorMsg.includes('cooldown') || errorMsg.includes('wait before requesting')) {
-    return {
-      type: 'MFA_ERROR',
-      message: ERROR_MESSAGES.COOLDOWN_ACTIVE,
-      statusCode: 400
-    }
-  }
-
-  if (errorMsg.includes('Invalid OTP') || errorMsg.includes('invalid code')) {
-    return {
-      type: 'MFA_ERROR',
-      message: ERROR_MESSAGES.INVALID_OTP,
-      statusCode: 400
-    }
-  }
-
-  if (errorMsg.includes('expired') || errorMsg.includes('OTP has expired')) {
-    return {
-      type: 'MFA_ERROR',
-      message: ERROR_MESSAGES.OTP_EXPIRED,
       statusCode: 400
     }
   }

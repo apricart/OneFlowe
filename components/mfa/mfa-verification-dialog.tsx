@@ -20,6 +20,18 @@ interface MFAVerificationDialogProps {
   isEmployee?: boolean
 }
 
+const getAuthResultError = (result: Awaited<ReturnType<typeof signIn>>) => {
+  if (result?.error) return result.error
+
+  if (!result?.url) return null
+
+  try {
+    return new URL(result.url).searchParams.get("error")
+  } catch {
+    return null
+  }
+}
+
 export function MFAVerificationDialog({
   open,
   onClose,
@@ -32,8 +44,10 @@ export function MFAVerificationDialog({
   const [otp, setOtp] = useState("")
   const [isVerifying, setIsVerifying] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  const [isInitialSend, setIsInitialSend] = useState(false)
   const [timeLeft, setTimeLeft] = useState(0)
   const [canResend, setCanResend] = useState(true)
+  const [hasActiveCodeWindow, setHasActiveCodeWindow] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [remainingAttempts, setRemainingAttempts] = useState<number | null>(null)
   const [isRedirecting, setIsRedirecting] = useState(false)
@@ -56,7 +70,7 @@ export function MFAVerificationDialog({
     if (open && !hasSentOTP.current) {
       console.log("MFA Dialog: Sending OTP for", username)
       hasSentOTP.current = true
-      sendOTP()
+      sendOTP({ initial: true })
     }
   }, [open, username])
 
@@ -65,10 +79,12 @@ export function MFAVerificationDialog({
     if (!open) {
       hasSentOTP.current = false
       isSendingRef.current = false
+      setIsInitialSend(false)
+      setHasActiveCodeWindow(false)
     }
   }, [open])
 
-  const sendOTP = async () => {
+  const sendOTP = async ({ initial = false }: { initial?: boolean } = {}) => {
     if (isSending || isSendingRef.current) {
       console.log("MFA Dialog: Already sending OTP, skipping")
       return // Prevent multiple simultaneous sends
@@ -77,8 +93,10 @@ export function MFAVerificationDialog({
     console.log("MFA Dialog: Starting OTP send for", username)
     isSendingRef.current = true
     setIsSending(true)
+    setIsInitialSend(initial)
     setError(null)
     setOtp("")
+    setHasActiveCodeWindow(false)
 
     try {
       const response = await jsonFetcher("/api/v1/mfa/login/send-otp", {
@@ -98,6 +116,7 @@ export function MFAVerificationDialog({
 
       setTimeLeft(120) // 2 minutes
       setCanResend(false)
+      setHasActiveCodeWindow(true)
       setRemainingAttempts(null)
 
     } catch (error: any) {
@@ -111,6 +130,7 @@ export function MFAVerificationDialog({
     } finally {
       isSendingRef.current = false
       setIsSending(false)
+      setIsInitialSend(false)
     }
   }
 
@@ -130,12 +150,13 @@ export function MFAVerificationDialog({
           redirect: false
         })
 
-        if (result?.error) {
+        const authError = getAuthResultError(result)
+        if (authError) {
           // NextAuth returns generic error codes like "CredentialsSignin"
           // Map them to user-friendly messages
-          const errorMessage = result.error === "CredentialsSignin"
-            ? "Invalid or expired OTP code. Please check and try again."
-            : result.error
+          const errorMessage = authError === "CredentialsSignin"
+            ? "Invalid OTP code. Please check your email and try again."
+            : authError
           throw new Error(errorMessage)
         }
 
@@ -300,10 +321,14 @@ export function MFAVerificationDialog({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock className="h-4 w-4" />
-                {timeLeft > 0 ? (
+                {isSending && isInitialSend ? (
+                  <span>Sending code to your email</span>
+                ) : timeLeft > 0 ? (
                   <span>Code expires in {formatTime(timeLeft)}</span>
-                ) : (
+                ) : hasActiveCodeWindow ? (
                   <span>Code has expired</span>
+                ) : (
+                  <span>Waiting for code</span>
                 )}
               </div>
 
@@ -319,7 +344,7 @@ export function MFAVerificationDialog({
                 ) : (
                   <RefreshCw className="h-3 w-3" />
                 )}
-                Resend OTP
+                {isSending && isInitialSend ? "Sending OTP" : "Resend OTP"}
               </Button>
             </div>
 

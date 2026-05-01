@@ -352,6 +352,26 @@ export async function verifyOTP(
     }
 
     if (!otpData || otpData.isUsed || otpData.type !== type) {
+      let hasActiveOTP = false
+
+      try {
+        const [activeOTP] = await db
+          .select({ id: mfaCodes.id })
+          .from(mfaCodes)
+          .where(and(
+            eq(mfaCodes.userId, userId),
+            eq(mfaCodes.type, type),
+            eq(mfaCodes.isUsed, false),
+            gte(mfaCodes.expiresAt, new Date())
+          ))
+          .orderBy(desc(mfaCodes.expiresAt))
+          .limit(1)
+
+        hasActiveOTP = Boolean(activeOTP)
+      } catch (dbError) {
+        logError(dbError, 'MFA_DB_ACTIVE_CODE_CHECK', { userId, type })
+      }
+
       // Increment failed attempts
       const attempts = (cooldown?.attempts || 0) + 1
 
@@ -363,7 +383,9 @@ export async function verifyOTP(
 
       return {
         success: false,
-        message: "Invalid or expired OTP code",
+        message: hasActiveOTP
+          ? "Invalid OTP code. Please check your email and try again."
+          : "OTP has expired. Please request a new one.",
         remainingAttempts: Math.max(0, OTP_CONFIG.MAX_ATTEMPTS - attempts)
       }
     }
