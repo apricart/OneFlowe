@@ -349,7 +349,7 @@ export function OrdersDirectory({
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-indigo-400/80 dark:text-indigo-500 uppercase tracking-widest mb-0.5">Order ID</p>
-                      <h2 className="font-mono text-xl font-black text-slate-800 dark:text-slate-100 tracking-wider">
+                      <h2 className="font-mono text-lg font-black text-slate-800 dark:text-slate-100 tracking-wider">
                         {viewingOrder.tid}
                       </h2>
                     </div>
@@ -358,7 +358,7 @@ export function OrdersDirectory({
                     const derivedStatus = getOrderDerivedStatus(viewingOrder, statusContext)
                     const c = getStatusColor(derivedStatus.key)
                     return (
-                      <Badge variant="outline" className={cn("px-3 py-1 text-[10px] font-bold tracking-widest uppercase rounded-xl border-dashed shadow-sm backdrop-blur-sm", c.bg, c.text, c.border)}>
+                      <Badge variant="outline" className={cn("px-3 py-1 text-[9px] font-bold tracking-widest uppercase rounded-xl border-dashed shadow-sm backdrop-blur-sm", c.bg, c.text, c.border)}>
                         {derivedStatus.label}
                       </Badge>
                     )
