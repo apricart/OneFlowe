@@ -224,25 +224,85 @@ export default function GroupsReportPage() {
     }
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
-        // Structured columns matching the UI table exactly
-        const columns = [
-            { label: "Group Name",     value: (g: any) => g.name || "-" },
-            ...(role === "SUPER_ADMIN" ? [{ label: "Organization", value: (g: any) => g.organizationName || "-" }] : []),
-            { label: "Budget (PKR)",   value: (g: any) => ((g.totalBudget || 0) / 100).toFixed(2) },
-            { label: "Managed Units",  value: (g: any) => g.branchCount || 0 },
-            { label: isBuyer ? "Purchased (PKR)" : "Revenue (PKR)", value: (g: any) => ((g.totalAmountCents || 0) / 100).toFixed(2) },
-            { label: "Refunds (PKR)",  value: (g: any) => ((g.totalRefundCents || 0) / 100).toFixed(2) },
-            { label: "Orders",         value: (g: any) => g.totalOrders || 0 },
+        const money = (value: number | null | undefined) => ((value || 0) / 100).toFixed(2)
+        const revenueHeader = isBuyer ? "Purchased (PKR)" : "Revenue (PKR)"
+
+        // Keep exports aligned with the role-filtered table: each group row is followed by
+        // only the branch rows already present in the authorized report payload.
+        const headers = [
+            "Group Name",
+            ...(role === "SUPER_ADMIN" ? ["Organization"] : []),
+            "Budget (PKR)",
+            "Managed Units",
+            revenueHeader,
+            "Refunds (PKR)",
+            "Orders",
         ]
 
-        const headers = columns.map(c => c.label)
-        const rows = filteredGroups.map((group: any) => columns.map(c => c.value(group)))
+        const exportRows = filteredGroups.flatMap((group: any) => {
+            const groupRow = [
+                `GROUP: ${group.name || "-"}`,
+                ...(role === "SUPER_ADMIN" ? [group.organizationName || "-"] : []),
+                money(group.totalBudget),
+                group.branchCount || 0,
+                money(group.totalAmountCents),
+                money(group.totalRefundCents),
+                group.totalOrders || 0,
+            ]
+
+            const branches = group.branches || []
+            const branchHeadingRow = [
+                `Branch details for ${group.name || "Group"}`,
+                ...(role === "SUPER_ADMIN" ? [group.organizationName || "-"] : []),
+                "",
+                "",
+                "",
+                "",
+                "",
+            ]
+
+            const branchRows = branches.map((branch: any) => [
+                `  - ${branch.name || "-"}`,
+                ...(role === "SUPER_ADMIN" ? [group.organizationName || "-"] : []),
+                money(branch.totalBudget),
+                branch.status || "Unknown",
+                money(branch.revenue),
+                money(branch.refunds),
+                branch.orders || 0,
+            ]).map((values: any[]) => ({ kind: "branch", values }))
+
+            return [
+                { kind: "group", values: groupRow },
+                ...(branches.length > 0 ? [{ kind: "branch-heading", values: branchHeadingRow }] : []),
+                ...branchRows,
+            ]
+        })
+        const rows = exportRows.map((row: any) => row.values)
 
         if (format === 'pdf') {
             const doc = new jsPDF()
             doc.setFontSize(20); doc.text(isBuyer ? "Group Purchase Ledger" : "Group Performance Ledger", 14, 20)
             doc.setFontSize(10); doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28)
-            autoTable(doc, { startY: 40, head: [headers], body: rows, theme: 'grid' })
+            autoTable(doc, {
+                startY: 40,
+                head: [headers],
+                body: rows,
+                theme: 'grid',
+                didParseCell: (data) => {
+                    if (data.section !== "body") return
+
+                    const rowKind = exportRows[data.row.index]?.kind
+                    if (rowKind === "group") {
+                        data.cell.styles.fillColor = [241, 245, 249]
+                        data.cell.styles.fontStyle = "bold"
+                    }
+                    if (rowKind === "branch-heading") {
+                        data.cell.styles.fillColor = [248, 250, 252]
+                        data.cell.styles.textColor = [100, 116, 139]
+                        data.cell.styles.fontStyle = "bold"
+                    }
+                },
+            })
             doc.save(`group-report-${new Date().getTime()}.pdf`)
             return
         }
