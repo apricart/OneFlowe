@@ -89,6 +89,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   const [viewingUser, setViewingUser] = useState<UserRow | null>(null)
   const [editErrors, setEditErrors] = useState<Record<string, string>>({})
   const [submittingUserId, setSubmittingUserId] = useState<string | null>(null)
+  const [statusSubmittingUserId, setStatusSubmittingUserId] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<UserRow | null>(null)
 
   const [showPasswordReset, setShowPasswordReset] = useState(false)
@@ -419,7 +420,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   // Toggle user status
   const toggleUserStatus = async (user: UserRow) => {
     const nextIsActive = !user.isActive
-    setSubmittingUserId(user.id)
+    setStatusSubmittingUserId(user.id)
     setViewingUser(prev => (
       prev && prev.id === user.id
         ? { ...prev, isActive: nextIsActive }
@@ -440,7 +441,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       console.error("Error toggling user status:", error)
       alert("Failed to update user status: " + error.message)
     } finally {
-      setSubmittingUserId(null)
+      setStatusSubmittingUserId(null)
     }
   }
 
@@ -989,11 +990,12 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
                   <Button 
                     variant="outline" 
                     className="gap-2 border-slate-200 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 h-10 shadow-sm"
+                    disabled={viewingUser ? statusSubmittingUserId === viewingUser.id : false}
                     onClick={() => {
                         if (viewingUser) toggleUserStatus(viewingUser)
                     }}
                   >
-                    <RefreshCw className={cn("h-4 w-4", viewingUser && submittingUserId === viewingUser.id && "animate-spin")} />
+                    <RefreshCw className={cn("h-4 w-4", viewingUser && statusSubmittingUserId === viewingUser.id && "animate-spin")} />
                     {viewingUser.isActive ? "Deactivate" : "Activate"}
                   </Button>
                   <Button 
