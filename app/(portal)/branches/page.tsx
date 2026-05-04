@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
-import { Building2, Users, RefreshCcw, Search, Boxes, UserCog, Sparkles, Loader2, ShieldCheck, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react"
+import { Building2, Users, RefreshCcw, Search, Boxes, UserCog, Sparkles, ShieldCheck, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -318,6 +318,7 @@ export default function BranchesPage() {
                 {paginatedBranches.map((branch) => {
                   const admin = adminByBranch[String(branch.id)]
                   const isActive = (branch.status || "active").toLowerCase() === "active"
+                  const isUpdatingThisBranch = updatingBranchId === branch.id
                   return (
                     <div
                       key={branch.id}
@@ -402,25 +403,17 @@ export default function BranchesPage() {
                         <Button
                           variant="outline"
                           size="sm"
+                          loading={isUpdatingThisBranch}
                           className={cn(
-                            "h-10 px-4 gap-2 rounded-xl border-slate-200 dark:border-slate-800 shadow-sm transition-all",
+                            "h-10 min-w-[112px] px-4 gap-2 rounded-xl border-slate-200 dark:border-slate-800 shadow-sm transition-all",
                             isActive
                               ? "text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
                               : "text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
                           )}
                           disabled={!!updatingBranchId}
-                          onClick={() => handleStatusToggle(branch.id, branch.status)}
+                          onClick={() => { void handleStatusToggle(branch.id, branch.status) }}
                         >
-                          {updatingBranchId === branch.id ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Updating
-                            </>
-                          ) : isActive ? (
-                            "Deactivate"
-                          ) : (
-                            "Activate"
-                          )}
+                          {isUpdatingThisBranch ? "Updating" : isActive ? "Deactivate" : "Activate"}
                         </Button>
                       </div>
                     </div>
