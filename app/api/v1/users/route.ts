@@ -15,12 +15,13 @@ export async function GET(req: Request) {
   if (err) return err
   const { searchParams } = new URL(req.url)
   const organizationId = searchParams.get("organizationId")
+  const shouldRefresh = searchParams.has("refresh")
   const scope = await getRequestScope()
   const scopedOrgId = scope?.role === "SUPER_ADMIN" ? (organizationId ? Number(organizationId) : undefined) : (scope?.organizationId ?? undefined)
 
   const cacheKey = scopedCacheKey('users', { orgId: scopedOrgId, role: scope?.role })
 
-  const items = await getCached(cacheKey, async () => {
+  const fetchUsers = async () => {
     const conditions = [ne(rolesTable.name, "SUPER_ADMIN"), isNull(usersTable.deletedAt)]
     if (scopedOrgId) {
       conditions.push(eq(usersTable.organizationId, scopedOrgId))
@@ -70,7 +71,11 @@ export async function GET(req: Request) {
       contactPerson: r.contactPerson || null,
       address: r.address || null,
     }))
-  }, CACHE_TTL.LISTING)
+  }
+
+  const items = shouldRefresh
+    ? await fetchUsers()
+    : await getCached(cacheKey, fetchUsers, CACHE_TTL.LISTING)
 
   return ok({ items })
 }

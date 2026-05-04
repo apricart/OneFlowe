@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useBranches, useUsers } from "@/lib/hooks/use-api"
+import { fetcher } from "@/lib/fetcher"
 import { useAppContext } from "@/components/context/app-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -43,6 +44,7 @@ export default function BranchesPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all")
   const [page, setPage] = useState(1)
   const [updatingBranchId, setUpdatingBranchId] = useState<number | null>(null)
+  const [manualRefreshing, setManualRefreshing] = useState(false)
 
   const branches = (branchesRes?.items as Branch[] | undefined) || []
   const users = (usersRes?.items as User[] | undefined) || []
@@ -91,13 +93,33 @@ export default function BranchesPage() {
   const branchesWithAdmins = Object.keys(adminByBranch).length
   const coverage = totalBranches ? Math.round((branchesWithAdmins / totalBranches) * 100) : 0
 
-  const isRefreshing = isRefreshingBranches || isRefreshingUsers
+  const isRefreshing = manualRefreshing || isRefreshingBranches || isRefreshingUsers
 
   const handleRefresh = async () => {
-    await Promise.all([
-      refetchBranches(),
-      refetchUsers(),
-    ])
+    const addRefreshParam = (url: string) => {
+      const separator = url.includes("?") ? "&" : "?"
+      return `${url}${separator}refresh=${Date.now()}`
+    }
+
+    const branchUrl = `/api/v1/branches${organizationId ? `?organizationId=${organizationId}` : ""}`
+    const usersUrl = `/api/v1/users${organizationId ? `?organizationId=${organizationId}` : ""}`
+
+    setManualRefreshing(true)
+    try {
+      const [freshBranches, freshUsers] = await Promise.all([
+        fetcher<{ items: Branch[] }>(addRefreshParam(branchUrl)),
+        fetcher<{ items: User[] }>(addRefreshParam(usersUrl)),
+      ])
+
+      await Promise.all([
+        refetchBranches(freshBranches, { revalidate: false }),
+        refetchUsers(freshUsers, { revalidate: false }),
+      ])
+    } catch (error) {
+      console.error("Failed to refresh branches page data", error)
+    } finally {
+      setManualRefreshing(false)
+    }
   }
 
   const handleStatusToggle = async (branchId: number, currentStatus?: string | null) => {
@@ -176,7 +198,7 @@ export default function BranchesPage() {
           <Badge variant="outline" className="h-8 px-3 rounded-full border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:border-blue-800/60 dark:text-blue-400 font-semibold uppercase tracking-wider text-[10px]">
             {totalBranches} Branches
           </Badge>
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing} className="h-9 gap-2 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 shadow-sm">
+          <Button variant="outline" size="sm" onClick={() => { void handleRefresh() }} disabled={isRefreshing} className="h-9 gap-2 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 shadow-sm">
             <RefreshCcw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
             <span className="hidden sm:inline">Refresh</span>
           </Button>

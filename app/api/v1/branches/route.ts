@@ -20,6 +20,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const organizationIdRaw = searchParams.get("organizationId") || undefined
     const groupIdsRaw = searchParams.get("groupIds") || undefined
+    const shouldRefresh = searchParams.has("refresh")
 
     // Validate organization ID parameter (supports single or comma-separated)
     let orgIds: number[] = []
@@ -79,7 +80,7 @@ export async function GET(req: Request) {
       }
     )
 
-    const result = await getCached(cacheKey, async () => {
+    const fetchBranches = async () => {
       const items = await db
         .select({
           id: branchesTable.id,
@@ -108,7 +109,11 @@ export async function GET(req: Request) {
         .orderBy(desc(branchesTable.createdAt))
 
       return { items, count: items.length }
-    }, CACHE_TTL.LISTING)
+    }
+
+    const result = shouldRefresh
+      ? await fetchBranches()
+      : await getCached(cacheKey, fetchBranches, CACHE_TTL.LISTING)
 
     return ok(result)
   } catch (e: any) {
