@@ -215,6 +215,7 @@ export async function GET(req: NextRequest) {
             organizationName: organizations.name,
             receiptData: orders.receiptData,
             creatorName: users.fullName,
+            creatorPhone: users.phone,
             creatorEmployeeId: users.employeeId
         })
             .from(orders)
@@ -420,7 +421,7 @@ export async function GET(req: NextRequest) {
                 customerLevel: (order.id % 5 === 0) ? "VIP" : "Regular",
                 preparationTime: prepTimeStr,
                 buyerName: order.receiptData?.buyerName || order.creatorName || "Walk-in Customer",
-buyerPhone: order.receiptData?.buyerPhone || "N/A",
+                buyerPhone: order.receiptData?.buyerPhone || order.creatorPhone || "N/A",
                 creatorName: order.creatorName,
                 creatorEmployeeId: order.creatorEmployeeId,
                 items: detailedItemsMap[order.id] || []
