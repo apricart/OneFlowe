@@ -303,8 +303,8 @@ export default function OrganizationsPage() {
           />
         </div>
 
-        <section className="grid gap-10 lg:grid-cols-12 shrink-0 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300 fill-mode-both">
-          <div className="lg:col-span-6 xl:col-span-5">
+        <section className="grid gap-10 2xl:grid-cols-[minmax(460px,5fr)_minmax(0,7fr)] 2xl:gap-6 shrink-0 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300 fill-mode-both">
+          <div className="min-w-0">
             <Card className="h-full border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-[2rem] overflow-hidden">
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between mb-2">
@@ -325,8 +325,8 @@ export default function OrganizationsPage() {
                     className="pl-11 h-12 bg-slate-50/50 dark:bg-slate-950/50 border-transparent focus:border-indigo-500/30 focus:ring-4 focus:ring-indigo-500/10 rounded-xl transition-all"
                   />
                 </div>
-                <ScrollArea className="h-[500px] xl:h-[600px] -mx-4 px-4 pr-6">
-                  <div className="space-y-3">
+                <ScrollArea className="h-[500px] xl:h-[600px] w-full">
+                  <div className="space-y-3 pr-4">
                     <OrganizationListItem
                       isActive={!selectedOrgId}
                       onClick={() => setSelectedOrgId(null)}
@@ -372,7 +372,7 @@ export default function OrganizationsPage() {
             </Card>
           </div>
 
-          <div className="lg:col-span-6 xl:col-span-7 space-y-10">
+          <div className="min-w-0 space-y-10">
             <div className="grid gap-6 sm:grid-cols-2">
               <SummaryStat
                 label={selectedOrg ? "Parent Identity" : "Infrastructure"}
@@ -389,7 +389,7 @@ export default function OrganizationsPage() {
             </div>
 
             <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-[2rem] overflow-hidden">
-              <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-6">
+              <CardHeader className="flex flex-col gap-4 px-5 pb-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                   <CardTitle className="text-2xl font-bold tracking-tight">Branches Management</CardTitle>
                   <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
@@ -414,7 +414,7 @@ export default function OrganizationsPage() {
               </CardHeader>
               <CardContent className="p-0">
                 <ScrollArea className="h-[450px] xl:h-[550px] w-full">
-                  <div className="w-full px-8 pb-8 pt-2">
+                  <div className="w-full px-5 pb-6 pt-2">
                     <BranchesTable
                       items={filteredBranches}
                       organizations={orgs?.items || []}
@@ -508,17 +508,17 @@ function BranchesTable({
       <table className="w-full text-sm border-collapse table-fixed">
         <thead>
           <tr className="text-left text-[10px] uppercase tracking-[0.2em] text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800/60">
-            <th className="pb-4 pr-2 font-semibold w-[35%]">Strategic Branch</th>
-            <th className="pb-4 pr-2 font-semibold w-[15%]">Code</th>
-            {showCompanyColumn && <th className="pb-4 pr-2 font-semibold w-[25%]">Parent</th>}
+            <th className="pb-4 pr-2 font-semibold w-[30%]">Strategic Branch</th>
+            <th className="pb-4 pr-2 font-semibold w-[20%]">Code</th>
+            {showCompanyColumn && <th className="pb-4 pr-2 font-semibold w-[20%]">Parent</th>}
             <th className="pb-4 pr-2 font-semibold w-[15%] text-center">Lifecycle</th>
-            <th className="pb-4 w-[10%]"></th>
+            <th className="pb-4 w-[15%] text-right">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50 dark:divide-slate-800/40">
           {items.map((b) => (
             <tr key={b.id} className="group hover:bg-slate-50/80 dark:hover:bg-indigo-500/[0.03] transition-all duration-300">
-              <td className="py-5 pr-4">
+              <td className="py-5 pr-3">
                 <div className="flex items-center gap-3">
                   <div className="h-9 w-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-100/50 dark:border-indigo-500/20 group-hover:scale-110 transition-transform">
                     {b.name.charAt(0)}
@@ -526,8 +526,8 @@ function BranchesTable({
                   <span className="font-semibold text-slate-900 dark:text-slate-100 tracking-tight">{b.name}</span>
                 </div>
               </td>
-              <td className="py-5 pr-4">
-                <code className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-widest border border-slate-200/50 dark:border-slate-700/50">
+              <td className="py-5 pr-3">
+                <code className="inline-block whitespace-nowrap px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider border border-slate-200/50 dark:border-slate-700/50">
                   {b.code}
                 </code>
               </td>
@@ -550,12 +550,13 @@ function BranchesTable({
                 </Badge>
               </td>
               <td className="py-5 text-right">
-                <div className="inline-flex items-center gap-2 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all">
+                <div className="inline-flex min-w-[88px] items-center justify-end gap-2">
                   <EditBranchDialog branch={b} onSave={(payload) => edit(String(b.id), payload)} />
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-9 w-9 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                    aria-label={`Delete ${b.name}`}
                     onClick={() => onDelete(String(b.id), b.name)}
                   >
                     <Trash2 size={16} />
@@ -659,7 +660,7 @@ function OrganizationListItem({
           </div>
           <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{subtitle}</p>
         </div>
-        <div className="flex w-full items-center justify-between gap-2 pt-1 sm:w-auto sm:flex-col sm:items-end sm:justify-start sm:pt-0 shrink-0">
+        <div className="flex w-full shrink-0 items-center justify-between gap-2 pt-1 sm:w-[96px] sm:flex-col sm:items-end sm:justify-start sm:pt-0">
           {typeof status === "boolean" ? (
             <Badge variant={status ? "outline" : "secondary"} className={cn(
               "text-[9px] uppercase font-semibold tracking-widest px-2 py-0.5 rounded-md",
@@ -676,7 +677,7 @@ function OrganizationListItem({
           ) : null}
           {children && (
             <div
-              className="flex items-center gap-1 opacity-100 transition-all sm:translate-x-2 sm:opacity-0 sm:group-hover:translate-x-0 sm:group-hover:opacity-100"
+              className="flex min-w-[72px] items-center justify-end gap-1"
               onClick={(event) => event.stopPropagation()}
             >
               {children}
