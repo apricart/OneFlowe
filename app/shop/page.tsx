@@ -140,7 +140,18 @@ export default function OrderPortalPage() {
   const { data: budget, mutate: mutateBudget } = useSWR<any>(budgetsUrl, fetcher, {
     refreshInterval: 5000,
   })
-  const { data: ordersData, mutate: mutateOrders } = useSWR<any>("/api/v1/orders", fetcher)
+  const ordersUrl = "/api/v1/orders"
+  const { data: ordersData, mutate: mutateOrders } = useSWR<any>(ordersUrl, fetcher)
+
+  const handleTabChange = async (tab: "shop" | "orders" | "refunded") => {
+    setActiveTab(tab)
+
+    if (tab === "orders" || tab === "refunded") {
+      const freshOrders = await fetcher(`${ordersUrl}?refresh=${Date.now()}`)
+      await mutateOrders(freshOrders, { revalidate: false })
+      void mutateBudget()
+    }
+  }
 
   // Fetch full details for selected order to get items
   const { data: orderDetailsData } = useSWR(
@@ -635,7 +646,7 @@ export default function OrderPortalPage() {
         {/* Tabs */}
         <div className="mb-6 flex gap-2 rounded-2xl bg-white/80 p-1 shadow-sm ring-1 ring-black/5 backdrop-blur-md dark:bg-slate-900/80">
           <Button
-            onClick={() => setActiveTab("shop")}
+            onClick={() => { void handleTabChange("shop") }}
             variant={activeTab === "shop" ? "default" : "outline"}
             className="gap-2"
           >
@@ -643,7 +654,7 @@ export default function OrderPortalPage() {
             Shop
           </Button>
           <Button
-            onClick={() => setActiveTab("orders")}
+            onClick={() => { void handleTabChange("orders") }}
             variant={activeTab === "orders" ? "default" : "outline"}
             className="gap-2"
           >
@@ -651,7 +662,7 @@ export default function OrderPortalPage() {
             Active Orders ({ordersData?.items?.filter((o: any) => (o.status || "").toLowerCase() !== "refunded").length || 0})
           </Button>
           <Button
-            onClick={() => setActiveTab("refunded")}
+            onClick={() => { void handleTabChange("refunded") }}
             variant={activeTab === "refunded" ? "default" : "outline"}
             className="gap-2"
           >
