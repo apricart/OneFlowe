@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { categories, globalProducts } from "@/db/schema"
-import { eq, and, like, or, desc, sql, isNull, isNotNull } from "drizzle-orm"
+import { eq, and, desc, sql, isNull } from "drizzle-orm"
 import { escapeLikePattern } from "@/lib/utils"
 import { getCached, invalidateByPrefix, CACHE_TTL } from "@/lib/cache-utils"
 
@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const searchRaw = searchParams.get("search") || ""
-    const search = searchRaw ? escapeLikePattern(searchRaw) : "" // Sanitize LIKE patterns
+    const normalizedSearch = searchRaw.trim().toLowerCase()
+    const search = normalizedSearch ? escapeLikePattern(normalizedSearch) : "" // Sanitize LIKE patterns
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
@@ -31,12 +32,12 @@ export async function GET(req: NextRequest) {
     // Build where clause - flat categories only (no parent)
     const conditions = [isNull(categories.parentId)]
     if (search) {
-      conditions.push(like(categories.name, `%${search}%`))
+      conditions.push(sql`lower(${categories.name}) like ${`%${search}%`}`)
     }
 
     const whereClause = and(...conditions)
 
-    const cacheKey = `cache:categories:search=${search}&page=${page}&limit=${limit}`
+    const cacheKey = `cache:categories:v2:search=${search}&page=${page}&limit=${limit}`
 
     const result = await getCached(cacheKey, async () => {
       const [items, totalResult] = await Promise.all([
