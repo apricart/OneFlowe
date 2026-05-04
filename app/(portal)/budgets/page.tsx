@@ -830,17 +830,17 @@ function CompactStatCard({
   iconBadge: string
 }) {
   return (
-    <Card className={cn("border rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5", gradient)}>
-      <CardContent className="flex items-center justify-between gap-3 p-5">
-        <div className="min-w-0 flex-1 space-y-1.5">
+    <Card className={cn("border rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 [container-type:inline-size]", gradient)}>
+      <CardContent className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 p-3">
+        <div className="min-w-0 space-y-1.5">
           <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">
             {label}
           </p>
-          <p className="break-all text-lg font-black leading-tight tracking-tight sm:text-2xl">
+          <p className="whitespace-nowrap text-[clamp(1.05rem,8.5cqw,2.1rem)] font-black leading-tight tracking-tight tabular-nums">
             {value}
           </p>
         </div>
-        <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", iconBadge)}>
+        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl 2xl:h-12 2xl:w-12", iconBadge)}>
            {icon}
         </div>
       </CardContent>
