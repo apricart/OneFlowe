@@ -33,6 +33,7 @@ import { OrganizationFilter as OrgFilter } from "@/components/reports/organizati
 import { GroupFilter } from "@/components/reports/group-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { KPICard } from "@/components/reports/kpi-card"
+import { Upload } from "lucide-react"
 
 type DateRange = { startDate: Date; endDate: Date }
 
@@ -564,7 +565,7 @@ export default function GroupsReportPage() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" className="h-10 rounded-xl font-black text-[10px] tracking-widest uppercase">
-                                        <Download className="h-3.5 w-3.5 mr-2" /> Export
+                                        <Upload className="h-3.5 w-3.5 mr-2" /> Export
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="rounded-xl border-slate-200">
@@ -599,7 +600,7 @@ export default function GroupsReportPage() {
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Managed Units</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{isBuyer ? "Purchased (PKR)" : "Revenue (PKR)"}</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
-                                            <TableHead className="h-14 pr-8 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
+                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Orders</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -640,7 +641,7 @@ export default function GroupsReportPage() {
                                                             <TableCell className="text-right">
                                                                 <span className="text-sm font-bold text-rose-500 tracking-tight">{formatPKR(group.totalRefundCents / 100)}</span>
                                                             </TableCell>
-                                                            <TableCell className="pr-6 text-right font-black text-sm text-slate-900 dark:text-white tracking-tight">
+                                                            <TableCell className="text-center font-black text-sm text-slate-900 dark:text-white tracking-tight">
                                                                 {group.totalOrders.toLocaleString()}
                                                             </TableCell>
                                                         </TableRow>
@@ -663,7 +664,7 @@ export default function GroupsReportPage() {
                                                                 </TableCell>
                                                                 <TableCell className="text-right text-xs font-bold text-slate-500">{formatPKR(branch.revenue / 100)}</TableCell>
                                                                 <TableCell className="text-right text-xs font-bold text-rose-400/70">{formatPKR(branch.refunds / 100)}</TableCell>
-                                                                <TableCell className="pr-6 text-right text-xs font-bold text-slate-500">{branch.orders.toLocaleString()}</TableCell>
+                                                                <TableCell className="text-center text-xs font-bold text-slate-500">{branch.orders.toLocaleString()}</TableCell>
                                                             </TableRow>
                                                         ))}
                                                     </Fragment>

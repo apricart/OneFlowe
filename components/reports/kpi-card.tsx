@@ -72,13 +72,13 @@ export function KPICard({
             "border rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5",
             colors.gradient
         )}>
-            <CardContent className="p-6 flex items-start justify-between relative overflow-hidden h-full">
-                <div className="space-y-1.5 flex-1 max-w-[calc(100%-4rem)] pr-2 z-10 flex flex-col justify-between h-full">
+            <CardContent className="p-3 flex items-start justify-between relative overflow-hidden h-full">
+                <div className="space-y-1 flex-1 max-w-[calc(100%-4rem)] pr-1 z-10 flex flex-col justify-between h-full">
                     <div className="min-w-0">
-                        <p className="text-[10px] font-bold opacity-80 uppercase tracking-[0.15em] mb-1 truncate">
+                        <p className="text-[10px] font-bold opacity-80 uppercase tracking-[0.15em] mb-1">
                             {title}
                         </p>
-                        <h3 className="text-2xl xl:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-none break-words min-w-0 sm:break-normal" style={{ overflowWrap: 'anywhere' }}>
+                        <h3 className="text-xl xl:text-xl font-black tracking-tight text-slate-900 dark:text-white  min-w-0 sm:break-normal" >
                             {value}
                         </h3>
                     </div>
@@ -94,7 +94,7 @@ export function KPICard({
                                             trend < 0 ? "bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400" :
                                                 "bg-slate-500/10 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400"
                                     )}>
-                                        {TrendIcon && <TrendIcon className="h-3 w-3" />}
+                                        {TrendIcon && <TrendIcon className="h-2 w-2" />}
                                         {Math.abs(trend).toFixed(1)}%
                                     </div>
                                     <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">{subtitle ? '' : 'vs prior'}</span>
@@ -102,12 +102,12 @@ export function KPICard({
                             )}
 
                             {comparisonValue && (
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                                     {comparisonLabel}: <span className="font-black text-slate-700 dark:text-slate-300">{comparisonValue}</span>
                                 </p>
                             )}
                             {subtitle && (
-                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest truncate">
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                                     {subtitle}
                                 </p>
                             )}
@@ -115,7 +115,7 @@ export function KPICard({
                     )}
                 </div>
 
-                <div className={cn("flex shrink-0 h-14 w-14 items-center justify-center rounded-2xl z-10", colors.iconBadge)}>
+                <div className={cn("flex shrink-0 h-11 w-11 items-center justify-center rounded-2xl z-10", colors.iconBadge)}>
                     <Icon className="h-6 w-6 stroke-[2.5]" />
                 </div>
 

@@ -372,12 +372,6 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
 
   return (
     <>
-      <PremiumAlert
-        message={feedback.message}
-        type={feedback.type}
-        isVisible={feedback.visible}
-        onClose={() => setFeedback({ ...feedback, visible: false })}
-      />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
           <Button style={{ background: "var(--color-brand-primary)", color: "white" }}>
@@ -385,7 +379,16 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
             Create User
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        >
+          <PremiumAlert
+            message={feedback.message}
+            type={feedback.type}
+            isVisible={feedback.visible}
+            placement="sticky"
+            onClose={() => setFeedback({ ...feedback, visible: false })}
+          />
           <DialogHeader>
             <DialogTitle>Create New User</DialogTitle>
             <DialogDescription>

@@ -19,6 +19,7 @@ import { Switch } from "@/components/ui/switch"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { PremiumAlert, type AlertType } from "@/components/premium/premium-alert"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
@@ -91,6 +92,15 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   const [submittingUserId, setSubmittingUserId] = useState<string | null>(null)
   const [statusSubmittingUserId, setStatusSubmittingUserId] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<UserRow | null>(null)
+  const [editFeedback, setEditFeedback] = useState<{
+    message: string
+    type: AlertType
+    visible: boolean
+  }>({
+    message: "",
+    type: "info",
+    visible: false
+  })
 
   const [showPasswordReset, setShowPasswordReset] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -123,6 +133,10 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
     contactPerson: "",
     address: ""
   })
+
+  const showEditFeedback = (message: string, type: AlertType = "warning") => {
+    setEditFeedback({ message, type, visible: true })
+  }
 
   // Filter users
   const filteredUsers = useMemo(() => {
@@ -202,6 +216,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   const openEditDialog = (user: UserRow) => {
     setEditingUser(user)
     setEditErrors({})
+    setEditFeedback({ message: "", type: "info", visible: false })
     setShowPasswordReset(false)
     setEditForm({
       firstName: user.firstName || "",
@@ -228,6 +243,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
   const closeEditDialog = () => {
     setEditingUser(null)
     setEditErrors({})
+    setEditFeedback({ message: "", type: "info", visible: false })
     setShowPasswordReset(false)
     setEditForm({
       firstName: "",
@@ -327,21 +343,22 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
     }
     if (Object.keys(nextErrors).length > 0) {
       setEditErrors(nextErrors)
+      showEditFeedback("Please fix the errors before saving.", "warning")
       return
     }
 
     // Validate password if reset is enabled
     if (showPasswordReset && editForm.password) {
       if (editForm.password !== editForm.confirmPassword) {
-        alert("Passwords do not match")
+        showEditFeedback("Passwords do not match", "warning")
         return
       }
       if (editForm.password.length < 12) {
-        alert("Password must be at least 12 characters")
+        showEditFeedback("Password must be at least 12 characters", "warning")
         return
       }
       if (!/[A-Z]/.test(editForm.password) || !/[a-z]/.test(editForm.password) || !/\d/.test(editForm.password) || !/[^a-zA-Z0-9]/.test(editForm.password)) {
-        alert("Password must include uppercase, lowercase, number, and special character")
+        showEditFeedback("Password must include uppercase, lowercase, number, and special character", "warning")
         return
       }
     }
@@ -396,7 +413,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       if (parsed.field) {
         setEditErrors({ [parsed.field]: parsed.message })
       }
-      alert(parsed.message || "Failed to update user")
+      showEditFeedback(parsed.message || "Failed to update user", parsed.field ? "warning" : "error")
     } finally {
       setSubmittingUserId(null)
     }
@@ -1050,6 +1067,13 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       {/* Edit User Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && closeEditDialog()}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <PremiumAlert
+            message={editFeedback.message}
+            type={editFeedback.type}
+            isVisible={editFeedback.visible}
+            placement="sticky"
+            onClose={() => setEditFeedback(prev => ({ ...prev, visible: false }))}
+          />
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
             <DialogDescription>

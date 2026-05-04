@@ -758,7 +758,7 @@ export default function OrganizationReportPage() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" className="h-10 rounded-xl font-black text-[10px] tracking-widest uppercase">
-                                        <Download className="h-3.5 w-3.5 mr-2" /> Export
+                                        <Upload className="h-3.5 w-3.5 mr-2" /> Export
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="rounded-xl border-slate-200">

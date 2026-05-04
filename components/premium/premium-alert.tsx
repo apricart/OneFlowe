@@ -14,6 +14,7 @@ interface PremiumAlertProps {
     duration?: number // in milliseconds
     isVisible: boolean
     onClose: () => void
+    placement?: "fixed" | "sticky"
 }
 
 export function PremiumAlert({
@@ -22,6 +23,7 @@ export function PremiumAlert({
     duration = 5000,
     isVisible,
     onClose,
+    placement = "fixed",
 }: PremiumAlertProps) {
     console.log("PremiumAlert Render:", { isVisible, message, type })
     useEffect(() => {
@@ -70,11 +72,14 @@ export function PremiumAlert({
     }[type]
 
     const Icon = config.icon
+    const containerClassName = placement === "sticky"
+        ? "sticky top-0 z-[60] flex justify-center px-2 pb-3 pointer-events-none"
+        : "fixed inset-x-0 top-8 z-[9999] flex justify-center px-4 pointer-events-none"
 
     return (
         <AnimatePresence>
             {isVisible && (
-                <div className="fixed inset-x-0 top-8 z-[9999] flex justify-center px-4 pointer-events-none">
+                <div data-premium-alert className={containerClassName}>
                     <motion.div
                         initial={{ opacity: 0, y: -20, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -97,7 +102,11 @@ export function PremiumAlert({
                         </div>
 
                         <button
-                            onClick={onClose}
+                            onClick={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                onClose()
+                            }}
                             className="absolute right-2 top-2 rounded-full p-2 text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                         >
                             <X className="h-4 w-4" />
