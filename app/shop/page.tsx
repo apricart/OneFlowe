@@ -58,7 +58,38 @@ interface Order {
   refundReason?: string | null
   rejectionReason?: string | null
   statusAtRefund?: string | null
+  orderItems?: OrderItem[]
 }
+
+interface OrderItem {
+  id: number
+  quantity: number
+  quantityRefunded?: number | null
+}
+
+type RefundState = "none" | "partial" | "full"
+
+const getRefundState = (order: Pick<Order, "status" | "totalCents" | "refundAmountCents" | "orderItems">): RefundState => {
+  if ((order.status || "").toLowerCase() === "refunded") return "full"
+
+  if (order.orderItems?.length) {
+    const refundedItems = order.orderItems.filter((item) => (item.quantityRefunded || 0) > 0)
+    if (refundedItems.length === 0) return "none"
+
+    const allItemsFullyRefunded = order.orderItems.every((item) => (item.quantityRefunded || 0) >= item.quantity)
+    return allItemsFullyRefunded ? "full" : "partial"
+  }
+
+  const refundAmount = order.refundAmountCents || 0
+  if (refundAmount <= 0) return "none"
+  return refundAmount >= order.totalCents ? "full" : "partial"
+}
+
+const isRefundRelatedOrder = (order: Pick<Order, "status" | "totalCents" | "refundAmountCents" | "orderItems">) =>
+  getRefundState(order) !== "none"
+
+const isActiveOrder = (order: Pick<Order, "status" | "totalCents" | "refundAmountCents" | "orderItems">) =>
+  getRefundState(order) === "none"
 
 export default function OrderPortalPage() {
   const { data: session, status } = useSession()
@@ -158,6 +189,30 @@ export default function OrderPortalPage() {
     selectedOrder ? `/api/v1/orders?id=${selectedOrder.id}` : null,
     fetcher
   )
+
+  React.useEffect(() => {
+    const freshOrder = orderDetailsData?.items?.[0]
+    if (!freshOrder || !selectedOrder || freshOrder.id !== selectedOrder.id) return
+
+    setSelectedOrder((current) => (
+      current?.id === freshOrder.id
+        ? { ...current, ...freshOrder }
+        : current
+    ))
+
+    void mutateOrders((current: any) => {
+      if (!current?.items) return current
+
+      return {
+        ...current,
+        items: current.items.map((order: Order) => (
+          order.id === freshOrder.id
+            ? { ...order, ...freshOrder }
+            : order
+        )),
+      }
+    }, { revalidate: false })
+  }, [orderDetailsData, selectedOrder?.id, mutateOrders])
 
   // Fetch names for header context
   const { data: orgsData } = useOrganizations()
@@ -659,7 +714,7 @@ export default function OrderPortalPage() {
             className="gap-2"
           >
             <Package className="h-4 w-4" />
-            Active Orders ({ordersData?.items?.filter((o: any) => (o.status || "").toLowerCase() !== "refunded").length || 0})
+            Active Orders ({ordersData?.items?.filter(isActiveOrder).length || 0})
           </Button>
           <Button
             onClick={() => { void handleTabChange("refunded") }}
@@ -667,10 +722,7 @@ export default function OrderPortalPage() {
             className="gap-2"
           >
             <TrendingDown className="h-4 w-4" />
-            Refunded ({ordersData?.items?.filter((o: any) => {
-              const s = (o.status || "").toLowerCase()
-              return s === "refunded" || (o.refundAmountCents && o.refundAmountCents > 0)
-            }).length || 0})
+            Refunded ({ordersData?.items?.filter(isRefundRelatedOrder).length || 0})
           </Button>
         </div>
 
@@ -701,10 +753,9 @@ export default function OrderPortalPage() {
               <div className="space-y-3">
                 {ordersData.items
                   .filter((order: any) => {
-                    const status = (order.status || "").toLowerCase()
                     return activeTab === "refunded"
-                      ? status === "refunded" || (order.refundAmountCents && order.refundAmountCents > 0)
-                      : status !== "refunded" && !(order.refundAmountCents && order.refundAmountCents > 0)
+                      ? isRefundRelatedOrder(order)
+                      : isActiveOrder(order)
                   })
                   .map((order: any) => {
                     const statusColors: Record<string, { bg: string; text: string; icon: any }> = {
@@ -716,6 +767,7 @@ export default function OrderPortalPage() {
                     }
                     const statusInfo = statusColors[order.status?.toLowerCase()] || statusColors.pending
                     const StatusIcon = statusInfo.icon
+                    const refundState = getRefundState(order)
 
                     return (
                       <Card key={order.id} className="p-4 hover:shadow-md transition-shadow dark:bg-slate-900 dark:border-slate-800">
@@ -743,11 +795,13 @@ export default function OrderPortalPage() {
                                 const s = (order.status || "").toLowerCase()
                                 if (s === "pending") return "Awaiting Approval"
                                 if (s === "approved") {
-                                  if (order.refundAmountCents && order.refundAmountCents > 0) return "Partially Refunded"
+                                  if (refundState === "full") return "Refunded"
+                                  if (refundState === "partial") return "Partially Refunded"
                                   return "Approved"
                                 }
                                 if (s === "fulfilled") {
-                                  if (order.refundAmountCents && order.refundAmountCents > 0) return "Partially Refunded"
+                                  if (refundState === "full") return "Refunded"
+                                  if (refundState === "partial") return "Partially Refunded"
                                   return "Completed"
                                 }
                                 if (s === "rejected") return "Cancelled"
@@ -800,11 +854,11 @@ export default function OrderPortalPage() {
                               <span className="text-muted-foreground">Order Fulfilled</span>
                             </div>
                           )}
-                          {(order.status === "refunded" || (order.refundAmountCents && order.refundAmountCents > 0)) && (
+                          {refundState !== "none" && (
                             <div className="flex items-center gap-2 text-xs">
                               <TrendingDown className="h-4 w-4 text-red-600" />
                               <span className="text-muted-foreground">
-                                {order.status === "refunded" ? "Fully Refunded" : "Partially Refunded"}
+                                {refundState === "full" ? "Fully Refunded" : "Partially Refunded"}
                               </span>
                             </div>
                           )}
@@ -831,10 +885,9 @@ export default function OrderPortalPage() {
                   })}
                 {/* Empty State for Specific Filter */}
                 {ordersData.items.filter((order: any) => {
-                  const status = (order.status || "").toLowerCase()
                   return activeTab === "refunded"
-                    ? status === "refunded" || (order.refundAmountCents && order.refundAmountCents > 0)
-                    : status !== "refunded" && !(order.refundAmountCents && order.refundAmountCents > 0)
+                    ? isRefundRelatedOrder(order)
+                    : isActiveOrder(order)
                 }).length === 0 && (
                     <div className="text-center py-16">
                       {activeTab === "refunded" ? (

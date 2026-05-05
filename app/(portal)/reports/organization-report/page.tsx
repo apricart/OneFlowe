@@ -225,7 +225,7 @@ export default function OrganizationReportPage() {
             { label: "Orders",             value: (org: any) => org.orderCount || 0 },
             { label: "Fulfilled Orders",   value: (org: any) => org.fulfilledCount || 0 },
             { label: "Refunded Orders",    value: (org: any) => org.refundedCount || 0 },
-            { label: "Fulfillment Rate",   value: (org: any) => org.fulfillmentRate ? `${org.fulfillmentRate.toFixed(1)}%` : "N/A" },
+            // { label: "Fulfillment Rate",   value: (org: any) => org.fulfillmentRate ? `${org.fulfillmentRate.toFixed(1)}%` : "N/A" },
         ]
 
         const headers = columns.map(c => c.label)
