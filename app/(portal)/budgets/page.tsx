@@ -403,7 +403,7 @@ export default function BudgetsPage() {
           iconBadge="bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400"
         />
         <CompactStatCard
-          label="Credits / Remaining"
+          label="Remaining"
           value={formatAmount(totalRemaining)}
           icon={<CheckCircle2 className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-teal-50/80 to-emerald-50/80 border-teal-100/50 text-teal-700 dark:from-teal-900/20 dark:to-emerald-900/20 dark:border-teal-800/30 dark:text-teal-400"
