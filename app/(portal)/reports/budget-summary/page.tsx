@@ -89,6 +89,20 @@ interface BudgetSummaryResponse {
     }>;
 }
 
+const formatChartAxisPKR = (value: number) => {
+    if (value >= 1000000) {
+        const millions = value / 1000000;
+        return `₨ ${Number.isInteger(millions) ? millions.toFixed(0) : millions.toFixed(1)}M`;
+    }
+
+    if (value >= 1000) {
+        const thousands = value / 1000;
+        return `₨ ${Number.isInteger(thousands) ? thousands.toFixed(0) : thousands.toFixed(1)}k`;
+    }
+
+    return `₨ ${Number.isInteger(value) ? value : value.toFixed(0)}`;
+}
+
 export default function BudgetSummaryPage() {
     const router = useRouter()
     const pathname = usePathname()
@@ -1093,7 +1107,7 @@ export default function BudgetSummaryPage() {
                                                         axisLine={false}
                                                         tickLine={false}
                                                         tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}
-                                                        tickFormatter={(v) => `₨ ${v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`}
+                                                        tickFormatter={formatChartAxisPKR}
                                                         width={65}
                                                     />
                                                     <RechartsTooltip
