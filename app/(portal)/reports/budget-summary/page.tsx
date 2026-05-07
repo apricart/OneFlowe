@@ -1028,28 +1028,28 @@ export default function BudgetSummaryPage() {
                                                             initial={{ opacity: 0, scale: 0.95 }}
                                                             animate={{ opacity: 1, scale: 1 }}
                                                             exit={{ opacity: 0, scale: 0.95 }}
-                                                            className="col-span-3 grid grid-cols-2 lg:grid-cols-4 gap-3"
+                                                            className="col-span-3 grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3"
                                                         >
-                                                            <div className="relative overflow-hidden bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 rounded-xl p-3 border border-emerald-100 dark:border-emerald-900/50">
-                                                                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 mb-0.5">Base Budget</p>
-                                                                <p className="text-base font-black text-emerald-700 dark:text-emerald-300">{formatPKR(totalBaseline)}</p>
+                                                            <div className="relative overflow-hidden min-w-0 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20 rounded-xl p-3 border border-emerald-100 dark:border-emerald-900/50">
+                                                                <p className="relative z-10 whitespace-nowrap text-[8px] sm:text-[9px] font-black uppercase tracking-[0.14em] sm:tracking-widest text-emerald-500 mb-1">Base Budget</p>
+                                                                <p className="relative z-10 whitespace-nowrap text-[clamp(0.72rem,1.05vw,1rem)] leading-tight font-black tracking-tight text-emerald-700 dark:text-emerald-300">{formatPKR(totalBaseline)}</p>
                                                                 <div className="absolute -top-2 -right-2 w-12 h-12 bg-emerald-200/20 rounded-full blur-xl" />
                                                             </div>
-                                                            <div className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 rounded-xl p-3 border border-amber-100 dark:border-amber-900/50">
-                                                                <p className="text-[9px] font-black uppercase tracking-widest text-amber-500 mb-0.5">Addon Credits</p>
-                                                                <p className="text-base font-black text-amber-700 dark:text-amber-300">{formatPKR(totalAddon)}</p>
+                                                            <div className="relative overflow-hidden min-w-0 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 rounded-xl p-3 border border-amber-100 dark:border-amber-900/50">
+                                                                <p className="relative z-10 whitespace-nowrap text-[8px] sm:text-[9px] font-black uppercase tracking-[0.14em] sm:tracking-widest text-amber-500 mb-1">Addon Credits</p>
+                                                                <p className="relative z-10 whitespace-nowrap text-[clamp(0.72rem,1.05vw,1rem)] leading-tight font-black tracking-tight text-amber-700 dark:text-amber-300">{formatPKR(totalAddon)}</p>
                                                                 <div className="absolute -top-2 -right-2 w-12 h-12 bg-amber-200/20 rounded-full blur-xl" />
                                                             </div>
-                                                            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/20 rounded-xl p-3 border border-indigo-100 dark:border-indigo-900/50">
-                                                                <p className="text-[9px] font-black uppercase tracking-widest text-indigo-500 mb-0.5">Total Spent</p>
-                                                                <p className="text-base font-black text-indigo-700 dark:text-indigo-300">{formatPKR(totalSpent)}</p>
+                                                            <div className="relative overflow-hidden min-w-0 bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/20 rounded-xl p-3 border border-indigo-100 dark:border-indigo-900/50">
+                                                                <p className="relative z-10 whitespace-nowrap text-[8px] sm:text-[9px] font-black uppercase tracking-[0.14em] sm:tracking-widest text-indigo-500 mb-1">Total Spent</p>
+                                                                <p className="relative z-10 whitespace-nowrap text-[clamp(0.72rem,1.05vw,1rem)] leading-tight font-black tracking-tight text-indigo-700 dark:text-indigo-300">{formatPKR(totalSpent)}</p>
                                                                 <div className="absolute -top-2 -right-2 w-12 h-12 bg-indigo-200/20 rounded-full blur-xl" />
                                                             </div>
-                                                            <div className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-gray-50 dark:from-slate-950/30 dark:to-gray-950/20 rounded-xl p-3 border border-slate-200 dark:border-slate-800">
-                                                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-0.5">Utilization</p>
-                                                                <div className="flex items-center gap-2">
-                                                                    <p className={cn("text-base font-black", utilization > 90 ? "text-rose-500" : utilization > 70 ? "text-amber-500" : "text-emerald-500")}>{utilization.toFixed(1)}%</p>
-                                                                    <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden max-w-[60px]">
+                                                            <div className="relative overflow-hidden min-w-0 bg-gradient-to-br from-slate-50 to-gray-50 dark:from-slate-950/30 dark:to-gray-950/20 rounded-xl p-3 border border-slate-200 dark:border-slate-800">
+                                                                <p className="relative z-10 whitespace-nowrap text-[8px] sm:text-[9px] font-black uppercase tracking-[0.14em] sm:tracking-widest text-slate-400 mb-1">Utilization</p>
+                                                                <div className="relative z-10 flex items-center gap-2 min-w-0">
+                                                                    <p className={cn("whitespace-nowrap text-[clamp(0.72rem,1.05vw,1rem)] leading-tight font-black tracking-tight", utilization > 90 ? "text-rose-500" : utilization > 70 ? "text-amber-500" : "text-emerald-500")}>{utilization.toFixed(1)}%</p>
+                                                                    <div className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden max-w-[60px] min-w-8">
                                                                         <motion.div
                                                                             initial={{ width: 0 }}
                                                                             animate={{ width: `${Math.min(utilization, 100)}%` }}

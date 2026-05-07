@@ -153,10 +153,16 @@ export async function GET(req: NextRequest) {
         end: endDate.toISOString().slice(0, 16),
         compareStart: compareStartDateParam || "",
         compareEnd: compareEndDateParam || "",
+        months: parsedMonths.join(","),
+        years: parsedYears.join(","),
+        compareMonths: parsedCompMonths.join(","),
+        compareYears: parsedCompYears.join(","),
         granularity,
     })
 
     const fetchData = async () => {
+        const dashboardCreatedAt = sql`(${orders.createdAt} AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi'`
+
         // Build base conditions
         const conditions: any[] = []
 
@@ -168,10 +174,10 @@ export async function GET(req: NextRequest) {
 
         // Advanced Multi-Select Date Filtering (Months / Years arrays)
         if (parsedMonths.length > 0) {
-            conditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
+            conditions.push(sql`EXTRACT(MONTH FROM ${dashboardCreatedAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
         }
         if (parsedYears.length > 0) {
-            conditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
+            conditions.push(sql`EXTRACT(YEAR FROM ${dashboardCreatedAt}) IN (${sql.join(parsedYears, sql`, `)})`)
         }
 
         // Status filter: normalize to uppercase for comparison
@@ -363,10 +369,10 @@ export async function GET(req: NextRequest) {
             const compConditions: any[] = []
 
             if (parsedCompMonths.length > 0) {
-                compConditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
+                compConditions.push(sql`EXTRACT(MONTH FROM ${dashboardCreatedAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
             }
             if (parsedCompYears.length > 0) {
-                compConditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
+                compConditions.push(sql`EXTRACT(YEAR FROM ${dashboardCreatedAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
             }
 
             if (!hasCompareArrays) {

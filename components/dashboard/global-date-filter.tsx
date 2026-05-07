@@ -295,12 +295,13 @@ export function GlobalDateFilter({
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent 
-                                className="w-48 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" 
+                                className="w-48 max-h-[var(--radix-popover-content-available-height)] overflow-hidden p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                                 align="start"
                                 side="bottom"
-                                avoidCollisions={false}
+                                sideOffset={8}
+                                collisionPadding={12}
                             >
-                                <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
+                                <div className="space-y-1 max-h-[calc(var(--radix-popover-content-available-height)-3.5rem)] overflow-y-auto pr-1">
                                     {monthPresets.map((m, i) => {
                                         const monthValue = i + 1
                                         return (
@@ -337,12 +338,13 @@ export function GlobalDateFilter({
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent 
-                                className="w-32 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" 
+                                className="w-32 max-h-[var(--radix-popover-content-available-height)] overflow-hidden p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                                 align="start"
                                 side="bottom"
-                                avoidCollisions={false}
+                                sideOffset={8}
+                                collisionPadding={12}
                             >
-                                <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                                <div className="space-y-1 max-h-[calc(var(--radix-popover-content-available-height)-3.5rem)] overflow-y-auto pr-1">
                                     {dynamicYears.map((y: number) => (
                                         <div 
                                             key={y} 
@@ -373,7 +375,7 @@ export function GlobalDateFilter({
                     <DropdownMenuSeparator className="my-1.5 bg-slate-100 dark:bg-slate-800" />
 
                     <div className="px-1 mb-1.5">
-                        <div className={cn(
+                        {/* <div className={cn(
                             "flex items-center justify-between p-2 rounded-xl transition-colors",
                             compare ? "bg-indigo-50/50 dark:bg-indigo-950/30" : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
                         )}>
@@ -386,7 +388,7 @@ export function GlobalDateFilter({
                                 onCheckedChange={toggleCompare}
                                 className="scale-75 data-[state=checked]:bg-indigo-600"
                             />
-                        </div>
+                        </div> */}
                         {compare && (
                             <div className="mt-2 text-center" onClick={(e) => e.stopPropagation()}>
                                 <Popover open={compareCalendarOpen} onOpenChange={setCompareCalendarOpen}>
@@ -417,12 +419,13 @@ export function GlobalDateFilter({
                                                         </Button>
                                                     </PopoverTrigger>
                                                     <PopoverContent 
-                                                        className="w-48 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" 
+                                                        className="w-48 max-h-[var(--radix-popover-content-available-height)] overflow-hidden p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                                                         align="start"
                                                         side="bottom"
-                                                        avoidCollisions={false}
+                                                        sideOffset={8}
+                                                        collisionPadding={12}
                                                     >
-                                                        <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
+                                                        <div className="space-y-1 max-h-[calc(var(--radix-popover-content-available-height)-3.5rem)] overflow-y-auto pr-1">
                                                             {monthPresets.map((m, i) => {
                                                                 const monthValue = i + 1
                                                                 return (
@@ -459,12 +462,13 @@ export function GlobalDateFilter({
                                                         </Button>
                                                     </PopoverTrigger>
                                                     <PopoverContent 
-                                                        className="w-32 p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" 
+                                                        className="w-32 max-h-[var(--radix-popover-content-available-height)] overflow-hidden p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                                                         align="start"
                                                         side="bottom"
-                                                        avoidCollisions={false}
+                                                        sideOffset={8}
+                                                        collisionPadding={12}
                                                     >
-                                                        <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+                                                        <div className="space-y-1 max-h-[calc(var(--radix-popover-content-available-height)-3.5rem)] overflow-y-auto pr-1">
                                                             {dynamicYears.map((y) => (
                                                                 <div 
                                                                     key={y} 
@@ -502,7 +506,7 @@ export function GlobalDateFilter({
                                                 }}
                                                 onSelect={(range: any) => {
                                                     if (range?.from && range?.to) {
-                                                        const newCompareRange = { startDate: range.from, endDate: range.to }
+                                                        const newCompareRange = { startDate: startOfDay(range.from), endDate: endOfDay(range.to) }
                                                         onChange(value, activePreset, compare, newCompareRange, months, years, [], []) // Clear advanced when standard clicked
                                                         setCompareCalendarOpen(false)
                                                     }
@@ -572,7 +576,7 @@ export function GlobalDateFilter({
                                     onSelect={(range: any) => {
                                         if (range?.from && range?.to) {
                                             // Normal range selection clears the arrays
-                                            onChange({ startDate: range.from, endDate: range.to }, "custom", compare, compareRange, [], [], compareMonths, compareYears)
+                                            onChange({ startDate: startOfDay(range.from), endDate: endOfDay(range.to) }, "custom", compare, compareRange, [], [], compareMonths, compareYears)
                                             setCalendarOpen(false)
                                         }
                                     }}

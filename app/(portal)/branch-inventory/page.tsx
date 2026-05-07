@@ -1,12 +1,13 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import useSWR from "swr"
 import { motion, AnimatePresence } from "framer-motion"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAppContext } from "@/components/context/app-context"
 import { useSession } from "next-auth/react"
 import { Role } from "@/lib/rbac"
@@ -14,17 +15,15 @@ import { formatPKR, cn } from "@/lib/utils"
 import { 
   Search, 
   Package, 
-  Sparkles, 
   Box, 
   LayoutGrid, 
   Filter, 
   RefreshCw, 
   ChevronRight,
   Info,
-  AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  XCircle
 } from "lucide-react"
-import { BankingKPICard } from "@/components/dashboard/banking-kpi-card"
 import { Button } from "@/components/ui/button"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
@@ -74,6 +73,18 @@ export default function BranchInventoryPage() {
     if (organizationId) params.set("organizationId", String(organizationId))
   }
 
+  const statsParams = new URLSearchParams()
+  statsParams.set("limit", "5000")
+
+  if (role === "BRANCH_ADMIN") {
+    const adminBranchId = userBranchId || branchId
+    if (userOrgId) statsParams.set("organizationId", String(userOrgId))
+    if (adminBranchId) statsParams.set("branchId", String(adminBranchId))
+  } else {
+    if (branchId) statsParams.set("branchId", String(branchId))
+    if (organizationId) statsParams.set("organizationId", String(organizationId))
+  }
+
   const { data, isLoading, mutate } = useSWR<{
     items: BranchInventoryItem[]
     total: number
@@ -82,12 +93,20 @@ export default function BranchInventoryPage() {
     refreshInterval: 5000,
   })
 
+  const { data: statsData, mutate: mutateStats } = useSWR<{
+    items: BranchInventoryItem[]
+    total: number
+  }>(`/api/v1/branch/inventory?${statsParams.toString()}`, fetcher, {
+    fallbackData: { items: [], total: 0 },
+    refreshInterval: 5000,
+  })
+
   const inventory = data?.items ?? []
   const totalProducts = data?.total ?? 0
-  const lowStock = useMemo(
-    () => inventory.filter((item) => item.stockQuantity <= item.reorderThreshold && item.stockQuantity > 0).length,
-    [inventory]
-  )
+  const statsInventory = statsData?.items ?? []
+  const totalAssigned = statsData?.total ?? statsInventory.length
+  const activeCount = useMemo(() => statsInventory.filter((item) => item.isActive).length, [statsInventory])
+  const inactiveCount = Math.max(totalAssigned - activeCount, 0)
 
   return (
     <motion.main 
@@ -110,7 +129,10 @@ export default function BranchInventoryPage() {
         <div className="flex items-center gap-3">
           <Button 
             variant="outline" 
-            onClick={() => mutate()} 
+            onClick={() => {
+              void mutate()
+              void mutateStats()
+            }}
             className="h-10 px-4 rounded-xl border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shadow-sm gap-2 text-xs font-bold uppercase tracking-wider"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -120,44 +142,44 @@ export default function BranchInventoryPage() {
       </div>
 
       {/* ━━━ KPI Stats ━━━ */}
-      <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6 mb-8">
-        <BankingKPICard
-          icon={Package}
-          title="Assigned Products"
-          value={totalProducts}
-          subtitle="Currently active SKUs"
-          gradient="from-blue-500 to-indigo-600"
-          iconBg="text-blue-600 bg-blue-600"
-          delay={0}
+      <div className="relative z-10 grid gap-4 md:grid-cols-3 mb-8">
+        <StatCard
+          label="Assigned Products"
+          value={totalAssigned}
+          icon={<Package className="h-5 w-5" />}
+          variant="blue"
         />
-        <BankingKPICard
-          icon={AlertCircle}
-          title="Low Stock"
-          value={lowStock}
-          subtitle="Requires attention"
-          gradient="from-amber-400 to-orange-500"
-          iconBg="text-amber-600 bg-amber-600"
-          delay={50}
+        <StatCard
+          label="Active SKUs"
+          value={activeCount}
+          icon={<CheckCircle2 className="h-5 w-5" />}
+          variant="green"
+        />
+        <StatCard
+          label="Inactive SKUs"
+          value={inactiveCount}
+          icon={<XCircle className="h-5 w-5" />}
+          variant="red"
         />
       </div>
 
       {/* ━━━ Inventory Management Table ━━━ */}
       <Card className="border border-slate-200/80 dark:border-slate-800/60 shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl overflow-hidden glass-card rounded-[2rem]">
         <div className="p-6 border-b border-slate-100 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-800/20">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex flex-col gap-5">
             <div className="flex items-center gap-3">
               <LayoutGrid className="w-5 h-5 text-indigo-500" />
               <h3 className="text-lg font-black text-slate-800 dark:text-slate-200 uppercase tracking-widest">Branch Catalog</h3>
             </div>
-            
-            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-              <div className="relative group flex-1 md:flex-none">
+
+            <div className="flex w-full flex-col gap-3 md:flex-row md:flex-wrap md:items-center lg:flex-nowrap">
+              <div className="relative group w-full md:min-w-[320px] md:max-w-md md:flex-1">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
                 <Input
                   placeholder="Search products or SKU..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 w-full md:w-72 h-11 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20 transition-all text-sm font-medium"
+                  className="pl-10 w-full h-11 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20 transition-all text-sm font-medium"
                 />
               </div>
 
@@ -213,15 +235,17 @@ export default function BranchInventoryPage() {
                     >
                       <TableCell className="px-6 py-4">
                         <div className="flex items-center gap-4">
-                          <div className="relative group-hover:scale-110 transition-transform duration-300">
+                          <div className="relative h-14 w-14 shrink-0 group-hover:scale-110 transition-transform duration-300">
                             {item.customImageUrl || item.productImageUrl ? (
-                              <img
-                                src={item.customImageUrl || item.productImageUrl}
-                                alt={item.productName}
-                                className="w-14 h-14 object-cover rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm"
-                              />
+                              <div className="h-full w-full overflow-hidden rounded-2xl border border-slate-200 shadow-sm dark:border-slate-800">
+                                <img
+                                  src={item.customImageUrl || item.productImageUrl}
+                                  alt={item.productName}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
                             ) : (
-                              <div className="w-14 h-14 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                              <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
                                 <Package className="w-6 h-6 text-slate-300 dark:text-slate-500" />
                               </div>
                             )}
@@ -307,24 +331,67 @@ export default function BranchInventoryPage() {
   )
 }
 
+function StatCard({
+  label,
+  value,
+  icon,
+  variant
+}: {
+  label: string
+  value: string | number
+  icon: ReactNode
+  variant: "blue" | "green" | "red" | "amber" | "purple"
+}) {
+  const variants = {
+    blue: "bg-gradient-to-br from-blue-50/80 to-indigo-50/80 border-blue-100/50 text-blue-700 dark:from-blue-900/20 dark:to-indigo-900/20 dark:border-blue-800/30 dark:text-blue-400",
+    green: "bg-gradient-to-br from-emerald-50/80 to-teal-50/80 border-emerald-100/50 text-emerald-700 dark:from-emerald-900/20 dark:to-teal-900/20 dark:border-emerald-800/30 dark:text-emerald-400",
+    red: "bg-gradient-to-br from-rose-50/80 to-red-50/80 border-rose-100/50 text-rose-700 dark:from-rose-900/20 dark:to-red-900/20 dark:border-rose-800/30 dark:text-rose-400",
+    amber: "bg-gradient-to-br from-amber-50/80 to-orange-50/80 border-amber-100/50 text-amber-700 dark:from-amber-900/20 dark:to-orange-900/20 dark:border-amber-800/30 dark:text-amber-400",
+    purple: "bg-gradient-to-br from-purple-50/80 to-fuchsia-50/80 border-purple-100/50 text-purple-700 dark:from-purple-900/20 dark:to-fuchsia-900/20 dark:border-purple-800/30 dark:text-purple-400",
+  }
+
+  const iconBadge = {
+    blue: "bg-white/80 text-blue-600 shadow-sm border border-blue-100 dark:bg-slate-800 dark:border-blue-800",
+    green: "bg-white/80 text-emerald-600 shadow-sm border border-emerald-100 dark:bg-slate-800 dark:border-emerald-800",
+    red: "bg-white/80 text-rose-600 shadow-sm border border-rose-100 dark:bg-slate-800 dark:border-rose-800",
+    amber: "bg-white/80 text-amber-600 shadow-sm border border-amber-100 dark:bg-slate-800 dark:border-amber-800",
+    purple: "bg-white/80 text-purple-600 shadow-sm border border-purple-100 dark:bg-slate-800 dark:border-purple-800",
+  }
+
+  return (
+    <div className={cn("flex items-center justify-between p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md", variants[variant])}>
+      <div className="space-y-1">
+        <p className="text-[10px] font-bold uppercase tracking-[0.15em] opacity-80">{label}</p>
+        <p className="text-2xl font-black tracking-tight">{value}</p>
+      </div>
+      <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", iconBadge[variant])}>
+        {icon}
+      </div>
+    </div>
+  )
+}
+
 const CategoryFilter = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
   const { data } = useSWR<{ items: { id: number, name: string }[] }>('/api/v1/categories?limit=100', fetcher)
   return (
-    <div className="relative group">
-      <Filter className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-indigo-500 z-10" />
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="pl-10 pr-4 h-11 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20 transition-all text-[10px] font-black uppercase tracking-wider appearance-none w-full lg:w-48 shadow-sm cursor-pointer"
-      >
-        <option value="all">All Categories</option>
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="h-11 w-full rounded-xl border-slate-200 bg-white pl-3 pr-3 text-[10px] font-black uppercase tracking-wider shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-800 dark:bg-slate-900 md:w-56 md:shrink-0 lg:w-48">
+        <div className="flex min-w-0 items-center gap-2">
+          <Filter className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+          <SelectValue placeholder="All Categories" />
+        </div>
+      </SelectTrigger>
+      <SelectContent className="max-h-72 rounded-2xl border-slate-200 bg-white p-1.5 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+        <SelectItem value="all" className="rounded-xl py-2 text-[11px] font-black uppercase tracking-wider">
+          All Categories
+        </SelectItem>
         {data?.items?.map((cat) => (
-          <option key={cat.id} value={cat.id.toString()}>
+          <SelectItem key={cat.id} value={cat.id.toString()} className="rounded-xl py-2 text-[11px] font-bold uppercase tracking-wider">
             {cat.name}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-    </div>
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -335,20 +402,23 @@ const SubcategoryFilter = ({ categoryId, value, onChange }: { categoryId: string
   const { data } = useSWR<{ items: { id: number, name: string }[] }>(query, fetcher)
 
   return (
-    <div className="relative group">
-      <LayoutGrid className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-indigo-500 z-10" />
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="pl-10 pr-4 h-11 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20 transition-all text-[10px] font-black uppercase tracking-wider appearance-none w-full lg:w-48 shadow-sm cursor-pointer"
-      >
-        <option value="all">All Subcategories</option>
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="h-11 w-full rounded-xl border-slate-200 bg-white pl-3 pr-3 text-[10px] font-black uppercase tracking-wider shadow-sm transition-all focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-800 dark:bg-slate-900 md:w-60 md:shrink-0 lg:w-56">
+        <div className="flex min-w-0 items-center gap-2">
+          <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+          <SelectValue placeholder="All Subcategories" />
+        </div>
+      </SelectTrigger>
+      <SelectContent className="max-h-72 rounded-2xl border-slate-200 bg-white p-1.5 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+        <SelectItem value="all" className="rounded-xl py-2 text-[11px] font-black uppercase tracking-wider">
+          All Subcategories
+        </SelectItem>
         {data?.items?.map((cat) => (
-          <option key={cat.id} value={cat.id.toString()}>
+          <SelectItem key={cat.id} value={cat.id.toString()} className="rounded-xl py-2 text-[11px] font-bold uppercase tracking-wider">
             {cat.name}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-    </div>
+      </SelectContent>
+    </Select>
   )
 }

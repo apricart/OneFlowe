@@ -126,6 +126,25 @@ export default function OrdersManagementPage() {
     setActivePreset(preset)
   }, [])
 
+  const hasActiveOrderFilters =
+    reportGroupIds.length > 0 ||
+    reportBranchIds.length > 0 ||
+    searchQuery.length > 0 ||
+    activePreset !== "all" ||
+    dateRange !== null ||
+    statusFilter !== "all" ||
+    splitFilter !== "all"
+
+  const resetOrderFilters = useCallback(() => {
+    setReportGroupIds([])
+    setReportBranchIds([])
+    setSearchQuery("")
+    setDateRange(null)
+    setActivePreset("all")
+    setStatusFilter("all")
+    setSplitFilter("all")
+  }, [])
+
   // ━━━ CASCADING SELECTION CLEARING ━━━
   useEffect(() => {
     setReportBranchIds([])
@@ -528,33 +547,34 @@ export default function OrdersManagementPage() {
             )}
 
             {/* Bottom Row: Hierarchical Filters */}
-            {(isSuperAdmin || isHeadOffice) && (
+            {((isSuperAdmin || isHeadOffice) || hasActiveOrderFilters) && (
               <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-800/50">
                 <span className="text-[9px] uppercase font-black text-slate-400 tracking-wider flex items-center gap-1.5 ml-1">
                   <Filter className="h-3 w-3" /> Filters
                 </span>
-                
-                <GroupFilter
-                  selectedIds={reportGroupIds}
-                  onChange={setReportGroupIds}
-                  organizationIds={organizationId ? [organizationId] : undefined}
-                />
-                
-                <BranchFilter
-                  selectedIds={reportBranchIds}
-                  onChange={setReportBranchIds}
-                  organizationIds={organizationId ? [organizationId] : undefined}
-                  groupIds={reportGroupIds}
-                />
 
-                {(reportGroupIds.length > 0 || reportBranchIds.length > 0) && (
+                {(isSuperAdmin || isHeadOffice) && (
+                  <>
+                    <GroupFilter
+                      selectedIds={reportGroupIds}
+                      onChange={setReportGroupIds}
+                      organizationIds={organizationId ? [organizationId] : undefined}
+                    />
+
+                    <BranchFilter
+                      selectedIds={reportBranchIds}
+                      onChange={setReportBranchIds}
+                      organizationIds={organizationId ? [organizationId] : undefined}
+                      groupIds={reportGroupIds}
+                    />
+                  </>
+                )}
+
+                {hasActiveOrderFilters && (
                    <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => {
-                      setReportGroupIds([]);
-                      setReportBranchIds([]);
-                    }}
+                    onClick={resetOrderFilters}
                     className="h-7 px-2 text-[9px] font-black text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 uppercase tracking-widest gap-1 rounded-lg transition-all"
                   >
                     <RefreshCw className="h-3 w-3" /> Reset Filters
