@@ -504,7 +504,8 @@ export function DrillDownSheet({
                                                                                         <span className="text-[10px] font-semibold text-slate-400 font-mono italic">{prod.productCode || 'N/A'}</span>
                                                                                         <div className="flex items-center gap-1.5 ml-auto md:ml-0">
                                                                                             <Badge variant="outline" className="text-[8px] h-4 border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-0 font-medium">
-                                                                                                Qty: {prod.quantity - (prod.refundQuantity || 0)}
+                                                                                                Qty: {prod.quantity || 0}
+                                                                                                {/* Qty: {prod.quantity - (prod.refundQuantity || 0)} */}
                                                                                             </Badge>
                                                                                             {(prod.refundQuantity || 0) > 0 && (
                                                                                                 <Badge variant="outline" className="text-[8px] h-4 border-rose-200 bg-rose-50 text-rose-600 px-2 py-0 font-medium font-mono">

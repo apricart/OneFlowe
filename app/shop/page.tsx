@@ -19,7 +19,9 @@ import Image from "next/image"
 import { RefundManagement } from "@/components/refund-management"
 import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 
-const fetcher = (url: string) => fetch(url).then(r => r.json())
+const ORDER_PORTAL_REFRESH_INTERVAL_MS = 5000
+
+const fetcher = (url: string) => fetch(url, { cache: "no-store" }).then(r => r.json())
 
 const parseProductRating = (rating: unknown) => {
   const numericRating = typeof rating === "number" ? rating : Number(rating)
@@ -166,13 +168,18 @@ export default function OrderPortalPage() {
     : null
 
   const { data: inventoryData, mutate: mutateBranchInventory, error: inventoryError } = useSWR<any>(branchInventoryUrl, fetcher, {
-    refreshInterval: 5000, // Auto-refresh every 5s so admin changes appear quickly
+    refreshInterval: ORDER_PORTAL_REFRESH_INTERVAL_MS, // Auto-refresh so admin changes appear quickly
   })
   const { data: budget, mutate: mutateBudget } = useSWR<any>(budgetsUrl, fetcher, {
-    refreshInterval: 5000,
+    refreshInterval: ORDER_PORTAL_REFRESH_INTERVAL_MS,
   })
   const ordersUrl = "/api/v1/orders"
-  const { data: ordersData, mutate: mutateOrders } = useSWR<any>(ordersUrl, fetcher)
+  const isViewingOrders = activeTab === "orders" || activeTab === "refunded"
+  const { data: ordersData, mutate: mutateOrders } = useSWR<any>(ordersUrl, fetcher, {
+    refreshInterval: isViewingOrders || showOrderDetail ? ORDER_PORTAL_REFRESH_INTERVAL_MS : 0,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+  })
 
   const handleTabChange = async (tab: "shop" | "orders" | "refunded") => {
     setActiveTab(tab)
@@ -187,7 +194,12 @@ export default function OrderPortalPage() {
   // Fetch full details for selected order to get items
   const { data: orderDetailsData } = useSWR(
     selectedOrder ? `/api/v1/orders?id=${selectedOrder.id}` : null,
-    fetcher
+    fetcher,
+    {
+      refreshInterval: showOrderDetail ? ORDER_PORTAL_REFRESH_INTERVAL_MS : 0,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+    }
   )
 
   React.useEffect(() => {
