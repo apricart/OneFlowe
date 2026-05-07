@@ -51,6 +51,7 @@ import {
     Tooltip as RechartsTooltip,
     Legend
 } from 'recharts'
+import { Upload } from "lucide-react"
 
 interface BudgetSummaryResponse {
     summary: {
@@ -1464,7 +1465,7 @@ export default function BudgetSummaryPage() {
                                                                 variant="outline"
                                                                 className="h-12 border-indigo-100/50 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] gap-3 bg-indigo-50/30 dark:bg-slate-950/30 hover:bg-white dark:hover:bg-slate-900 shadow-sm transition-all rounded-2xl px-6 border-2 group"
                                                             >
-                                                                <DownloadIcon className="h-5 w-5 text-indigo-600 transition-transform group-hover:-translate-y-0.5" /> 
+                                                                <Upload className="h-5 w-5 text-indigo-600 transition-transform group-hover:-translate-y-0.5" /> 
                                                                 Export Options
                                                                 <ChevronDown className="h-3 w-3 opacity-50 ml-1" />
                                                             </Button>
@@ -1477,7 +1478,7 @@ export default function BudgetSummaryPage() {
                                                                 <Database className="h-4 w-4" /> Export as Excel
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => handleExport('csv')} className="cursor-pointer gap-3 p-3 rounded-lg font-black text-[11px] uppercase tracking-widest text-slate-700 dark:text-slate-300 focus:bg-indigo-50 focus:text-indigo-600 dark:focus:bg-indigo-500/10 dark:focus:text-indigo-400">
-                                                                <DownloadIcon className="h-4 w-4" /> Export as CSV
+                                                                <Upload className="h-4 w-4" /> Export as CSV
                                                             </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
