@@ -220,25 +220,29 @@ export async function generateAndSendOTP(
     // Generate OTP
     const code = generateOTP()
     const ttlSeconds = OTP_CONFIG.EXPIRY_MINUTES * 60
-
-    // Save OTP to Redis
-    try {
-      await RedisMFA.setOTP(userId, code, ttlSeconds, type)
-    } catch (redisError) {
-      logError(redisError, 'MFA_REDIS_SET_OTP', { userId, type })
-      // Continue even if Redis fails - we have database backup
-    }
-
-    // Save to database for audit trail
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000)
+
+    // Keep exactly one active OTP per user and MFA type.
+    // Any resend invalidates earlier unused codes before the new code is persisted.
     try {
-      await db.insert(mfaCodes).values({
-        userId,
-        code,
-        type,
-        expiresAt,
-        attempts: 0,
-        isUsed: false
+      await db.transaction(async (tx) => {
+        await tx
+          .update(mfaCodes)
+          .set({ isUsed: true })
+          .where(and(
+            eq(mfaCodes.userId, userId),
+            eq(mfaCodes.type, type),
+            eq(mfaCodes.isUsed, false)
+          ))
+
+        await tx.insert(mfaCodes).values({
+          userId,
+          code,
+          type,
+          expiresAt,
+          attempts: 0,
+          isUsed: false
+        })
       })
     } catch (dbError) {
       logError(dbError, 'MFA_DB_INSERT_CODE', { userId, type })
@@ -246,6 +250,14 @@ export async function generateAndSendOTP(
         success: false,
         message: "Failed to save OTP. Please try again."
       }
+    }
+
+    // Save OTP to Redis after the database state is authoritative.
+    try {
+      await RedisMFA.setOTP(userId, code, ttlSeconds, type)
+    } catch (redisError) {
+      logError(redisError, 'MFA_REDIS_SET_OTP', { userId, type })
+      // Continue even if Redis fails - verification can fall back to database
     }
 
     // Send OTP via email
@@ -341,14 +353,98 @@ export async function verifyOTP(
       }
     }
 
+    let latestDbOTP: {
+      id: string
+      code: string
+      attempts: number
+      isUsed: boolean
+      expiresAt: Date
+    } | null = null
+
+    try {
+      const [latestOTP] = await db
+        .select({
+          id: mfaCodes.id,
+          code: mfaCodes.code,
+          attempts: mfaCodes.attempts,
+          isUsed: mfaCodes.isUsed,
+          expiresAt: mfaCodes.expiresAt,
+        })
+        .from(mfaCodes)
+        .where(and(
+          eq(mfaCodes.userId, userId),
+          eq(mfaCodes.type, type),
+          eq(mfaCodes.isUsed, false),
+          gte(mfaCodes.expiresAt, new Date())
+        ))
+        .orderBy(desc(mfaCodes.expiresAt))
+        .limit(1)
+
+      latestDbOTP = latestOTP || null
+    } catch (dbError) {
+      logError(dbError, 'MFA_DB_LATEST_CODE_CHECK', { userId, type })
+      return {
+        success: false,
+        message: "Failed to verify OTP. Please request a new one."
+      }
+    }
+
+    if (!latestDbOTP) {
+      const attempts = (cooldown?.attempts || 0) + 1
+
+      try {
+        await setCooldown(userId, 'OTP_VERIFY', attempts)
+      } catch (error) {
+        console.error('[MFA] Failed to set cooldown:', error)
+      }
+
+      return {
+        success: false,
+        message: "OTP has expired. Please request a new one.",
+        remainingAttempts: Math.max(0, OTP_CONFIG.MAX_ATTEMPTS - attempts)
+      }
+    }
+
+    if (latestDbOTP.code !== sanitizedCode) {
+      const attempts = (cooldown?.attempts || 0) + 1
+
+      try {
+        await setCooldown(userId, 'OTP_VERIFY', attempts)
+      } catch (error) {
+        console.error('[MFA] Failed to set cooldown:', error)
+      }
+
+      return {
+        success: false,
+        message: "Invalid OTP code. Please use the latest code sent to your email.",
+        remainingAttempts: Math.max(0, OTP_CONFIG.MAX_ATTEMPTS - attempts)
+      }
+    }
+
     // Check OTP in Redis first
     let otpData
     try {
-      otpData = await RedisMFA.getOTP(userId, sanitizedCode)
+      const latestRedisCode = await RedisMFA.getLatestOTPCode(userId, type)
+      if (latestRedisCode && latestRedisCode !== sanitizedCode) {
+        otpData = null
+      } else {
+        otpData = await RedisMFA.getOTP(userId, sanitizedCode)
+      }
     } catch (redisError) {
       logError(redisError, 'MFA_REDIS_GET_OTP', { userId })
       // Fall back to database if Redis fails
       otpData = null
+    }
+
+    if (!otpData) {
+      otpData = {
+        userId,
+        code: latestDbOTP.code,
+        type,
+        attempts: latestDbOTP.attempts,
+        isUsed: latestDbOTP.isUsed,
+        expiresAt: latestDbOTP.expiresAt,
+      }
     }
 
     if (!otpData || otpData.isUsed || otpData.type !== type) {
@@ -401,6 +497,7 @@ export async function verifyOTP(
     // Mark OTP as used in Redis
     try {
       await RedisMFA.markOTPUsed(userId, sanitizedCode)
+      await RedisMFA.deleteLatestOTP(userId, type)
     } catch (redisError) {
       logError(redisError, 'MFA_REDIS_MARK_USED', { userId })
       // Continue - database update is more critical
@@ -413,8 +510,8 @@ export async function verifyOTP(
         .set({ isUsed: true })
         .where(
           and(
+            eq(mfaCodes.id, latestDbOTP.id),
             eq(mfaCodes.userId, userId),
-            eq(mfaCodes.code, sanitizedCode),
             eq(mfaCodes.type, type)
           )
         )

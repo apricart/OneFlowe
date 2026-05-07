@@ -26,6 +26,12 @@ export const REDIS_KEYS = {
     }
     return `mfa:otp:${userId}:${code}`
   },
+  MFA_OTP_LATEST: (userId: string, type: string) => {
+    if (!userId || !type) {
+      throw new Error('userId and type are required for MFA_OTP_LATEST key')
+    }
+    return `mfa:otp:latest:${userId}:${type}`
+  },
   MFA_ATTEMPTS: (userId: string, type: string) => {
     if (!userId || !type) {
       throw new Error('userId and type are required for MFA_ATTEMPTS key')
@@ -137,6 +143,7 @@ export class RedisMFA {
   // Set OTP with TTL
   static async setOTP(userId: string, code: string, ttlSeconds: number, type: string): Promise<void> {
     const key = REDIS_KEYS.MFA_OTP(userId, code)
+    const latestKey = REDIS_KEYS.MFA_OTP_LATEST(userId, type)
     const otpData = {
       userId,
       code,
@@ -146,6 +153,7 @@ export class RedisMFA {
       isUsed: false,
     }
     await redis.setex(key, ttlSeconds, JSON.stringify(otpData))
+    await redis.setex(latestKey, ttlSeconds, code)
   }
 
   // Get OTP data
@@ -165,6 +173,18 @@ export class RedisMFA {
     } else if (typeof data === 'object') {
       return data
     }
+    return null
+  }
+
+  // Get latest active OTP code for a user and MFA type
+  static async getLatestOTPCode(userId: string, type: string): Promise<string | null> {
+    const key = REDIS_KEYS.MFA_OTP_LATEST(userId, type)
+    const data = await redis.get(key)
+
+    if (!data) return null
+    if (typeof data === 'string') return data
+    if (typeof data === 'number') return String(data)
+
     return null
   }
 
@@ -214,6 +234,12 @@ export class RedisMFA {
       otpData.isUsed = true
       await redis.setex(key, 120, JSON.stringify(otpData)) // 2 minutes TTL
     }
+  }
+
+  // Clear latest OTP pointer after successful verification
+  static async deleteLatestOTP(userId: string, type: string): Promise<void> {
+    const key = REDIS_KEYS.MFA_OTP_LATEST(userId, type)
+    await redis.del(key)
   }
 
   // Delete OTP

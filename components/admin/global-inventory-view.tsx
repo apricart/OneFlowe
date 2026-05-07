@@ -13,6 +13,7 @@ import { Search, Package, Sparkles, Plus, Edit, Trash2, Building2, AlertTriangle
 import { ProductForm } from "@/components/global-inventory/product-form"
 import { useToast } from "@/hooks/use-toast"
 import { useDebounce } from "@/hooks/use-debounce"
+import { Loader } from "lucide-react"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 const PAGE_SIZE = 50
@@ -391,7 +392,7 @@ export default function GlobalInventoryView() {
                                                         onClick={() => handleEditProduct(product.id)}
                                                     >
                                                         {loadingProductId === product.id ? (
-                                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                                            <Loader className="h-3 w-3 animate-spin" />
                                                         ) : (
                                                             <Edit className="h-3 w-3" />
                                                         )}
