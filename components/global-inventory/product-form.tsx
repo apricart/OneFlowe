@@ -597,7 +597,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+        {/* <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
           <CardHeader className="space-y-1 pb-4">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
@@ -671,7 +671,7 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
             //   </div>
             // </CardContent>
           )}
-        </Card>
+        </Card> */}
 
         {/* Action Buttons */}
         <div className="flex items-center justify-end gap-3 pt-4 border-t">
