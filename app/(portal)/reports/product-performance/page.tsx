@@ -794,31 +794,17 @@ export default function ProductPerformancePage() {
                         comparisonLabel="Prior"
                         comparisonValue={comparison ? `${comparison.totalRefunds.toLocaleString()} items` : undefined}
                     />
-                    <Card className="p-5 rounded-2xl border border-violet-100/50 dark:border-violet-800/30 shadow-sm bg-gradient-to-br from-violet-50/80 to-indigo-50/80 dark:from-violet-950/20 dark:to-indigo-950/20 flex flex-col justify-between transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 group">
-                        <div className="flex items-center justify-between mb-2">
-                              <div>
-                            <p className="text-[10px] font-bold text-violet-500 uppercase tracking-widest mb-1 opacity-80">Product Catalog</p>
-                            <p className="text-3xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">{products.length.toLocaleString()}</p>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tight">
-                                    <ShieldCheck className="h-3 w-3" /> {activeProductCount} active
-                                </span>
-                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-tight">
-                                    <ShieldX className="h-3 w-3" /> {inactiveProductCount} inactive
-                                </span>
-                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-tight">
-                                    <ShieldX className="h-3 w-3" /> {deletedProductCount} deleted
-                                </span>
-                            </div>
-                        </div>
-                            <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 shadow-inner group-hover:scale-110 transition-transform duration-300">
-                                <Layers className="h-4 w-4" />
-                            </div>
-                            
-                            {/* <Badge variant="outline" className="text-[9px] uppercase font-black tracking-widest border-violet-200 dark:border-violet-800 text-violet-500 bg-violet-50/50 dark:bg-violet-950/30">STATUS</Badge> */}
-                        </div>
-                     
-                    </Card>
+
+                      <KPICard
+                        title="Product Catalog"
+                        value={products.length.toLocaleString()}
+                        icon={Layers}
+                        colorScheme="indigo"
+                        trend={undefined}
+                        comparisonLabel="Prior"
+                        comparisonValue={comparison ? `${comparison.products.toLocaleString()} items` : undefined}
+                    />
+                 
                 </div>
 
                 <Tabs value={activeTab} onValueChange={(val) => {
