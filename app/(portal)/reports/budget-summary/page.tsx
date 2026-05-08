@@ -104,6 +104,8 @@ const formatChartAxisPKR = (value: number) => {
     return `₨ ${Number.isInteger(value) ? value : value.toFixed(0)}`;
 }
 
+const ALL_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
 export default function BudgetSummaryPage() {
     const router = useRouter()
     const pathname = usePathname()
@@ -485,6 +487,34 @@ export default function BudgetSummaryPage() {
         }
     }, [availableChartYears])
 
+    const getDefaultReportYears = useCallback(() => {
+        const currentYear = new Date().getFullYear()
+        if (availableChartYears.includes(currentYear)) return [currentYear]
+        const latestYear = availableChartYears[availableChartYears.length - 1]
+        return latestYear ? [latestYear] : []
+    }, [availableChartYears])
+
+    const getDefaultChartYears = useCallback(() => {
+        const currentYear = new Date().getFullYear()
+        if (availableChartYears.includes(currentYear)) return [currentYear]
+        const latestYear = availableChartYears[availableChartYears.length - 1]
+        return latestYear ? [latestYear] : []
+    }, [availableChartYears])
+
+    const resetChartFilters = useCallback(() => {
+        setChartYears(getDefaultChartYears())
+        setChartMonths([...ALL_MONTHS])
+        setChartBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+        setShowBudgetBar(false)
+    }, [contextBranchIds, getDefaultChartYears])
+
+    const resetReportFilters = useCallback(() => {
+        setReportYears(getDefaultReportYears())
+        setReportMonths([...ALL_MONTHS])
+        setReportBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+        setSearchTerm("")
+    }, [contextBranchIds, getDefaultReportYears])
+
     const CHART_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
     // Filtered chart data based on chart-local filters
@@ -830,23 +860,16 @@ export default function BudgetSummaryPage() {
                                                 />
                                             </div>
                                         </div>
-                                        {(chartYears.length > 0 || chartMonths.length > 0 || chartBranchIds.length > 0) && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => {
-                                                    const currentY = new Date().getFullYear();
-                                                    const defaultYear = availableChartYears.includes(currentY) ? currentY : (availableChartYears[availableChartYears.length - 1] || currentY);
-                                                    setChartYears([defaultYear]);
-                                                    setChartMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-                                                    setChartBranchIds([]);
-                                                    setShowBudgetBar(true);
-                                                }}
-                                                className="h-7 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full px-3 gap-1 transition-all duration-200 hover:scale-105"
-                                            >
-                                                <RotateCcw className="h-3 w-3" /> Reset Defaults
-                                            </Button>
-                                        )}
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={resetChartFilters}
+                                            className="h-7 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full px-3 gap-1 transition-all duration-200 hover:scale-105"
+                                            aria-label="Reset analytics filters"
+                                            title="Reset analytics filters"
+                                        >
+                                            <RefreshCw className={cn("h-3 w-3", isChartLoading && "animate-spin")} /> Reset Defaults
+                                        </Button>
                                     </div>
                                     {/* ── Chart Filters ── */}
                                     <div className="flex flex-wrap items-center gap-2">
@@ -1447,6 +1470,19 @@ export default function BudgetSummaryPage() {
                                                             </div>
                                                         </PopoverContent>
                                                     </Popover>
+
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={resetReportFilters}
+                                                        className="h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 uppercase tracking-widest hover:bg-slate-50"
+                                                        aria-label="Reset report filters"
+                                                        title="Reset report filters"
+                                                    >
+                                                        <RotateCcw className="h-3.5 w-3.5" />
+                                                        Reset
+                                                    </Button>
 
                                                     <div className="h-8 w-px bg-slate-100 dark:bg-slate-800 mx-2" />
 

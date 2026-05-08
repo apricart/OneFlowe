@@ -38,6 +38,8 @@ import { Upload } from "lucide-react"
 
 type DateRange = { startDate: Date; endDate: Date }
 
+const ALL_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
 export default function BranchReportsPage() {
     const router = useRouter()
     const pathname = usePathname()
@@ -169,11 +171,10 @@ export default function BranchReportsPage() {
     useEffect(() => {
         if (hasMounted && isInitialLoad.current && allYears.length > 0) {
             if (activePreset === "all") {
-                const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-                setChartMonths(months)
-                setChartYears(allYears)
-                setReportMonths(months)
-                setReportYears(allYears)
+                setChartMonths([...ALL_MONTHS])
+                setChartYears([...allYears])
+                setReportMonths([...ALL_MONTHS])
+                setReportYears([...allYears])
             }
             isInitialLoad.current = false
         }
@@ -189,6 +190,35 @@ export default function BranchReportsPage() {
         if (cm !== undefined) setCompareMonths(cm)
         if (cy !== undefined) setCompareYears(cy)
     }, [])
+
+    const resetReportFilters = useCallback(() => {
+        const defaultOrgId = contextOrgId ? String(contextOrgId) : (userOrgId ? String(userOrgId) : "")
+        const defaultBranchIds = role === "BRANCH_ADMIN" && userBranchId
+            ? [String(userBranchId)]
+            : (contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+
+        setSelectedOrgId(defaultOrgId)
+        setSelectedGroupIds([])
+        setSelectedBranchIds(defaultBranchIds)
+        setReportMonths(activePreset === "all" ? [...ALL_MONTHS] : [])
+        setReportYears(activePreset === "all" ? [...allYears] : [])
+        setReportSearch("")
+        mutateReport()
+    }, [activePreset, allYears, contextBranchIds, contextOrgId, mutateReport, role, userBranchId, userOrgId])
+
+    const resetChartFilters = useCallback(() => {
+        const defaultOrgId = contextOrgId ? String(contextOrgId) : (userOrgId ? String(userOrgId) : "")
+        const defaultBranchIds = role === "BRANCH_ADMIN" && userBranchId
+            ? [String(userBranchId)]
+            : (contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+
+        setSelectedOrgId(defaultOrgId)
+        setSelectedGroupIds([])
+        setSelectedBranchIds(defaultBranchIds)
+        setChartMonths(activePreset === "all" ? [...ALL_MONTHS] : [])
+        setChartYears(activePreset === "all" ? [...allYears] : [])
+        mutateChart()
+    }, [activePreset, allYears, contextBranchIds, contextOrgId, mutateChart, role, userBranchId, userOrgId])
 
     const summary = globalData?.summary || { totalOrders: 0, totalRevenue: 0, totalRefunds: 0, activeBranches: 0 }
     const comparison = globalData?.comparison
@@ -389,7 +419,7 @@ export default function BranchReportsPage() {
                                         </div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11">Comparative output analysis</p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={() => mutateChart()} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800">
+                                    <Button variant="outline" size="sm" onClick={resetChartFilters} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800" aria-label="Reset analytics filters" title="Reset analytics filters">
                                         <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isChartLoading && "animate-spin")} />
                                     </Button>
                                 </div>
@@ -529,7 +559,7 @@ export default function BranchReportsPage() {
                             )}
                             <MonthFilter selected={reportMonths} onChange={setReportMonths} />
                              <YearFilter selected={reportYears} onChange={setReportYears} availableYears={allYears} />
-                            <Button variant="outline" size="sm" onClick={() => mutateReport()} className="h-10 w-10 p-0 rounded-xl">
+                            <Button variant="outline" size="sm" onClick={resetReportFilters} className="h-10 w-10 p-0 rounded-xl" aria-label="Reset report filters" title="Reset report filters">
                                 <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isReportLoading && "animate-spin")} />
                             </Button>
                             <DropdownMenu>

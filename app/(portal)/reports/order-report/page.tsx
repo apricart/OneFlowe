@@ -249,6 +249,26 @@ export default function OrderReportPage() {
         setContextBranchIds(ids)
     }, [setContextBranchIds])
 
+    const resetReportFilters = useCallback(() => {
+        setStatusFilter("all")
+        setReportSearch("")
+        setReportMonths([])
+        setReportYears([])
+        setReportOrgIds([])
+        setReportGroupIds([])
+        setReportBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+        mutateReport()
+    }, [contextBranchIds, mutateReport])
+
+    const resetChartFilters = useCallback(() => {
+        setChartMonths([])
+        setChartYears([])
+        setChartOrgIds([])
+        setChartGroupIds([])
+        setChartBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+        mutateChart()
+    }, [contextBranchIds, mutateChart])
+
     // ━━━ DATA PROCESSING ━━━
     const summary = globalData?.summary || { totalSales: 0, totalRefunds: 0, totalTax: 0, totalSubtotal: 0, orderCount: 0, totalOrderCount: 0 }
     const comparison = globalData?.comparison
@@ -553,6 +573,17 @@ export default function OrderReportPage() {
                                                 />
                                             </>
                                         )}
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={resetChartFilters}
+                                            className="h-10 w-10 p-0 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm"
+                                            aria-label="Reset analytics filters"
+                                            title="Reset analytics filters"
+                                        >
+                                            <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isChartLoading && "animate-spin")} />
+                                        </Button>
                                     </div>
                                 </div>
                                 <div className="p-8 h-[400px]">
@@ -711,6 +742,17 @@ export default function OrderReportPage() {
                                     </>
                                 )}
                                 <ColumnSelector columns={ALL_COLUMNS} storageKey="order-report-v2" visibleKeys={visibleKeys} onChange={setVisibleKeys} />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={resetReportFilters}
+                                    className="h-11 w-11 p-0 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm"
+                                    aria-label="Reset report filters"
+                                    title="Reset report filters"
+                                >
+                                    <RotateCcw className="h-3.5 w-3.5 text-slate-500" />
+                                </Button>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <Button variant="outline" size="sm" className="h-11 text-[11px] font-black underline decoration-slate-200 gap-2 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-sm px-5">

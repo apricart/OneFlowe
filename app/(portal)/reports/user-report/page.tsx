@@ -52,6 +52,8 @@ import { Upload } from "lucide-react"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
+const ALL_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
 export default function UserReportPage() {
     const router = useRouter()
     const pathname = usePathname()
@@ -271,6 +273,29 @@ export default function UserReportPage() {
         if (cm !== undefined) setCompareMonths(cm)
         if (cy !== undefined) setCompareYears(cy)
     }, [])
+
+    const resetReportFilters = useCallback(() => {
+        setReportSearch("")
+        setReportMonths([...ALL_MONTHS])
+        setReportYears([...allYears])
+        setReportBranchIds([])
+        setReportOrganizationIds([])
+        setReportGroupIds([])
+        setReportUserIds([])
+        setVisibleUserProductCounts({})
+        mutateReport()
+        mutateUserProducts()
+    }, [allYears, mutateReport, mutateUserProducts])
+
+    const resetChartFilters = useCallback(() => {
+        setChartMonths([...ALL_MONTHS])
+        setChartYears([...allYears])
+        setChartBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+        setChartOrganizationIds([])
+        setChartGroupIds([])
+        setChartUserIds([])
+        mutateChart()
+    }, [allYears, contextBranchIds, mutateChart])
 
     const showNextUserProduct = useCallback((userId: string | number, totalProducts: number) => {
         setVisibleUserProductCounts((prev) => {
@@ -499,15 +524,8 @@ export default function UserReportPage() {
                                         groupIds={chartGroupIds}
                                         branchIds={chartBranchIds}
                                     />
-                                    <Button variant="ghost" size="icon" onClick={() => {
-                                        setChartMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-                                        setChartYears([]);
-                                        setChartBranchIds([]);
-                                        setChartOrganizationIds([]);
-                                        setChartGroupIds([]);
-                                        setChartUserIds([]);
-                                    }} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all">
-                                        <RefreshCw className="h-4 w-4" />
+                                    <Button variant="ghost" size="icon" onClick={resetChartFilters} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all" aria-label="Reset analytics filters" title="Reset analytics filters">
+                                        <RefreshCw className={cn("h-4 w-4", isChartLoading && "animate-spin")} />
                                     </Button>
                                 </div>
                             </div>
@@ -747,14 +765,7 @@ export default function UserReportPage() {
                                         groupIds={reportGroupIds}
                                         branchIds={reportBranchIds}
                                     />
-                                    <Button variant="ghost" size="icon" onClick={() => {
-                                        setReportMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-                                        setReportYears([]);
-                                        setReportBranchIds([]);
-                                        setReportOrganizationIds([]);
-                                        setReportGroupIds([]);
-                                        setReportUserIds([]);
-                                    }} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all">
+                                    <Button variant="ghost" size="icon" onClick={resetReportFilters} className="h-10 w-10 text-slate-400 hover:text-indigo-500 rounded-xl hover:bg-indigo-50/50 transition-all" aria-label="Reset report filters" title="Reset report filters">
                                         <RefreshCw className="h-4 w-4" />
                                     </Button>
                                     <DropdownMenu>

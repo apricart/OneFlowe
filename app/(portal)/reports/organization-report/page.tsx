@@ -88,6 +88,8 @@ const getDefaultDateRange = (): DateRange => ({
     endDate: endOfMonth(new Date()),
 })
 
+const ALL_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
 export default function OrganizationReportPage() {
     const { data: session } = useSession()
     const role = (session?.user as any)?.role
@@ -261,23 +263,35 @@ export default function OrganizationReportPage() {
     }, [allTimeData])
 
     const resetChartFilters = useCallback(() => {
-        const defaultMonths = activePreset === "all" ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : []
+        const defaultMonths = activePreset === "all" ? ALL_MONTHS : []
         const defaultYears = activePreset === "all" ? allYears : []
 
-        setChartMonths(defaultMonths)
-        setChartYears(defaultYears)
+        setChartMonths([...defaultMonths])
+        setChartYears([...defaultYears])
         setChartOrgIds([])
         setChartBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
-    }, [activePreset, allYears, contextBranchIds])
+        mutateChart()
+    }, [activePreset, allYears, contextBranchIds, mutateChart])
+
+    const resetReportFilters = useCallback(() => {
+        const defaultMonths = activePreset === "all" ? ALL_MONTHS : []
+        const defaultYears = activePreset === "all" ? allYears : []
+
+        setReportMonths([...defaultMonths])
+        setReportYears([...defaultYears])
+        setReportOrgIds([])
+        setReportBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+        setReportSearch("")
+        mutateReport()
+    }, [activePreset, allYears, contextBranchIds, mutateReport])
 
     useEffect(() => {
         if (hasMounted && isInitialLoad.current && allYears.length > 0) {
             if (activePreset === "all") {
-                const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-                setChartMonths(months)
-                setChartYears(allYears)
-                setReportMonths(months)
-                setReportYears(allYears)
+                setChartMonths([...ALL_MONTHS])
+                setChartYears([...allYears])
+                setReportMonths([...ALL_MONTHS])
+                setReportYears([...allYears])
             }
             isInitialLoad.current = false
         }
@@ -477,7 +491,7 @@ export default function OrganizationReportPage() {
                                         </div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11"></p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={() => mutateChart()} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800">
+                                    <Button variant="outline" size="sm" onClick={resetChartFilters} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800" aria-label="Reset analytics filters" title="Reset analytics filters">
                                         <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isChartLoading && "animate-spin")} />
                                     </Button>
                                 </div>
@@ -752,7 +766,7 @@ export default function OrganizationReportPage() {
                                     placeholder="Branches"
                                 />
                             )}
-                            <Button variant="outline" size="sm" onClick={() => mutateReport()} className="h-10 w-10 p-0 rounded-xl border-slate-200 dark:border-slate-800">
+                            <Button variant="outline" size="sm" onClick={resetReportFilters} className="h-10 w-10 p-0 rounded-xl border-slate-200 dark:border-slate-800" aria-label="Reset report filters" title="Reset report filters">
                                 <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isReportLoading && "animate-spin")} />
                             </Button>
                             <DropdownMenu>

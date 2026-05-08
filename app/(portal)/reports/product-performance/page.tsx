@@ -50,6 +50,7 @@ import { Upload } from "lucide-react"
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 const CHART_COLORS = ['#6366f1', '#8b5cf6', '#a78bfa', '#c4b5fd', '#818cf8', '#7c3aed', '#4f46e5', '#4338ca', '#6d28d9', '#5b21b6']
+const ALL_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
 const LEDGER_COLUMNS: ColumnDef[] = [
     { key: "date", label: "Date", defaultVisible: true },
@@ -335,6 +336,20 @@ export default function ProductPerformancePage() {
         setContextBranchIds(ids)
     }, [setContextBranchIds])
 
+    const getDefaultReportYears = useCallback(() => {
+        const currentYear = new Date().getFullYear()
+        if (availableChartYears.includes(currentYear)) return [currentYear]
+        const latestYear = availableChartYears[availableChartYears.length - 1]
+        return latestYear ? [latestYear] : []
+    }, [availableChartYears])
+
+    const getDefaultChartYears = useCallback(() => {
+        const currentYear = new Date().getFullYear()
+        if (availableChartYears.includes(currentYear)) return [currentYear]
+        const latestYear = availableChartYears[availableChartYears.length - 1]
+        return latestYear ? [latestYear] : []
+    }, [availableChartYears])
+
     // ━━━ GLOBAL DATA (Bento Grid) ━━━
     const globalQueryParams = new URLSearchParams()
     
@@ -382,6 +397,16 @@ export default function ProductPerformancePage() {
 
     const { data: chartPerfData, isLoading: isChartPerfLoading, mutate: mutateChart } = useSWR<any>(`/api/v1/analytics/products/performance?${chartQueryParams.toString()}`, fetcher)
 
+    const resetChartFilters = useCallback(() => {
+        setChartYears(getDefaultChartYears())
+        setChartMonths([...ALL_MONTHS])
+        setChartBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+        setChartGroupIds([])
+        setChartOrgIds([])
+        setChartProductIds([])
+        mutateChart()
+    }, [contextBranchIds, getDefaultChartYears, mutateChart])
+
     // ━━━ REPORT DATA (Local Filtered) ━━━
     const reportQueryParams = new URLSearchParams()
     
@@ -403,6 +428,18 @@ export default function ProductPerformancePage() {
     if (reportSearchTerm) reportQueryParams.set("searchTerm", reportSearchTerm)
 
     const { data: ledgerData, isLoading: isLedgerLoading, mutate: mutateLedger } = useSWR<any>(`/api/v1/analytics/orders/itemized?${reportQueryParams.toString()}`, fetcher)
+
+    const resetReportFilters = useCallback(() => {
+        setReportYears(getDefaultReportYears())
+        setReportMonths([...ALL_MONTHS])
+        setReportBranchIds([])
+        setReportGroupIds([])
+        setReportProductIds([])
+        setReportOrganizationIds([])
+        setReportSearchTerm("")
+        setExpandedRow(null)
+        mutateLedger()
+    }, [getDefaultReportYears, mutateLedger])
 
     useEffect(() => {
         setHasMounted(true)
@@ -811,21 +848,16 @@ export default function ProductPerformancePage() {
                                             {chartTitleLabel}
                                         </CardTitle>
                                     </div>
-                                    {(chartYears.length > 0 || chartMonths.length > 0 || chartBranchIds.length > 0 || chartGroupIds.length > 0) && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => {
-                                                setChartYears([]);
-                                                setChartMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-                                                setChartBranchIds([]);
-                                                setChartGroupIds([]);
-                                            }}
-                                            className="h-7 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full px-3 gap-1 transition-all duration-200 hover:scale-105"
-                                        >
-                                            <RotateCcw className="h-3 w-3" /> Reset Defaults
-                                        </Button>
-                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={resetChartFilters}
+                                        className="h-7 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full px-3 gap-1 transition-all duration-200 hover:scale-105"
+                                        aria-label="Reset analytics filters"
+                                        title="Reset analytics filters"
+                                    >
+                                        <RefreshCw className={cn("h-3 w-3", isChartPerfLoading && "animate-spin")} /> Reset Defaults
+                                    </Button>
                                 </div>
 
                                 {/* ── Chart Filters ── */}
@@ -1137,23 +1169,16 @@ export default function ProductPerformancePage() {
                                             {role === "SUPER_ADMIN" ? "Product Wise Sale" : "Product Wise Purchase"}
                                         </h3>
                                     </div>
-                                    {(reportYears.length > 0 || reportMonths.length > 0 || reportBranchIds.length > 0 || reportGroupIds.length > 0) && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => {
-                                                setReportYears([]);
-                                                setReportMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-                                                setReportBranchIds([]);
-                                                setReportGroupIds([]);
-                                                setReportProductIds([]);
-                                                setReportOrganizationIds([]);
-                                            }}
-                                            className="h-7 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full px-3 gap-1 transition-all duration-200 hover:scale-105"
-                                        >
-                                            <RotateCcw className="h-3 w-3" /> Reset Defaults
-                                        </Button>
-                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={resetReportFilters}
+                                        className="h-7 text-[10px] font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-full px-3 gap-1 transition-all duration-200 hover:scale-105"
+                                        aria-label="Reset report filters"
+                                        title="Reset report filters"
+                                    >
+                                        <RotateCcw className="h-3 w-3" /> Reset Defaults
+                                    </Button>
                                 </div>
 
                                 <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
