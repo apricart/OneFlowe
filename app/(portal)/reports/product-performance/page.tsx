@@ -422,6 +422,10 @@ export default function ProductPerformancePage() {
         if (reportOrganizationIds.length > 0) reportQueryParams.set("organizationIds", reportOrganizationIds.join(","))
     }
 
+    if (dateRange) {
+        reportQueryParams.set("startDate", dateRange.startDate.toISOString())
+        reportQueryParams.set("endDate", dateRange.endDate.toISOString())
+    }
     if (reportProductIds.length > 0) reportQueryParams.set("productIds", reportProductIds.join(","))
     if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
     if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
@@ -438,8 +442,9 @@ export default function ProductPerformancePage() {
         setReportOrganizationIds([])
         setReportSearchTerm("")
         setExpandedRow(null)
+        handleDateChange(null, "all")
         mutateLedger()
-    }, [getDefaultReportYears, mutateLedger])
+    }, [getDefaultReportYears, handleDateChange, mutateLedger])
 
     useEffect(() => {
         setHasMounted(true)
@@ -791,12 +796,7 @@ export default function ProductPerformancePage() {
                     />
                     <Card className="p-5 rounded-2xl border border-violet-100/50 dark:border-violet-800/30 shadow-sm bg-gradient-to-br from-violet-50/80 to-indigo-50/80 dark:from-violet-950/20 dark:to-indigo-950/20 flex flex-col justify-between transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 group">
                         <div className="flex items-center justify-between mb-2">
-                            <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 shadow-inner group-hover:scale-110 transition-transform duration-300">
-                                <Layers className="h-4 w-4" />
-                            </div>
-                            <Badge variant="outline" className="text-[9px] uppercase font-black tracking-widest border-violet-200 dark:border-violet-800 text-violet-500 bg-violet-50/50 dark:bg-violet-950/30">STATUS</Badge>
-                        </div>
-                        <div>
+                              <div>
                             <p className="text-[10px] font-bold text-violet-500 uppercase tracking-widest mb-1 opacity-80">Product Catalog</p>
                             <p className="text-3xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">{products.length.toLocaleString()}</p>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -811,6 +811,13 @@ export default function ProductPerformancePage() {
                                 </span>
                             </div>
                         </div>
+                            <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 shadow-inner group-hover:scale-110 transition-transform duration-300">
+                                <Layers className="h-4 w-4" />
+                            </div>
+                            
+                            {/* <Badge variant="outline" className="text-[9px] uppercase font-black tracking-widest border-violet-200 dark:border-violet-800 text-violet-500 bg-violet-50/50 dark:bg-violet-950/30">STATUS</Badge> */}
+                        </div>
+                     
                     </Card>
                 </div>
 
@@ -1184,6 +1191,22 @@ export default function ProductPerformancePage() {
                                 <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
                                     {/* ── Report Filters ── */}
                                     <div className="flex flex-wrap items-center gap-3">
+                                        <GlobalDateFilter
+                                            value={dateRange}
+                                            onChange={(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears) => {
+                                                handleDateChange(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears)
+                                                setReportMonths(months ?? [])
+                                                setReportYears(years ?? [])
+                                            }}
+                                            activePreset={activePreset}
+                                            customRangeOnly
+                                            compare={compare}
+                                            compareRange={compareRange}
+                                            months={selectedMonths}
+                                            years={selectedYears}
+                                            compareMonths={compareMonths}
+                                            compareYears={compareYears}
+                                        />
                                         <MultiSelectFilter
                                             title="Months"
                                             items={CHART_MONTH_NAMES.map((name, i) => ({ id: i + 1, label: name }))}
@@ -1206,28 +1229,33 @@ export default function ProductPerformancePage() {
                                             <>
                                                 <OrganizationFilter
                                                     selectedIds={reportOrganizationIds}
-                                                    onChange={setReportOrganizationIds}
+                                                    onChange={(ids: string[]) => {
+                                                        setReportOrganizationIds(ids)
+                                                        setReportGroupIds([])
+                                                        setReportBranchIds([])
+                                                    }}
                                                     placeholder="Organizations"
                                                 />
+                                                <GroupFilter
+                                                    selectedIds={reportGroupIds}
+                                                    onChange={(ids: string[]) => {
+                                                        setReportGroupIds(ids)
+                                                        setReportBranchIds([])
+                                                    }}
+                                                    organizationId={organizationId || undefined}
+                                                    organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
+                                                    disabled={reportBranchIds.length > 0}
+                                                    placeholder="Groups"
+                                                />
                                                 {(reportOrganizationIds.length > 0 || organizationId) && (
-                                                    <>
-                                                        <GroupFilter
-                                                            selectedIds={reportGroupIds}
-                                                            onChange={setReportGroupIds}
-                                                            organizationId={organizationId || undefined}
-                                                            organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
-                                                            disabled={reportBranchIds.length > 0}
-                                                            placeholder="Groups"
-                                                        />
-                                                        <BranchFilter
-                                                            selectedIds={reportBranchIds}
-                                                            onChange={setReportBranchIds}
-                                                            organizationId={organizationId || undefined}
-                                                            organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
-                                                            groupIds={reportGroupIds}
-                                                            placeholder="Branches"
-                                                        />
-                                                    </>
+                                                    <BranchFilter
+                                                        selectedIds={reportBranchIds}
+                                                        onChange={setReportBranchIds}
+                                                        organizationId={organizationId || undefined}
+                                                        organizationIds={reportOrganizationIds.length > 0 ? reportOrganizationIds : undefined}
+                                                        groupIds={reportGroupIds}
+                                                        placeholder="Branches"
+                                                    />
                                                 )}
                                             </>
                                         )}

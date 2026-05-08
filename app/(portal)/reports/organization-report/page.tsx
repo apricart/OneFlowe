@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { GlobalDateFilter, FilterPreset } from "@/components/dashboard/global-date-filter"
 import { BranchFilter } from "@/components/reports/branch-filter"
+import { GroupFilter } from "@/components/reports/group-filter"
 import { DateRange } from "@/lib/hooks/use-sales-performance"
 import { startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns"
 import { Badge } from "@/components/ui/badge"
@@ -176,11 +177,13 @@ export default function OrganizationReportPage() {
     const [reportYears, setReportYears] = useState<number[]>([])
     const [reportBranchIds, setReportBranchIds] = useState<string[]>([])
     const [reportOrgIds, setReportOrgIds] = useState<string[]>([])
+    const [reportGroupIds, setReportGroupIds] = useState<string[]>([])
     const [reportSearch, setReportSearch] = useState("")
 
     const reportQueryParams = new URLSearchParams(globalQueryParams.toString())
     if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
     if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
+    if (reportGroupIds.length > 0) reportQueryParams.set("groupIds", reportGroupIds.join(","))
     if (reportBranchIds.length > 0) reportQueryParams.set("branchIds", reportBranchIds.join(","))
     if (reportOrgIds.length > 0) reportQueryParams.set("organizationIds", reportOrgIds.join(","))
 
@@ -280,8 +283,13 @@ export default function OrganizationReportPage() {
         setReportMonths([...defaultMonths])
         setReportYears([...defaultYears])
         setReportOrgIds([])
+        setReportGroupIds([])
         setReportBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
         setReportSearch("")
+        setDateRange(null)
+        setActivePreset("all")
+        setSelectedMonths([])
+        setSelectedYears([])
         mutateReport()
     }, [activePreset, allYears, contextBranchIds, mutateReport])
 
@@ -743,28 +751,75 @@ export default function OrganizationReportPage() {
                                 />
                             </div>
                             <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-800 mx-1 lg:block hidden" />
+                            <GlobalDateFilter
+                                value={dateRange}
+                                activePreset={activePreset}
+                                customRangeOnly
+                                onChange={(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears) => {
+                                    handleDateChange(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears)
+                                    setReportMonths(months ?? [])
+                                    setReportYears(years ?? [])
+                                }}
+                                compare={compare}
+                                compareRange={compareRange}
+                                months={selectedMonths}
+                                years={selectedYears}
+                                compareMonths={compareMonths}
+                                compareYears={compareYears}
+                            />
                             <MonthFilter selected={reportMonths} onChange={setReportMonths} />
                             <YearFilter selected={reportYears} onChange={setReportYears} availableYears={reportYearsAvailable} />
                             {role === "SUPER_ADMIN" && (
                                 <div className="flex items-center gap-2.5">
-                                    <OrgFilter selectedIds={reportOrgIds} onChange={setReportOrgIds} />
+                                    <OrgFilter
+                                        selectedIds={reportOrgIds}
+                                        onChange={(ids: string[]) => {
+                                            setReportOrgIds(ids)
+                                            setReportGroupIds([])
+                                            setReportBranchIds([])
+                                        }}
+                                    />
+                                    <GroupFilter
+                                        selectedIds={reportGroupIds}
+                                        onChange={(ids: string[]) => {
+                                            setReportGroupIds(ids)
+                                            setReportBranchIds([])
+                                        }}
+                                        organizationIds={reportOrgIds}
+                                        disabled={reportBranchIds.length > 0}
+                                        placeholder="Groups"
+                                    />
                                     {reportOrgIds.length > 0 && (
                                         <BranchFilter
                                             selectedIds={reportBranchIds}
                                             onChange={setReportBranchIds}
                                             organizationIds={reportOrgIds}
+                                            groupIds={reportGroupIds}
                                             placeholder="Branches"
                                         />
                                     )}
                                 </div>
                             )}
                             {role !== "SUPER_ADMIN" && userOrgId && (
-                                <BranchFilter
-                                    selectedIds={reportBranchIds}
-                                    onChange={setReportBranchIds}
-                                    organizationIds={[String(userOrgId)]}
-                                    placeholder="Branches"
-                                />
+                                <>
+                                    <GroupFilter
+                                        selectedIds={reportGroupIds}
+                                        onChange={(ids: string[]) => {
+                                            setReportGroupIds(ids)
+                                            setReportBranchIds([])
+                                        }}
+                                        organizationIds={[String(userOrgId)]}
+                                        disabled={reportBranchIds.length > 0}
+                                        placeholder="Groups"
+                                    />
+                                    <BranchFilter
+                                        selectedIds={reportBranchIds}
+                                        onChange={setReportBranchIds}
+                                        organizationIds={[String(userOrgId)]}
+                                        groupIds={reportGroupIds}
+                                        placeholder="Branches"
+                                    />
+                                </>
                             )}
                             <Button variant="outline" size="sm" onClick={resetReportFilters} className="h-10 w-10 p-0 rounded-xl border-slate-200 dark:border-slate-800" aria-label="Reset report filters" title="Reset report filters">
                                 <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isReportLoading && "animate-spin")} />

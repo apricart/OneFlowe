@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
     
     const orgIdsParam = url.searchParams.get("organizationIds")
     const orgIdParam = url.searchParams.get("organizationId")
+    const groupIdsParam = url.searchParams.get("groupIds")
     const branchIdsParam = url.searchParams.get("branchIds")
     const statusParam = url.searchParams.get("status") // branch status
 
@@ -55,6 +56,13 @@ export async function GET(req: NextRequest) {
         const ids = branchIdsParam.split(",").map(Number).filter(n => !isNaN(n))
         if (ids.length > 0) {
             branchConditions.push(inArray(branches.id, ids))
+        }
+    }
+
+    if (groupIdsParam) {
+        const ids = groupIdsParam.split(",").map(Number).filter(n => !isNaN(n) && n > 0)
+        if (ids.length > 0) {
+            branchConditions.push(inArray(branches.groupId, ids))
         }
     }
     

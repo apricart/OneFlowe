@@ -29,6 +29,7 @@ interface GlobalDateFilterProps {
     years?: number[]
     compareMonths?: number[]
     compareYears?: number[]
+    customRangeOnly?: boolean
 }
 
 export const presets: { id: FilterPreset; label: string }[] = [
@@ -117,7 +118,8 @@ const EMPTY_ARRAY: number[] = []
 export function GlobalDateFilter({ 
     value, onChange, activePreset, className, hidePresets, 
     compare, compareRange, months = EMPTY_ARRAY, years = EMPTY_ARRAY, 
-    compareMonths = EMPTY_ARRAY, compareYears = EMPTY_ARRAY 
+    compareMonths = EMPTY_ARRAY, compareYears = EMPTY_ARRAY,
+    customRangeOnly = false
 }: GlobalDateFilterProps) {
     const [calendarOpen, setCalendarOpen] = useState(false)
     const [compareCalendarOpen, setCompareCalendarOpen] = useState(false)
@@ -242,6 +244,67 @@ export function GlobalDateFilter({
     const currentYear = new Date().getFullYear()
     const startYear = earliestDate ? earliestDate.getFullYear() : currentYear
     const dynamicYears = Array.from({ length: currentYear - startYear + 1 }, (_, i) => currentYear - i)
+
+    if (customRangeOnly || hidePresets) {
+        return (
+            <div className={cn("flex items-center gap-2", className)}>
+                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                                "h-10 px-4 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all rounded-xl gap-2.5 font-bold text-xs text-slate-700 dark:text-slate-300 min-w-[180px] justify-between",
+                                activePreset === "custom" && value && "border-indigo-500/50 bg-indigo-50/10 text-indigo-600"
+                            )}
+                        >
+                            <div className="flex items-center gap-2.5 truncate">
+                                <CalendarIcon className="h-4 w-4 shrink-0 text-indigo-500" />
+                                <span className="truncate">
+                                    {value ? `${format(value.startDate, "dd MMM yyyy")} - ${format(value.endDate, "dd MMM yyyy")}` : "Custom Range"}
+                                </span>
+                            </div>
+                            <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                        className="w-auto p-0 rounded-3xl border-slate-200 dark:border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden"
+                        align="start"
+                        side="bottom"
+                        sideOffset={8}
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                    >
+                        <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={value?.startDate || new Date()}
+                            selected={{
+                                from: value?.startDate,
+                                to: value?.endDate,
+                            }}
+                            onSelect={(range: any) => {
+                                if (range?.from && range?.to) {
+                                    onChange(
+                                        { startDate: startOfDay(range.from), endDate: endOfDay(range.to) },
+                                        "custom",
+                                        compare,
+                                        compareRange,
+                                        [],
+                                        [],
+                                        compareMonths,
+                                        compareYears
+                                    )
+                                    setCalendarOpen(false)
+                                }
+                            }}
+                            numberOfMonths={2}
+                            className="p-4 bg-white dark:bg-slate-900"
+                        />
+                    </PopoverContent>
+                </Popover>
+            </div>
+        )
+    }
 
     return (
         <div className={cn("flex items-center gap-2", className)}>

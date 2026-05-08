@@ -203,6 +203,10 @@ export default function BranchReportsPage() {
         setReportMonths(activePreset === "all" ? [...ALL_MONTHS] : [])
         setReportYears(activePreset === "all" ? [...allYears] : [])
         setReportSearch("")
+        setDateRange(null)
+        setActivePreset("all")
+        setSelectedMonths([])
+        setSelectedYears([])
         mutateReport()
     }, [activePreset, allYears, contextBranchIds, contextOrgId, mutateReport, role, userBranchId, userOrgId])
 
@@ -508,6 +512,22 @@ export default function BranchReportsPage() {
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                                 <Input placeholder="Search branches..." value={reportSearch} onChange={(e) => setReportSearch(e.target.value)} className="pl-9 h-10 bg-slate-100/50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold font-mono" />
                             </div>
+                            <GlobalDateFilter
+                                value={dateRange}
+                                onChange={(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears) => {
+                                    handleDateChange(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears)
+                                    setReportMonths(months ?? [])
+                                    setReportYears(years ?? [])
+                                }}
+                                activePreset={activePreset}
+                                customRangeOnly
+                                compare={compare}
+                                compareRange={compareRange}
+                                months={selectedMonths}
+                                years={selectedYears}
+                                compareMonths={compareMonths}
+                                compareYears={compareYears}
+                            />
                             {role === "SUPER_ADMIN" && (
                                 <>
                                     <OrgFilter 
@@ -519,16 +539,14 @@ export default function BranchReportsPage() {
                                         }} 
                                         maxSelect={1} 
                                     />
-                                    {selectedOrgId && (
-                                        <GroupFilter 
-                                            selectedIds={selectedGroupIds} 
-                                            onChange={(ids) => {
-                                                setSelectedGroupIds(ids);
-                                                setSelectedBranchIds([]);
-                                            }} 
-                                            organizationId={parseInt(selectedOrgId)} 
-                                        />
-                                    )}
+                                    <GroupFilter
+                                        selectedIds={selectedGroupIds}
+                                        onChange={(ids: string[]) => {
+                                            setSelectedGroupIds(ids);
+                                            setSelectedBranchIds([]);
+                                        }}
+                                        organizationId={selectedOrgId ? parseInt(selectedOrgId) : undefined}
+                                    />
                                     {selectedOrgId && (
                                         <BranchFilter 
                                             selectedIds={selectedBranchIds} 

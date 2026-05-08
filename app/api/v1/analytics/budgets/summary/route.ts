@@ -6,6 +6,19 @@ import { budgets, orders, orderItems, branches, globalProducts, categories } fro
 import { and, eq, gte, lte, inArray, sql, desc, asc, isNotNull } from "drizzle-orm"
 import { Role } from "@/lib/rbac"
 
+const emptyBudgetSummary = {
+    summary: { totalAllocated: 0, totalSpent: 0, totalHeld: 0, totalCredited: 0, totalRemaining: 0 },
+    chartData: [],
+    branchBreakdown: [],
+    insights: { spentGrowth: 0, allocationGrowth: 0 },
+    categories: []
+}
+
+const parseNumberList = (value: string | null) =>
+    value
+        ? value.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
+        : []
+
 export async function GET(req: NextRequest) {
     try {
         const session = await getServerSession(authOptions)
@@ -22,6 +35,9 @@ export async function GET(req: NextRequest) {
         const branchIdsParam = url.searchParams.get("branchIds")
         const branchIdParam = url.searchParams.get("branchId")
         const organizationIdParam = url.searchParams.get("organizationId")
+        const groupIds = parseNumberList(url.searchParams.get("groupIds"))
+        const months = parseNumberList(url.searchParams.get("months"))
+        const years = parseNumberList(url.searchParams.get("years"))
         const granularity = url.searchParams.get("granularity") || "monthly" // daily, monthly, yearly
 
         // 1. RBAC Check and Branch/Org Resolution
@@ -45,6 +61,25 @@ export async function GET(req: NextRequest) {
             // Global summary for Super Admin
             const b = await db.select({ id: branches.id }).from(branches)
             branchIds = b.map(br => br.id)
+        }
+
+        if (groupIds.length > 0) {
+            const groupBranchConditions = [
+                inArray(branches.groupId, groupIds),
+                branchIds.length > 0 ? inArray(branches.id, branchIds) : undefined,
+                allowedOrgId ? eq(branches.organizationId, allowedOrgId) : undefined
+            ].filter(Boolean) as any
+
+            const scopedBranches = await db
+                .select({ id: branches.id })
+                .from(branches)
+                .where(and(...groupBranchConditions))
+
+            branchIds = scopedBranches.map(branch => branch.id)
+
+            if (branchIds.length === 0) {
+                return NextResponse.json(emptyBudgetSummary)
+            }
         }
 
         if (branchIds.length === 0) {
@@ -97,7 +132,19 @@ export async function GET(req: NextRequest) {
                 periods.add(p)
             }
         }
-        const periodList = Array.from(periods)
+        const periodList = Array.from(periods).filter(period => {
+            const [yearText, monthText] = period.split("-")
+            const year = Number(yearText)
+            const month = Number(monthText)
+
+            if (years.length > 0 && !years.includes(year)) return false
+            if (months.length > 0 && !months.includes(month)) return false
+            return true
+        })
+
+        if (periodList.length === 0) {
+            return NextResponse.json(emptyBudgetSummary)
+        }
 
         // 3. Fetch All Relevant Branches with Baselines
         let activeBranches: any[] = []
@@ -130,13 +177,7 @@ export async function GET(req: NextRequest) {
         }
 
         if (activeBranches.length === 0) {
-            return NextResponse.json({
-                summary: { totalAllocated: 0, totalSpent: 0, totalHeld: 0, totalCredited: 0, totalRemaining: 0 },
-                chartData: [],
-                branchBreakdown: [],
-                insights: { spentGrowth: 0, allocationGrowth: 0 },
-                categories: []
-            })
+            return NextResponse.json(emptyBudgetSummary)
         }
 
         const actualBranchIds = activeBranches.map(b => b.id)

@@ -220,6 +220,8 @@ export default function OrderReportPage() {
     }
 
     if (reportGroupIds.length > 0) reportParams.set("groupIds", reportGroupIds.join(","))
+    if (dateRange?.startDate) reportParams.set("startDate", dateRange.startDate.toISOString())
+    if (dateRange?.endDate) reportParams.set("endDate", dateRange.endDate.toISOString())
     if (reportMonths.length > 0) reportParams.set("months", reportMonths.join(","))
     if (reportYears.length > 0) reportParams.set("years", reportYears.join(","))
     const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR(
@@ -257,6 +259,10 @@ export default function OrderReportPage() {
         setReportOrgIds([])
         setReportGroupIds([])
         setReportBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+        setDateRange(null)
+        setActivePreset("all")
+        setSelectedMonths([])
+        setSelectedYears([])
         mutateReport()
     }, [contextBranchIds, mutateReport])
 
@@ -702,26 +708,50 @@ export default function OrderReportPage() {
                                     </div>
                                 </div>
                                 <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
+                                <GlobalDateFilter
+                                    value={dateRange}
+                                    onChange={(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears) => {
+                                        handleDateChange(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears)
+                                        setReportMonths(months ?? [])
+                                        setReportYears(years ?? [])
+                                    }}
+                                    activePreset={activePreset}
+                                    customRangeOnly
+                                    compare={compare}
+                                    compareRange={compareRange}
+                                    months={selectedMonths}
+                                    years={selectedYears}
+                                    compareMonths={compareMonths}
+                                    compareYears={compareYears}
+                                />
                                 <MonthFilter selected={reportMonths} onChange={setReportMonths} />
                                 <YearFilter selected={reportYears} onChange={setReportYears} allTimeData={allTimeData} />
                                 {role === "SUPER_ADMIN" && (
                                     <>
-                                        <OrganizationFilter selectedIds={reportOrgIds} onChange={setReportOrgIds} />
+                                        <OrganizationFilter
+                                            selectedIds={reportOrgIds}
+                                            onChange={(ids: string[]) => {
+                                                setReportOrgIds(ids)
+                                                setReportGroupIds([])
+                                                setReportBranchIds([])
+                                            }}
+                                        />
+                                        <GroupFilter
+                                            selectedIds={reportGroupIds}
+                                            onChange={(ids: string[]) => {
+                                                setReportGroupIds(ids)
+                                                setReportBranchIds([])
+                                            }}
+                                            organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [String(organizationId)] : undefined)}
+                                            disabled={reportBranchIds.length > 0}
+                                        />
                                         {(reportOrgIds.length > 0 || organizationId) && (
-                                            <>
-                                                <GroupFilter
-                                                    selectedIds={reportGroupIds}
-                                                    onChange={setReportGroupIds}
-                                                    organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [String(organizationId)] : [])}
-                                                    disabled={reportBranchIds.length > 0}
-                                                />
-                                                <BranchFilter
-                                                    selectedIds={reportBranchIds}
-                                                    onChange={setReportBranchIds}
-                                                    organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [organizationId] : [])}
-                                                    groupIds={reportGroupIds}
-                                                />
-                                            </>
+                                            <BranchFilter
+                                                selectedIds={reportBranchIds}
+                                                onChange={setReportBranchIds}
+                                                organizationIds={reportOrgIds.length > 0 ? reportOrgIds : (organizationId ? [organizationId] : [])}
+                                                groupIds={reportGroupIds}
+                                            />
                                         )}
                                     </>
                                 )}

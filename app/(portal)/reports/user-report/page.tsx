@@ -158,6 +158,8 @@ export default function UserReportPage() {
     if (reportGroupIds.length) reportParams.set("groupIds", reportGroupIds.join(","))
     if (reportBranchIds.length) reportParams.set("branchIds", reportBranchIds.join(","))
     if (reportUserIds.length) reportParams.set("userIds", reportUserIds.join(","))
+    if (dateRange?.startDate) reportParams.set("startDate", dateRange.startDate.toISOString())
+    if (dateRange?.endDate) reportParams.set("endDate", dateRange.endDate.toISOString())
     if (reportMonths.length) reportParams.set("months", reportMonths.join(","))
     if (reportYears.length) reportParams.set("years", reportYears.join(","))
     const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR(
@@ -283,6 +285,10 @@ export default function UserReportPage() {
         setReportGroupIds([])
         setReportUserIds([])
         setVisibleUserProductCounts({})
+        setDateRange(null)
+        setActivePreset("all")
+        setSelectedMonths([])
+        setSelectedYears([])
         mutateReport()
         mutateUserProducts()
     }, [allYears, mutateReport, mutateUserProducts])
@@ -738,6 +744,22 @@ export default function UserReportPage() {
                                             onChange={(e) => setReportSearch(e.target.value)}
                                         />
                                     </div>
+                                    <GlobalDateFilter
+                                        value={dateRange}
+                                        onChange={(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears) => {
+                                            handleDateChange(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears)
+                                            setReportMonths(months ?? [])
+                                            setReportYears(years ?? [])
+                                        }}
+                                        activePreset={activePreset}
+                                        customRangeOnly
+                                        compare={compare}
+                                        compareRange={compareRange}
+                                        months={selectedMonths}
+                                        years={selectedYears}
+                                        compareMonths={compareMonths}
+                                        compareYears={compareYears}
+                                    />
                                     <MonthFilter selected={reportMonths} onChange={setReportMonths} />
                                     <YearFilter selected={reportYears} onChange={setReportYears} availableYears={allTimeData?.years || []} />
                                     {role === "SUPER_ADMIN" && (

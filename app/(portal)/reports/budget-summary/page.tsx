@@ -132,6 +132,7 @@ export default function BudgetSummaryPage() {
     const [reportYears, setReportYears] = useState<number[]>([])
     const [reportMonths, setReportMonths] = useState<number[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     const [reportBranchIds, setReportBranchIds] = useState<string[]>([])
+    const [reportGroupIds, setReportGroupIds] = useState<string[]>([])
 
     const { data: session } = useSession()
     const role = (session?.user as any)?.role as Role
@@ -279,6 +280,26 @@ export default function BudgetSummaryPage() {
     chartQueryParams.set("granularity", "monthly")
 
     const { data: chartApiData, isLoading: isChartLoading } = useSWR<BudgetSummaryResponse>(`/api/v1/analytics/budgets/summary?${chartQueryParams.toString()}`, fetcher)
+
+    const reportQueryParams = new URLSearchParams()
+    if (role === "BRANCH_ADMIN") {
+        const adminBranchId = contextBranchId || (session?.user as any)?.branchId
+        if (organizationId) reportQueryParams.set("organizationId", organizationId.toString())
+        if (adminBranchId) reportQueryParams.set("branchIds", String(adminBranchId))
+    } else {
+        if (organizationId) reportQueryParams.set("organizationId", organizationId.toString())
+        if (reportBranchIds.length > 0) reportQueryParams.set("branchIds", reportBranchIds.join(","))
+        else if (contextBranchIds.length > 0) reportQueryParams.set("branchIds", contextBranchIds.join(","))
+        else if (contextBranchId) reportQueryParams.set("branchId", contextBranchId)
+    }
+    if (reportGroupIds.length > 0) reportQueryParams.set("groupIds", reportGroupIds.join(","))
+    if (startFromUrl) reportQueryParams.set("startDate", startFromUrl)
+    if (endFromUrl) reportQueryParams.set("endDate", endFromUrl)
+    if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
+    if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
+    reportQueryParams.set("granularity", "monthly")
+
+    const { data: budgetReportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR<BudgetSummaryResponse>(`/api/v1/analytics/budgets/summary?${reportQueryParams.toString()}`, fetcher)
 
     useEffect(() => {
         setHasMounted(true)
@@ -466,11 +487,15 @@ export default function BudgetSummaryPage() {
         return Object.values(branchMap)
     }, [transformedChartData, reportYears, reportMonths, reportBranchIds])
 
+    const reportBranches = useMemo(() => {
+        return budgetReportData ? (budgetReportData.branchBreakdown || []) : calculatedReportBranches
+    }, [budgetReportData, calculatedReportBranches])
+
     const filteredReportBranches = useMemo(() => {
-        return calculatedReportBranches.filter((b: any) =>
+        return reportBranches.filter((b: any) =>
             (b.branchName || "").toLowerCase().includes(searchTerm.toLowerCase())
         )
-    }, [calculatedReportBranches, searchTerm])
+    }, [reportBranches, searchTerm])
 
     // Smart defaults: if no year is selected, pick the CURRENT year if available, else latest
     useEffect(() => {
@@ -512,8 +537,11 @@ export default function BudgetSummaryPage() {
         setReportYears(getDefaultReportYears())
         setReportMonths([...ALL_MONTHS])
         setReportBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
+        setReportGroupIds([])
         setSearchTerm("")
-    }, [contextBranchIds, getDefaultReportYears])
+        handleDateChange(null, "all")
+        mutateReport()
+    }, [contextBranchIds, getDefaultReportYears, handleDateChange, mutateReport])
 
     const CHART_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
@@ -1363,6 +1391,23 @@ export default function BudgetSummaryPage() {
                                                 </div>
 
                                                 <div className="flex flex-wrap items-center gap-3">
+                                                    <GlobalDateFilter
+                                                        value={dateRange}
+                                                        onChange={(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears) => {
+                                                            handleDateChange(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears)
+                                                            setReportMonths(months ?? [])
+                                                            setReportYears(years ?? [])
+                                                        }}
+                                                        activePreset={activePreset}
+                                                        customRangeOnly
+                                                        compare={compare}
+                                                        compareRange={compareRange}
+                                                        months={selectedMonths}
+                                                        years={selectedYears}
+                                                        compareMonths={compareMonths}
+                                                        compareYears={compareYears}
+                                                    />
+
                                                     {/* Report Year Filter */}
                                                     <Popover>
                                                         <PopoverTrigger asChild>
@@ -1436,6 +1481,19 @@ export default function BudgetSummaryPage() {
                                                         </PopoverContent>
                                                     </Popover>
 
+                                                    {role !== "BRANCH_ADMIN" && organizationId && (
+                                                        <GroupFilter
+                                                            selectedIds={reportGroupIds}
+                                                            onChange={(ids) => {
+                                                                setReportGroupIds(ids)
+                                                                setReportBranchIds([])
+                                                            }}
+                                                            organizationId={organizationId}
+                                                            disabled={reportBranchIds.length > 0}
+                                                            placeholder="Groups"
+                                                        />
+                                                    )}
+
                                                     {/* Report Branch Filter */}
                                                     <Popover>
                                                         <PopoverTrigger asChild>
@@ -1480,7 +1538,7 @@ export default function BudgetSummaryPage() {
                                                         aria-label="Reset report filters"
                                                         title="Reset report filters"
                                                     >
-                                                        <RotateCcw className="h-3.5 w-3.5" />
+                                                        <RotateCcw className={cn("h-3.5 w-3.5", isReportLoading && "animate-spin")} />
                                                         Reset
                                                     </Button>
 
