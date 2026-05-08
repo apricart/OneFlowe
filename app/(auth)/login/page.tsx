@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense } from "react"
 import type React from "react"
 
 import { useRouter, useSearchParams } from "next/navigation"
-import { signIn, signOut, getSession } from "next-auth/react"
+import { signIn, getSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card"
@@ -39,13 +39,28 @@ function clearAuthCookies() {
 }
 
 /**
- * Detect NextAuth internal URL constructor errors.
- * These happen when `signIn()` or `signOut()` internally calls `new URL(data.url)`
- * with an undefined value from a stale/invalidated session.
+ * Detect NextAuth client URL constructor errors.
+ * These happen when `signIn()` receives a response that does not include the
+ * `url` field expected by next-auth/react.
  */
 function isUrlConstructorError(err: any): boolean {
   const msg = String(err?.message || err || "").toLowerCase()
   return msg.includes("url") && (msg.includes("invalid") || msg.includes("undefined") || msg.includes("failed to construct"))
+}
+
+const LOGIN_RESPONSE_ERROR = "We couldn't complete sign in. Please try again."
+const LOGIN_CONFIRMATION_ERROR = "We couldn't confirm your sign in. Please try again."
+
+async function signInWithRetry(providerId: "credentials" | "employee-credentials", username: string, password: string) {
+  try {
+    return await signIn(providerId, { redirect: false, username, password })
+  } catch (err: any) {
+    if (!isUrlConstructorError(err)) throw err
+
+    console.warn("[Login] Invalid NextAuth sign-in response. Clearing stale auth state and retrying once:", err?.message)
+    clearAuthCookies()
+    return signIn(providerId, { redirect: false, username, password })
+  }
 }
 
 function getLoginErrorMessage(errorCode: string) {
@@ -78,7 +93,8 @@ function LoginForm() {
   const [pendingUser, setPendingUser] = useState<{ username: string; password: string } | null>(null)
   const [isProcessingMFA, setIsProcessingMFA] = useState(false)
 
-  // Clear theme, context, stale cookies on mount. Force light mode. Sign out any existing session.
+  // Clear theme, app context, and stale client auth cookies on mount. Avoid a
+  // background signOut here because it can race with a quick login attempt.
   useEffect(() => {
     localStorage.removeItem("theme")
     localStorage.removeItem("ctx.organizationId")
@@ -87,13 +103,8 @@ function LoginForm() {
     document.documentElement.classList.remove("dark")
     document.documentElement.style.colorScheme = "light"
 
-    // Clear stale auth cookies BEFORE calling signOut to prevent URL constructor crash
     clearAuthCookies()
 
-    signOut({ redirect: false }).catch((err) => {
-      // Stale session may cause URL constructor errors inside NextAuth — safe to ignore on login page
-      console.warn("[Login] signOut on mount failed (expected after password/email change):", err?.message)
-    })
   }, [])
 
   async function onSubmit(e: React.FormEvent) {
@@ -108,7 +119,7 @@ function LoginForm() {
       // Clear cookies again before sign-in to guarantee a clean state
       clearAuthCookies()
 
-      let result = await signIn("credentials", { redirect: false, username, password })
+      let result = await signInWithRetry("credentials", username, password)
 
       if (result?.error) {
         if (result.error === "MFA_REQUIRED") {
@@ -125,7 +136,7 @@ function LoginForm() {
 
         // Try employee login fallback only for true credential misses
         console.log("Standard login failed with CredentialsSignin, trying employee login fallback...")
-        result = await signIn("employee-credentials", { redirect: false, username, password })
+        result = await signInWithRetry("employee-credentials", username, password)
 
         if (result?.error) {
           console.log(result.error, "resuult error login")
@@ -142,6 +153,10 @@ function LoginForm() {
 
       // Fetch session to determine redirect target
       const session = await getSession()
+      if (!session?.user) {
+        throw new Error(LOGIN_CONFIRMATION_ERROR)
+      }
+
       const userRole = (session?.user as any)?.role
 
       if (userRole === "ORDER_PORTAL" || userRole === "EMPLOYEE") {
@@ -152,11 +167,11 @@ function LoginForm() {
         window.location.replace(targetUrl)
       }
     } catch (err: any) {
-      // Catch NextAuth internal URL constructor errors and show friendly message
+      // Catch malformed NextAuth responses without showing a misleading session-expired message on the login page.
       if (isUrlConstructorError(err)) {
-        console.warn("[Login] Caught URL constructor error — clearing cookies and prompting retry:", err?.message)
+        console.warn("[Login] Invalid NextAuth sign-in response after retry:", err?.message)
         clearAuthCookies()
-        setError("Your session has expired. Please try signing in again.")
+        setError(LOGIN_RESPONSE_ERROR)
       } else {
         setError(err.message || "An error occurred during login")
       }
@@ -173,6 +188,10 @@ function LoginForm() {
 
     try {
       const session = await getSession()
+      if (!session?.user) {
+        throw new Error(LOGIN_CONFIRMATION_ERROR)
+      }
+
       const userRole = (session?.user as any)?.role
 
       if (userRole === "ORDER_PORTAL" || userRole === "EMPLOYEE") {
@@ -185,7 +204,7 @@ function LoginForm() {
     } catch (err: any) {
       if (isUrlConstructorError(err)) {
         clearAuthCookies()
-        setError("Your session has expired. Please try signing in again.")
+        setError(LOGIN_CONFIRMATION_ERROR)
         setIsProcessingMFA(false)
       } else {
         setError(err.message || "An error occurred")

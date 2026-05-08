@@ -389,7 +389,9 @@ export default function GlobalInventoryView() {
                                                         size="sm"
                                                         className="h-8 w-8 p-0"
                                                         disabled={loadingProductId === product.id}
-                                                        onClick={() => handleEditProduct(product.id)}
+                                                        onClick={() => {
+                                                            void handleEditProduct(product.id)
+                                                        }}
                                                     >
                                                         {loadingProductId === product.id ? (
                                                             <Loader className="h-3 w-3 animate-spin" />

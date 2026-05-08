@@ -1,9 +1,66 @@
 import NextAuth from "next-auth"
 import { authOptions } from "@/lib/auth-options"
-import { NextRequest } from "next/server"
-import { checkRateLimit, rateLimitResponse, getClientIdentifier } from "@/lib/rate-limiter"
+import { NextRequest, NextResponse } from "next/server"
+import { checkRateLimit, getClientIdentifier, resetRateLimit } from "@/lib/rate-limiter"
+import { createHash } from "crypto"
 
 const handler = NextAuth(authOptions)
+
+function hashRateLimitPart(value: string): string {
+    return createHash("sha256").update(value).digest("hex").slice(0, 32)
+}
+
+async function getLoginRateLimitIdentifier(req: NextRequest): Promise<string> {
+    const clientIdentifier = await getClientIdentifier()
+
+    try {
+        const body = await req.clone().text()
+        const username = new URLSearchParams(body).get("username")?.trim().toLowerCase()
+
+        if (username) {
+            return `${clientIdentifier}:username:${hashRateLimitPart(username)}`
+        }
+    } catch (error) {
+        console.warn("[Auth] Unable to read login username for rate limiting:", error)
+    }
+
+    return clientIdentifier
+}
+
+function loginRateLimitResponse(req: NextRequest, resetIn: number): NextResponse {
+    const validResetIn = typeof resetIn === "number" && resetIn > 0 ? resetIn : 60
+    const message = `Too many login attempts. Please wait ${validResetIn} seconds before trying again.`
+    const url = new URL("/login", req.url || "http://localhost")
+    url.searchParams.set("error", message)
+
+    return NextResponse.json(
+        {
+            url: url.toString(),
+            error: message,
+            retryAfter: validResetIn,
+            message,
+        },
+        {
+            status: 429,
+            headers: {
+                "Retry-After": String(validResetIn),
+                "X-RateLimit-Remaining": "0",
+                "X-RateLimit-Reset": String(Math.floor(Date.now() / 1000) + validResetIn),
+            },
+        }
+    )
+}
+
+async function getNextAuthCallbackError(response: Response): Promise<string | null> {
+    try {
+        const data = await response.clone().json() as { url?: string }
+        if (!data?.url) return null
+
+        return new URL(data.url).searchParams.get("error")
+    } catch {
+        return null
+    }
+}
 
 // GET requests pass through (session checks, CSRF token)
 export { handler as GET }
@@ -16,13 +73,24 @@ export async function POST(req: NextRequest, context: any) {
         url.pathname.endsWith('/callback/employee-credentials')
 
     if (isSignIn) {
-        // Rate limit login attempts: 15 per 15 minutes per IP
-        const identifier = await getClientIdentifier()
+        // Rate limit failed login attempts per IP and username.
+        const identifier = await getLoginRateLimitIdentifier(req)
         const { allowed, resetIn } = await checkRateLimit(identifier, "login")
 
         if (!allowed) {
-            return rateLimitResponse(resetIn)
+            return loginRateLimitResponse(req, resetIn)
         }
+
+        const response = await handler(req, context)
+        const callbackError = await getNextAuthCallbackError(response)
+
+        // Valid credentials should not consume the brute-force login budget.
+        // MFA_REQUIRED is a successful first factor and continues in the MFA flow.
+        if ((response.ok && !callbackError) || (callbackError && callbackError !== "CredentialsSignin")) {
+            await resetRateLimit(identifier, "login")
+        }
+
+        return response
     }
 
     return handler(req, context)

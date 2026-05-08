@@ -1098,7 +1098,7 @@ export default function OrderPortalPage() {
                             )}
                           </div>
 
-                          {/* Rating */}
+                          {/* Rating hidden until product rating is supported.
                           <div className="flex items-center gap-1">
                             {[...Array(5)].map((_, i) => (
                               <Star
@@ -1113,6 +1113,7 @@ export default function OrderPortalPage() {
                               {(product.rating || 0).toFixed(1)}
                             </span>
                           </div>
+                          */}
 
                           {/* Spacer */}
                           <div className="flex-1" />
@@ -1401,7 +1402,7 @@ export default function OrderPortalPage() {
                   </div>
                 </div>
 
-                {/* Rating */}
+                {/* Rating hidden until product rating is supported.
                 <div className="flex items-center gap-2">
                   {[...Array(5)].map((_, i) => (
                     <Star
@@ -1416,6 +1417,7 @@ export default function OrderPortalPage() {
                     {(selectedProduct.rating || 0).toFixed(1)} rating
                   </span>
                 </div>
+                */}
 
                 {/* Quantity Selector */}
                 <div className="space-y-2">
