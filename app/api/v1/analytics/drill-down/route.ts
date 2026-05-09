@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import { eq, and, gte, lte, desc, sql, inArray, gt, or } from "drizzle-orm"
 import { requireApiRole, ok, error } from "@/lib/api"
 import { db } from "@/lib/db"
-import { orders, users, orderItems, branches, organizations, refundItems } from "@/db/schema"
+import { orders, users, orderItems, branches, organizations, refundItems, refunds } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
@@ -238,20 +238,31 @@ export async function GET(req: NextRequest) {
                 productCode: orderItems.productCode,
                 quantity: orderItems.quantity,
                 priceCents: orderItems.priceCents,
-                refundQuantity: sql<number>`COALESCE(${refundItems.quantity}, 0)`.mapWith(Number),
-                refundAmountCents: sql<number>`COALESCE(${refundItems.amountCents}, 0)`.mapWith(Number)
+                refundQuantity: sql<number>`
+                    CASE
+                        WHEN UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED') THEN COALESCE(${refundItems.quantity}, 0)
+                        ELSE 0
+                    END
+                `.mapWith(Number),
+                refundAmountCents: sql<number>`
+                    CASE
+                        WHEN UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED') THEN COALESCE(${refundItems.amountCents}, 0)
+                        ELSE 0
+                    END
+                `.mapWith(Number)
             })
                 .from(orderItems)
                 .leftJoin(refundItems, eq(orderItems.id, refundItems.orderItemId))
+                .leftJoin(refunds, eq(refundItems.refundId, refunds.id))
                 .where(inArray(orderItems.orderId, displayOrderIds))
 
             detailedItemsMap = allItems.reduce((acc, curr) => {
                 if (curr.orderId) {
                     if (!acc[curr.orderId]) acc[curr.orderId] = []
                     
-                    const existing = acc[curr.orderId].find(i => i.name === curr.productName)
+                    const existing = acc[curr.orderId].find(i => i.id === curr.id)
                     if (existing) {
-                        existing.quantity += curr.quantity
+                        existing.quantity = Math.max(Number(existing.quantity) || 0, Number(curr.quantity) || 0)
                         existing.refundQuantity += curr.refundQuantity
                         existing.refundAmount += curr.refundAmountCents / 100
                     } else {

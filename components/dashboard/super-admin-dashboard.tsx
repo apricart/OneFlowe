@@ -313,6 +313,10 @@ export function SuperAdminDashboard() {
     setSelectedBranchIds([])
   }, [])
 
+  const resetDashboardFilters = useCallback(() => {
+    handleDateChange(getPresetRange("all"), "all", false, null, [], [], [], [])
+  }, [handleDateChange])
+
   const totalRevenue = perfData?.totalNetSales ?? perfData?.totalSales ?? 0
   const totalOrders = perfData?.totalOrders ?? 0
   const pendingCount = pendingData?.totalOrders ?? 0
@@ -396,6 +400,17 @@ export function SuperAdminDashboard() {
             compareMonths={compareMonths}
             compareYears={compareYears}
           />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={resetDashboardFilters}
+            className="h-10 w-10 rounded-xl text-slate-400 hover:bg-indigo-50/60 hover:text-indigo-600 dark:hover:bg-slate-800 dark:hover:text-indigo-400"
+            aria-label="Reset dashboard filters"
+            title="Reset dashboard filters"
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoadingPerf && "animate-spin")} />
+          </Button>
           {organizationId && (
             <>
               <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1" />

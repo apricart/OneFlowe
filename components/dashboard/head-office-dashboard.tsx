@@ -224,6 +224,10 @@ export function HeadOfficeDashboard() {
     setCompareYears(cy || [])
   }, [])
 
+  const resetDashboardFilters = useCallback(() => {
+    handleDateChange(getPresetRange("all"), "all", false, null, [], [], [], [])
+  }, [handleDateChange])
+
   const buildTrend = useCallback((current: number, prev: number | undefined, formatFn?: (v: number) => string) => {
     if (!compare || prev === undefined || prev === null) return undefined
     const diff = current - prev
@@ -272,6 +276,17 @@ export function HeadOfficeDashboard() {
             compareMonths={compareMonths}
             compareYears={compareYears}
           />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={resetDashboardFilters}
+            className="h-10 w-10 rounded-xl text-slate-400 hover:bg-indigo-50/60 hover:text-indigo-600 dark:hover:bg-slate-800 dark:hover:text-indigo-400"
+            aria-label="Reset dashboard filters"
+            title="Reset dashboard filters"
+          >
+            <RefreshCw className={cn("h-4 w-4", isLoadingPerf && "animate-spin")} />
+          </Button>
           {organizationId && (
             <>
               <div className="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-1" />
