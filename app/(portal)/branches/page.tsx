@@ -219,12 +219,12 @@ export default function BranchesPage() {
           icon={<ShieldCheck className="h-5 w-5" />}
           variant="green"
         />
-        <StatCard
+        {/* <StatCard
           label="Admin"
           value={`${coverage}%`}
           icon={<Users className="h-5 w-5" />}
           variant="purple"
-        />
+        /> */}
         <StatCard
           label="Needs Attention"
           value={inactiveBranches}

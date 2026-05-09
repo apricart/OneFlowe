@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns"
-import { X, Loader2 } from "lucide-react"
 import type { DateRange } from "@/lib/hooks/use-sales-performance"
 
 export type MonthPreset = "jan" | "feb" | "mar" | "apr" | "may" | "jun" | "jul" | "aug" | "sep" | "oct" | "nov" | "dec"
 export type FilterPreset = "today" | "3d" | "7d" | "monthly" | "thisMonth" | "yearly" | "all" | "custom" | MonthPreset
+type CalendarRangeDraft = { from: Date | undefined; to?: Date } | undefined
 
 interface GlobalDateFilterProps {
     value: DateRange | null
@@ -99,21 +99,19 @@ export function getPresetRange(preset: FilterPreset): DateRange {
 }
 
 import { Button } from "@/components/ui/button"
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-    DropdownMenuSeparator,
-    DropdownMenuCheckboxItem,
-} from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
-import { Switch } from "@/components/ui/switch"
-import { Check, ChevronDown, Calendar as CalendarIcon, ArrowRightLeft, Calculator } from "lucide-react"
+import { Calendar, CALENDAR_DROPDOWN_LAYER_ATTR } from "@/components/ui/calendar"
+import { Check, ChevronDown, Calendar as CalendarIcon, Calculator } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const EMPTY_ARRAY: number[] = []
+const DATE_FILTER_LAYER_ATTR = "data-global-date-filter-layer"
+
+const isInsideDateFilterLayer = (target: EventTarget | null) => {
+    return target instanceof HTMLElement && Boolean(
+        target.closest(`[${DATE_FILTER_LAYER_ATTR}], [${CALENDAR_DROPDOWN_LAYER_ATTR}]`)
+    )
+}
 
 export function GlobalDateFilter({ 
     value, onChange, activePreset, className, hidePresets, 
@@ -121,8 +119,12 @@ export function GlobalDateFilter({
     compareMonths = EMPTY_ARRAY, compareYears = EMPTY_ARRAY,
     customRangeOnly = false
 }: GlobalDateFilterProps) {
+    const filterRootRef = useRef<HTMLDivElement>(null)
+    const [filterOpen, setFilterOpen] = useState(false)
     const [calendarOpen, setCalendarOpen] = useState(false)
     const [compareCalendarOpen, setCompareCalendarOpen] = useState(false)
+    const [calendarDraft, setCalendarDraft] = useState<CalendarRangeDraft>()
+    const [compareCalendarDraft, setCompareCalendarDraft] = useState<CalendarRangeDraft>()
     const [earliestDate, setEarliestDate] = useState<Date | null>(null)
 
     useEffect(() => {
@@ -145,6 +147,63 @@ export function GlobalDateFilter({
     const [compareMonthsOpen, setCompareMonthsOpen] = useState(false)
     const [compareYearsOpen, setCompareYearsOpen] = useState(false)
 
+    const closeFilter = useCallback(() => {
+        setFilterOpen(false)
+        setCalendarOpen(false)
+        setCompareCalendarOpen(false)
+        setMonthsOpen(false)
+        setYearsOpen(false)
+        setCompareMonthsOpen(false)
+        setCompareYearsOpen(false)
+    }, [])
+
+    const handleCalendarOpenChange = useCallback((open: boolean) => {
+        setCalendarOpen(open)
+        if (open) {
+            setCalendarDraft(undefined)
+        }
+    }, [])
+
+    const handleCompareCalendarOpenChange = useCallback((open: boolean) => {
+        setCompareCalendarOpen(open)
+        if (open) {
+            setCompareCalendarDraft(undefined)
+        }
+    }, [])
+
+    const openMainCalendarFromMenu = useCallback((event?: Event) => {
+        event?.preventDefault()
+        setCalendarDraft(undefined)
+        setCalendarOpen(true)
+        setFilterOpen(true)
+    }, [])
+
+    const preventDropdownDismissForDateLayer = useCallback((event: { target: EventTarget | null; preventDefault: () => void }) => {
+        if (isInsideDateFilterLayer(event.target)) {
+            event.preventDefault()
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!filterOpen) return
+
+        const handlePointerDown = (event: PointerEvent) => {
+            const target = event.target
+
+            if (
+                (target instanceof Node && filterRootRef.current?.contains(target)) ||
+                isInsideDateFilterLayer(target)
+            ) {
+                return
+            }
+
+            closeFilter()
+        }
+
+        document.addEventListener("pointerdown", handlePointerDown)
+        return () => document.removeEventListener("pointerdown", handlePointerDown)
+    }, [closeFilter, filterOpen])
+
     const getMainSelectionChange = (nextMonths: number[], nextYears: number[]) => {
         const hasArbitraryPeriod = nextMonths.length > 0 || nextYears.length > 0
         const allTimeRange = earliestDate
@@ -159,7 +218,9 @@ export function GlobalDateFilter({
 
     const handleSelectPreset = (preset: FilterPreset) => {
         if (preset === "custom") {
+            setCalendarDraft(undefined)
             setCalendarOpen(true)
+            setFilterOpen(true)
             return
         }
         let range = getPresetRange(preset)
@@ -169,10 +230,6 @@ export function GlobalDateFilter({
         
         // When picking a classic preset, clear the array selections to avoid conflicts
         onChange(range, preset, compare, compareRange, [], [], compareMonths, compareYears)
-    }
-
-    const toggleCompare = (checked: boolean) => {
-        onChange(value, activePreset, checked, compareRange, months, years, compareMonths, compareYears)
     }
 
     const [tempMonths, setTempMonths] = useState<number[]>(months)
@@ -213,6 +270,7 @@ export function GlobalDateFilter({
         setYearsOpen(false)
         setCompareMonthsOpen(false)
         setCompareYearsOpen(false)
+        setFilterOpen(false)
     }
 
     const toggleTempSelection = (type: 'months' | 'years' | 'compareMonths' | 'compareYears', val: number) => {
@@ -239,6 +297,50 @@ export function GlobalDateFilter({
         }
     }
 
+    const handleMainCalendarSelect = (range: CalendarRangeDraft) => {
+        if (!range?.from) {
+            setCalendarDraft(undefined)
+            return
+        }
+
+        const hasPendingStart = Boolean(calendarDraft?.from && !calendarDraft.to)
+        if (!hasPendingStart || !range.to) {
+            setCalendarDraft({ from: range.from })
+            return
+        }
+
+        setCalendarDraft(range)
+        onChange(
+            { startDate: startOfDay(range.from), endDate: endOfDay(range.to) },
+            "custom",
+            compare,
+            compareRange,
+            [],
+            [],
+            compareMonths,
+            compareYears
+        )
+        closeFilter()
+    }
+
+    const handleCompareCalendarSelect = (range: CalendarRangeDraft) => {
+        if (!range?.from) {
+            setCompareCalendarDraft(undefined)
+            return
+        }
+
+        const hasPendingStart = Boolean(compareCalendarDraft?.from && !compareCalendarDraft.to)
+        if (!hasPendingStart || !range.to) {
+            setCompareCalendarDraft({ from: range.from })
+            return
+        }
+
+        const newCompareRange = { startDate: startOfDay(range.from), endDate: endOfDay(range.to) }
+        setCompareCalendarDraft(range)
+        onChange(value, activePreset, compare, newCompareRange, months, years, [], [])
+        closeFilter()
+    }
+
     const selectedLabel = getPresetLabel(activePreset, value)
 
     const currentYear = new Date().getFullYear()
@@ -248,7 +350,7 @@ export function GlobalDateFilter({
     if (customRangeOnly || hidePresets) {
         return (
             <div className={cn("flex items-center gap-2", className)}>
-                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <Popover open={calendarOpen} onOpenChange={handleCalendarOpenChange}>
                     <PopoverTrigger asChild>
                         <Button
                             variant="outline"
@@ -268,35 +370,21 @@ export function GlobalDateFilter({
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent
-                        className="w-auto p-0 rounded-3xl border-slate-200 dark:border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden"
+                        data-global-date-filter-layer
+                        className="w-auto p-0 rounded-3xl border-slate-200 dark:border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-visible"
                         align="start"
                         side="bottom"
                         sideOffset={8}
+                        onInteractOutside={preventDropdownDismissForDateLayer}
+                        onFocusOutside={preventDropdownDismissForDateLayer}
                         onOpenAutoFocus={(e) => e.preventDefault()}
                     >
                         <Calendar
                             initialFocus
                             mode="range"
                             defaultMonth={value?.startDate || new Date()}
-                            selected={{
-                                from: value?.startDate,
-                                to: value?.endDate,
-                            }}
-                            onSelect={(range: any) => {
-                                if (range?.from && range?.to) {
-                                    onChange(
-                                        { startDate: startOfDay(range.from), endDate: endOfDay(range.to) },
-                                        "custom",
-                                        compare,
-                                        compareRange,
-                                        [],
-                                        [],
-                                        compareMonths,
-                                        compareYears
-                                    )
-                                    setCalendarOpen(false)
-                                }
-                            }}
+                            selected={calendarDraft}
+                            onSelect={handleMainCalendarSelect}
                             numberOfMonths={2}
                             className="p-4 bg-white dark:bg-slate-900"
                         />
@@ -307,34 +395,65 @@ export function GlobalDateFilter({
     }
 
     return (
-        <div className={cn("flex items-center gap-2", className)}>
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                            "h-10 px-4 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all rounded-xl gap-2.5 font-bold text-xs text-slate-700 dark:text-slate-300 min-w-[140px] justify-between",
-                            compare && "border-indigo-500/50 bg-indigo-50/10"
-                        )}
-                    >
-                        <div className="flex items-center gap-2.5 truncate">
-                            <CalendarIcon className={cn("h-4 w-4 shrink-0", compare ? "text-indigo-600" : "text-indigo-500")} />
-                            <span className="truncate">{selectedLabel}{compare && " (vs Prev)"}</span>
+        <div ref={filterRootRef} className={cn("relative flex items-center gap-2", className)}>
+            <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={filterOpen}
+                onClick={() => {
+                    if (filterOpen) {
+                        closeFilter()
+                        return
+                    }
+
+                    setFilterOpen(true)
+                }}
+                className={cn(
+                    "h-10 px-4 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all rounded-xl gap-2.5 font-bold text-xs text-slate-700 dark:text-slate-300 min-w-[140px] justify-between",
+                    compare && "border-indigo-500/50 bg-indigo-50/10"
+                )}
+            >
+                <div className="flex items-center gap-2.5 truncate">
+                    <CalendarIcon className={cn("h-4 w-4 shrink-0", compare ? "text-indigo-600" : "text-indigo-500")} />
+                    <span className="truncate">{selectedLabel}{compare && " (vs Prev)"}</span>
+                </div>
+                <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0" />
+            </Button>
+            {filterOpen && (
+                <div
+                    data-global-date-filter-layer
+                    className={cn(
+                        "absolute left-0 top-full z-[80] mt-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md md:left-auto md:right-0",
+                        calendarOpen ? "w-auto p-0 overflow-visible" : "w-60 p-1.5"
+                    )}
+                    role="dialog"
+                >
+                    {calendarOpen ? (
+                        <div data-global-date-filter-layer onClick={(e) => e.stopPropagation()}>
+                            <Calendar
+                                initialFocus
+                                mode="range"
+                                defaultMonth={value?.startDate || new Date()}
+                                selected={calendarDraft}
+                                onSelect={handleMainCalendarSelect}
+                                numberOfMonths={2}
+                                className="p-4 bg-white dark:bg-slate-900"
+                            />
                         </div>
-                        <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-60 rounded-2xl border-slate-200 dark:border-slate-800 shadow-2xl p-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
+                    ) : (
+                        <>
                     <div className="px-2 py-1.5 mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         <span>Date Range</span>
                     </div>
                     {presets.map((p) => (
-                        <DropdownMenuItem
+                        <button
+                            type="button"
                             key={p.id}
                             onClick={() => handleSelectPreset(p.id)}
                             className={cn(
-                                "rounded-xl px-3 py-2 text-xs font-semibold cursor-pointer flex items-center justify-between mb-0.5 transition-colors",
+                                "w-full rounded-xl px-3 py-2 text-left text-xs font-semibold cursor-pointer flex items-center justify-between mb-0.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
                                 activePreset === p.id
                                     ? "bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
                                     : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -342,7 +461,7 @@ export function GlobalDateFilter({
                         >
                             {p.label}
                             {activePreset === p.id && <Check className="h-3.5 w-3.5" />}
-                        </DropdownMenuItem>
+                        </button>
                     ))}
 
                     <div className="px-2 py-2 mt-2 border-t border-slate-100 dark:border-slate-800 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -358,11 +477,13 @@ export function GlobalDateFilter({
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent 
+                                data-global-date-filter-layer
                                 className="w-48 max-h-[var(--radix-popover-content-available-height)] overflow-hidden p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                                 align="start"
                                 side="bottom"
                                 sideOffset={8}
                                 collisionPadding={12}
+                                onOpenAutoFocus={(e) => e.preventDefault()}
                             >
                                 <div className="space-y-1 max-h-[calc(var(--radix-popover-content-available-height)-3.5rem)] overflow-y-auto pr-1">
                                     {monthPresets.map((m, i) => {
@@ -401,11 +522,13 @@ export function GlobalDateFilter({
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent 
+                                data-global-date-filter-layer
                                 className="w-32 max-h-[var(--radix-popover-content-available-height)] overflow-hidden p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                                 align="start"
                                 side="bottom"
                                 sideOffset={8}
                                 collisionPadding={12}
+                                onOpenAutoFocus={(e) => e.preventDefault()}
                             >
                                 <div className="space-y-1 max-h-[calc(var(--radix-popover-content-available-height)-3.5rem)] overflow-y-auto pr-1">
                                     {dynamicYears.map((y: number) => (
@@ -435,7 +558,7 @@ export function GlobalDateFilter({
                         </Popover>
                     </div>
 
-                    <DropdownMenuSeparator className="my-1.5 bg-slate-100 dark:bg-slate-800" />
+                    <div className="my-1.5 h-px bg-slate-100 dark:bg-slate-800" />
 
                     <div className="px-1 mb-1.5">
                         {/* <div className={cn(
@@ -454,7 +577,7 @@ export function GlobalDateFilter({
                         </div> */}
                         {compare && (
                             <div className="mt-2 text-center" onClick={(e) => e.stopPropagation()}>
-                                <Popover open={compareCalendarOpen} onOpenChange={setCompareCalendarOpen}>
+                                <Popover open={compareCalendarOpen} onOpenChange={handleCompareCalendarOpenChange}>
                                     <PopoverTrigger asChild>
                                         <Button variant="outline" size="sm" className="w-full h-8 text-[11px] justify-start px-2.5 font-semibold text-slate-600 dark:text-slate-400 border-indigo-200 dark:border-indigo-800/60 bg-indigo-50/50 hover:bg-indigo-100/50 hover:text-indigo-600">
                                             <CalendarIcon className="mr-2 h-3.5 w-3.5 opacity-60" />
@@ -462,11 +585,13 @@ export function GlobalDateFilter({
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent
-                                        className="w-auto p-0 rounded-3xl border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden z-[100]"
+                                        data-global-date-filter-layer
+                                        className="w-auto p-0 rounded-3xl border-slate-200 dark:border-slate-800 shadow-2xl overflow-visible z-[100]"
                                         align="center"
                                         side="bottom"
                                         sideOffset={8}
                                         onInteractOutside={(e) => e.preventDefault()}
+                                        onFocusOutside={preventDropdownDismissForDateLayer}
                                         onOpenAutoFocus={(e) => e.preventDefault()}
                                     >
                                         <div onClick={(e) => e.stopPropagation()}>
@@ -482,11 +607,13 @@ export function GlobalDateFilter({
                                                         </Button>
                                                     </PopoverTrigger>
                                                     <PopoverContent 
+                                                        data-global-date-filter-layer
                                                         className="w-48 max-h-[var(--radix-popover-content-available-height)] overflow-hidden p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                                                         align="start"
                                                         side="bottom"
                                                         sideOffset={8}
                                                         collisionPadding={12}
+                                                        onOpenAutoFocus={(e) => e.preventDefault()}
                                                     >
                                                         <div className="space-y-1 max-h-[calc(var(--radix-popover-content-available-height)-3.5rem)] overflow-y-auto pr-1">
                                                             {monthPresets.map((m, i) => {
@@ -525,11 +652,13 @@ export function GlobalDateFilter({
                                                         </Button>
                                                     </PopoverTrigger>
                                                     <PopoverContent 
+                                                        data-global-date-filter-layer
                                                         className="w-32 max-h-[var(--radix-popover-content-available-height)] overflow-hidden p-2 rounded-2xl shadow-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                                                         align="start"
                                                         side="bottom"
                                                         sideOffset={8}
                                                         collisionPadding={12}
+                                                        onOpenAutoFocus={(e) => e.preventDefault()}
                                                     >
                                                         <div className="space-y-1 max-h-[calc(var(--radix-popover-content-available-height)-3.5rem)] overflow-y-auto pr-1">
                                                             {dynamicYears.map((y) => (
@@ -563,17 +692,8 @@ export function GlobalDateFilter({
                                                 initialFocus
                                                 mode="range"
                                                 defaultMonth={compareRange?.startDate || value?.startDate || new Date()}
-                                                selected={{
-                                                    from: compareRange?.startDate,
-                                                    to: compareRange?.endDate,
-                                                }}
-                                                onSelect={(range: any) => {
-                                                    if (range?.from && range?.to) {
-                                                        const newCompareRange = { startDate: startOfDay(range.from), endDate: endOfDay(range.to) }
-                                                        onChange(value, activePreset, compare, newCompareRange, months, years, [], []) // Clear advanced when standard clicked
-                                                        setCompareCalendarOpen(false)
-                                                    }
-                                                }}
+                                                selected={compareCalendarDraft}
+                                                onSelect={handleCompareCalendarSelect}
                                                 numberOfMonths={2}
                                                 className="p-4 bg-white dark:bg-slate-900"
                                             />
@@ -585,7 +705,7 @@ export function GlobalDateFilter({
                                                         className="h-8 text-[11px] text-rose-500 hover:text-rose-600 hover:bg-rose-50 w-full"
                                                         onClick={() => {
                                                             onChange(value, activePreset, compare, undefined, months, years, compareMonths, compareYears);
-                                                            setCompareCalendarOpen(false);
+                                                            closeFilter();
                                                         }}
                                                     >
                                                         Clear & Use Default Previous
@@ -599,58 +719,25 @@ export function GlobalDateFilter({
                         )}
                     </div>
 
-                    <DropdownMenuSeparator className="my-1.5 bg-slate-100 dark:border-slate-800" />
+                    <div className="my-1.5 h-px bg-slate-100 dark:bg-slate-800" />
 
-                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                        <PopoverTrigger asChild>
-                            <DropdownMenuItem
-                                onSelect={(e) => e.preventDefault()}
-                                className={cn(
-                                    "rounded-xl px-3 py-2 text-xs font-semibold cursor-pointer flex items-center gap-2.5 transition-colors",
-                                    activePreset === "custom"
-                                        ? "bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
-                                        : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                                )}
-                            >
-                                <CalendarIcon className="h-4 w-4 text-indigo-500" />
-                                Custom Range...
-                            </DropdownMenuItem>
-                        </PopoverTrigger>
-                        <PopoverContent
-                            className="w-auto p-0 rounded-3xl border-slate-200 dark:border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden"
-                            align="start"
-                            side="bottom"
-                            sideOffset={8}
-                            onInteractOutside={(e) => {
-                                // Prevent closing if clicking inside the calendar area
-                                e.preventDefault()
-                            }}
-                            onOpenAutoFocus={(e) => e.preventDefault()}
-                        >
-                            <div onClick={(e) => e.stopPropagation()}>
-                                <Calendar
-                                    initialFocus
-                                    mode="range"
-                                    defaultMonth={value?.startDate || new Date()}
-                                    selected={{
-                                        from: value?.startDate,
-                                        to: value?.endDate,
-                                    }}
-                                    onSelect={(range: any) => {
-                                        if (range?.from && range?.to) {
-                                            // Normal range selection clears the arrays
-                                            onChange({ startDate: startOfDay(range.from), endDate: endOfDay(range.to) }, "custom", compare, compareRange, [], [], compareMonths, compareYears)
-                                            setCalendarOpen(false)
-                                        }
-                                    }}
-                                    numberOfMonths={2}
-                                    className="p-4 bg-white dark:bg-slate-900"
-                                />
-                            </div>
-                        </PopoverContent>
-                    </Popover>
-                </DropdownMenuContent>
-            </DropdownMenu>
+                    <button
+                        type="button"
+                        onClick={(event) => openMainCalendarFromMenu(event.nativeEvent)}
+                        className={cn(
+                            "w-full rounded-xl px-3 py-2 text-left text-xs font-semibold cursor-pointer flex items-center gap-2.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
+                            activePreset === "custom"
+                                ? "bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
+                                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        )}
+                    >
+                        <CalendarIcon className="h-4 w-4 text-indigo-500" />
+                        Custom Range...
+                    </button>
+                        </>
+                    )}
+                </div>
+            )}
         </div>
     )
 }

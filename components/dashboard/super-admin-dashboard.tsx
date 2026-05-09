@@ -46,10 +46,11 @@ export function SuperAdminDashboard() {
 
   const [drillDownType, setDrillDownType] = useState<DrillDownType | null>(null)
   const [isDrillDownOpen, setIsDrillDownOpen] = useState(false)
+  const allTimeEndDate = useMemo(() => new Date().toISOString(), [])
 
   // Fetch all-time data to extract available years from the database
   const { data: allTimePerf } = useSWR(
-    `/api/v1/analytics/sales-performance?startDate=2015-01-01T00:00:00.000Z&endDate=${new Date().toISOString()}&granularity=yearly&status=all`,
+    `/api/v1/analytics/sales-performance?startDate=2015-01-01T00:00:00.000Z&endDate=${allTimeEndDate}&granularity=yearly&status=all`,
     fetcher
   )
 

@@ -2,14 +2,22 @@
 
 import * as React from 'react'
 import {
+  CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
 } from 'lucide-react'
-import { DayButton, DayPicker, getDefaultClassNames } from 'react-day-picker'
+import {
+  DayButton,
+  DayPicker,
+  getDefaultClassNames,
+  type DropdownProps,
+} from 'react-day-picker'
 
 import { cn } from '@/lib/utils'
 import { Button, buttonVariants } from '@/components/ui/button'
+
+export const CALENDAR_DROPDOWN_LAYER_ATTR = 'data-calendar-dropdown-layer'
 
 function Calendar({
   className,
@@ -50,17 +58,17 @@ function Calendar({
         ),
         month: cn('flex flex-col w-full gap-4', defaultClassNames.month),
         nav: cn(
-          'flex items-center gap-1 w-full absolute top-0 inset-x-0 justify-between',
+          'pointer-events-none flex items-center gap-1 w-full absolute top-0 inset-x-0 justify-between',
           defaultClassNames.nav,
         ),
         button_previous: cn(
           buttonVariants({ variant: buttonVariant }),
-          'size-(--cell-size) aria-disabled:opacity-50 p-0 select-none',
+          'pointer-events-auto size-(--cell-size) aria-disabled:opacity-50 p-0 select-none',
           defaultClassNames.button_previous,
         ),
         button_next: cn(
           buttonVariants({ variant: buttonVariant }),
-          'size-(--cell-size) aria-disabled:opacity-50 p-0 select-none',
+          'pointer-events-auto size-(--cell-size) aria-disabled:opacity-50 p-0 select-none',
           defaultClassNames.button_next,
         ),
         month_caption: cn(
@@ -158,6 +166,7 @@ function Calendar({
           )
         },
         DayButton: CalendarDayButton,
+        Dropdown: CalendarDropdown,
         WeekNumber: ({ children, ...props }) => {
           return (
             <td {...props}>
@@ -171,6 +180,100 @@ function Calendar({
       }}
       {...props}
     />
+  )
+}
+
+function CalendarDropdown({
+  value,
+  options,
+  onChange,
+  disabled,
+  className,
+  'aria-label': ariaLabel,
+}: DropdownProps) {
+  const [open, setOpen] = React.useState(false)
+  const dropdownRef = React.useRef<HTMLDivElement>(null)
+  const listboxId = React.useId()
+  const selectedOption = options?.find((option) => option.value === value)
+
+  React.useEffect(() => {
+    if (!open) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!dropdownRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [open])
+
+  return (
+    <div
+      ref={dropdownRef}
+      {...{ [CALENDAR_DROPDOWN_LAYER_ATTR]: '' }}
+      className="relative"
+      onPointerDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          event.stopPropagation()
+          setOpen(false)
+        }
+      }}
+    >
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-controls={open ? listboxId : undefined}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((current) => !current)}
+        className={cn(
+          'h-8 min-w-[4.75rem] rounded-xl border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800',
+          className,
+        )}
+      >
+        <span>{selectedOption?.label ?? value}</span>
+        <ChevronDownIcon className="size-3.5 opacity-50" />
+      </Button>
+
+      {open && (
+        <div
+          id={listboxId}
+          role="listbox"
+          className="absolute left-0 top-full z-[130] mt-1 max-h-72 min-w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-900"
+        >
+          {options?.map((option) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              key={option.value}
+              disabled={option.disabled}
+              onClick={() => {
+                onChange?.({
+                  target: { value: String(option.value) },
+                } as React.ChangeEvent<HTMLSelectElement>)
+                setOpen(false)
+              }}
+              className={cn(
+                'flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-slate-800 dark:focus:bg-slate-800',
+                option.value === value
+                  ? 'font-semibold text-indigo-600 dark:text-indigo-400'
+                  : 'text-slate-700 dark:text-slate-300',
+              )}
+            >
+              <span>{option.label}</span>
+              {option.value === value && <CheckIcon className="size-3.5" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
