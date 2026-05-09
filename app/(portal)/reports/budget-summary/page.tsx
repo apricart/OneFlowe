@@ -804,7 +804,7 @@ export default function BudgetSummaryPage() {
                                 compareYears={compareYears}
                             />
                         </div>
-                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => mutatePage()}>
+                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => handleDateChange(null, "all", false, null)}>
                             <RefreshCw className={cn("h-4 w-4", isPageLoading && "animate-spin")} />
                         </Button>
                     </div>

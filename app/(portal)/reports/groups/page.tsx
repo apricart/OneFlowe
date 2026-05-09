@@ -164,6 +164,20 @@ export default function GroupsReportPage() {
         if (cy !== undefined) setCompareYears(cy)
     }, [])
 
+    const resetGlobalDateFilter = useCallback(() => {
+        setDateRange(null)
+        setActivePreset("all")
+        setCompare(false)
+        setCompareRange(null)
+        setSelectedMonths([])
+        setSelectedYears([])
+        setCompareMonths([])
+        setCompareYears([])
+        mutateGlobal()
+        mutateChart()
+        mutateReport()
+    }, [mutateGlobal, mutateChart, mutateReport])
+
     const resetReportFilters = useCallback(() => {
         const defaultOrgIds = contextOrgId
             ? [String(contextOrgId)]
@@ -382,7 +396,7 @@ export default function GroupsReportPage() {
                             />
                         </div>
                         {/* Filters moved to local tabs */}
-                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => mutateGlobal()}>
+                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={resetGlobalDateFilter}>
                             <RefreshCw className={cn("h-4 w-4", isGlobalLoading && "animate-spin")} />
                         </Button>
                     </div>

@@ -757,7 +757,7 @@ export default function ProductPerformancePage() {
                                 <MultiBranchFilter organizationId={organizationId} selectedBranchIds={contextBranchIds} onChange={setContextBranchIds} />
                             </>
                         )}
-                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => { mutateGlobalPerf(); mutateLedger(); mutateChart(); }}>
+                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => { handleDateChange(null, "all", false, null, [], [], [], []); mutateGlobalPerf(); mutateLedger(); mutateChart(); }}>
                             <RefreshCw className={cn("h-4 w-4", (isGlobalPerfLoading || isLedgerLoading || isChartPerfLoading) && "animate-spin")} />
                         </Button>
                     </div>

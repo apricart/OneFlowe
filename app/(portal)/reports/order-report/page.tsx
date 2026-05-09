@@ -247,6 +247,20 @@ export default function OrderReportPage() {
         if (cy !== undefined) setCompareYears(cy)
     }, [])
 
+    const resetGlobalDateFilter = useCallback(() => {
+        setDateRange(null)
+        setActivePreset("all")
+        setCompare(false)
+        setCompareRange(null)
+        setSelectedMonths([])
+        setSelectedYears([])
+        setCompareMonths([])
+        setCompareYears([])
+        mutateGlobal()
+        mutateChart()
+        mutateReport()
+    }, [mutateGlobal, mutateChart, mutateReport])
+
     const handleBranchChange = useCallback((ids: string[]) => {
         setContextBranchIds(ids)
     }, [setContextBranchIds])
@@ -497,7 +511,7 @@ export default function OrderReportPage() {
                                 <MultiBranchFilter organizationId={organizationId} selectedBranchIds={contextBranchIds} onChange={setContextBranchIds} />
                             </>
                         )}
-                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => { mutateGlobal(); mutateChart(); mutateReport(); }}>
+                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={resetGlobalDateFilter}>
                             <RefreshCw className={cn("h-4 w-4", (isGlobalLoading || isChartLoading || isReportLoading) && "animate-spin")} />
                         </Button>
                     </div>

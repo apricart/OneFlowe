@@ -191,6 +191,20 @@ export default function BranchReportsPage() {
         if (cy !== undefined) setCompareYears(cy)
     }, [])
 
+    const resetGlobalDateFilter = useCallback(() => {
+        setDateRange(null)
+        setActivePreset("all")
+        setCompare(false)
+        setCompareRange(null)
+        setSelectedMonths([])
+        setSelectedYears([])
+        setCompareMonths([])
+        setCompareYears([])
+        mutateGlobal()
+        mutateChart()
+        mutateReport()
+    }, [mutateGlobal, mutateChart, mutateReport])
+
     const resetReportFilters = useCallback(() => {
         const defaultOrgId = contextOrgId ? String(contextOrgId) : (userOrgId ? String(userOrgId) : "")
         const defaultBranchIds = role === "BRANCH_ADMIN" && userBranchId
@@ -357,7 +371,7 @@ export default function BranchReportsPage() {
                                 <MultiBranchFilter organizationId={contextOrgId || userOrgId} selectedBranchIds={contextBranchIds} onChange={setContextBranchIds} />
                             </>
                         )}
-                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-emerald-500 transition-colors" onClick={() => mutateGlobal()}>
+                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-emerald-500 transition-colors" onClick={resetGlobalDateFilter}>
                             <RefreshCw className={cn("h-4 w-4", isGlobalLoading && "animate-spin")} />
                         </Button>
                     </div>

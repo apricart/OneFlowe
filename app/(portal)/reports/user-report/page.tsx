@@ -276,6 +276,21 @@ export default function UserReportPage() {
         if (cy !== undefined) setCompareYears(cy)
     }, [])
 
+    const resetGlobalDateFilter = useCallback(() => {
+        setDateRange(null)
+        setActivePreset("all")
+        setCompare(false)
+        setCompareRange(null)
+        setSelectedMonths([])
+        setSelectedYears([])
+        setCompareMonths([])
+        setCompareYears([])
+        mutateGlobal()
+        mutateChart()
+        mutateReport()
+        mutateUserProducts()
+    }, [mutateGlobal, mutateChart, mutateReport, mutateUserProducts])
+
     const resetReportFilters = useCallback(() => {
         setReportSearch("")
         setReportMonths([...ALL_MONTHS])
@@ -459,7 +474,7 @@ export default function UserReportPage() {
                                 compareYears={compareYears}
                             />
                         </div>
-                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={() => { mutateGlobal(); mutateChart(); mutateReport(); mutateUserProducts(); }}>
+                        <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors" onClick={resetGlobalDateFilter}>
                             <RefreshCw className={cn("h-4 w-4", (isGlobalLoading || isChartLoading || isReportLoading || isUserProductsLoading) && "animate-spin")} />
                         </Button>
                     </div>
