@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useAppContext } from "@/components/context/app-context"
 import { useBranches, useOrders, useUsers } from "@/lib/hooks/use-api"
@@ -19,13 +19,46 @@ export type DashboardNotification = {
   tag?: string
 }
 
+const getNotificationReadKey = (notification: DashboardNotification) =>
+  [
+    notification.id,
+    notification.severity,
+    notification.tag || "",
+    notification.title,
+    notification.message,
+  ].join("|")
+
 export function useDashboardNotifications() {
   const { data: session } = useSession()
   const role = ((session?.user as any)?.role || "BRANCH_ADMIN") as "SUPER_ADMIN" | "HEAD_OFFICE" | "BRANCH_ADMIN"
+  const userId = (session?.user as any)?.id || session?.user?.email || "anonymous"
   const { organizationId, branchId, isInitialized } = useAppContext()
+  const [seenNotificationKeys, setSeenNotificationKeys] = useState<Set<string>>(new Set())
 
   const scopedOrgId = role === "SUPER_ADMIN" ? undefined : organizationId || undefined
   const scopedBranchId = role === "BRANCH_ADMIN" ? branchId || undefined : undefined
+  const seenStorageKey = useMemo(
+    () => [
+      "oneflowe.dashboard-notifications.seen",
+      userId,
+      role,
+      organizationId ?? "all-orgs",
+      branchId ?? "all-branches",
+    ].join(":"),
+    [userId, role, organizationId, branchId],
+  )
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    try {
+      const stored = window.localStorage.getItem(seenStorageKey)
+      const parsed = stored ? JSON.parse(stored) : []
+      setSeenNotificationKeys(new Set(Array.isArray(parsed) ? parsed.filter((key) => typeof key === "string") : []))
+    } catch {
+      setSeenNotificationKeys(new Set())
+    }
+  }, [seenStorageKey])
 
   const pendingOrdersQuery = useOrders({
     organizationId: scopedOrgId,
@@ -100,14 +133,39 @@ export function useDashboardNotifications() {
     branchesQuery.isLoading ||
     usersQuery.isLoading
 
-  const criticalCount = notifications.filter((n) => n.severity !== "info").length
+  const unreadNotifications = useMemo(
+    () => notifications.filter((notification) => !seenNotificationKeys.has(getNotificationReadKey(notification))),
+    [notifications, seenNotificationKeys],
+  )
+
+  const markAllAsRead = useCallback(() => {
+    if (typeof window === "undefined" || notifications.length === 0) return
+
+    setSeenNotificationKeys((currentKeys) => {
+      const nextKeys = new Set(currentKeys)
+      notifications.forEach((notification) => {
+        nextKeys.add(getNotificationReadKey(notification))
+      })
+
+      const serializedKeys = Array.from(nextKeys).slice(-200)
+      try {
+        window.localStorage.setItem(seenStorageKey, JSON.stringify(serializedKeys))
+      } catch {
+        // Keep the in-memory read state even if browser storage is unavailable.
+      }
+      return new Set(serializedKeys)
+    })
+  }, [notifications, seenStorageKey])
+
+  const criticalCount = unreadNotifications.filter((n) => n.severity !== "info").length
 
   return {
     role,
     notifications,
-    unreadCount: notifications.length,
+    unreadCount: unreadNotifications.length,
     criticalCount,
     isLoading,
+    markAllAsRead,
   }
 }
 

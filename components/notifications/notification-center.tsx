@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment } from "react"
+import { useEffect, useState } from "react"
 import { Bell, AlertTriangle, CheckCircle2, Info } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -25,10 +25,17 @@ const severityTone: Record<DashboardNotification["severity"], string> = {
 }
 
 export function NotificationBell() {
-  const { notifications, criticalCount, isLoading } = useDashboardNotifications()
+  const { notifications, criticalCount, isLoading, markAllAsRead } = useDashboardNotifications()
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (open && !isLoading) {
+      markAllAsRead()
+    }
+  }, [open, isLoading, markAllAsRead])
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />

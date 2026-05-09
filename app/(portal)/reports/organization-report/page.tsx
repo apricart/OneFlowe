@@ -90,6 +90,17 @@ const getDefaultDateRange = (): DateRange => ({
 })
 
 const ALL_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+const formatTrendPeriodLabel = (period: string) => {
+    const [year, month, day] = period.split("-")
+    const monthIndex = month ? Number(month) - 1 : -1
+    const monthLabel = monthIndex >= 0 && monthIndex < MONTH_LABELS.length ? MONTH_LABELS[monthIndex] : month
+
+    if (year && monthLabel && day) return `${day} ${monthLabel} ${year}`
+    if (year && monthLabel) return `${monthLabel} ${year}`
+    return period
+}
 
 export default function OrganizationReportPage() {
     const { data: session } = useSession()
@@ -266,15 +277,12 @@ export default function OrganizationReportPage() {
     }, [allTimeData])
 
     const resetChartFilters = useCallback(() => {
-        const defaultMonths = activePreset === "all" ? ALL_MONTHS : []
-        const defaultYears = activePreset === "all" ? allYears : []
-
-        setChartMonths([...defaultMonths])
-        setChartYears([...defaultYears])
+        setChartMonths([])
+        setChartYears([])
         setChartOrgIds([])
         setChartBranchIds(contextBranchIds.length > 0 ? [...contextBranchIds] : [])
         mutateChart()
-    }, [activePreset, allYears, contextBranchIds, mutateChart])
+    }, [contextBranchIds, mutateChart])
 
     const resetReportFilters = useCallback(() => {
         const defaultMonths = activePreset === "all" ? ALL_MONTHS : []
@@ -296,8 +304,8 @@ export default function OrganizationReportPage() {
     useEffect(() => {
         if (hasMounted && isInitialLoad.current && allYears.length > 0) {
             if (activePreset === "all") {
-                setChartMonths([...ALL_MONTHS])
-                setChartYears([...allYears])
+                setChartMonths([])
+                setChartYears([])
                 setReportMonths([...ALL_MONTHS])
                 setReportYears([...allYears])
             }
@@ -311,13 +319,25 @@ export default function OrganizationReportPage() {
     const stats = reportData?.items || []
     const normalizedTrend = useMemo(() => {
         const trend = chartData?.trend || []
+        const comparisonTrend = chartData?.comparisonTrend || []
         const currentYear = new Date().getFullYear()
+        const getComparisonRevenue = (period: string) =>
+            comparisonTrend.find((t: any) => t.period === period)?.revenue || 0
+
+        if (chartYears.length === 0 || (chartYears.length === 1 && chartMonths.length === 1)) {
+            return trend.map((t: any) => ({
+                period: formatTrendPeriodLabel(String(t.period)),
+                revenue: t.revenue || 0,
+                orders: t.orders || 0,
+                prevRevenue: getComparisonRevenue(String(t.period))
+            }))
+        }
 
         // Case A: Multiple years -> Show Years on X-Axis
         if (chartYears.length > 1) {
-            return chartYears.sort((a, b) => a - b).map(year => {
+            return [...chartYears].sort((a, b) => a - b).map(year => {
                 const yearData = trend.filter((t: any) => t.period.startsWith(String(year)))
-                const compData = chartData?.comparisonTrend?.filter((t: any) => t.period.startsWith(String(year))) || []
+                const compData = comparisonTrend.filter((t: any) => t.period.startsWith(String(year)))
 
                 return {
                     period: String(year),
@@ -335,13 +355,12 @@ export default function OrganizationReportPage() {
             : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
         return monthsToShow.map(m => {
-            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
             const periodKey = `${activeYear}-${String(m).padStart(2, '0')}`
             const monthData = trend.find((t: any) => t.period === periodKey)
-            const compData = chartData?.comparisonTrend?.find((t: any) => t.period === periodKey)
+            const compData = comparisonTrend.find((t: any) => t.period === periodKey)
 
             return {
-                period: monthNames[m - 1],
+                period: MONTH_LABELS[m - 1],
                 revenue: monthData?.revenue || 0,
                 orders: monthData?.orders || 0,
                 prevRevenue: compData?.revenue || 0
@@ -499,9 +518,9 @@ export default function OrganizationReportPage() {
                                         </div>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-11"></p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={resetChartFilters} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800" aria-label="Reset analytics filters" title="Reset analytics filters">
+                                    {/* <Button variant="outline" size="sm" onClick={resetChartFilters} className="h-8 w-8 p-0 rounded-lg border-slate-200 dark:border-slate-800" aria-label="Reset analytics filters" title="Reset analytics filters">
                                         <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isChartLoading && "animate-spin")} />
-                                    </Button>
+                                    </Button> */}
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2.5 pt-1">
