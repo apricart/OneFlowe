@@ -465,7 +465,7 @@ export function GlobalDateFilter({
                     ))}
 
                     <div className="px-2 py-2 mt-2 border-t border-slate-100 dark:border-slate-800 mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        Select Arbitrary Period A
+                        Select Arbitrary Period
                     </div>
                     
                     {/* Advanced Multi-Select Arrays */}
