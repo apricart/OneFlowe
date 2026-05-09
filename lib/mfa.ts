@@ -6,7 +6,7 @@
 
 import { db } from "@/lib/db"
 import { users, mfaCodes } from "@/db/schema"
-import { eq, and, gte, desc } from "drizzle-orm"
+import { eq, and, gte, desc, sql } from "drizzle-orm"
 import { randomInt } from "crypto"
 import { RedisMFA, redis, REDIS_KEYS } from "@/lib/redis"
 import { logError } from "@/lib/global-logger"
@@ -138,6 +138,48 @@ export async function setCooldown(userId: string, type: 'OTP_REQUEST' | 'OTP_VER
   } catch (error) {
     console.error("Error setting cooldown:", error)
   }
+}
+
+function getCooldownRemainingMs(cooldown: MFACooldown): number {
+  return cooldown.timestamp
+    ? cooldown.timestamp - Date.now()
+    : new Date(cooldown.cooldownUntil).getTime() - Date.now()
+}
+
+function getTooManyFailedAttemptsMessage(remainingMs: number): string {
+  const minutes = Math.ceil(remainingMs / 60000)
+  return `Too many failed attempts. Please wait ${minutes} minute${minutes !== 1 ? 's' : ''} before trying again`
+}
+
+async function incrementOTPAttempts(
+  otp: Pick<MFACode, 'id' | 'code' | 'attempts'>,
+  userId: string,
+  type: 'LOGIN' | 'VERIFY_EMAIL' | 'RESET_PASSWORD'
+): Promise<number> {
+  const [updatedOTP] = await db
+    .update(mfaCodes)
+    .set({ attempts: sql`${mfaCodes.attempts} + 1` })
+    .where(and(
+      eq(mfaCodes.id, otp.id),
+      eq(mfaCodes.userId, userId),
+      eq(mfaCodes.type, type),
+      eq(mfaCodes.isUsed, false)
+    ))
+    .returning({ attempts: mfaCodes.attempts })
+
+  if (!updatedOTP) {
+    throw new Error('Active OTP was not available for attempt update')
+  }
+
+  const attempts = updatedOTP.attempts
+
+  try {
+    await RedisMFA.updateOTPAttempts(userId, otp.code, attempts)
+  } catch (redisError) {
+    logError(redisError, 'MFA_REDIS_UPDATE_OTP_ATTEMPTS', { userId, type })
+  }
+
+  return attempts
 }
 
 /**
@@ -338,16 +380,13 @@ export async function verifyOTP(
 
     // Check cooldown
     const cooldown = await checkCooldown(userId, 'OTP_VERIFY')
-    if (cooldown) {
-      const remainingMs = cooldown.timestamp ?
-        cooldown.timestamp - Date.now() :
-        new Date(cooldown.cooldownUntil).getTime() - Date.now()
+    if (cooldown && cooldown.attempts >= OTP_CONFIG.MAX_ATTEMPTS) {
+      const remainingMs = getCooldownRemainingMs(cooldown)
 
       if (remainingMs > 0) {
-        const minutes = Math.ceil(remainingMs / 60000)
         return {
           success: false,
-          message: `Too many failed attempts. Please wait ${minutes} minute${minutes !== 1 ? 's' : ''} before trying again`,
+          message: getTooManyFailedAttemptsMessage(remainingMs),
           cooldownUntil: new Date(cooldown.cooldownUntil)
         }
       }
@@ -390,28 +429,33 @@ export async function verifyOTP(
     }
 
     if (!latestDbOTP) {
-      const attempts = (cooldown?.attempts || 0) + 1
-
-      try {
-        await setCooldown(userId, 'OTP_VERIFY', attempts)
-      } catch (error) {
-        console.error('[MFA] Failed to set cooldown:', error)
-      }
-
       return {
         success: false,
-        message: "OTP has expired. Please request a new one.",
-        remainingAttempts: Math.max(0, OTP_CONFIG.MAX_ATTEMPTS - attempts)
+        message: "OTP has expired. Please request a new one."
       }
     }
 
     if (latestDbOTP.code !== sanitizedCode) {
-      const attempts = (cooldown?.attempts || 0) + 1
+      let attempts: number
 
       try {
+        attempts = await incrementOTPAttempts(latestDbOTP, userId, type)
+      } catch (attemptError) {
+        logError(attemptError, 'MFA_DB_INCREMENT_ATTEMPTS', { userId, type })
+        return {
+          success: false,
+          message: "Failed to verify OTP. Please try again."
+        }
+      }
+
+      if (attempts >= OTP_CONFIG.MAX_ATTEMPTS) {
         await setCooldown(userId, 'OTP_VERIFY', attempts)
-      } catch (error) {
-        console.error('[MFA] Failed to set cooldown:', error)
+
+        return {
+          success: false,
+          message: getTooManyFailedAttemptsMessage(OTP_CONFIG.COOLDOWN_MINUTES * 60000),
+          remainingAttempts: 0
+        }
       }
 
       return {
@@ -469,12 +513,26 @@ export async function verifyOTP(
       }
 
       // Increment failed attempts
-      const attempts = (cooldown?.attempts || 0) + 1
+      let attempts: number
 
       try {
+        attempts = await incrementOTPAttempts(latestDbOTP, userId, type)
+      } catch (attemptError) {
+        logError(attemptError, 'MFA_DB_INCREMENT_ATTEMPTS', { userId, type })
+        return {
+          success: false,
+          message: "Failed to verify OTP. Please try again."
+        }
+      }
+
+      if (attempts >= OTP_CONFIG.MAX_ATTEMPTS) {
         await setCooldown(userId, 'OTP_VERIFY', attempts)
-      } catch (error) {
-        console.error('[MFA] Failed to set cooldown:', error)
+
+        return {
+          success: false,
+          message: getTooManyFailedAttemptsMessage(OTP_CONFIG.COOLDOWN_MINUTES * 60000),
+          remainingAttempts: 0
+        }
       }
 
       return {
@@ -487,7 +545,8 @@ export async function verifyOTP(
     }
 
     // Check attempt limit
-    if (otpData.attempts >= OTP_CONFIG.MAX_ATTEMPTS) {
+    const attempts = Math.max(latestDbOTP.attempts, Number(otpData.attempts || 0))
+    if (attempts >= OTP_CONFIG.MAX_ATTEMPTS) {
       return {
         success: false,
         message: "OTP code has exceeded maximum attempts. Please request a new one."

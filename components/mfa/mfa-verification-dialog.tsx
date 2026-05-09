@@ -337,11 +337,10 @@ export function MFAVerificationDialog({
                 size="sm"
                 onClick={handleResend}
                 disabled={!canResend || isSending}
+                loading={isSending}
                 className="flex items-center gap-2"
               >
-                {isSending ? (
-                  <RefreshCw className="h-3 w-3 animate-spin" />
-                ) : (
+                {!isSending && (
                   <RefreshCw className="h-3 w-3" />
                 )}
                 {isSending && isInitialSend ? "Sending OTP" : "Resend OTP"}
@@ -365,12 +364,12 @@ export function MFAVerificationDialog({
               >
                 {isVerifying ? (
                   <>
-                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    {/* <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> */}
                     Verifying...
                   </>
                 ) : (
                   <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
+                    {/* <CheckCircle className="mr-2 h-4 w-4" /> */}
                     Verify
                   </>
                 )}
