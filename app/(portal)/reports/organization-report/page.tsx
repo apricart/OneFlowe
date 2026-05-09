@@ -576,10 +576,22 @@ export default function OrganizationReportPage() {
                             </div>
 
                             <CardContent className="p-8">
-                                {(isChartLoading || !normalizedTrend.length) ? (
+                                {isChartLoading ? (
                                     <div className="h-[450px] flex flex-col items-center justify-center gap-4">
                                         <div className="h-10 w-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
                                         <p className="text-[10px] font-black uppercase text-slate-400 animate-pulse">Synchronizing Analytics...</p>
+                                    </div>
+                                ) : !normalizedTrend.length ? (
+                                    <div className="h-[450px] flex flex-col items-center justify-center gap-4 text-center">
+                                        <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                                            <BarChart3 className="h-7 w-7 text-slate-300 dark:text-slate-600" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No analytics data available</p>
+                                            <p className="max-w-sm text-xs font-semibold text-slate-400 dark:text-slate-500">
+                                                Try adjusting the date, year, month, organization, or branch filters.
+                                            </p>
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="h-[450px] w-full">

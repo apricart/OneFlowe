@@ -382,7 +382,7 @@ export function GlobalDateFilter({
                         <Calendar
                             initialFocus
                             mode="range"
-                            defaultMonth={value?.startDate || new Date()}
+                            defaultMonth={new Date()}
                             selected={calendarDraft}
                             onSelect={handleMainCalendarSelect}
                             numberOfMonths={2}
@@ -435,7 +435,7 @@ export function GlobalDateFilter({
                             <Calendar
                                 initialFocus
                                 mode="range"
-                                defaultMonth={value?.startDate || new Date()}
+                                defaultMonth={new Date()}
                                 selected={calendarDraft}
                                 onSelect={handleMainCalendarSelect}
                                 numberOfMonths={2}
