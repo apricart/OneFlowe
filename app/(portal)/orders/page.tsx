@@ -161,11 +161,11 @@ export default function OrdersManagementPage() {
 
     // Local filters override global context if set
     // If a group is selected but no branches, we leave branchIds empty so the API filters solely by Group
-    const effectiveBranchIds = reportBranchIds.length > 0 
-      ? reportBranchIds 
-      : (reportGroupIds.length > 0 
-          ? [] 
-          : (branchIds.length > 0 ? branchIds : (branchId ? [branchId] : [])))
+    const effectiveBranchIds = reportBranchIds.length > 0
+      ? reportBranchIds
+      : (reportGroupIds.length > 0
+        ? []
+        : (branchIds.length > 0 ? branchIds : (branchId ? [branchId] : [])))
 
     if (effectiveBranchIds.length > 0) {
       params.set("branchIds", effectiveBranchIds.join(","))
@@ -514,7 +514,7 @@ export default function OrdersManagementPage() {
               </div>
 
               {/* Right Side: Environment Filters & Actions */}
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0 pb-1 lg:pb-0">
+              <div className="hidden lg:flex items-center    rounded-2xl  ">
                 <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
 
                 <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
@@ -571,9 +571,9 @@ export default function OrdersManagementPage() {
                 )}
 
                 {hasActiveOrderFilters && (
-                   <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={resetOrderFilters}
                     className="h-7 px-2 text-[9px] font-black text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 uppercase tracking-widest gap-1 rounded-lg transition-all"
                   >
@@ -583,7 +583,7 @@ export default function OrdersManagementPage() {
               </div>
             )}
 
-            </div>
+          </div>
 
           <div className="px-1 sm:px-4 pb-4 w-full">
             <OrdersDirectory
