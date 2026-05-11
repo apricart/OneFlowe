@@ -287,7 +287,7 @@ export function DrillDownSheet({
                                 </h2>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 relative z-50">
                             <GlobalDateFilter
                                 value={localDateRange}
                                 onChange={handleDateChange}

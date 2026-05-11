@@ -12,13 +12,13 @@ import { useAppContext } from "@/components/context/app-context"
 import { useSession } from "next-auth/react"
 import { Role } from "@/lib/rbac"
 import { formatPKR, cn } from "@/lib/utils"
-import { 
-  Search, 
-  Package, 
-  Box, 
-  LayoutGrid, 
-  Filter, 
-  RefreshCw, 
+import {
+  Search,
+  Package,
+  Box,
+  LayoutGrid,
+  Filter,
+  RefreshCw,
   ChevronRight,
   Info,
   CheckCircle2,
@@ -63,7 +63,7 @@ export default function BranchInventoryPage() {
   params.set("search", searchQuery)
   if (categoryFilter !== "all") params.set("category", categoryFilter)
   if (subCategoryFilter !== "all") params.set("subCategory", subCategoryFilter)
-  
+
   if (role === "BRANCH_ADMIN") {
     const adminBranchId = userBranchId || branchId
     if (userOrgId) params.set("organizationId", String(userOrgId))
@@ -109,7 +109,7 @@ export default function BranchInventoryPage() {
   const inactiveCount = Math.max(totalAssigned - activeCount, 0)
 
   return (
-    <motion.main 
+    <motion.main
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 lg:p-6 space-y-6 max-w-[2000px] mx-auto overflow-x-hidden"
@@ -125,11 +125,14 @@ export default function BranchInventoryPage() {
           </div>
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Direct SKUs from Head Office for your branch</p>
         </div>
-        
+
         <div className="flex items-center gap-3">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => {
+              setSearchQuery("")
+              setCategoryFilter("all")
+              setSubCategoryFilter("all")
               void mutate()
               void mutateStats()
             }}
@@ -267,7 +270,7 @@ export default function BranchInventoryPage() {
                           </div>
                         </div>
                       </TableCell>
-                      
+
                       <TableCell className="px-6 py-4">
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5">
@@ -290,14 +293,14 @@ export default function BranchInventoryPage() {
                         <div className="flex justify-center">
                           <div className={cn(
                             "flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-sm transition-all duration-300",
-                            item.stockQuantity > item.reorderThreshold 
-                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 ring-4 ring-emerald-500/5" 
+                            item.stockQuantity > item.reorderThreshold
+                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 ring-4 ring-emerald-500/5"
                               : item.stockQuantity > 0
                                 ? "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400 ring-4 ring-amber-500/5"
                                 : "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400 ring-4 ring-rose-500/5"
                           )}>
                             <div className={cn(
-                              "w-1.5 h-1.5 rounded-full animate-pulse", 
+                              "w-1.5 h-1.5 rounded-full animate-pulse",
                               item.stockQuantity > item.reorderThreshold ? "bg-emerald-500" : item.stockQuantity > 0 ? "bg-amber-500" : "bg-rose-500"
                             )} />
                             <span className="text-[10px] font-black uppercase tracking-widest">
@@ -319,7 +322,7 @@ export default function BranchInventoryPage() {
             </TableBody>
           </Table>
         </div>
-        
+
         <div className="p-6 border-t border-slate-100 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-800/10">
           <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             <Info className="w-3.5 h-3.5 text-indigo-500" />
