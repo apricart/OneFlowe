@@ -482,7 +482,7 @@ export default function OrderReportPage() {
                             </div>
                         </div>
                         <div>
-                            <h1 className="text-xl font-black tracking-tighter text-slate-900 dark:text-white uppercase leading-none mb-1">Orderss Intelligence</h1>
+                            <h1 className="text-xl font-black tracking-tighter text-slate-900 dark:text-white uppercase leading-none mb-1">Order Intelligence</h1>
                             <div className="flex items-center gap-1.5 h-4">
                                 <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse" />
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Audit & Analytics Terminal</p>
