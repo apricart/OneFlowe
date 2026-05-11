@@ -96,6 +96,8 @@ export default function OrdersManagementPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [dateRange, setDateRange] = useState<DateRange | null>(null)
   const [activePreset, setActivePreset] = useState<FilterPreset>("all")
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([])
+  const [selectedYears, setSelectedYears] = useState<number[]>([])
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [splitFilter, setSplitFilter] = useState<OrderSplitFilter>("all")
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null)
@@ -121,9 +123,18 @@ export default function OrdersManagementPage() {
   const [errorMessage, setErrorMessage] = useState("")
 
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
+  const handleDateChange = useCallback((
+    range: DateRange | null,
+    preset: FilterPreset,
+    _compare?: boolean,
+    _compareRange?: DateRange | null,
+    months: number[] = [],
+    years: number[] = []
+  ) => {
     setDateRange(range)
     setActivePreset(preset)
+    setSelectedMonths(months)
+    setSelectedYears(years)
   }, [])
 
   const hasActiveOrderFilters =
@@ -132,6 +143,8 @@ export default function OrdersManagementPage() {
     searchQuery.length > 0 ||
     activePreset !== "all" ||
     dateRange !== null ||
+    selectedMonths.length > 0 ||
+    selectedYears.length > 0 ||
     statusFilter !== "all" ||
     splitFilter !== "all"
 
@@ -141,6 +154,8 @@ export default function OrdersManagementPage() {
     setSearchQuery("")
     setDateRange(null)
     setActivePreset("all")
+    setSelectedMonths([])
+    setSelectedYears([])
     setStatusFilter("all")
     setSplitFilter("all")
   }, [])
@@ -180,8 +195,16 @@ export default function OrdersManagementPage() {
       params.set("endDate", dateRange.endDate.toISOString())
     }
 
+    if (selectedMonths.length > 0) {
+      params.set("months", selectedMonths.join(","))
+    }
+
+    if (selectedYears.length > 0) {
+      params.set("years", selectedYears.join(","))
+    }
+
     return `/api/v1/orders${params.toString() ? `?${params.toString()}` : ""}`
-  }, [organizationId, branchId, branchIds, reportBranchIds, reportGroupIds, dateRange, isInitialized])
+  }, [organizationId, branchId, branchIds, reportBranchIds, reportGroupIds, dateRange, selectedMonths, selectedYears, isInitialized])
 
   // Fetch orders scoped by context
   const { data: ordersData, mutate: mutateOrders, isLoading } = useSWR<any>(
@@ -515,7 +538,13 @@ export default function OrdersManagementPage() {
 
               {/* Right Side: Environment Filters & Actions */}
               <div className="hidden lg:flex items-center    rounded-2xl  ">
-                <GlobalDateFilter value={dateRange} onChange={handleDateChange} activePreset={activePreset} />
+                <GlobalDateFilter
+                  value={dateRange}
+                  onChange={handleDateChange}
+                  activePreset={activePreset}
+                  months={selectedMonths}
+                  years={selectedYears}
+                />
 
                 <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
                 <OrderExport orders={filteredOrders} role={userRole} />

@@ -54,6 +54,8 @@ export async function GET(req: NextRequest) {
     const mode = searchParams.get("mode") || undefined // weeklySales | monthlySales
     const groupId = searchParams.get("groupId") || undefined
     const groupIdsRaw = searchParams.get("groupIds") || undefined
+    const monthsRaw = searchParams.get("months") || undefined
+    const yearsRaw = searchParams.get("years") || undefined
 
     // Parsing branchIds
     const parsedBranchIds = branchIdsRaw
@@ -63,6 +65,14 @@ export async function GET(req: NextRequest) {
     // Parsing groupIds
     const parsedGroupIds = groupIdsRaw
       ? groupIdsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id))
+      : []
+
+    const parsedMonths = monthsRaw
+      ? monthsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id >= 1 && id <= 12)
+      : []
+
+    const parsedYears = yearsRaw
+      ? yearsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id >= 2000 && id <= 2100)
       : []
 
     const conditions: any[] = []
@@ -113,6 +123,15 @@ export async function GET(req: NextRequest) {
       const end = new Date(endDate)
       end.setHours(23, 59, 59, 999)
       conditions.push(lte(orders.createdAt, end))
+    }
+
+    // Arbitrary month/year filtering from GlobalDateFilter.
+    if (parsedMonths.length > 0) {
+      conditions.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedMonths, sql`, `)})`)
+    }
+
+    if (parsedYears.length > 0) {
+      conditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedYears, sql`, `)})`)
     }
 
     // Legacy date filters

@@ -1665,7 +1665,7 @@ export default function OrderPortalPage() {
 
               {/* Refund Management */}
               {/* Refund Management - Disabled for Order Portal */}
-              {/* 
+              
               <RefundManagement
                 orderId={selectedOrder.id}
                 orderTotalCents={selectedOrder.totalCents}
@@ -1679,7 +1679,7 @@ export default function OrderPortalPage() {
                 refundedAt={selectedOrder.refundedAt}
                 refundReason={selectedOrder.refundReason}
               />
-              */}
+             
             </div>
           )}
 
