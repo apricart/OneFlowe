@@ -11,6 +11,7 @@
     "db:seed": "tsx lib/seed.ts",
     "db:studio": "drizzle-kit studio --config=drizzle.config.ts",
     "db:sync": "tsx scripts/sync-schema.ts",
+    "import:fake-products": "tsx scripts/import-fake-products.ts",
     "dev": "next dev --turbo",
     "dev:legacy": "next dev",
     "lint": "next lint",
