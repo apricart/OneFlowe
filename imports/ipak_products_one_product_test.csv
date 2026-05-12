@@ -1,0 +1,2 @@
+productCode,name,description,categoryId,imageUrl,basePrice,discountType,discountValue,discountStartAt,discountEndAt,discountActive,unit,status,stockQuantity,createdByUserId,lastSyncedAt,deletedAt
+IPAK-0001,Sufi Test,,4,,100,,,,,,pkt,active,1000,33ac5154-29dc-4cc3-9f1e-bef288bafa71,,
