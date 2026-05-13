@@ -210,6 +210,36 @@ export async function GET(req: NextRequest) {
             budgetLookup[r.branchId][r.period] = r
         })
 
+        const useOrderScopedSpending = Boolean(
+            startDateParam || endDateParam || months.length > 0 || years.length > 0
+        )
+        const orderSpendingConditions = [
+            inArray(orders.branchId, actualBranchIds),
+            startDateParam || endDateParam ? gte(orders.createdAt, startDate) : undefined,
+            startDateParam || endDateParam ? lte(orders.createdAt, endDate) : undefined,
+            months.length > 0 ? sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(months, sql`, `)})` : undefined,
+            years.length > 0 ? sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(years, sql`, `)})` : undefined,
+        ].filter(Boolean)
+
+        const orderScopedSpendingRows = useOrderScopedSpending
+            ? await db
+                .select({
+                    branchId: orders.branchId,
+                    period: sql<string>`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`,
+                    spentCents: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'PARTIAL', 'PARTIALLY_FULFILLED') THEN GREATEST(0, ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)) ELSE 0 END), 0)`.mapWith(Number),
+                    heldCents: sql<number>`COALESCE(SUM(CASE WHEN UPPER(${orders.status}) IN ('PENDING', 'APPROVED') THEN GREATEST(0, ${orders.totalCents} - COALESCE(${orders.refundAmountCents}, 0)) ELSE 0 END), 0)`.mapWith(Number),
+                })
+                .from(orders)
+                .where(and(...orderSpendingConditions))
+                .groupBy(orders.branchId, sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
+            : []
+
+        const orderSpendingLookup: Record<number, Record<string, typeof orderScopedSpendingRows[number]>> = {}
+        orderScopedSpendingRows.forEach(row => {
+            if (!orderSpendingLookup[row.branchId]) orderSpendingLookup[row.branchId] = {}
+            orderSpendingLookup[row.branchId][row.period] = row
+        })
+
         let totalAllocated = 0
         let totalSpent = 0
         let totalHeld = 0
@@ -219,9 +249,14 @@ export async function GET(req: NextRequest) {
         activeBranches.forEach(branch => {
             periodList.forEach(period => {
                 const record = budgetLookup[branch.id]?.[period]
+                const orderSpending = orderSpendingLookup[branch.id]?.[period]
                 
-                totalSpent += record ? (record.amountSpentCents || 0) : 0
-                totalHeld += record ? (record.amountHeldCents || 0) : 0
+                totalSpent += useOrderScopedSpending
+                    ? (orderSpending?.spentCents || 0)
+                    : record ? (record.amountSpentCents || 0) : 0
+                totalHeld += useOrderScopedSpending
+                    ? (orderSpending?.heldCents || 0)
+                    : record ? (record.amountHeldCents || 0) : 0
 
                 const allocated = record ? (record.amountAllocatedCents || 0) : (branch.baselineBudgetCents || 0)
                 totalAllocated += allocated
@@ -332,8 +367,9 @@ export async function GET(req: NextRequest) {
                 // Everything else (excess allocation + credits) is Addon.
                 const baseline = Math.min(allocated, baselineSetting)
                 const addon = (allocated - baseline) + credited
-                const spent = record ? (record.amountSpentCents || 0) : 0
-                const held = record ? (record.amountHeldCents || 0) : 0
+                const orderSpending = orderSpendingLookup[branch.id]?.[period]
+                const spent = useOrderScopedSpending ? (orderSpending?.spentCents || 0) : record ? (record.amountSpentCents || 0) : 0
+                const held = useOrderScopedSpending ? (orderSpending?.heldCents || 0) : record ? (record.amountHeldCents || 0) : 0
                 
                 if (!chartDataMap[period].branches[branch.id]) {
                     chartDataMap[period].branches[branch.id] = { branchName: branch.name, baseline: 0, addon: 0, spent: 0 }
@@ -384,9 +420,14 @@ export async function GET(req: NextRequest) {
 
             periodList.forEach(period => {
                 const record = budgetLookup[branch.id]?.[period]
+                const orderSpending = orderSpendingLookup[branch.id]?.[period]
                 
-                spent += record ? (record.amountSpentCents || 0) : 0
-                held += record ? (record.amountHeldCents || 0) : 0
+                spent += useOrderScopedSpending
+                    ? (orderSpending?.spentCents || 0)
+                    : record ? (record.amountSpentCents || 0) : 0
+                held += useOrderScopedSpending
+                    ? (orderSpending?.heldCents || 0)
+                    : record ? (record.amountHeldCents || 0) : 0
                 allocated += record ? (record.amountAllocatedCents || 0) : (branch.baselineBudgetCents || 0)
                 credited += record ? (record.amountCreditedCents || 0) : 0
             })

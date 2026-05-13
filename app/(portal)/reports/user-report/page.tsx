@@ -613,7 +613,7 @@ export default function UserReportPage() {
                                                 <Legend verticalAlign="top" align="right" height={40} iconType="circle" wrapperStyle={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }} />
                                                 <Bar yAxisId="left" dataKey="orders" name={compare ? "Orders (A)" : "Total Orders"} fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={compare ? 15 : 30} />
                                                 {compare && <Bar yAxisId="left" dataKey="compOrders" name="Orders (B)" fill="#94a3b8" radius={[6, 6, 0, 0]} barSize={15} opacity={0.5} />}
-                                                <Line yAxisId="right" type="monotone" dataKey="spent" name={compare ? (isBuyer ? "Purchased (A)" : "Spent (A)") : (isBuyer ? "Total Purchased" : "Yield")} stroke="#6366f1" strokeWidth={4} dot={{ r: 5, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }} />
+                                                {/* <Line yAxisId="right" type="monotone" dataKey="spent" name={compare ? (isBuyer ? "Purchased (A)" : "Spent (A)") : (isBuyer ? "Total Purchased" : "Yield")} stroke="#6366f1" strokeWidth={4} dot={{ r: 5, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }} /> */}
                                                 {compare && <Line yAxisId="right" type="monotone" dataKey="compSpent" name={isBuyer ? "Purchased (B)" : "Spent (B)"} stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 4 }} />}
                                             </ComposedChart>
                                         </ResponsiveContainer>
