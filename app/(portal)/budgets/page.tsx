@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw, Trash2, Search } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
-import { GlobalDateFilter, type FilterPreset, getPresetRange } from "@/components/dashboard/global-date-filter"
+import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
@@ -32,6 +32,12 @@ interface BudgetAllocation {
   amountCreditedCents: number
   remainingCents: number
   baselineBudgetCents: number
+}
+
+const getBudgetUsagePercentage = (budget: BudgetAllocation) => {
+  const total = (budget.amountAllocatedCents || 0) + (budget.amountCreditedCents || 0)
+  if (total <= 0) return 0
+  return ((budget.amountSpentCents || 0) + (budget.amountHeldCents || 0)) / total * 100
 }
 
 export default function BudgetsPage() {
@@ -54,20 +60,31 @@ export default function BudgetsPage() {
   const [allocationType, setAllocationType] = useState<"monthly" | "addon">("addon")
 
   // ━━━ GLOBAL FILTERS ━━━
-  const [dateRange, setDateRange] = useState<DateRange | null>(getPresetRange("all"))
+  const [dateRange, setDateRange] = useState<DateRange | null>(null)
   const [activePreset, setActivePreset] = useState<FilterPreset>("all")
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([])
+  const [selectedYears, setSelectedYears] = useState<number[]>([])
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
 
-  const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset) => {
+  const handleDateChange = useCallback((
+    range: DateRange | null,
+    preset: FilterPreset,
+    _compare?: boolean,
+    _compareRange?: DateRange | null,
+    months?: number[],
+    years?: number[]
+  ) => {
     setDateRange(range)
     setActivePreset(preset)
+    setSelectedMonths(months || [])
+    setSelectedYears(years || [])
   }, [])
 
   useEffect(() => {
     if (isInitialized) {
-      handleDateChange(getPresetRange("all"), "all")
+      handleDateChange(null, "all")
     }
-  }, [isInitialized])
+  }, [isInitialized, handleDateChange])
 
   // Build endpoint respecting context (organization scope)
   const budgetsEndpoint = useMemo(() => {
@@ -78,22 +95,31 @@ export default function BudgetsPage() {
       params.set("organizationId", String(organizationId))
     }
 
-    if (activePreset === "all" || activePreset === "yearly") {
-      // By omitting period, the backend defaults to the current month.
-      // Budgets are inherently monthly, so 'All Time'/'This Year' showing the current active budget makes more sense than showing Jan 2024.
-    } else if (dateRange?.startDate) {
-      const year = dateRange.startDate.getFullYear()
-      const month = String(dateRange.startDate.getMonth() + 1).padStart(2, '0')
-      params.set("period", `${year}-${month}`)
+    if (dateRange) {
+      params.set("startDate", dateRange.startDate.toISOString())
+      params.set("endDate", dateRange.endDate.toISOString())
     }
+    if (selectedMonths.length > 0) params.set("months", selectedMonths.join(","))
+    const effectiveSelectedYears = selectedMonths.length > 0 && selectedYears.length === 0 && !dateRange
+      ? [new Date().getFullYear()]
+      : selectedYears
+    if (effectiveSelectedYears.length > 0) params.set("years", effectiveSelectedYears.join(","))
 
     if (selectedGroupIds.length > 0) params.set("groupIds", selectedGroupIds.join(","))
     if (contextBranchIds.length > 0) params.set("branchIds", contextBranchIds.join(","))
 
     return `/api/v1/budgets?${params.toString()}`
-  }, [isHeadOffice, isInitialized, organizationId, dateRange, activePreset, contextBranchIds, selectedGroupIds])
+  }, [isHeadOffice, isInitialized, organizationId, dateRange, selectedMonths, selectedYears, contextBranchIds, selectedGroupIds])
 
   const { data: budgetsData, mutate } = useSWR<any>(budgetsEndpoint, fetcher)
+
+  const resetBudgetFilters = useCallback(() => {
+    handleDateChange(null, "all")
+    setSelectedGroupIds([])
+    setContextBranchIds([])
+    setSearchQuery("")
+    mutate()
+  }, [handleDateChange, mutate, setContextBranchIds])
 
   const budgets: BudgetAllocation[] = budgetsData?.budgets || []
 
@@ -120,7 +146,10 @@ export default function BudgetsPage() {
   const totalSpent = scopedBudgets.reduce((sum, b) => sum + b.amountSpentCents, 0)
   const totalHeld = scopedBudgets.reduce((sum, b) => sum + b.amountHeldCents, 0)
   const totalRemaining = scopedBudgets.reduce((sum, b) => sum + b.remainingCents, 0)
-  const avgBudget = scopedBudgets.length > 0 ? totalAllocated / scopedBudgets.length : 0
+  const budgetsWithAllocation = scopedBudgets.filter((b) => ((b.amountAllocatedCents || 0) + (b.amountCreditedCents || 0)) > 0)
+  const avgUtilization = budgetsWithAllocation.length > 0
+    ? budgetsWithAllocation.reduce((sum, b) => sum + getBudgetUsagePercentage(b), 0) / budgetsWithAllocation.length
+    : 0
 
   const handleEditBudget = (budget: BudgetAllocation) => {
     setEditingBudget(budget)
@@ -305,10 +334,7 @@ export default function BudgetsPage() {
   }
 
   const getSpendingPercentage = (budget: BudgetAllocation) => {
-    const total = (budget.amountAllocatedCents || 0) + (budget.amountCreditedCents || 0)
-    if (total <= 0) return 0
-    const usage = (budget.amountSpentCents + budget.amountHeldCents)
-    return (usage / total) * 100
+    return getBudgetUsagePercentage(budget)
   }
 
   const getStatusColor = (percentage: number) => {
@@ -361,6 +387,8 @@ export default function BudgetsPage() {
               value={dateRange} 
               activePreset={activePreset} 
               onChange={handleDateChange} 
+              months={selectedMonths}
+              years={selectedYears}
             />
             {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
               <div className="flex items-center gap-2 h-6 pl-3 border-l border-slate-200 dark:border-slate-800">
@@ -378,7 +406,7 @@ export default function BudgetsPage() {
                 />
               </div>
             )}
-            <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors bg-white dark:bg-slate-900 ml-2 border border-slate-200 dark:border-slate-800" onClick={() => mutate()}>
+            <Button variant="ghost" size="icon" className="rounded-xl text-slate-400 hover:text-indigo-500 transition-colors bg-white dark:bg-slate-900 ml-2 border border-slate-200 dark:border-slate-800" onClick={resetBudgetFilters}>
               <RefreshCw className={cn("h-4 w-4", !budgetsData && "animate-spin")} />
             </Button>
           </div>
@@ -411,7 +439,7 @@ export default function BudgetsPage() {
         />
         <CompactStatCard
           label="Avg Utilization"
-          value={`${totalAllocated > 0 ? (((totalSpent + totalHeld) / totalAllocated) * 100).toFixed(1) : "0.0"}%`}
+          value={`${avgUtilization.toFixed(1)}%`}
           icon={<Zap className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-fuchsia-50/80 to-purple-50/80 border-fuchsia-100/50 text-fuchsia-700 dark:from-fuchsia-900/20 dark:to-purple-900/20 dark:border-fuchsia-800/30 dark:text-fuchsia-400"
           iconBadge="bg-fuchsia-100 dark:bg-fuchsia-900/40 text-fuchsia-600 dark:text-fuchsia-400"

@@ -110,6 +110,18 @@ export function OrdersDirectory({
     router.push(`/orders/${order.id}#refund-details`)
   }
 
+  const EmptyOrdersState = ({ compact = false }: { compact?: boolean }) => (
+    <div className={cn("flex flex-col items-center justify-center gap-3 text-center", compact ? "py-16" : "p-16")}>
+      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+        <Package className="h-10 w-10 text-slate-300 dark:text-slate-600" />
+      </div>
+      <div className="space-y-1">
+        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No orders found</p>
+        <p className="text-xs font-medium text-slate-400 dark:text-slate-500">No order data is available for the selected filters.</p>
+      </div>
+    </div>
+  )
+
   // Handlers
   const executeAction = async () => {
     if (!viewingOrder || !actionType) return
@@ -209,7 +221,11 @@ export function OrdersDirectory({
             transition={{ duration: 0.2 }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
           >
-            {orders.map((order, idx) => {
+            {orders.length === 0 ? (
+              <div className="col-span-full border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-slate-50/50 dark:bg-slate-900/50">
+                <EmptyOrdersState />
+              </div>
+            ) : orders.map((order, idx) => {
               const derivedStatus = getOrderDerivedStatus(order, statusContext)
               const statusColors = getStatusColor(derivedStatus.key)
               return (
@@ -319,6 +335,13 @@ export function OrdersDirectory({
                     </motion.tr>
                   )
                 })}
+                {orders.length === 0 && (
+                  <tr>
+                    <td colSpan={5}>
+                      <EmptyOrdersState compact />
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </motion.div>
