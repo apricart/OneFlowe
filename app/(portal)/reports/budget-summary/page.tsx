@@ -106,6 +106,9 @@ const formatChartAxisPKR = (value: number) => {
 
 const ALL_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 
+const formatBudgetPeriodDateParam = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+
 export default function BudgetSummaryPage() {
     const router = useRouter()
     const pathname = usePathname()
@@ -208,7 +211,7 @@ export default function BudgetSummaryPage() {
         if (cYears.length > 0) params.set("compareYears", cYears.join(","))
         else params.delete("compareYears")
 
-        if (range) {
+        if (range && preset !== "all") {
             params.set("startDate", range.startDate.toISOString())
             params.set("endDate", range.endDate.toISOString())
         } else {
@@ -241,6 +244,10 @@ export default function BudgetSummaryPage() {
 
     if (startFromUrl) queryParams.set("startDate", startFromUrl)
     if (endFromUrl) queryParams.set("endDate", endFromUrl)
+    if (dateRange) {
+        queryParams.set("budgetStartDate", formatBudgetPeriodDateParam(dateRange.startDate))
+        queryParams.set("budgetEndDate", formatBudgetPeriodDateParam(dateRange.endDate))
+    }
     if (selectedMonths.length > 0) queryParams.set("months", selectedMonths.join(","))
     if (selectedYears.length > 0) queryParams.set("years", selectedYears.join(","))
     if (compareMonths.length > 0) queryParams.set("compareMonths", compareMonths.join(","))
@@ -295,6 +302,10 @@ export default function BudgetSummaryPage() {
     if (reportGroupIds.length > 0) reportQueryParams.set("groupIds", reportGroupIds.join(","))
     if (startFromUrl) reportQueryParams.set("startDate", startFromUrl)
     if (endFromUrl) reportQueryParams.set("endDate", endFromUrl)
+    if (dateRange) {
+        reportQueryParams.set("budgetStartDate", formatBudgetPeriodDateParam(dateRange.startDate))
+        reportQueryParams.set("budgetEndDate", formatBudgetPeriodDateParam(dateRange.endDate))
+    }
     if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
     if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
     reportQueryParams.set("granularity", "monthly")
@@ -692,15 +703,16 @@ export default function BudgetSummaryPage() {
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
         // Export the full branch breakdown table to match the UI report
+        const getBaseBudget = (b: any) => b.allocated ?? b.baselineAmount ?? 0
         const columns = [
             { label: "Branch Name",        value: (b: any) => b.branchName || "-" },
-            { label: "Monthly Base (PKR)", value: (b: any) => ((b.baselineAmount || 0) / 100).toFixed(2) },
+            { label: "Monthly Base (PKR)", value: (b: any) => (getBaseBudget(b) / 100).toFixed(2) },
             { label: "Add-On Credit (PKR)",value: (b: any) => ((b.credited || 0) / 100).toFixed(2) },
-            { label: "Total Budget (PKR)", value: (b: any) => (((b.baselineAmount || 0) + (b.credited || 0)) / 100).toFixed(2) },
+            { label: "Total Budget (PKR)", value: (b: any) => ((getBaseBudget(b) + (b.credited || 0)) / 100).toFixed(2) },
             { label: "Spent (PKR)",        value: (b: any) => ((b.spent || 0) / 100).toFixed(2) },
-            { label: "Remaining (PKR)",    value: (b: any) => ((((b.baselineAmount || 0) + (b.credited || 0)) - (b.spent || 0)) / 100).toFixed(2) },
+            { label: "Remaining (PKR)",    value: (b: any) => (((getBaseBudget(b) + (b.credited || 0)) - (b.spent || 0)) / 100).toFixed(2) },
             { label: "Utilization %",      value: (b: any) => {
-                const total = (b.baselineAmount || 0) + (b.credited || 0)
+                const total = getBaseBudget(b) + (b.credited || 0)
                 return total > 0 ? `${((b.spent || 0) / total * 100).toFixed(1)}%` : "0%"
             }},
         ]
@@ -1596,7 +1608,7 @@ export default function BudgetSummaryPage() {
                                                     <TableBody className="bg-transparent">
                                                         <AnimatePresence mode="popLayout">
                                                             {filteredReportBranches.map((b: any, index: number) => {
-                                                                const baseline = b.baselineAmount || 0;
+                                                                const baseline = b.allocated ?? b.baselineAmount ?? 0;
                                                                 const addon = b.credited || 0;
                                                                 const totalLimit = baseline + addon;
                                                                 const spent = b.spent || 0;

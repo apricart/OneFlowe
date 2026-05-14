@@ -14,21 +14,25 @@ import * as dotenv from "dotenv";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { parse } from "csv-parse/sync";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config();
 
-const uploadedByUserId = "33ac5154-29dc-4cc3-9f1e-bef288bafa71";
+const uploadedByUserId = "3c0d853b-1296-4b30-b68d-fd27696e9222";
 
 const defaultCsvPath = "imports/ipak_products_upload_ready_comma.csv";
 const csvPath = process.argv[2] || defaultCsvPath;
+const defaultSubcategoryName = "General";
 
 type CsvRow = {
   productCode?: string;
   name?: string;
   description?: string;
+  parentCategoryId?: string;
   categoryId?: string;
+  subcategoryId?: string;
+  defaultSubcategoryName?: string;
   imageUrl?: string;
   basePrice?: string;
   discountType?: string;
@@ -43,6 +47,39 @@ type CsvRow = {
   createdByUserId?: string;
   lastSyncedAt?: string;
   deletedAt?: string;
+};
+
+type ImportRowError = { row: number; errors: string[] };
+
+type CategoryRecord = {
+  id: number;
+  name: string;
+  parentId: number | null;
+  organizationId: number | null;
+};
+
+type ProductDraft = {
+  productCode: string;
+  name: string;
+  description: string | null;
+  parentCategoryId: number | null;
+  subcategoryId: number | null;
+  categoryIdFromLegacyColumn: boolean;
+  defaultSubcategoryName: string;
+  imageUrl: string | null;
+  basePrice: number;
+  discountType: string | null;
+  discountValue: number | null;
+  discountStartAt: Date | null;
+  discountEndAt: Date | null;
+  discountActive: boolean;
+  unit: string;
+  status: string;
+  stockQuantity: number;
+  metadata: Record<string, any>;
+  createdByUserId: string;
+  lastSyncedAt: Date | null;
+  deletedAt: Date | null;
 };
 
 function clean(value: unknown): string {
@@ -115,7 +152,7 @@ function parseMetadata(value: unknown, fallback: Record<string, any>) {
 
 async function main() {
   const { db } = await import("../lib/db");
-  const { globalProducts, productImportBatches } = await import("../db/schema");
+  const { categories, globalProducts, productImportBatches } = await import("../db/schema");
 
   const absoluteCsvPath = resolve(process.cwd(), csvPath);
 
@@ -136,8 +173,8 @@ async function main() {
     process.exit(1);
   }
 
-  const validationErrors: Array<{ row: number; errors: string[] }> = [];
-  const validProducts: any[] = [];
+  const validationErrors: ImportRowError[] = [];
+  const validProducts: ProductDraft[] = [];
 
   rows.forEach((row, index) => {
     const rowNumber = index + 2; // +2 because CSV header is row 1
@@ -148,13 +185,35 @@ async function main() {
     const basePrice = requiredInteger(row.basePrice);
     const unit = clean(row.unit);
     const status = clean(row.status) || "active";
+    const rawParentCategoryId = clean(row.parentCategoryId);
+    const rawSubcategoryId = clean(row.subcategoryId);
+    const rawLegacyCategoryId = clean(row.categoryId);
+    const categoryIdFromLegacyColumn =
+      !rawParentCategoryId && !rawSubcategoryId && Boolean(rawLegacyCategoryId);
+
+    const parentCategoryId = rawParentCategoryId
+      ? nullableInteger(rawParentCategoryId)
+      : rawSubcategoryId
+        ? null
+        : nullableInteger(rawLegacyCategoryId);
+    const subcategoryId = rawSubcategoryId
+      ? nullableInteger(rawSubcategoryId)
+      : null;
 
     if (!productCode) errors.push("productCode is required");
     if (!name) errors.push("name is required");
     if (basePrice === null) errors.push("basePrice is required and must be a number");
     if (!unit) errors.push("unit is required");
+    if (rawParentCategoryId && parentCategoryId === null) {
+      errors.push("parentCategoryId must be a number");
+    }
+    if (rawSubcategoryId && subcategoryId === null) {
+      errors.push("subcategoryId must be a number");
+    }
+    if (categoryIdFromLegacyColumn && parentCategoryId === null) {
+      errors.push("categoryId must be a number");
+    }
 
-    const categoryId = nullableInteger(row.categoryId);
     const discountValue = nullableInteger(row.discountValue);
     const stockQuantity = nullableInteger(row.stockQuantity);
 
@@ -175,13 +234,16 @@ async function main() {
       productCode,
       name,
       description: nullableString(row.description),
-      categoryId,
+      parentCategoryId,
+      subcategoryId,
+      categoryIdFromLegacyColumn,
+      defaultSubcategoryName: clean(row.defaultSubcategoryName) || defaultSubcategoryName,
       imageUrl: nullableString(row.imageUrl),
 
       // Important:
       // The upload-ready CSV already contains basePrice in cents/paisa.
       // Do NOT multiply it by 100 again here.
-      basePrice,
+      basePrice: basePrice ?? 0,
 
       discountType: nullableString(row.discountType),
       discountValue,
@@ -226,7 +288,7 @@ async function main() {
       })
       .returning();
 
-    let duplicateErrors: Array<{ row: number; errors: string[] }> = [];
+    let duplicateErrors: ImportRowError[] = [];
     let productsToInsert = validProducts;
 
     if (productCodes.length) {
@@ -253,10 +315,150 @@ async function main() {
         }));
     }
 
-    const insertedProducts = productsToInsert.length
+    const categoryErrors: ImportRowError[] = [];
+    const resolvedProducts: any[] = [];
+    const defaultSubcategoryIds = new Map<string, number>();
+    const categoryIds = Array.from(
+      new Set(
+        productsToInsert
+          .flatMap((product) => [product.parentCategoryId, product.subcategoryId])
+          .filter((id): id is number => id !== null)
+      )
+    );
+    const categoryRows: CategoryRecord[] = categoryIds.length
+      ? await tx
+          .select({
+            id: categories.id,
+            name: categories.name,
+            parentId: categories.parentId,
+            organizationId: categories.organizationId,
+          })
+          .from(categories)
+          .where(inArray(categories.id, categoryIds))
+      : [];
+    const categoryById = new Map<number, CategoryRecord>(
+      categoryRows.map((category) => [category.id, category])
+    );
+
+    for (const product of productsToInsert) {
+      const rowErrors: string[] = [];
+      let resolvedCategoryId: number | null = null;
+      let resolvedParentCategoryId = product.parentCategoryId;
+
+      if (product.subcategoryId !== null) {
+        const subcategory = categoryById.get(product.subcategoryId);
+
+        if (!subcategory) {
+          rowErrors.push(`subcategoryId does not exist: ${product.subcategoryId}`);
+        } else if (subcategory.parentId === null || subcategory.parentId === undefined) {
+          rowErrors.push(
+            `subcategoryId ${product.subcategoryId} is a parent category; expected a subcategory`
+          );
+        } else if (
+          product.parentCategoryId !== null &&
+          product.parentCategoryId !== subcategory.parentId
+        ) {
+          rowErrors.push(
+            `subcategoryId ${product.subcategoryId} does not belong to parentCategoryId ${product.parentCategoryId}`
+          );
+        } else {
+          resolvedCategoryId = subcategory.id;
+          resolvedParentCategoryId = subcategory.parentId;
+        }
+      } else if (product.parentCategoryId !== null) {
+        const parentCategory = categoryById.get(product.parentCategoryId);
+
+        if (!parentCategory) {
+          rowErrors.push(`parentCategoryId does not exist: ${product.parentCategoryId}`);
+        } else if (
+          product.categoryIdFromLegacyColumn &&
+          parentCategory.parentId !== null &&
+          parentCategory.parentId !== undefined
+        ) {
+          resolvedCategoryId = parentCategory.id;
+          resolvedParentCategoryId = parentCategory.parentId;
+        } else if (parentCategory.parentId !== null && parentCategory.parentId !== undefined) {
+          rowErrors.push(
+            `parentCategoryId ${product.parentCategoryId} is a subcategory; use a parent category id or put it in subcategoryId`
+          );
+        } else {
+          const subcategoryName = product.defaultSubcategoryName || defaultSubcategoryName;
+          const subcategoryKey = `${parentCategory.id}:${subcategoryName.toLowerCase()}`;
+          let defaultSubcategoryId = defaultSubcategoryIds.get(subcategoryKey) ?? null;
+
+          if (!defaultSubcategoryId) {
+            const [existingSubcategory] = await tx
+              .select({ id: categories.id })
+              .from(categories)
+              .where(
+                and(
+                  eq(categories.parentId, parentCategory.id),
+                  eq(categories.name, subcategoryName)
+                )
+              )
+              .limit(1);
+
+            if (existingSubcategory) {
+              defaultSubcategoryId = existingSubcategory.id;
+            } else {
+              const [createdSubcategory] = await tx
+                .insert(categories)
+                .values({
+                  name: subcategoryName,
+                  parentId: parentCategory.id,
+                  organizationId: parentCategory.organizationId,
+                })
+                .returning({ id: categories.id });
+
+              defaultSubcategoryId = createdSubcategory.id;
+            }
+
+            if (defaultSubcategoryId === null) {
+              throw new Error(
+                `Could not resolve default subcategory for parentCategoryId ${parentCategory.id}`
+              );
+            }
+
+            defaultSubcategoryIds.set(subcategoryKey, defaultSubcategoryId);
+          }
+
+          resolvedCategoryId = defaultSubcategoryId;
+        }
+      }
+
+      if (rowErrors.length) {
+        categoryErrors.push({
+          row: Number(product.metadata?.originalCsvRow || 0),
+          errors: rowErrors,
+        });
+        continue;
+      }
+
+      const {
+        parentCategoryId: _parentCategoryId,
+        subcategoryId: _subcategoryId,
+        categoryIdFromLegacyColumn: _categoryIdFromLegacyColumn,
+        defaultSubcategoryName: _defaultSubcategoryName,
+        ...insertProduct
+      } = product;
+
+      resolvedProducts.push({
+        ...insertProduct,
+        categoryId: resolvedCategoryId,
+        metadata: {
+          ...insertProduct.metadata,
+          ...(resolvedParentCategoryId !== null
+            ? { parentCategoryId: resolvedParentCategoryId }
+            : {}),
+          ...(resolvedCategoryId !== null ? { resolvedSubcategoryId: resolvedCategoryId } : {}),
+        },
+      });
+    }
+
+    const insertedProducts = resolvedProducts.length
       ? await tx
           .insert(globalProducts)
-          .values(productsToInsert)
+          .values(resolvedProducts)
           .returning({
             id: globalProducts.id,
             productCode: globalProducts.productCode,
@@ -268,7 +470,7 @@ async function main() {
           })
       : [];
 
-    const allErrors = [...validationErrors, ...duplicateErrors];
+    const allErrors = [...validationErrors, ...duplicateErrors, ...categoryErrors];
     const failedRows = allErrors.length;
     const successfulRows = insertedProducts.length;
 

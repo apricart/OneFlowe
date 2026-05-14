@@ -20,6 +20,9 @@ import { type DateRange } from "@/lib/hooks/use-sales-performance"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
+const formatBudgetPeriodDateParam = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+
 interface BudgetAllocation {
   branchId: number
   branchName: string
@@ -74,7 +77,7 @@ export default function BudgetsPage() {
     months?: number[],
     years?: number[]
   ) => {
-    setDateRange(range)
+    setDateRange(preset === "all" ? null : range)
     setActivePreset(preset)
     setSelectedMonths(months || [])
     setSelectedYears(years || [])
@@ -98,6 +101,8 @@ export default function BudgetsPage() {
     if (dateRange) {
       params.set("startDate", dateRange.startDate.toISOString())
       params.set("endDate", dateRange.endDate.toISOString())
+      params.set("budgetStartDate", formatBudgetPeriodDateParam(dateRange.startDate))
+      params.set("budgetEndDate", formatBudgetPeriodDateParam(dateRange.endDate))
     }
     if (selectedMonths.length > 0) params.set("months", selectedMonths.join(","))
     const effectiveSelectedYears = selectedMonths.length > 0 && selectedYears.length === 0 && !dateRange
