@@ -6,7 +6,6 @@ import { budgets, branches, auditLogs, budgetAddons, groups, orders } from "@/db
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
-import { buildBudgetPeriods, parseBudgetPeriodBoundary } from "@/lib/budget-periods"
 
 /**
  * Validate numeric ID parameter
@@ -39,6 +38,28 @@ const parseDateParam = (value: string | null) => {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+const buildBudgetPeriods = (startDate: Date, endDate: Date, months: number[], years: number[]) => {
+  const periods: string[] = []
+  const startYear = startDate.getFullYear()
+  const startMonth = startDate.getMonth()
+  const endYear = endDate.getFullYear()
+  const endMonth = endDate.getMonth()
+
+  for (let year = startYear; year <= endYear; year++) {
+    const firstMonth = year === startYear ? startMonth : 0
+    const lastMonth = year === endYear ? endMonth : 11
+
+    for (let month = firstMonth; month <= lastMonth; month++) {
+      const oneBasedMonth = month + 1
+      if (years.length > 0 && !years.includes(year)) continue
+      if (months.length > 0 && !months.includes(oneBasedMonth)) continue
+      periods.push(`${year}-${String(oneBasedMonth).padStart(2, "0")}`)
+    }
+  }
+
+  return periods
+}
+
 /**
  * GET /api/v1/budgets - Fetch budget information
  */
@@ -60,8 +81,6 @@ export async function GET(req: NextRequest) {
     const periodParam = searchParams.get("period")
     const startDateParam = searchParams.get("startDate")
     const endDateParam = searchParams.get("endDate")
-    const budgetStartDateParam = searchParams.get("budgetStartDate")
-    const budgetEndDateParam = searchParams.get("budgetEndDate")
     const monthsParam = searchParams.get("months")
     const yearsParam = searchParams.get("years")
     const groupIdsParam = searchParams.get("groupIds")
@@ -133,8 +152,6 @@ export async function GET(req: NextRequest) {
           const requestedEndDate = parseDateParam(endDateParam)
           let startDate = requestedStartDate
           const endDate = requestedEndDate || new Date()
-          let budgetStartDate = parseBudgetPeriodBoundary(budgetStartDateParam || startDateParam, "start")
-          let budgetEndDate = parseBudgetPeriodBoundary(budgetEndDateParam || endDateParam, "end") || endDate
 
           if (!startDate) {
             const firstBudget = await db
@@ -147,13 +164,12 @@ export async function GET(req: NextRequest) {
             startDate = firstBudget.length > 0
               ? new Date(`${firstBudget[0].period}-01T00:00:00.000Z`)
               : new Date(`${new Date().toISOString().slice(0, 7)}-01T00:00:00.000Z`)
-            budgetStartDate = startDate
           }
 
-          if (!requestedStartDate) startDate.setHours(0, 0, 0, 0)
-          if (!requestedEndDate) endDate.setHours(23, 59, 59, 999)
+          startDate.setHours(0, 0, 0, 0)
+          endDate.setHours(23, 59, 59, 999)
 
-          const periodList = buildBudgetPeriods(budgetStartDate || startDate, budgetEndDate, parsedMonths, parsedYears)
+          const periodList = buildBudgetPeriods(startDate, endDate, parsedMonths, parsedYears)
           if (periodList.length === 0) {
             return NextResponse.json({ budgets: [] })
           }

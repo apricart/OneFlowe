@@ -5,7 +5,6 @@ import { db } from "@/lib/db"
 import { budgets, orders, orderItems, branches, globalProducts, categories } from "@/db/schema"
 import { and, eq, gte, lte, inArray, sql, desc, asc, isNotNull } from "drizzle-orm"
 import { Role } from "@/lib/rbac"
-import { buildBudgetPeriods, parseBudgetPeriodBoundary } from "@/lib/budget-periods"
 
 const emptyBudgetSummary = {
     summary: { totalAllocated: 0, totalSpent: 0, totalHeld: 0, totalCredited: 0, totalRemaining: 0 },
@@ -33,8 +32,6 @@ export async function GET(req: NextRequest) {
         const url = new URL(req.url)
         const startDateParam = url.searchParams.get("startDate")
         const endDateParam = url.searchParams.get("endDate")
-        const budgetStartDateParam = url.searchParams.get("budgetStartDate")
-        const budgetEndDateParam = url.searchParams.get("budgetEndDate")
         const branchIdsParam = url.searchParams.get("branchIds")
         const branchIdParam = url.searchParams.get("branchId")
         const organizationIdParam = url.searchParams.get("organizationId")
@@ -91,7 +88,6 @@ export async function GET(req: NextRequest) {
 
         // 2. Date/Period parsing
         let startDate: Date;
-        let budgetStartDate = parseBudgetPeriodBoundary(budgetStartDateParam || startDateParam, "start")
         if (startDateParam) {
             startDate = new Date(startDateParam)
         } else {
@@ -113,15 +109,38 @@ export async function GET(req: NextRequest) {
                 startDate = new Date()
                 startDate.setDate(1)
             }
-            budgetStartDate = startDate
         }
         const endDate = endDateParam ? new Date(endDateParam) : new Date()
-        const budgetEndDate = parseBudgetPeriodBoundary(budgetEndDateParam || endDateParam, "end") || endDate
 
-        if (!startDateParam) startDate.setHours(0, 0, 0, 0)
-        if (!endDateParam) endDate.setHours(23, 59, 59, 999)
+        startDate.setHours(0, 0, 0, 0)
+        endDate.setHours(23, 59, 59, 999)
 
-        const periodList = buildBudgetPeriods(budgetStartDate || startDate, budgetEndDate, months, years)
+        // Get unique YYYY-MM periods from the date range to query budgets table
+        const periods = new Set<string>()
+        
+        // Use component-based iteration to avoid timezone/DST/leap-year issues with Date objects
+        let startYear = startDate.getFullYear()
+        let startMonth = startDate.getMonth()
+        let endYear = endDate.getFullYear()
+        let endMonth = endDate.getMonth()
+        
+        for (let y = startYear; y <= endYear; y++) {
+            let mStart = (y === startYear) ? startMonth : 0
+            let mEnd = (y === endYear) ? endMonth : 11
+            for (let m = mStart; m <= mEnd; m++) {
+                const p = `${y}-${String(m + 1).padStart(2, '0')}`
+                periods.add(p)
+            }
+        }
+        const periodList = Array.from(periods).filter(period => {
+            const [yearText, monthText] = period.split("-")
+            const year = Number(yearText)
+            const month = Number(monthText)
+
+            if (years.length > 0 && !years.includes(year)) return false
+            if (months.length > 0 && !months.includes(month)) return false
+            return true
+        })
 
         if (periodList.length === 0) {
             return NextResponse.json(emptyBudgetSummary)
@@ -281,7 +300,20 @@ export async function GET(req: NextRequest) {
         const prevEndDate = new Date(startDate.getTime() - 1)
         const prevStartDate = new Date(prevEndDate.getTime() - rangeDurationMs)
 
-        const prevPeriodList = buildBudgetPeriods(prevStartDate, prevEndDate, [], [])
+        const prevPeriods = new Set<string>()
+        let pStartYear = prevStartDate.getFullYear()
+        let pStartMonth = prevStartDate.getMonth()
+        let pEndYear = prevEndDate.getFullYear()
+        let pEndMonth = prevEndDate.getMonth()
+        
+        for (let y = pStartYear; y <= pEndYear; y++) {
+            let mStart = (y === pStartYear) ? pStartMonth : 0
+            let mEnd = (y === pEndYear) ? pEndMonth : 11
+            for (let m = mStart; m <= mEnd; m++) {
+                prevPeriods.add(`${y}-${String(m + 1).padStart(2, '0')}`)
+            }
+        }
+        const prevPeriodList = Array.from(prevPeriods)
 
         const prevBudgetRecords = await db.select().from(budgets).where(
             and(
@@ -316,7 +348,7 @@ export async function GET(req: NextRequest) {
         const chartDataMap: Record<string, any> = {}
 
         // Initialize map with all periods in range
-        periodList.forEach(p => {
+        periods.forEach(p => {
             chartDataMap[p] = { period: p, branches: {} }
         })
 
