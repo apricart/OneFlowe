@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
     const endDateParam = searchParams.get("endDate")
     const monthsParam = searchParams.get("months")
     const yearsParam = searchParams.get("years")
+    const presetParam = searchParams.get("preset") || ""
     const groupIdsParam = searchParams.get("groupIds")
     const branchIdsParam = searchParams.get("branchIds")
 
@@ -153,7 +154,18 @@ export async function GET(req: NextRequest) {
           let startDate = requestedStartDate
           const endDate = requestedEndDate || new Date()
 
-          if (!startDate) {
+          if (presetParam === "all") {
+            const firstBudget = await db
+              .select({ period: budgets.period })
+              .from(budgets)
+              .where(inArray(budgets.branchId, activeBranchIds))
+              .orderBy(asc(budgets.period))
+              .limit(1)
+
+            startDate = firstBudget.length > 0
+              ? new Date(`${firstBudget[0].period}-01T00:00:00.000Z`)
+              : new Date(`${new Date().toISOString().slice(0, 7)}-01T00:00:00.000Z`)
+          } else if (!startDate) {
             const firstBudget = await db
               .select({ period: budgets.period })
               .from(budgets)
@@ -169,7 +181,11 @@ export async function GET(req: NextRequest) {
           startDate.setHours(0, 0, 0, 0)
           endDate.setHours(23, 59, 59, 999)
 
-          const periodList = buildBudgetPeriods(startDate, endDate, parsedMonths, parsedYears)
+          let periodList = buildBudgetPeriods(startDate, endDate, parsedMonths, parsedYears)
+          if (["today", "3d", "7d", "monthly", "thisMonth"].includes(presetParam)) {
+            periodList = [`${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}`]
+          }
+
           if (periodList.length === 0) {
             return NextResponse.json({ budgets: [] })
           }
@@ -223,18 +239,14 @@ export async function GET(req: NextRequest) {
           )
 
           const aggregatedBudgets = activeBranches.map(branch => {
-            let allocated = branch.baselineBudgetCents || 0
-            let latestAllocatedPeriod = ""
+            let allocated = 0
             let spent = 0
             let held = 0
             let credited = 0
 
             periodList.forEach(period => {
               const record = budgetLookup[branch.branchId]?.[period]
-              if (record && period >= latestAllocatedPeriod) {
-                allocated = record.amountAllocatedCents ?? (branch.baselineBudgetCents || 0)
-                latestAllocatedPeriod = period
-              }
+              allocated += record?.amountAllocatedCents || 0
               spent += record?.amountSpentCents || 0
               held += record?.amountHeldCents || 0
               credited += record?.amountCreditedCents || 0

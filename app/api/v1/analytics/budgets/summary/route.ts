@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
         const groupIds = parseNumberList(url.searchParams.get("groupIds"))
         const months = parseNumberList(url.searchParams.get("months"))
         const years = parseNumberList(url.searchParams.get("years"))
+        const preset = url.searchParams.get("preset") || ""
         const granularity = url.searchParams.get("granularity") || "monthly" // daily, monthly, yearly
 
         // 1. RBAC Check and Branch/Org Resolution
@@ -88,7 +89,20 @@ export async function GET(req: NextRequest) {
 
         // 2. Date/Period parsing
         let startDate: Date;
-        if (startDateParam) {
+        if (preset === "all") {
+            const firstBudget = await db.select({ period: budgets.period })
+                .from(budgets)
+                .where(inArray(budgets.branchId, branchIds))
+                .orderBy(asc(budgets.period))
+                .limit(1)
+
+            if (firstBudget.length > 0) {
+                startDate = new Date(firstBudget[0].period + "-01")
+            } else {
+                startDate = new Date()
+                startDate.setDate(1)
+            }
+        } else if (startDateParam) {
             startDate = new Date(startDateParam)
         } else {
             // Default: "All Time" should start from the first budget record in the system
@@ -132,7 +146,7 @@ export async function GET(req: NextRequest) {
                 periods.add(p)
             }
         }
-        const periodList = Array.from(periods).filter(period => {
+        let periodList = Array.from(periods).filter(period => {
             const [yearText, monthText] = period.split("-")
             const year = Number(yearText)
             const month = Number(monthText)
@@ -141,6 +155,10 @@ export async function GET(req: NextRequest) {
             if (months.length > 0 && !months.includes(month)) return false
             return true
         })
+
+        if (["today", "3d", "7d", "monthly", "thisMonth"].includes(preset)) {
+            periodList = [`${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}`]
+        }
 
         if (periodList.length === 0) {
             return NextResponse.json(emptyBudgetSummary)
@@ -245,7 +263,8 @@ export async function GET(req: NextRequest) {
         let totalHeld = 0
         let totalCredited = 0
 
-        // Calculate totals by iterating over all selected branches and selected periods
+        // Calculate period totals from actual budget rows only. Missing months should not
+        // invent budget from the branch baseline in this report.
         activeBranches.forEach(branch => {
             periodList.forEach(period => {
                 const record = budgetLookup[branch.id]?.[period]
@@ -258,11 +277,8 @@ export async function GET(req: NextRequest) {
                     ? (orderSpending?.heldCents || 0)
                     : record ? (record.amountHeldCents || 0) : 0
 
-                const allocated = record ? (record.amountAllocatedCents || 0) : (branch.baselineBudgetCents || 0)
-                totalAllocated += allocated
-                
-                const credited = record ? (record.amountCreditedCents || 0) : 0
-                totalCredited += credited
+                totalAllocated += record?.amountAllocatedCents || 0
+                totalCredited += record?.amountCreditedCents || 0
             })
         })
 
@@ -327,11 +343,21 @@ export async function GET(req: NextRequest) {
         let prevTotalHeld = 0
         let prevTotalCredited = 0
 
-        prevBudgetRecords.forEach(b => {
-            prevTotalAllocated += b.amountAllocatedCents || 0
-            prevTotalSpent += b.amountSpentCents || 0
-            prevTotalHeld += b.amountHeldCents || 0
-            prevTotalCredited += b.amountCreditedCents || 0
+        const prevBudgetLookup: Record<number, Record<string, typeof prevBudgetRecords[number]>> = {}
+        prevBudgetRecords.forEach(record => {
+            if (!prevBudgetLookup[record.branchId]) prevBudgetLookup[record.branchId] = {}
+            prevBudgetLookup[record.branchId][record.period] = record
+        })
+
+        activeBranches.forEach(branch => {
+            prevPeriodList.forEach(period => {
+                const record = prevBudgetLookup[branch.id]?.[period]
+
+                prevTotalAllocated += record?.amountAllocatedCents || 0
+                prevTotalSpent += record?.amountSpentCents || 0
+                prevTotalHeld += record?.amountHeldCents || 0
+                prevTotalCredited += record?.amountCreditedCents || 0
+            })
         })
 
         const prevTotalRemaining = (prevTotalAllocated + prevTotalCredited) - (prevTotalSpent + prevTotalHeld)
@@ -358,15 +384,8 @@ export async function GET(req: NextRequest) {
                 if (!chartDataMap[period]) return
                 
                 const record = budgetLookup[branch.id]?.[period]
-                const baselineSetting = branch.baselineBudgetCents || 0
-                const allocated = record ? (record.amountAllocatedCents || 0) : baselineSetting
-                const credited = record ? (record.amountCreditedCents || 0) : 0
-                
-                // For the chart, we split into baseline vs addon:
-                // Base is up to the branch's default baseline. 
-                // Everything else (excess allocation + credits) is Addon.
-                const baseline = Math.min(allocated, baselineSetting)
-                const addon = (allocated - baseline) + credited
+                const baseline = record?.amountAllocatedCents || 0
+                const addon = record?.amountCreditedCents || 0
                 const orderSpending = orderSpendingLookup[branch.id]?.[period]
                 const spent = useOrderScopedSpending ? (orderSpending?.spentCents || 0) : record ? (record.amountSpentCents || 0) : 0
                 const held = useOrderScopedSpending ? (orderSpending?.heldCents || 0) : record ? (record.amountHeldCents || 0) : 0
@@ -428,8 +447,8 @@ export async function GET(req: NextRequest) {
                 held += useOrderScopedSpending
                     ? (orderSpending?.heldCents || 0)
                     : record ? (record.amountHeldCents || 0) : 0
-                allocated += record ? (record.amountAllocatedCents || 0) : (branch.baselineBudgetCents || 0)
-                credited += record ? (record.amountCreditedCents || 0) : 0
+                allocated += record?.amountAllocatedCents || 0
+                credited += record?.amountCreditedCents || 0
             })
 
             return {
@@ -440,7 +459,7 @@ export async function GET(req: NextRequest) {
                 held,
                 credited,
                 remaining: (allocated + credited) - (spent + held),
-                baselineAmount: branch.baselineBudgetCents || 0
+                baselineAmount: allocated
             }
         })
 

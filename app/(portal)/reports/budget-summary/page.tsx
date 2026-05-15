@@ -241,6 +241,7 @@ export default function BudgetSummaryPage() {
 
     if (startFromUrl) queryParams.set("startDate", startFromUrl)
     if (endFromUrl) queryParams.set("endDate", endFromUrl)
+    queryParams.set("preset", activePreset)
     if (selectedMonths.length > 0) queryParams.set("months", selectedMonths.join(","))
     if (selectedYears.length > 0) queryParams.set("years", selectedYears.join(","))
     if (compareMonths.length > 0) queryParams.set("compareMonths", compareMonths.join(","))
@@ -295,6 +296,7 @@ export default function BudgetSummaryPage() {
     if (reportGroupIds.length > 0) reportQueryParams.set("groupIds", reportGroupIds.join(","))
     if (startFromUrl) reportQueryParams.set("startDate", startFromUrl)
     if (endFromUrl) reportQueryParams.set("endDate", endFromUrl)
+    reportQueryParams.set("preset", activePreset)
     if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
     if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
     reportQueryParams.set("granularity", "monthly")

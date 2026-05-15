@@ -99,6 +99,7 @@ export default function BudgetsPage() {
       params.set("startDate", dateRange.startDate.toISOString())
       params.set("endDate", dateRange.endDate.toISOString())
     }
+    params.set("preset", activePreset)
     if (selectedMonths.length > 0) params.set("months", selectedMonths.join(","))
     const effectiveSelectedYears = selectedMonths.length > 0 && selectedYears.length === 0 && !dateRange
       ? [new Date().getFullYear()]
@@ -109,7 +110,7 @@ export default function BudgetsPage() {
     if (contextBranchIds.length > 0) params.set("branchIds", contextBranchIds.join(","))
 
     return `/api/v1/budgets?${params.toString()}`
-  }, [isHeadOffice, isInitialized, organizationId, dateRange, selectedMonths, selectedYears, contextBranchIds, selectedGroupIds])
+  }, [isHeadOffice, isInitialized, organizationId, dateRange, activePreset, selectedMonths, selectedYears, contextBranchIds, selectedGroupIds])
 
   const { data: budgetsData, mutate } = useSWR<any>(budgetsEndpoint, fetcher)
 
