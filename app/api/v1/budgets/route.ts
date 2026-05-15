@@ -223,14 +223,18 @@ export async function GET(req: NextRequest) {
           )
 
           const aggregatedBudgets = activeBranches.map(branch => {
-            let allocated = 0
+            let allocated = branch.baselineBudgetCents || 0
+            let latestAllocatedPeriod = ""
             let spent = 0
             let held = 0
             let credited = 0
 
             periodList.forEach(period => {
               const record = budgetLookup[branch.branchId]?.[period]
-              allocated += record ? (record.amountAllocatedCents || 0) : (branch.baselineBudgetCents || 0)
+              if (record && period >= latestAllocatedPeriod) {
+                allocated = record.amountAllocatedCents ?? (branch.baselineBudgetCents || 0)
+                latestAllocatedPeriod = period
+              }
               spent += record?.amountSpentCents || 0
               held += record?.amountHeldCents || 0
               credited += record?.amountCreditedCents || 0
