@@ -40,6 +40,15 @@ const getBudgetUsagePercentage = (budget: BudgetAllocation) => {
   return ((budget.amountSpentCents || 0) + (budget.amountHeldCents || 0)) / total * 100
 }
 
+const formatPercentageNoRound = (value: number) => {
+  const scaled = Math.trunc(value * 100)
+  const sign = scaled < 0 ? "-" : ""
+  const absoluteScaled = Math.abs(scaled)
+  const whole = Math.trunc(absoluteScaled / 100)
+  const decimal = String(absoluteScaled % 100).padStart(2, "0")
+  return `${sign}${whole}.${decimal}%`
+}
+
 export default function BudgetsPage() {
   const { data: session, status } = useSession()
   const { toast } = useToast()
@@ -147,9 +156,8 @@ export default function BudgetsPage() {
   const totalSpent = scopedBudgets.reduce((sum, b) => sum + b.amountSpentCents, 0)
   const totalHeld = scopedBudgets.reduce((sum, b) => sum + b.amountHeldCents, 0)
   const totalRemaining = scopedBudgets.reduce((sum, b) => sum + b.remainingCents, 0)
-  const budgetsWithAllocation = scopedBudgets.filter((b) => ((b.amountAllocatedCents || 0) + (b.amountCreditedCents || 0)) > 0)
-  const avgUtilization = budgetsWithAllocation.length > 0
-    ? budgetsWithAllocation.reduce((sum, b) => sum + getBudgetUsagePercentage(b), 0) / budgetsWithAllocation.length
+  const avgUtilization = totalAllocated > 0
+    ? ((totalSpent + totalHeld) / totalAllocated) * 100
     : 0
 
   const handleEditBudget = (budget: BudgetAllocation) => {
@@ -440,7 +448,7 @@ export default function BudgetsPage() {
         />
         <CompactStatCard
           label="Avg Utilization"
-          value={`${avgUtilization.toFixed(2)}%`}
+          value={formatPercentageNoRound(avgUtilization)}
           icon={<Zap className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-fuchsia-50/80 to-purple-50/80 border-fuchsia-100/50 text-fuchsia-700 dark:from-fuchsia-900/20 dark:to-purple-900/20 dark:border-fuchsia-800/30 dark:text-fuchsia-400"
           iconBadge="bg-fuchsia-100 dark:bg-fuchsia-900/40 text-fuchsia-600 dark:text-fuchsia-400"

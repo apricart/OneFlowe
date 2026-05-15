@@ -228,7 +228,7 @@ export async function GET(req: NextRequest) {
             budgetLookup[r.branchId][r.period] = r
         })
 
-        const useOrderScopedSpending = Boolean(
+        const useOrderScopedSpending = preset !== "all" && Boolean(
             startDateParam || endDateParam || months.length > 0 || years.length > 0
         )
         const orderSpendingConditions = [
