@@ -440,7 +440,7 @@ export default function BudgetsPage() {
         />
         <CompactStatCard
           label="Avg Utilization"
-          value={`${avgUtilization.toFixed(1)}%`}
+          value={`${avgUtilization.toFixed(2)}%`}
           icon={<Zap className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-fuchsia-50/80 to-purple-50/80 border-fuchsia-100/50 text-fuchsia-700 dark:from-fuchsia-900/20 dark:to-purple-900/20 dark:border-fuchsia-800/30 dark:text-fuchsia-400"
           iconBadge="bg-fuchsia-100 dark:bg-fuchsia-900/40 text-fuchsia-600 dark:text-fuchsia-400"
