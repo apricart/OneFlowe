@@ -21,7 +21,14 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Search } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 
-const HIDE_PRICES_SETTING_KEY = "hide_prices_for_branch_and_order_portal"
+const LEGACY_HIDE_PRICES_SETTING_KEY = "hide_prices_for_branch_and_order_portal"
+const HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY = "hide_prices_for_branch_admin"
+const HIDE_ORDER_PORTAL_PRICES_SETTING_KEY = "hide_prices_for_order_portal"
+
+type PriceVisibilitySettings = {
+  hideBranchAdminPrices: boolean
+  hideOrderPortalPrices: boolean
+}
 
 type OrgsRes = { items: Organization[] }
 type BranchesRes = { items: Branch[] }
@@ -191,7 +198,7 @@ export default function OrganizationsPage() {
     }
   }
 
-  async function editOrganization(id: string, payload: Partial<Organization>, hidePricesForBranchRoles?: boolean): Promise<boolean> {
+  async function editOrganization(id: string, payload: Partial<Organization>, priceVisibility?: PriceVisibilitySettings): Promise<boolean> {
     try {
       const res = await fetch(`/api/v1/organizations/${id}`, {
         method: "PATCH",
@@ -201,18 +208,31 @@ export default function OrganizationsPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to update organization")
 
-      if (hidePricesForBranchRoles !== undefined) {
-        const settingsRes = await fetch("/api/v1/settings", {
-          method: "POST",
-          body: JSON.stringify({
-            organizationId: Number(id),
-            key: HIDE_PRICES_SETTING_KEY,
-            value: hidePricesForBranchRoles,
-          }),
-          headers: { "Content-Type": "application/json" },
-        })
-        const settingsData = await settingsRes.json()
-        if (!settingsRes.ok) throw new Error(settingsData.error || "Failed to update price visibility setting")
+      if (priceVisibility) {
+        const settingsPayload = [
+          {
+            key: HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY,
+            value: priceVisibility.hideBranchAdminPrices,
+          },
+          {
+            key: HIDE_ORDER_PORTAL_PRICES_SETTING_KEY,
+            value: priceVisibility.hideOrderPortalPrices,
+          },
+        ]
+
+        for (const setting of settingsPayload) {
+          const settingsRes = await fetch("/api/v1/settings", {
+            method: "POST",
+            body: JSON.stringify({
+              organizationId: Number(id),
+              key: setting.key,
+              value: setting.value,
+            }),
+            headers: { "Content-Type": "application/json" },
+          })
+          const settingsData = await settingsRes.json()
+          if (!settingsRes.ok) throw new Error(settingsData.error || "Failed to update price visibility setting")
+        }
       }
 
       showFeedback("Organization updated successfully.", "success")
@@ -369,7 +389,7 @@ export default function OrganizationsPage() {
                         <EditOrgDialog
                           org={org}
                           isSuperAdmin={userRole === "SUPER_ADMIN"}
-                          onSave={(payload, hidePricesForBranchRoles) => editOrganization(String(org.id), payload, hidePricesForBranchRoles)}
+                          onSave={(payload, priceVisibility) => editOrganization(String(org.id), payload, priceVisibility)}
                         />
                         <Button
                           variant="ghost"
@@ -1027,13 +1047,14 @@ function EditOrgDialog({
 }: {
   org: Organization
   isSuperAdmin: boolean
-  onSave: (payload: Partial<Organization>, hidePricesForBranchRoles?: boolean) => Promise<boolean>
+  onSave: (payload: Partial<Organization>, priceVisibility?: PriceVisibilitySettings) => Promise<boolean>
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(org.name)
   const [code, setCode] = useState(org.code)
   const [status, setStatus] = useState<boolean>(isActiveStatus(org.status))
-  const [hidePricesForBranchRoles, setHidePricesForBranchRoles] = useState(false)
+  const [hideBranchAdminPrices, setHideBranchAdminPrices] = useState(false)
+  const [hideOrderPortalPrices, setHideOrderPortalPrices] = useState(false)
   const [loadingSettings, setLoadingSettings] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -1052,11 +1073,19 @@ function EditOrgDialog({
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return
-        const setting = data?.data?.find((item: any) => item.key === HIDE_PRICES_SETTING_KEY)
-        setHidePricesForBranchRoles(setting?.value === true)
+        const settings = Array.isArray(data?.data) ? data.data : []
+        const legacySetting = settings.find((item: any) => item.key === LEGACY_HIDE_PRICES_SETTING_KEY)
+        const branchAdminSetting = settings.find((item: any) => item.key === HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY)
+        const orderPortalSetting = settings.find((item: any) => item.key === HIDE_ORDER_PORTAL_PRICES_SETTING_KEY)
+        const legacyValue = legacySetting?.value === true
+        setHideBranchAdminPrices(branchAdminSetting ? branchAdminSetting.value === true : legacyValue)
+        setHideOrderPortalPrices(orderPortalSetting ? orderPortalSetting.value === true : legacyValue)
       })
       .catch(() => {
-        if (!cancelled) setHidePricesForBranchRoles(false)
+        if (!cancelled) {
+          setHideBranchAdminPrices(false)
+          setHideOrderPortalPrices(false)
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingSettings(false)
@@ -1114,19 +1143,35 @@ function EditOrgDialog({
               </div>
             </div>
             {isSuperAdmin && (
-              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-                <div>
-                  <Label htmlFor="hide-price-visibility">Hide prices</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Hide product and order prices from branch admin and order portal users.
-                  </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                  <div>
+                    <Label htmlFor="hide-branch-admin-price-visibility">Hide Branch Admin prices</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Hide product and order prices from branch admin users.
+                    </p>
+                  </div>
+                  <Switch
+                    id="hide-branch-admin-price-visibility"
+                    checked={hideBranchAdminPrices}
+                    onCheckedChange={setHideBranchAdminPrices}
+                    disabled={loadingSettings || saving}
+                  />
                 </div>
-                <Switch
-                  id="hide-price-visibility"
-                  checked={hidePricesForBranchRoles}
-                  onCheckedChange={setHidePricesForBranchRoles}
-                  disabled={loadingSettings || saving}
-                />
+                <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                  <div>
+                    <Label htmlFor="hide-order-portal-price-visibility">Hide Order Portal prices</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Hide product and order prices from order portal users.
+                    </p>
+                  </div>
+                  <Switch
+                    id="hide-order-portal-price-visibility"
+                    checked={hideOrderPortalPrices}
+                    onCheckedChange={setHideOrderPortalPrices}
+                    disabled={loadingSettings || saving}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -1140,7 +1185,12 @@ function EditOrgDialog({
               try {
                 const saved = await onSave(
                   { name, code, status: status ? "active" : "inactive" },
-                  isSuperAdmin ? hidePricesForBranchRoles : undefined
+                  isSuperAdmin
+                    ? {
+                      hideBranchAdminPrices,
+                      hideOrderPortalPrices,
+                    }
+                    : undefined
                 )
                 if (saved) setOpen(false)
               } finally {

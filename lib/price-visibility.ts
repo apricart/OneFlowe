@@ -1,28 +1,54 @@
-import { eq, and } from "drizzle-orm"
+import { eq, and, inArray } from "drizzle-orm"
 import { organizationSettings } from "@/db/schema"
 import { db } from "@/lib/db"
 
-export const HIDE_PRICES_SETTING_KEY = "hide_prices_for_branch_and_order_portal"
+export const LEGACY_HIDE_PRICES_SETTING_KEY = "hide_prices_for_branch_and_order_portal"
+export const HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY = "hide_prices_for_branch_admin"
+export const HIDE_ORDER_PORTAL_PRICES_SETTING_KEY = "hide_prices_for_order_portal"
+
+export const PRICE_VISIBILITY_SETTING_KEYS = [
+  LEGACY_HIDE_PRICES_SETTING_KEY,
+  HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY,
+  HIDE_ORDER_PORTAL_PRICES_SETTING_KEY,
+] as const
+
+export function isPriceVisibilitySettingKey(key: unknown) {
+  return typeof key === "string" && (PRICE_VISIBILITY_SETTING_KEYS as readonly string[]).includes(key)
+}
 
 const PRICE_RESTRICTED_ROLES = new Set(["BRANCH_ADMIN", "ORDER_PORTAL"])
+const ROLE_PRICE_SETTING_KEYS: Record<string, string> = {
+  BRANCH_ADMIN: HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY,
+  ORDER_PORTAL: HIDE_ORDER_PORTAL_PRICES_SETTING_KEY,
+}
 
 export function isPriceRestrictedRole(role: unknown) {
   return typeof role === "string" && PRICE_RESTRICTED_ROLES.has(role)
 }
 
 export async function shouldHidePricesForRole(role: unknown, organizationId: unknown) {
-  if (!isPriceRestrictedRole(role)) return false
+  const roleSettingKey = typeof role === "string" ? ROLE_PRICE_SETTING_KEYS[role] : undefined
+  if (!roleSettingKey) return false
 
   const orgId = Number(organizationId)
   if (!Number.isFinite(orgId) || orgId <= 0) return false
 
-  const [setting] = await db
-    .select({ value: organizationSettings.value })
+  const settings = await db
+    .select({ key: organizationSettings.key, value: organizationSettings.value })
     .from(organizationSettings)
-    .where(and(eq(organizationSettings.organizationId, orgId), eq(organizationSettings.key, HIDE_PRICES_SETTING_KEY)))
-    .limit(1)
+    .where(
+      and(
+        eq(organizationSettings.organizationId, orgId),
+        inArray(organizationSettings.key, [roleSettingKey, LEGACY_HIDE_PRICES_SETTING_KEY])
+      )
+    )
+    .limit(2)
 
-  return setting?.value === true
+  const roleSetting = settings.find((setting) => setting.key === roleSettingKey)
+  if (roleSetting) return roleSetting.value === true
+
+  const legacySetting = settings.find((setting) => setting.key === LEGACY_HIDE_PRICES_SETTING_KEY)
+  return legacySetting?.value === true
 }
 
 function redactReceiptItems(items: any[] | undefined) {
