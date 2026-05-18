@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, orderItems, branches, users, organizations, groups } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 export async function GET(req: NextRequest) {
     try {
@@ -53,14 +54,12 @@ export async function GET(req: NextRequest) {
 
         // 2. Date Filtering
         if (startDate) {
-            const start = new Date(startDate)
-            start.setHours(0, 0, 0, 0)
-            conditions.push(gte(orders.createdAt, start))
+            const start = parseStartDateParam(startDate)
+            if (start) conditions.push(gte(orders.createdAt, start))
         }
         if (endDate) {
-            const end = new Date(endDate)
-            end.setHours(23, 59, 59, 999)
-            conditions.push(lte(orders.createdAt, end))
+            const end = parseEndDateParam(endDate)
+            if (end) conditions.push(lte(orders.createdAt, end))
         }
 
         // 3. Execution - Granular Details (Not Aggregated)

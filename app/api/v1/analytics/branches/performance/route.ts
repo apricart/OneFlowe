@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, branches, organizations, groups } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, sql } from "drizzle-orm"
 import { metricExpressions, REVENUE_ELIGIBLE_FILTER } from "@/lib/metric-utils"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 export async function GET(req: NextRequest) {
     try {
@@ -77,12 +78,10 @@ export async function GET(req: NextRequest) {
         }
 
         if (parsedMonths.length === 0 && parsedYears.length === 0) {
-            if (startDateParam) conditions.push(gte(orders.createdAt, new Date(startDateParam)))
-            if (endDateParam) {
-                const end = new Date(endDateParam)
-                end.setHours(23, 59, 59, 999)
-                conditions.push(lte(orders.createdAt, end))
-            }
+            const start = parseStartDateParam(startDateParam)
+            const end = parseEndDateParam(endDateParam)
+            if (start) conditions.push(gte(orders.createdAt, start))
+            if (end) conditions.push(lte(orders.createdAt, end))
         }
 
         // ━━━ Mode: Trend Only (Bar Chart) ━━━
@@ -103,9 +102,9 @@ export async function GET(req: NextRequest) {
             if (compare) {
                 let prevStart: Date, prevEnd: Date
                 if (compareStartDateParam && compareEndDateParam) {
-                    prevStart = new Date(compareStartDateParam); prevEnd = new Date(compareEndDateParam)
+                    prevStart = parseStartDateParam(compareStartDateParam) || new Date(compareStartDateParam); prevEnd = parseEndDateParam(compareEndDateParam) || new Date(compareEndDateParam)
                 } else if (startDateParam && endDateParam) {
-                    const start = new Date(startDateParam); const end = new Date(endDateParam)
+                    const start = parseStartDateParam(startDateParam) || new Date(startDateParam); const end = parseEndDateParam(endDateParam) || new Date(endDateParam)
                     const duration = end.getTime() - start.getTime()
                     prevStart = new Date(start.getTime() - duration - 1); prevEnd = new Date(start.getTime() - 1)
                 } else {
@@ -158,9 +157,9 @@ export async function GET(req: NextRequest) {
             if (compare) {
                 let prevStart: Date, prevEnd: Date
                 if (compareStartDateParam && compareEndDateParam) {
-                    prevStart = new Date(compareStartDateParam); prevEnd = new Date(compareEndDateParam)
+                    prevStart = parseStartDateParam(compareStartDateParam) || new Date(compareStartDateParam); prevEnd = parseEndDateParam(compareEndDateParam) || new Date(compareEndDateParam)
                 } else if (startDateParam && endDateParam) {
-                    const start = new Date(startDateParam); const end = new Date(endDateParam)
+                    const start = parseStartDateParam(startDateParam) || new Date(startDateParam); const end = parseEndDateParam(endDateParam) || new Date(endDateParam)
                     const duration = end.getTime() - start.getTime()
                     prevStart = new Date(start.getTime() - duration - 1); prevEnd = new Date(start.getTime() - 1)
                 } else {

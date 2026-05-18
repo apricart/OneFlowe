@@ -6,6 +6,7 @@ import { orders, branches, organizations } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 import { getCached, generateCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 import { metricExpressions } from "@/lib/metric-utils"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 type Role = typeof allowedRoles[number]
@@ -120,8 +121,8 @@ export async function GET(req: NextRequest) {
     const todayEnd = new Date(now)
     todayEnd.setHours(23, 59, 59, 999)
 
-    const startDate = startDateParam ? new Date(startDateParam) : todayStart
-    const endDate = endDateParam ? new Date(endDateParam) : todayEnd
+    const startDate = parseStartDateParam(startDateParam) || todayStart
+    const endDate = parseEndDateParam(endDateParam) || todayEnd
 
     // Determine granularity for series: hourly for 1 day, daily for ≤32 days, monthly for ≤400 days, yearly for more
     const diffMs = endDate.getTime() - startDate.getTime()
@@ -379,13 +380,11 @@ export async function GET(req: NextRequest) {
                 let prevStart: Date
                 let prevEnd: Date
                 if (compareStartDateParam && compareEndDateParam) {
-                    prevStart = new Date(compareStartDateParam)
-                    prevEnd = new Date(compareEndDateParam)
-                    prevStart.setHours(0, 0, 0, 0)
-                    prevEnd.setHours(23, 59, 59, 999)
+                    prevStart = parseStartDateParam(compareStartDateParam) || new Date(compareStartDateParam)
+                    prevEnd = parseEndDateParam(compareEndDateParam) || new Date(compareEndDateParam)
                 } else if (startDate && endDate && parsedMonths.length === 0 && parsedYears.length === 0) {
-                    const start = new Date(startDate)
-                    const end = new Date(endDate)
+                    const start = startDate
+                    const end = endDate
                     const duration = end.getTime() - start.getTime()
                     prevStart = new Date(start.getTime() - duration - 1)
                     prevEnd = new Date(start.getTime() - 1)

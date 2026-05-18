@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, orderItems, branches, globalProducts, categories, organizationInventory, branchInventory } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, isNull, sql, exists, or, isNotNull } from "drizzle-orm"
 import { getCached, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 export async function GET(req: NextRequest) {
     try {
@@ -54,10 +55,8 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        let startDate = startDateParam ? new Date(startDateParam) : undefined
-        let endDate = endDateParam ? new Date(endDateParam) : undefined
-        if (startDate) startDate.setHours(0, 0, 0, 0)
-        if (endDate) endDate.setHours(23, 59, 59, 999)
+        const startDate = parseStartDateParam(startDateParam)
+        const endDate = parseEndDateParam(endDateParam)
 
         const cacheKey = scopedCacheKey('analytics:catalog-performance', {
             orgId: userOrgId,

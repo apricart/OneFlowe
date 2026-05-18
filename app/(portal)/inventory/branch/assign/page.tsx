@@ -452,14 +452,12 @@ export default function AssignToBranchPage() {
                             </p>
                             <Button
                                 onClick={handleAssign}
+                                loading={saving}
                                 disabled={saving || newProductsCount === 0 || branchesToShow.length === 0}
                                 className="gap-2"
                             >
                                 {saving ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Assigning...
-                                    </>
+                                    "Assigning..."
                                 ) : (
                                     <>
                                         <GitBranch className="h-4 w-4" />

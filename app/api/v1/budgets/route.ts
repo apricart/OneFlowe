@@ -6,6 +6,7 @@ import { budgets, branches, auditLogs, budgetAddons, groups, orders } from "@/db
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
+import { buildAppMonthPeriods, getAppMonthPeriod, parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 /**
  * Validate numeric ID parameter
@@ -32,32 +33,8 @@ const parseNumberList = (value: string | null, min = 1, max = Number.MAX_SAFE_IN
     ? value.split(",").map(id => Number(id)).filter(id => Number.isInteger(id) && id >= min && id <= max)
     : []
 
-const parseDateParam = (value: string | null) => {
-  if (!value) return null
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
 const buildBudgetPeriods = (startDate: Date, endDate: Date, months: number[], years: number[]) => {
-  const periods: string[] = []
-  const startYear = startDate.getFullYear()
-  const startMonth = startDate.getMonth()
-  const endYear = endDate.getFullYear()
-  const endMonth = endDate.getMonth()
-
-  for (let year = startYear; year <= endYear; year++) {
-    const firstMonth = year === startYear ? startMonth : 0
-    const lastMonth = year === endYear ? endMonth : 11
-
-    for (let month = firstMonth; month <= lastMonth; month++) {
-      const oneBasedMonth = month + 1
-      if (years.length > 0 && !years.includes(year)) continue
-      if (months.length > 0 && !months.includes(oneBasedMonth)) continue
-      periods.push(`${year}-${String(oneBasedMonth).padStart(2, "0")}`)
-    }
-  }
-
-  return periods
+  return buildAppMonthPeriods(startDate, endDate, months, years)
 }
 
 /**
@@ -149,8 +126,8 @@ export async function GET(req: NextRequest) {
           }
 
           const activeBranchIds = activeBranches.map(branch => branch.branchId)
-          const requestedStartDate = parseDateParam(startDateParam)
-          const requestedEndDate = parseDateParam(endDateParam)
+          const requestedStartDate = parseStartDateParam(startDateParam)
+          const requestedEndDate = parseEndDateParam(endDateParam)
           let startDate = requestedStartDate
           const endDate = requestedEndDate || new Date()
 
@@ -178,12 +155,12 @@ export async function GET(req: NextRequest) {
               : new Date(`${new Date().toISOString().slice(0, 7)}-01T00:00:00.000Z`)
           }
 
-          startDate.setHours(0, 0, 0, 0)
-          endDate.setHours(23, 59, 59, 999)
+          if (!startDateParam) startDate.setHours(0, 0, 0, 0)
+          if (!endDateParam) endDate.setHours(23, 59, 59, 999)
 
           let periodList = buildBudgetPeriods(startDate, endDate, parsedMonths, parsedYears)
           if (["today", "3d", "7d", "monthly", "thisMonth"].includes(presetParam)) {
-            periodList = [`${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}`]
+            periodList = [getAppMonthPeriod(endDate)]
           }
 
           if (periodList.length === 0) {

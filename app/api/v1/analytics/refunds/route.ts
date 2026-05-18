@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, branches, organizations } from "@/db/schema"
 import { eq, and, gte, lte, or, gt, sql, inArray } from "drizzle-orm"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 /**
  * GET /api/v1/analytics/refunds
@@ -40,13 +41,13 @@ export async function GET(req: NextRequest) {
         }
 
         if (startDate) {
-            conditions.push(gte(orders.refundedAt, new Date(startDate)))
+            const start = parseStartDateParam(startDate)
+            if (start) conditions.push(gte(orders.refundedAt, start))
         }
 
         if (endDate) {
-            const end = new Date(endDate)
-            end.setHours(23, 59, 59, 999)
-            conditions.push(lte(orders.refundedAt, end))
+            const end = parseEndDateParam(endDate)
+            if (end) conditions.push(lte(orders.refundedAt, end))
         }
 
         // If groupId is specified, get all branch IDs in that group

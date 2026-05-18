@@ -8,26 +8,7 @@ import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
 import { isValidRole } from "@/lib/rbac"
 import { getCached, generateCacheKey, invalidateCache } from "@/lib/cache-utils"
-
-function parseAndValidateDate(dateStr: string | null, paramName: string): Date | null {
-    if (!dateStr) return null
-    try {
-        const date = new Date(dateStr)
-        if (isNaN(date.getTime())) {
-            throw new Error(`Invalid ${paramName}: ${dateStr}`)
-        }
-        const now = Date.now()
-        const tenYearsAgo = now - (10 * 365 * 24 * 60 * 60 * 1000)
-        const oneYearFromNow = now + (365 * 24 * 60 * 60 * 1000)
-        if (date.getTime() < tenYearsAgo || date.getTime() > oneYearFromNow) {
-            console.warn(`[ProductSummary] ${paramName} outside reasonable range: ${dateStr}`)
-        }
-        return date
-    } catch (error) {
-        console.error(`[ProductSummary] Error parsing ${paramName}:`, error)
-        return null
-    }
-}
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 function parseNumericId(value: string | null, paramName: string): number | null {
     if (!value || value === "all") return null
@@ -72,8 +53,8 @@ export async function GET(req: NextRequest) {
         }
 
         const url = new URL(req.url)
-        const startDate = parseAndValidateDate(url.searchParams.get("startDate"), "startDate")
-        const endDate = parseAndValidateDate(url.searchParams.get("endDate"), "endDate")
+        const startDate = parseStartDateParam(url.searchParams.get("startDate"))
+        const endDate = parseEndDateParam(url.searchParams.get("endDate"))
         const branchId = parseNumericId(url.searchParams.get("branchId"), "branchId")
         const organizationId = parseNumericId(url.searchParams.get("organizationId"), "organizationId")
         const groupId = parseNumericId(url.searchParams.get("groupId"), "groupId")
@@ -119,14 +100,10 @@ export async function GET(req: NextRequest) {
             }
 
             if (startDate) {
-                const start = new Date(startDate)
-                start.setHours(0, 0, 0, 0)
-                conditions.push(gte(orders.createdAt, start))
+                conditions.push(gte(orders.createdAt, startDate))
             }
             if (endDate) {
-                const end = new Date(endDate)
-                end.setHours(23, 59, 59, 999)
-                conditions.push(lte(orders.createdAt, end))
+                conditions.push(lte(orders.createdAt, endDate))
             }
 
             const data = await db

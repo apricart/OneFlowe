@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, orderItems, globalProducts, categories, users, branches, refundItems } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, sql } from "drizzle-orm"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 export async function GET(req: NextRequest) {
     try {
@@ -61,10 +62,8 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "No branches resolved" }, { status: 400 })
         }
 
-        let startDate = startDateParam ? new Date(startDateParam) : undefined
-        let endDate = endDateParam ? new Date(endDateParam) : undefined
-        if (startDate) startDate.setHours(0, 0, 0, 0)
-        if (endDate) endDate.setHours(23, 59, 59, 999)
+        const startDate = parseStartDateParam(startDateParam)
+        const endDate = parseEndDateParam(endDateParam)
 
         const baseConditions: any[] = [
             inArray(orders.branchId, branchIds),

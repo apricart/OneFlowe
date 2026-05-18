@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { budgets, orders, orderItems, branches, globalProducts, categories } from "@/db/schema"
 import { and, eq, gte, lte, inArray, sql, desc, asc, isNotNull } from "drizzle-orm"
 import { Role } from "@/lib/rbac"
+import { buildAppMonthPeriods, getAppMonthPeriod, parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 const emptyBudgetSummary = {
     summary: { totalAllocated: 0, totalSpent: 0, totalHeld: 0, totalCredited: 0, totalRemaining: 0 },
@@ -103,7 +104,7 @@ export async function GET(req: NextRequest) {
                 startDate.setDate(1)
             }
         } else if (startDateParam) {
-            startDate = new Date(startDateParam)
+            startDate = parseStartDateParam(startDateParam) || new Date(startDateParam)
         } else {
             // Default: "All Time" should start from the first budget record in the system
             const firstBudget = await db.select({ period: budgets.period })
@@ -124,40 +125,16 @@ export async function GET(req: NextRequest) {
                 startDate.setDate(1)
             }
         }
-        const endDate = endDateParam ? new Date(endDateParam) : new Date()
+        const endDate = parseEndDateParam(endDateParam) || new Date()
 
-        startDate.setHours(0, 0, 0, 0)
-        endDate.setHours(23, 59, 59, 999)
+        if (!startDateParam) startDate.setHours(0, 0, 0, 0)
+        if (!endDateParam) endDate.setHours(23, 59, 59, 999)
 
         // Get unique YYYY-MM periods from the date range to query budgets table
-        const periods = new Set<string>()
-        
-        // Use component-based iteration to avoid timezone/DST/leap-year issues with Date objects
-        let startYear = startDate.getFullYear()
-        let startMonth = startDate.getMonth()
-        let endYear = endDate.getFullYear()
-        let endMonth = endDate.getMonth()
-        
-        for (let y = startYear; y <= endYear; y++) {
-            let mStart = (y === startYear) ? startMonth : 0
-            let mEnd = (y === endYear) ? endMonth : 11
-            for (let m = mStart; m <= mEnd; m++) {
-                const p = `${y}-${String(m + 1).padStart(2, '0')}`
-                periods.add(p)
-            }
-        }
-        let periodList = Array.from(periods).filter(period => {
-            const [yearText, monthText] = period.split("-")
-            const year = Number(yearText)
-            const month = Number(monthText)
-
-            if (years.length > 0 && !years.includes(year)) return false
-            if (months.length > 0 && !months.includes(month)) return false
-            return true
-        })
+        let periodList = buildAppMonthPeriods(startDate, endDate, months, years)
 
         if (["today", "3d", "7d", "monthly", "thisMonth"].includes(preset)) {
-            periodList = [`${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}`]
+            periodList = [getAppMonthPeriod(endDate)]
         }
 
         if (periodList.length === 0) {
@@ -316,20 +293,7 @@ export async function GET(req: NextRequest) {
         const prevEndDate = new Date(startDate.getTime() - 1)
         const prevStartDate = new Date(prevEndDate.getTime() - rangeDurationMs)
 
-        const prevPeriods = new Set<string>()
-        let pStartYear = prevStartDate.getFullYear()
-        let pStartMonth = prevStartDate.getMonth()
-        let pEndYear = prevEndDate.getFullYear()
-        let pEndMonth = prevEndDate.getMonth()
-        
-        for (let y = pStartYear; y <= pEndYear; y++) {
-            let mStart = (y === pStartYear) ? pStartMonth : 0
-            let mEnd = (y === pEndYear) ? pEndMonth : 11
-            for (let m = mStart; m <= mEnd; m++) {
-                prevPeriods.add(`${y}-${String(m + 1).padStart(2, '0')}`)
-            }
-        }
-        const prevPeriodList = Array.from(prevPeriods)
+        const prevPeriodList = buildAppMonthPeriods(prevStartDate, prevEndDate)
 
         const prevBudgetRecords = await db.select().from(budgets).where(
             and(
@@ -374,7 +338,7 @@ export async function GET(req: NextRequest) {
         const chartDataMap: Record<string, any> = {}
 
         // Initialize map with all periods in range
-        periods.forEach(p => {
+        periodList.forEach(p => {
             chartDataMap[p] = { period: p, branches: {} }
         })
 

@@ -81,6 +81,14 @@ export default function GroupsReportPage() {
     const [selectedOrgIds, setSelectedOrgIds] = useState<string[]>(contextOrgId ? [String(contextOrgId)] : [])
     const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
     const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>([])
+    const effectiveOrganizationId = selectedOrgIds[0] || contextOrgId || (role !== "SUPER_ADMIN" && userOrgId ? String(userOrgId) : "")
+
+    useEffect(() => {
+        if (role !== "SUPER_ADMIN") return
+        setSelectedOrgIds(contextOrgId ? [String(contextOrgId)] : [])
+        setSelectedGroupIds([])
+        setSelectedBranchIds([])
+    }, [contextOrgId, role])
 
     // ━━━ TIER 1: GLOBAL SUMMARY DATA ━━━
     const globalQueryParams = new URLSearchParams()
@@ -88,7 +96,7 @@ export default function GroupsReportPage() {
         globalQueryParams.set("startDate", dateRange.startDate.toISOString())
         globalQueryParams.set("endDate", dateRange.endDate.toISOString())
     }
-    if (selectedOrgIds.length > 0) globalQueryParams.set("organizationId", selectedOrgIds[0])
+    if (effectiveOrganizationId) globalQueryParams.set("organizationId", effectiveOrganizationId)
     if (selectedGroupIds.length > 0) globalQueryParams.set("groupIds", selectedGroupIds.join(","))
     if (selectedBranchIds.length > 0) globalQueryParams.set("branchIds", selectedBranchIds.join(","))
     if (selectedMonths.length > 0) globalQueryParams.set("months", selectedMonths.join(","))
@@ -482,21 +490,21 @@ export default function GroupsReportPage() {
                                                 }} 
                                                 maxSelect={1} 
                                             />
-                                            {selectedOrgIds.length > 0 && (
+                                            {effectiveOrganizationId && (
                                                 <GroupFilter 
                                                     selectedIds={selectedGroupIds} 
                                                     onChange={(ids) => {
                                                         setSelectedGroupIds(ids);
                                                         setSelectedBranchIds([]);
                                                     }} 
-                                                    organizationId={parseInt(selectedOrgIds[0])} 
+                                                    organizationId={parseInt(effectiveOrganizationId)} 
                                                 />
                                             )}
-                                            {selectedOrgIds.length > 0 && (
+                                            {effectiveOrganizationId && (
                                                 <BranchFilter 
                                                     selectedIds={selectedBranchIds} 
                                                     onChange={setSelectedBranchIds} 
-                                                    organizationId={selectedOrgIds[0]}
+                                                    organizationId={effectiveOrganizationId}
                                                     groupIds={selectedGroupIds}
                                                 />
                                             )}
@@ -588,13 +596,13 @@ export default function GroupsReportPage() {
                                             setSelectedGroupIds(ids);
                                             setSelectedBranchIds([]);
                                         }}
-                                        organizationId={selectedOrgIds.length > 0 ? parseInt(selectedOrgIds[0]) : undefined}
+                                        organizationId={effectiveOrganizationId ? parseInt(effectiveOrganizationId) : undefined}
                                     />
-                                    {selectedOrgIds.length > 0 && (
+                                    {effectiveOrganizationId && (
                                         <BranchFilter 
                                             selectedIds={selectedBranchIds} 
                                             onChange={setSelectedBranchIds} 
-                                            organizationId={selectedOrgIds[0]}
+                                            organizationId={effectiveOrganizationId}
                                             groupIds={selectedGroupIds}
                                         />
                                     )}

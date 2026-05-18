@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { branches, orders, groups } from "@/db/schema"
 import { eq, and, gte, lte, sql, inArray } from "drizzle-orm"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 export async function GET(
     req: NextRequest,
@@ -47,12 +48,14 @@ export async function GET(
 
         // 2. Parse Query Params
         const { searchParams } = new URL(req.url)
-        const startDate = searchParams.get("startDate")
-            ? new Date(searchParams.get("startDate")!)
+        const startDateParam = searchParams.get("startDate")
+        const endDateParam = searchParams.get("endDate")
+        const startDate = startDateParam
+            ? parseStartDateParam(startDateParam) || new Date(startDateParam)
             : new Date(new Date().getFullYear(), new Date().getMonth(), 1) // Default: Start of current month
 
-        const endDate = searchParams.get("endDate")
-            ? new Date(searchParams.get("endDate")!)
+        const endDate = endDateParam
+            ? parseEndDateParam(endDateParam) || new Date(endDateParam)
             : new Date() // Default: Now
 
         // Ensure endDate extends to end of the day if just a date string provided (simple robustness)
