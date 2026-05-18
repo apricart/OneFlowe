@@ -147,6 +147,7 @@ export function BranchAdminDashboard() {
     chartMonths, chartYears, [], [],
     chartGranularity
   )
+  const pricesHidden = Boolean((perfData as any)?.pricesHidden || (chartPerfData as any)?.pricesHidden || (allTimePerf as any)?.pricesHidden)
 
   const normalizedChartData = useMemo(() => {
     const raw = chartPerfData?.seriesData ?? []
@@ -276,7 +277,7 @@ export function BranchAdminDashboard() {
 
       {/* ━━━ KPI Cards ━━━ */}
       <div className="relative z-10 grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <BankingKPICard
+        {!pricesHidden && <BankingKPICard
           icon={TrendingUp} title="Purchased"
           value={formatPKR(totalRevenue, { maximumFractionDigits: 0 })}
           subtitle={getPresetLabel(activePreset, dateRange)}
@@ -286,7 +287,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.value}
           comparisonValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.label}
           comparisonLabel="VS LAST"
-        />
+        />}
         <BankingKPICard
           icon={Package} title="Orders"
           value={totalOrders.toLocaleString()}
@@ -368,6 +369,13 @@ export function BranchAdminDashboard() {
 
       {/* ━━━ Sales Performance Chart ━━━ */}
       <div className="space-y-6">
+        {pricesHidden ? (
+          <Card className="border border-slate-200/80 dark:border-slate-800/60 shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
+            <CardContent className="p-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
+              Financial charts are hidden by organization settings.
+            </CardContent>
+          </Card>
+        ) : (
         <Card className="border border-slate-200/80 dark:border-slate-800/60 shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl overflow-hidden glass-card">
           <CardContent className="p-5">
             <div className="flex flex-wrap items-center gap-3 mb-6 p-3 bg-slate-50/50 dark:bg-slate-800/20 rounded-xl border border-slate-100 dark:border-slate-800/50">
@@ -427,9 +435,10 @@ export function BranchAdminDashboard() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
 
-      <DrillDownSheet
+      {!pricesHidden && <DrillDownSheet
         isOpen={isDrillDownOpen}
         onOpenChange={setIsDrillDownOpen}
         type={drillDownType}
@@ -443,7 +452,7 @@ export function BranchAdminDashboard() {
         years={years}
         compareMonths={compareMonths}
         compareYears={compareYears}
-      />
+      />}
     </motion.main>
   )
 }

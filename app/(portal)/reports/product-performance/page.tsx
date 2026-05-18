@@ -711,10 +711,22 @@ export default function ProductPerformancePage() {
         )
     }
 
+    const pricesHidden = Boolean((globalPerfData as any)?.pricesHidden || (chartPerfData as any)?.pricesHidden || (ledgerData as any)?.pricesHidden)
+
     if (!hasMounted) {
         return (
             <div className="flex h-[50vh] items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+            </div>
+        )
+    }
+
+    if (pricesHidden) {
+        return (
+            <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] p-6">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    Financial product reports are hidden by organization settings.
+                </div>
             </div>
         )
     }

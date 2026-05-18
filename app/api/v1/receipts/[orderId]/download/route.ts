@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders } from "@/db/schema"
 import { eq } from "drizzle-orm"
+import { shouldHidePricesForRole } from "@/lib/price-visibility"
 import { jsPDF } from "jspdf"
 import path from "path"
 import fs from "fs"
@@ -32,6 +33,18 @@ export async function GET(
 
         if (!order || !order.receiptData) {
             return NextResponse.json({ error: "Receipt not found" }, { status: 404 })
+        }
+
+        const { verifyResourceAccess } = await import("@/lib/auth")
+        const hasAccess = await verifyResourceAccess(order.organizationId, order.branchId)
+        if (!hasAccess) {
+            return NextResponse.json({ error: "Forbidden: You do not have access to this receipt" }, { status: 403 })
+        }
+
+        const userRole = (session.user as any).role
+        const pricesHidden = await shouldHidePricesForRole(userRole, order.organizationId)
+        if (pricesHidden) {
+            return NextResponse.json({ error: "Receipt download is unavailable while prices are hidden" }, { status: 403 })
         }
 
         const receiptData = {

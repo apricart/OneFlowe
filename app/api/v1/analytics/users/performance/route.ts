@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, users, branches, roles, organizations } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, sql } from "drizzle-orm"
 import { metricExpressions } from "@/lib/metric-utils"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 export async function GET(req: NextRequest) {
     try {
@@ -14,6 +15,8 @@ export async function GET(req: NextRequest) {
         const userRole = ((session.user as any).role || "").toUpperCase().replace(/\s+/g, '_')
         const userOrgId = (session.user as any).organizationId
         const userBranchId = (session.user as any).branchId
+        const pricesHidden = await shouldHidePricesForRole(userRole, userOrgId)
+        const respond = (payload: any) => NextResponse.json(pricesHidden ? redactAnalyticsPrices({ ...payload, pricesHidden }) : { ...payload, pricesHidden })
 
         const url = new URL(req.url)
         const startDateParam = url.searchParams.get("startDate")
@@ -190,13 +193,13 @@ export async function GET(req: NextRequest) {
                 .groupBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`)
                 .orderBy(desc(sql`EXTRACT(YEAR FROM ${orders.createdAt})`))
 
-            return NextResponse.json({
+            return respond({
                 years: distinctYears.map(y => y.year)
             })
         }
 
         if (summaryOnly) {
-            return NextResponse.json({
+            return respond({
                 data: {
                     totalOrders: results.reduce((sum, u) => sum + Number(u.totalOrders || 0), 0),
                     fulfilledOrders: results.reduce((sum, u) => sum + Number(u.fulfilledOrders || 0), 0),
@@ -262,7 +265,7 @@ export async function GET(req: NextRequest) {
                     .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
             }
 
-            return NextResponse.json({
+            return respond({
                 data: results, // Keep users list for fallback or top performers
                 trend: trendData,
                 compareTrend,
@@ -270,7 +273,7 @@ export async function GET(req: NextRequest) {
             })
         }
 
-        return NextResponse.json({
+        return respond({
             data: results,
             comparison: comparisonSummary
         })

@@ -4,6 +4,7 @@ import { orders, orderItems, globalProducts, refunds, refundItems } from "@/db/s
 import { and, eq, sql } from "drizzle-orm"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
+import { shouldHidePricesForRole } from "@/lib/price-visibility"
 type OrderStatus = "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED"
 
 export async function GET(
@@ -28,6 +29,7 @@ export async function GET(
   const session = await getServerSession(authOptions)
   const currentUserId = (session?.user as any)?.id
   const currentRole = (session?.user as any)?.role
+  const pricesHidden = await shouldHidePricesForRole(currentRole, item.organizationId)
 
   const { approvalToken, approvalTokenHash, approvalTokenCreatedAt, ...safeItem } = item
 
@@ -59,9 +61,20 @@ export async function GET(
 
   return ok({
     item: {
-      ...safeItem,
-      orderItems: itemsData,
+      ...(pricesHidden
+        ? {
+          ...safeItem,
+          subtotalCents: null,
+          taxCents: null,
+          totalCents: null,
+          refundAmountCents: null,
+        }
+        : safeItem),
+      orderItems: pricesHidden
+        ? itemsData.map((orderItem) => ({ ...orderItem, priceCents: null }))
+        : itemsData,
       approvalToken: isBranchAdminApprover ? approvalToken : null,
+      pricesHidden,
     }
   })
 }

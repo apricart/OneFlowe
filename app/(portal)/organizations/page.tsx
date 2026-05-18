@@ -3,7 +3,7 @@ import { useOrganizations, useBranches } from "@/lib/hooks/use-api"
 type Organization = { id: number; name: string; code: string; status?: "active" | "inactive" }
 type Branch = { id: number; name: string; code: string; organizationId: number; status?: "active" | "inactive" }
 import { Button } from "@/components/ui/button"
-import { Pencil, Trash2, Building2, GitBranch, Save } from "lucide-react"
+import { Loader2, Pencil, Trash2, Building2, GitBranch, Save } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -14,19 +14,25 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { ReactNode, useEffect, useMemo, useState } from "react"
 import { useAppContext } from "@/components/context/app-context"
+import { useSession } from "next-auth/react"
 import { PremiumConfirmDialog } from "@/components/premium/premium-confirm-dialog"
 import { PremiumAlert, type AlertType } from "@/components/premium/premium-alert"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Search } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+
+const HIDE_PRICES_SETTING_KEY = "hide_prices_for_branch_and_order_portal"
 
 type OrgsRes = { items: Organization[] }
 type BranchesRes = { items: Branch[] }
 
 
 export default function OrganizationsPage() {
+  const { data: session } = useSession()
   const { data: orgs, mutate: refetchOrgs, isLoading: loadingOrgs } = useOrganizations()
   const { data: branches, mutate: refetchBranches } = useBranches()
   const { organizationId: contextOrgId } = useAppContext()
+  const userRole = (session?.user as any)?.role
 
   const [openOrg, setOpenOrg] = useState(false)
   const [openBranch, setOpenBranch] = useState(false)
@@ -185,7 +191,7 @@ export default function OrganizationsPage() {
     }
   }
 
-  async function editOrganization(id: string, payload: Partial<Organization>) {
+  async function editOrganization(id: string, payload: Partial<Organization>, hidePricesForBranchRoles?: boolean): Promise<boolean> {
     try {
       const res = await fetch(`/api/v1/organizations/${id}`, {
         method: "PATCH",
@@ -194,11 +200,28 @@ export default function OrganizationsPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to update organization")
+
+      if (hidePricesForBranchRoles !== undefined) {
+        const settingsRes = await fetch("/api/v1/settings", {
+          method: "POST",
+          body: JSON.stringify({
+            organizationId: Number(id),
+            key: HIDE_PRICES_SETTING_KEY,
+            value: hidePricesForBranchRoles,
+          }),
+          headers: { "Content-Type": "application/json" },
+        })
+        const settingsData = await settingsRes.json()
+        if (!settingsRes.ok) throw new Error(settingsData.error || "Failed to update price visibility setting")
+      }
+
       showFeedback("Organization updated successfully.", "success")
       await editOrganizationOptimistic(id, payload)
+      return true
     } catch (e: any) {
       showFeedback(e.message, "error")
       await refreshAll() // Rollback on error
+      return false
     }
   }
 
@@ -343,7 +366,11 @@ export default function OrganizationsPage() {
                         subtitle={`${org.code} • ${branchesByOrgId.get(org.id)?.length || 0} branches`}
                         status={isActiveStatus(org.status)}
                       >
-                        <EditOrgDialog org={org} onSave={(payload) => editOrganization(String(org.id), payload)} />
+                        <EditOrgDialog
+                          org={org}
+                          isSuperAdmin={userRole === "SUPER_ADMIN"}
+                          onSave={(payload, hidePricesForBranchRoles) => editOrganization(String(org.id), payload, hidePricesForBranchRoles)}
+                        />
                         <Button
                           variant="ghost"
                           size="icon"
@@ -993,19 +1020,57 @@ function CreateBranchDialog({
   )
 }
 
-function EditOrgDialog({ org, onSave }: { org: Organization; onSave: (payload: Partial<Organization>) => void }) {
+function EditOrgDialog({
+  org,
+  isSuperAdmin,
+  onSave,
+}: {
+  org: Organization
+  isSuperAdmin: boolean
+  onSave: (payload: Partial<Organization>, hidePricesForBranchRoles?: boolean) => Promise<boolean>
+}) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(org.name)
   const [code, setCode] = useState(org.code)
   const [status, setStatus] = useState<boolean>(isActiveStatus(org.status))
+  const [hidePricesForBranchRoles, setHidePricesForBranchRoles] = useState(false)
+  const [loadingSettings, setLoadingSettings] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setName(org.name)
     setCode(org.code)
     setStatus(isActiveStatus(org.status))
   }, [org.name, org.code, org.status])
+
+  useEffect(() => {
+    if (!open || !isSuperAdmin) return
+
+    let cancelled = false
+    setLoadingSettings(true)
+    fetch(`/api/v1/settings?organizationId=${org.id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return
+        const setting = data?.data?.find((item: any) => item.key === HIDE_PRICES_SETTING_KEY)
+        setHidePricesForBranchRoles(setting?.value === true)
+      })
+      .catch(() => {
+        if (!cancelled) setHidePricesForBranchRoles(false)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSettings(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [open, isSuperAdmin, org.id])
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!saving) setOpen(nextOpen)
+    }}>
       <DialogTrigger asChild>
         <Button
           variant="ghost"
@@ -1026,11 +1091,11 @@ function EditOrgDialog({ org, onSave }: { org: Organization; onSave: (payload: P
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="ename">Company name</Label>
-                <Input id="ename" value={name} onChange={(e) => setName(e.target.value)} />
+                <Input id="ename" value={name} onChange={(e) => setName(e.target.value)} disabled={saving} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ecode">Code</Label>
-                <Input id="ecode" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} />
+                <Input id="ecode" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} disabled={saving} />
               </div>
             </div>
             <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
@@ -1043,22 +1108,48 @@ function EditOrgDialog({ org, onSave }: { org: Organization; onSave: (payload: P
                   id="org-status-edit"
                   checked={status}
                   onCheckedChange={(v: boolean | "indeterminate") => setStatus(Boolean(v))}
+                  disabled={saving}
                 />
                 <Badge variant={status ? "default" : "outline"}>{status ? "Active" : "Inactive"}</Badge>
               </div>
             </div>
+            {isSuperAdmin && (
+              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                <div>
+                  <Label htmlFor="hide-price-visibility">Hide prices</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Hide product and order prices from branch admin and order portal users.
+                  </p>
+                </div>
+                <Switch
+                  id="hide-price-visibility"
+                  checked={hidePricesForBranchRoles}
+                  onCheckedChange={setHidePricesForBranchRoles}
+                  disabled={loadingSettings || saving}
+                />
+              </div>
+            )}
           </div>
         </div>
         <DialogFooter>
           <Button
             className="gap-2"
-            onClick={() => {
-              onSave({ name, code, status: status ? "active" : "inactive" })
-              setOpen(false)
+            disabled={saving || loadingSettings || !name.trim() || !code.trim()}
+            onClick={async () => {
+              setSaving(true)
+              try {
+                const saved = await onSave(
+                  { name, code, status: status ? "active" : "inactive" },
+                  isSuperAdmin ? hidePricesForBranchRoles : undefined
+                )
+                if (saved) setOpen(false)
+              } finally {
+                setSaving(false)
+              }
             }}
           >
-            <Save className="h-4 w-4" />
-            Save Changes
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? "Saving..." : "Save Changes"}
           </Button>
         </DialogFooter>
       </DialogContent>

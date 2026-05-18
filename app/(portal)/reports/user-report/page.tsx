@@ -441,6 +441,18 @@ export default function UserReportPage() {
         XLSX.writeFile(workbook, `user-report-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
     }
 
+    const pricesHidden = Boolean((globalData as any)?.pricesHidden || (chartData as any)?.pricesHidden || (reportData as any)?.pricesHidden || (userProductsData as any)?.pricesHidden)
+
+    if (pricesHidden) {
+        return (
+            <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] p-6">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    Financial user reports are hidden by organization settings.
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] transition-colors duration-500 pb-20">
             {/* ━━━ STICKY PREMIUM HEADER ━━━ */}

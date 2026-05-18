@@ -7,6 +7,7 @@ import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
 import { getRequestScope } from "@/lib/auth"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { HIDE_PRICES_SETTING_KEY } from "@/lib/price-visibility"
 
 // Valid setting keys
 const VALID_SETTING_KEYS = new Set([
@@ -17,7 +18,8 @@ const VALID_SETTING_KEYS = new Set([
   'require_mfa',
   'session_timeout_minutes',
   'low_stock_threshold',
-  'enable_notifications'
+  'enable_notifications',
+  HIDE_PRICES_SETTING_KEY
 ])
 
 /**
@@ -97,6 +99,10 @@ export async function POST(req: NextRequest) {
 
     // BOLA: HEAD_OFFICE must only modify their own org's settings
     const scope = await getRequestScope()
+    if (key === HIDE_PRICES_SETTING_KEY && scope?.role !== "SUPER_ADMIN") {
+      return err("Only Super Admin can modify price visibility", 403)
+    }
+
     if (scope?.role === "HEAD_OFFICE" && Number(organizationId) !== scope.organizationId) {
       return err("Forbidden: Cannot modify settings for other organizations", 403)
     }
@@ -137,7 +143,7 @@ export async function POST(req: NextRequest) {
       return err("low_stock_threshold must be a non-negative number", 400)
     }
 
-    if (['auto_approve_orders', 'require_mfa', 'enable_notifications'].includes(key) && typeof value !== 'boolean') {
+    if (['auto_approve_orders', 'require_mfa', 'enable_notifications', HIDE_PRICES_SETTING_KEY].includes(key) && typeof value !== 'boolean') {
       return err(`${key} must be a boolean`, 400)
     }
 
@@ -187,8 +193,13 @@ export async function POST(req: NextRequest) {
       logError(auditError, 'SETTINGS_AUDIT_LOG')
     }
 
-    // Invalidate settings cache
+    // Invalidate settings and dependent inventory cache
     await invalidateByPrefix('settings')
+    if (key === HIDE_PRICES_SETTING_KEY) {
+      await invalidateByPrefix('branch-inv')
+      await invalidateByPrefix('inv:branch-products')
+      await invalidateByPrefix('inv:org-products')
+    }
 
     return ok({
       data: result,

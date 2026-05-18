@@ -52,7 +52,7 @@ interface BranchProduct {
   productCode: string
   productImageUrl: string | null
   categoryName: string | null
-  basePrice: number
+  basePrice: number | null
   unit: string
   customName: string | null
   customPrice: number | null
@@ -78,6 +78,7 @@ export default function BranchAdminInventory({
   // Fetch branch products with visibility data
   const { data, error, isLoading, mutate } = useSWR<{
     items: BranchProduct[]
+    pricesHidden?: boolean
   }>(
     `/api/v1/inventory/branch-visibility?branchId=${branchId}&organizationId=${organizationId}`,
     fetcher,
@@ -85,6 +86,7 @@ export default function BranchAdminInventory({
   )
 
   const products = data?.items || []
+  const pricesHidden = Boolean(data?.pricesHidden)
 
   // Filter products
   const filteredProducts = useMemo(() => {
@@ -287,7 +289,7 @@ export default function BranchAdminInventory({
               <TableRow className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-transparent">
                 <TableHead className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Product Details</TableHead>
                 <TableHead className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Category & Code</TableHead>
-                <TableHead className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Price Info</TableHead>
+                {!pricesHidden && <TableHead className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Price Info</TableHead>}
                 <TableHead className="px-6 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Shop Availability</TableHead>
                 <TableHead className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Action</TableHead>
               </TableRow>
@@ -296,7 +298,7 @@ export default function BranchAdminInventory({
               <AnimatePresence mode="popLayout">
                 {filteredProducts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-64 text-center">
+                    <TableCell colSpan={pricesHidden ? 4 : 5} className="h-64 text-center">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
                           <Package className="h-10 w-10 text-slate-300 dark:text-slate-600" />
@@ -353,13 +355,15 @@ export default function BranchAdminInventory({
                         </div>
                       </TableCell>
 
-                      <TableCell className="px-6 py-4">
+                      {!pricesHidden && <TableCell className="px-6 py-4">
                         <div className="space-y-0.5">
                           <div className="text-sm font-black text-indigo-600 dark:text-indigo-400 tracking-tight">
-                            {formatPKR(product.customPrice || product.basePrice, { maximumFractionDigits: 0 })}
+                            {product.customPrice !== null || product.basePrice !== null
+                              ? formatPKR(product.customPrice || product.basePrice || 0, { maximumFractionDigits: 0 })
+                              : "-"}
                           </div>
                         </div>
-                      </TableCell>
+                      </TableCell>}
 
                       <TableCell className="px-6 py-4">
                         <div className="flex justify-center">

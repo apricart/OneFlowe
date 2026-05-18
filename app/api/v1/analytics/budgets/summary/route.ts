@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { budgets, orders, orderItems, branches, globalProducts, categories } from "@/db/schema"
 import { and, eq, gte, lte, inArray, sql, desc, asc, isNotNull } from "drizzle-orm"
 import { Role } from "@/lib/rbac"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 const emptyBudgetSummary = {
     summary: { totalAllocated: 0, totalSpent: 0, totalHeld: 0, totalCredited: 0, totalRemaining: 0 },
@@ -46,6 +47,10 @@ export async function GET(req: NextRequest) {
         if (userRole === "SUPER_ADMIN" && organizationIdParam) {
             allowedOrgId = Number(organizationIdParam)
         }
+        const pricesHidden = await shouldHidePricesForRole(userRole, allowedOrgId || userOrgId)
+        const respond = (payload: any) => NextResponse.json(
+            pricesHidden ? redactAnalyticsPrices({ ...payload, pricesHidden: true }) : payload
+        )
 
         let branchIds: number[] = []
         if (branchIdsParam) {
@@ -79,7 +84,7 @@ export async function GET(req: NextRequest) {
             branchIds = scopedBranches.map(branch => branch.id)
 
             if (branchIds.length === 0) {
-                return NextResponse.json(emptyBudgetSummary)
+                return respond(emptyBudgetSummary)
             }
         }
 
@@ -161,7 +166,7 @@ export async function GET(req: NextRequest) {
         }
 
         if (periodList.length === 0) {
-            return NextResponse.json(emptyBudgetSummary)
+            return respond(emptyBudgetSummary)
         }
 
         // 3. Fetch All Relevant Branches with Baselines
@@ -195,7 +200,7 @@ export async function GET(req: NextRequest) {
         }
 
         if (activeBranches.length === 0) {
-            return NextResponse.json(emptyBudgetSummary)
+            return respond(emptyBudgetSummary)
         }
 
         const actualBranchIds = activeBranches.map(b => b.id)
@@ -463,7 +468,7 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        return NextResponse.json({
+        return respond({
             summary: {
                 totalAllocated,
                 totalSpent: totalSpent + totalHeld, // Merged for "Purchases" view

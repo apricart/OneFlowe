@@ -54,6 +54,7 @@ import {
 import { Upload } from "lucide-react"
 
 interface BudgetSummaryResponse {
+    pricesHidden?: boolean;
     summary: {
         totalAllocated: number;
         totalSpent: number;
@@ -767,6 +768,22 @@ export default function BudgetSummaryPage() {
         return (
             <div className="flex h-[50vh] items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+            </div>
+        )
+    }
+
+    const pricesHidden = Boolean(pageData?.pricesHidden || chartApiData?.pricesHidden || budgetReportData?.pricesHidden)
+    if (pricesHidden) {
+        return (
+            <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] p-6">
+                <Card className="mx-auto max-w-2xl border-slate-200 dark:border-slate-800">
+                    <CardHeader>
+                        <CardTitle>Budget reports hidden</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground">
+                        Financial budget reports are hidden by organization settings.
+                    </CardContent>
+                </Card>
             </div>
         )
     }

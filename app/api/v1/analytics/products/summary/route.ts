@@ -8,6 +8,7 @@ import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
 import { isValidRole } from "@/lib/rbac"
 import { getCached, generateCacheKey, invalidateCache } from "@/lib/cache-utils"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 function parseAndValidateDate(dateStr: string | null, paramName: string): Date | null {
     if (!dateStr) return null
@@ -70,6 +71,7 @@ export async function GET(req: NextRequest) {
                 { status: 403 }
             )
         }
+        const pricesHidden = await shouldHidePricesForRole(role, userOrgId)
 
         const url = new URL(req.url)
         const startDate = parseAndValidateDate(url.searchParams.get("startDate"), "startDate")
@@ -167,7 +169,7 @@ export async function GET(req: NextRequest) {
 
         const data = await getCached(cacheKey, fetchData, 300)
 
-        return NextResponse.json({
+        const payload = {
             items: data,
             metadata: {
                 count: data.length,
@@ -180,7 +182,11 @@ export async function GET(req: NextRequest) {
                     groupId
                 }
             }
-        })
+        }
+
+        return NextResponse.json(
+            pricesHidden ? redactAnalyticsPrices({ ...payload, pricesHidden: true }) : payload
+        )
 
     } catch (error: any) {
         logError(error, 'PRODUCT_SUMMARY_API', {

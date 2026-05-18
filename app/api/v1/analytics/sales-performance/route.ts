@@ -6,6 +6,7 @@ import { orders, branches, organizations } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 import { getCached, generateCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 import { metricExpressions } from "@/lib/metric-utils"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 type Role = typeof allowedRoles[number]
@@ -94,6 +95,7 @@ export async function GET(req: NextRequest) {
         console.warn(`[Security] Unknown role ${role} attempting to access sales-performance API`)
         return error("Access denied: Invalid user role")
     }
+    const pricesHidden = await shouldHidePricesForRole(role, scope?.organizationId)
 
     if (branchIdsParam) {
         branchIds = branchIdsParam.split(",").map(Number).filter(n => !isNaN(n) && n > 0)
@@ -158,6 +160,7 @@ export async function GET(req: NextRequest) {
         compareMonths: parsedCompMonths.join(","),
         compareYears: parsedCompYears.join(","),
         granularity,
+        pricesHidden,
     })
 
     const fetchData = async () => {
@@ -505,5 +508,5 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await getCached(cacheKey, fetchData, CACHE_TTL.ANALYTICS)
-    return ok(data)
+    return ok(pricesHidden ? redactAnalyticsPrices({ ...data, pricesHidden }) : { ...data, pricesHidden })
 }

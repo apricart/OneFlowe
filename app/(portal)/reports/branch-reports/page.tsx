@@ -328,7 +328,19 @@ export default function BranchReportsPage() {
         XLSX.writeFile(workbook, `branch-report-${new Date().getTime()}.${format === 'excel' ? 'xlsx' : 'csv'}`)
     }
 
+    const pricesHidden = Boolean((globalData as any)?.pricesHidden || (chartData as any)?.pricesHidden || (reportData as any)?.pricesHidden)
+
     if (!hasMounted) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950"><Loader2 className="h-8 w-8 animate-spin text-emerald-500" /></div>
+
+    if (pricesHidden) {
+        return (
+            <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] p-6">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    Financial branch reports are hidden by organization settings.
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] pb-20">

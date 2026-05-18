@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, users, roles, branches, organizations, groups, orderItems, refunds, refundItems } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql, sum, count, inArray } from "drizzle-orm"
 import { metricExpressions } from "@/lib/metric-utils"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions)
@@ -86,6 +87,8 @@ export async function GET(req: NextRequest) {
 
     // Security: RBAC
     const normalizedRole = (roleName || "").toUpperCase().replace(/\s+/g, '_')
+    const pricesHidden = await shouldHidePricesForRole(normalizedRole, currentUserOrgId)
+    const respond = (payload: any) => NextResponse.json(pricesHidden ? redactAnalyticsPrices({ ...payload, pricesHidden }) : { ...payload, pricesHidden })
     console.log(`[Summary API] User: ${userId}, Role: ${normalizedRole}, Params: Branch=${branchId}, Org=${organizationId}, Group=${groupId}`)
 
     if (normalizedRole === "SUPER_ADMIN") {
@@ -287,7 +290,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (url.searchParams.get("summaryOnly") === "true") {
-        return NextResponse.json({
+        return respond({
             summary: {
                 ...summary,
                 comparison: comparisonSummary,
@@ -297,7 +300,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (trendOnly) {
-        return NextResponse.json({
+        return respond({
             summary: {
                 ...summary,
                 comparison: comparisonSummary
@@ -365,7 +368,7 @@ employeeId: users.employeeId,
         .orderBy(desc(metricExpressions.revenue))
         .limit(10)
 
-    return NextResponse.json({
+    return respond({
         summary: {
             ...summary,
             comparison: comparisonSummary

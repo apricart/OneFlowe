@@ -34,12 +34,12 @@ type BranchInventoryItem = {
   productCode: string
   productImageUrl?: string
   customName?: string
-  customPrice?: number
+  customPrice?: number | null
   customDescription?: string
   customImageUrl?: string
   categoryName: string
   parentCategoryName?: string
-  basePrice: number
+  basePrice: number | null
   unit: string
   isVisible: boolean
   isActive: boolean
@@ -88,6 +88,7 @@ export default function BranchInventoryPage() {
   const { data, isLoading, mutate } = useSWR<{
     items: BranchInventoryItem[]
     total: number
+    pricesHidden?: boolean
   }>(`/api/v1/branch/inventory?${params.toString()}`, fetcher, {
     fallbackData: { items: [], total: 0 },
     refreshInterval: 5000,
@@ -102,6 +103,7 @@ export default function BranchInventoryPage() {
   })
 
   const inventory = data?.items ?? []
+  const pricesHidden = Boolean(data?.pricesHidden)
   const totalProducts = data?.total ?? 0
   const statsInventory = statsData?.items ?? []
   const totalAssigned = statsData?.total ?? statsInventory.length
@@ -198,7 +200,7 @@ export default function BranchInventoryPage() {
               <TableRow className="border-b border-slate-100 dark:border-slate-800/50 hover:bg-transparent">
                 <TableHead className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Product Info</TableHead>
                 <TableHead className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Category Path</TableHead>
-                <TableHead className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Pricing</TableHead>
+                {!pricesHidden && <TableHead className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Pricing</TableHead>}
                 <TableHead className="px-6 py-4 text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Stock Status</TableHead>
                 {/* <TableHead className="px-6 py-4 text-right text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Action</TableHead> */}
               </TableRow>
@@ -207,7 +209,7 @@ export default function BranchInventoryPage() {
               <AnimatePresence mode="popLayout">
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-64 text-center">
+                    <TableCell colSpan={pricesHidden ? 4 : 5} className="h-64 text-center">
                       <div className="flex flex-col items-center justify-center gap-3 animate-pulse">
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
                           <RefreshCw className="h-10 w-10 text-slate-300 dark:text-slate-600 animate-spin" />
@@ -218,7 +220,7 @@ export default function BranchInventoryPage() {
                   </TableRow>
                 ) : inventory.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-64 text-center">
+                    <TableCell colSpan={pricesHidden ? 4 : 5} className="h-64 text-center">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
                           <Package className="h-10 w-10 text-slate-300 dark:text-slate-600" />
@@ -281,13 +283,15 @@ export default function BranchInventoryPage() {
                         </div>
                       </TableCell>
 
-                      <TableCell className="px-6 py-4">
+                      {!pricesHidden && <TableCell className="px-6 py-4">
                         <div className="space-y-0.5">
                           <div className="text-sm font-black text-indigo-600 dark:text-indigo-400 tracking-tight">
-                            {formatPKR((item.customPrice ?? item.basePrice) / 100, { maximumFractionDigits: 0 })}
+                            {item.customPrice !== null || item.basePrice !== null
+                              ? formatPKR(((item.customPrice ?? item.basePrice) || 0) / 100, { maximumFractionDigits: 0 })
+                              : "-"}
                           </div>
                         </div>
-                      </TableCell>
+                      </TableCell>}
 
                       <TableCell className="px-6 py-4">
                         <div className="flex justify-center">

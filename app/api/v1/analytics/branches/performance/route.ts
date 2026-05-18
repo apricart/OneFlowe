@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, branches, organizations, groups } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, sql } from "drizzle-orm"
 import { metricExpressions, REVENUE_ELIGIBLE_FILTER } from "@/lib/metric-utils"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 export async function GET(req: NextRequest) {
     try {
@@ -13,6 +14,8 @@ export async function GET(req: NextRequest) {
 
         const userRole = ((session.user as any).role || "").toUpperCase().replace(/\s+/g, '_')
         const userOrgId = (session.user as any).organizationId
+        const pricesHidden = await shouldHidePricesForRole(userRole, userOrgId)
+        const respond = (payload: any) => NextResponse.json(pricesHidden ? redactAnalyticsPrices({ ...payload, pricesHidden }) : { ...payload, pricesHidden })
 
         const url = new URL(req.url)
         const startDateParam = url.searchParams.get("startDate")
@@ -63,7 +66,7 @@ export async function GET(req: NextRequest) {
                 .groupBy(sql`EXTRACT(YEAR FROM ${orders.createdAt})`)
                 .orderBy(desc(sql`EXTRACT(YEAR FROM ${orders.createdAt})`))
 
-            return NextResponse.json({
+            return respond({
                 years: distinctYears.map(y => y.year)
             })
         }
@@ -138,7 +141,7 @@ export async function GET(req: NextRequest) {
                     .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
             }
 
-            return NextResponse.json({ trend: trendData, compareTrend })
+            return respond({ trend: trendData, compareTrend })
         }
 
         // ━━━ Mode: Summary Only (KPI Cards) ━━━
@@ -195,7 +198,7 @@ export async function GET(req: NextRequest) {
                 comparisonSummary = compStats
             }
 
-            return NextResponse.json({ summary: stats, comparison: comparisonSummary })
+            return respond({ summary: stats, comparison: comparisonSummary })
         }
 
         // Default: Full Report (Tier 3)
@@ -223,7 +226,7 @@ export async function GET(req: NextRequest) {
             .groupBy(branches.id, organizations.name, groups.name)
             .orderBy(desc(metricExpressions.revenue))
 
-        return NextResponse.json({ items: branchResults })
+        return respond({ items: branchResults })
 
     } catch (error: any) {
         console.error("Branch Performance API failed:", error)

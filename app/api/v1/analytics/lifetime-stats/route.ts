@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, branches } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 import { metricExpressions } from "@/lib/metric-utils"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 
@@ -43,6 +44,7 @@ export async function GET(req: NextRequest) {
     if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") {
         groupId = Number(groupIdParam)
     }
+    const pricesHidden = await shouldHidePricesForRole(role, scope?.organizationId)
 
     // Build conditions — query ALL orders, use CASE WHEN for revenue
     const conditions: any[] = []
@@ -82,7 +84,7 @@ export async function GET(req: NextRequest) {
         .leftJoin(branches, eq(orders.branchId, branches.id))
         .where(whereClause)
 
-    return ok({
+    const payload = {
         totalOrders: Number(stats?.totalOrders || 0),
         fulfilledOrders: Number(stats?.fulfilledOrders || 0),
         refundedOrders: Number(stats?.refundedOrders || 0),
@@ -91,5 +93,8 @@ export async function GET(req: NextRequest) {
         totalRevenue: Number(stats?.totalRevenueCents || 0) / 100,
         grossRevenue: Number(stats?.grossRevenueCents || 0) / 100,
         totalRefunded: Number(stats?.totalRefundedCents || 0) / 100,
-    })
+        pricesHidden,
+    }
+
+    return ok(pricesHidden ? redactAnalyticsPrices(payload) : payload)
 }

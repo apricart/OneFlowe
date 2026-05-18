@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, orderItems, branches, users, organizations, groups } from "@/db/schema"
 import { and, desc, eq, gte, lte, sql } from "drizzle-orm"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 export async function GET(req: NextRequest) {
     try {
@@ -45,11 +46,14 @@ export async function GET(req: NextRequest) {
             if (branchIdParam && branchIdParam !== "all") {
                 conditions.push(eq(orders.branchId, Number(branchIdParam)))
             }
-        } else if (role === "BRANCH_ADMIN" || role === "BRANCH_MANAGER") {
+        } else if (role === "BRANCH_ADMIN" || role === "BRANCH_MANAGER" || role === "ORDER_PORTAL") {
             const bId = currentUser?.branchId
             if (!bId) return NextResponse.json({ error: "Branch not assigned" }, { status: 403 })
             conditions.push(eq(orders.branchId, bId))
+        } else {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
+        const pricesHidden = await shouldHidePricesForRole(role, currentUser?.organizationId)
 
         // 2. Date Filtering
         if (startDate) {
@@ -89,7 +93,10 @@ export async function GET(req: NextRequest) {
             .where(and(...conditions))
             .orderBy(desc(orders.createdAt), desc(orderItems.id))
 
-        return NextResponse.json({ items: data })
+        const payload = { items: data }
+        return NextResponse.json(
+            pricesHidden ? redactAnalyticsPrices({ ...payload, pricesHidden: true }) : payload
+        )
     } catch (error: any) {
         console.error("Product Details API Error:", error)
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS = [
   { key: "session_timeout_minutes", value: 60 },
   { key: "low_stock_threshold", value: 10 },
   { key: "enable_notifications", value: true },
+  { key: "hide_prices_for_branch_and_order_portal", value: false },
 ]
 
 async function seed() {

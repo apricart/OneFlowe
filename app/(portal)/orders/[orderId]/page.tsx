@@ -29,7 +29,7 @@ type OrderItem = {
   productCode?: string | null
   quantity: number
   quantityRefunded?: number
-  priceCents: number
+  priceCents: number | null
   unit: string
   globalProductId: number
   imageUrl?: string | null
@@ -46,13 +46,14 @@ type OrderDetail = {
   refundedByUserId?: string | null
   refundAmountCents?: number | null
   refundReason?: string | null
-  subtotalCents: number
-  taxCents: number
-  totalCents: number
+  subtotalCents: number | null
+  taxCents: number | null
+  totalCents: number | null
   createdAt: string
   orderItems?: OrderItem[]
   approvalToken?: string | null // Only visible to the approver
   rejectionReason?: string | null
+  pricesHidden?: boolean
 }
 
 export default function SuperAdminOrderDetailsPage() {
@@ -75,6 +76,7 @@ export default function SuperAdminOrderDetailsPage() {
 
   const order: OrderDetail | undefined = data?.item
   const orderItems = order?.orderItems || []
+  const pricesHidden = Boolean(order?.pricesHidden)
 
   // Hide items that have been fully refunded
   const visibleItems = orderItems.filter(item => (item.quantityRefunded || 0) < item.quantity)
@@ -140,6 +142,7 @@ export default function SuperAdminOrderDetailsPage() {
 
       {order && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {!pricesHidden && order.totalCents !== null && order.subtotalCents !== null && order.taxCents !== null && (
           <Card className="rounded-2xl border-0 bg-white dark:bg-slate-900 dark:border-slate-800 p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Order total</p>
             <p className="text-2xl font-semibold text-slate-900 dark:text-white">
@@ -149,6 +152,7 @@ export default function SuperAdminOrderDetailsPage() {
               Subtotal {formatPKR(order.subtotalCents / 100)} · Tax {formatPKR(order.taxCents / 100)}
             </p>
           </Card>
+          )}
           <Card className="rounded-2xl border-0 bg-white dark:bg-slate-900 dark:border-slate-800 p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Current status</p>
             <p className="text-2xl font-semibold capitalize text-slate-900 dark:text-white">
@@ -168,7 +172,7 @@ export default function SuperAdminOrderDetailsPage() {
             </p>
             <p className="text-xs text-muted-foreground">Order ID #{order.id}</p>
           </Card>
-          {order.refundAmountCents && order.refundAmountCents > 0 && (
+          {!pricesHidden && order.refundAmountCents && order.refundAmountCents > 0 && (
             <Card className="rounded-2xl border-0 bg-yellow-50 dark:bg-yellow-950/50 border-yellow-200 dark:border-yellow-800 p-4 shadow-md">
               <p className="text-sm text-yellow-700 dark:text-yellow-300">Refund amount</p>
               <p className="text-2xl font-semibold text-yellow-900 dark:text-yellow-200">
@@ -183,7 +187,7 @@ export default function SuperAdminOrderDetailsPage() {
       )}
 
       {/* Refund Information Card */}
-      {order && (order.refundAmountCents && order.refundAmountCents > 0) && (
+      {!pricesHidden && order && (order.refundAmountCents && order.refundAmountCents > 0) && (
         <Card id="refund-details" className="scroll-mt-6 border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-950/20 p-6">
           <div className="flex items-start gap-4">
             <div className="rounded-full bg-yellow-100 dark:bg-yellow-900 p-2 text-yellow-600 dark:text-yellow-400">
@@ -207,7 +211,7 @@ export default function SuperAdminOrderDetailsPage() {
                   </p>
                 </div>
 
-                {order.status.toLowerCase() !== "refunded" && (
+                {order.status.toLowerCase() !== "refunded" && order.totalCents !== null && (
                   <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-white dark:bg-slate-900 p-3">
                     <p className="text-xs uppercase text-yellow-700 dark:text-yellow-300">Remaining Balance</p>
                     <p className="text-lg font-bold text-yellow-900 dark:text-yellow-200">
@@ -256,13 +260,14 @@ export default function SuperAdminOrderDetailsPage() {
                           <div>
                             <p className="font-semibold text-slate-900 dark:text-white">{item.productName}</p>
                             <p className="text-muted-foreground mt-0.5">
-                              {item.quantityRefunded} {item.unit} @ {formatPKR(item.priceCents / 100)}
+                              {item.quantityRefunded} {item.unit}
+                              {item.priceCents !== null && <> @ {formatPKR(item.priceCents / 100)}</>}
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-red-600 dark:text-red-400">
+                            {item.priceCents !== null && <p className="font-bold text-red-600 dark:text-red-400">
                               - {formatPKR((item.priceCents * (item.quantityRefunded || 0)) / 100)}
-                            </p>
+                            </p>}
                           </div>
                         </div>
                       ))}
@@ -324,6 +329,7 @@ export default function SuperAdminOrderDetailsPage() {
                   </div>
                 </div>
 
+                {!pricesHidden && order.subtotalCents !== null && order.taxCents !== null && order.totalCents !== null && (
                 <div className="grid gap-3 px-6 pb-6 md:grid-cols-3">
                   <div className="rounded-2xl bg-white/80 dark:bg-slate-800/80 p-4 shadow-sm">
                     <p className="text-xs uppercase text-muted-foreground">Subtotal</p>
@@ -344,6 +350,7 @@ export default function SuperAdminOrderDetailsPage() {
                     </p>
                   </div>
                 </div>
+                )}
 
 
 
@@ -385,7 +392,9 @@ export default function SuperAdminOrderDetailsPage() {
                                 <p className="text-xs text-muted-foreground font-mono">{item.productCode}</p>
                               )}
                               <p className="text-xs text-muted-foreground mt-1">
-                                {formatPKR(item.priceCents / 100)} per {item.unit}
+                                {!pricesHidden && item.priceCents !== null && (
+                                  <>{formatPKR(item.priceCents / 100)} per {item.unit}</>
+                                )}
                                 {quantityRefunded > 0 && (
                                   <span className="ml-2 font-semibold text-red-600 dark:text-red-400">
                                     {quantityRefunded} refunded
@@ -395,10 +404,10 @@ export default function SuperAdminOrderDetailsPage() {
                             </div>
                             <div className="text-right">
                               <p className="text-sm font-semibold text-slate-900 dark:text-white">Qty: {item.quantity}</p>
-                              <p className={`text-sm font-bold ${isFullyRefunded ? "line-through text-muted-foreground" : "text-indigo-600 dark:text-indigo-400"}`}>
+                              {!pricesHidden && item.priceCents !== null && <p className={`text-sm font-bold ${isFullyRefunded ? "line-through text-muted-foreground" : "text-indigo-600 dark:text-indigo-400"}`}>
                                 {formatPKR((item.priceCents * item.quantity) / 100)}
-                              </p>
-                              {quantityRefunded > 0 && (
+                              </p>}
+                              {!pricesHidden && item.priceCents !== null && quantityRefunded > 0 && (
                                 <p className="text-[11px] font-bold text-red-600 dark:text-red-400">
                                   - {formatPKR((item.priceCents * quantityRefunded) / 100)}
                                 </p>
@@ -411,7 +420,7 @@ export default function SuperAdminOrderDetailsPage() {
                   </div>
                 )}
 
-                <div id={order.refundAmountCents && order.refundAmountCents > 0 ? undefined : "refund-details"} className="mx-6 mb-6 scroll-mt-6">
+                {!pricesHidden && order.totalCents !== null && <div id={order.refundAmountCents && order.refundAmountCents > 0 ? undefined : "refund-details"} className="mx-6 mb-6 scroll-mt-6">
                   <RefundManagement
                     orderId={order.id}
                     orderTotalCents={order.totalCents}
@@ -422,7 +431,7 @@ export default function SuperAdminOrderDetailsPage() {
                     refundedAt={order.refundedAt}
                     refundReason={order.refundReason}
                   />
-                </div>
+                </div>}
               </Card>
 
               {/* SECURITY: Approval token is NEVER shown on Super Admin view.

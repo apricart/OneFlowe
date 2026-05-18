@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { organizationProducts, globalProducts, auditLogs, branchInventory, branches } from "@/db/schema"
 import { eq, and, sql, inArray, exists } from "drizzle-orm"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { shouldHidePricesForRole } from "@/lib/price-visibility"
 
 // GET /api/v1/inventory/organization-products - Get products for organization
 export async function GET(req: NextRequest) {
@@ -31,10 +32,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const settingOrgId = parsedOrgIds[0] || userOrgId
+    const pricesHidden = await shouldHidePricesForRole(userRole, settingOrgId)
     const cacheKey = scopedCacheKey('inv:org-products', { 
         orgId: parsedOrgIds.join(','),
         role: userRole
-    })
+    }, { pricesHidden })
 
     const items = await getCached(cacheKey, async () => {
       const isSuperAdmin = userRole === "SUPER_ADMIN"
@@ -123,10 +126,13 @@ export async function GET(req: NextRequest) {
           )
       }
 
-      return query.where(and(...whereConditions))
+      const rows = await query.where(and(...whereConditions))
+      return pricesHidden
+        ? rows.map((item) => ({ ...item, basePrice: null, customPrice: null }))
+        : rows
     }, CACHE_TTL.LISTING)
 
-    return NextResponse.json({ items })
+    return NextResponse.json({ items, pricesHidden })
   } catch (error: any) {
     console.error("Error fetching organization products:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

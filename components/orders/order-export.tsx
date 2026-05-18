@@ -40,7 +40,7 @@ export function OrderExport({ orders, role }: OrderExportProps) {
             "Branch": order.branchName || "-",
             "Status": order.status?.toUpperCase() || "-",
             "Refund Status": refundStatus,
-            "Amount (PKR)": (order.totalCents / 100).toFixed(2),
+            "Amount (PKR)": order.totalCents !== null && order.totalCents !== undefined ? (order.totalCents / 100).toFixed(2) : "-",
             "Items": order.itemNames || "-",
         }
 
@@ -127,7 +127,7 @@ export function OrderExport({ orders, role }: OrderExportProps) {
                     order.branchName || "-",
                     order.status?.toUpperCase() || "-",
                     refundStatus,
-                    formatPKR(order.totalCents / 100),
+                    order.totalCents !== null && order.totalCents !== undefined ? formatPKR(order.totalCents / 100) : "-",
                     order.itemNames || "-",
                     order.rejectionReason || "-"
                 ]

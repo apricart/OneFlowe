@@ -6,6 +6,7 @@ import { orders, branches } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 import { getCached, generateCacheKey } from "@/lib/cache-utils"
 import { REVENUE_ELIGIBLE_FILTER, metricExpressions } from "@/lib/metric-utils"
+import { shouldHidePricesForRole } from "@/lib/price-visibility"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 
@@ -71,12 +72,14 @@ export async function GET(req: NextRequest) {
   if (groupIdParam && groupIdParam !== "null" && groupIdParam !== "0") {
     groupId = Number(groupIdParam)
   }
+  const pricesHidden = await shouldHidePricesForRole(role, scope?.organizationId)
 
   const cacheKey = generateCacheKey('dashboard-analytics', {
     role,
     organizationId,
     branchId,
-    groupId
+    groupId,
+    pricesHidden,
   })
 
   const fetchDashboardData = async () => {
@@ -219,5 +222,11 @@ export async function GET(req: NextRequest) {
   }
 
   const data = await getCached(cacheKey, fetchDashboardData, 180)
-  return ok(data)
+  return ok(pricesHidden
+    ? {
+      ...data,
+      gmvSeries: data.gmvSeries.map((point: any) => ({ ...point, value: null })),
+      pricesHidden,
+    }
+    : { ...data, pricesHidden })
 }

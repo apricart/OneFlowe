@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, refunds, refundItems, orderItems } from "@/db/schema"
 import { eq } from "drizzle-orm"
+import { shouldHidePricesForRole, redactReceiptPrices } from "@/lib/price-visibility"
 
 export async function GET(
     req: NextRequest,
@@ -32,7 +33,14 @@ export async function GET(
             return NextResponse.json({ error: "Order not found" }, { status: 404 })
         }
 
-        // TODO: Add role-based access control to ensure user can view this order
+        const { verifyResourceAccess } = await import("@/lib/auth")
+        const hasAccess = await verifyResourceAccess(order.organizationId, order.branchId)
+        if (!hasAccess) {
+            return NextResponse.json({ error: "Forbidden: You do not have access to this receipt" }, { status: 403 })
+        }
+
+        const userRole = (session.user as any).role
+        const pricesHidden = await shouldHidePricesForRole(userRole, order.organizationId)
 
         // Fetch refund information
         const refundData = await db
@@ -63,13 +71,13 @@ export async function GET(
                         orderItemId: item.orderItemId,
                         productName: item.productName || "Unknown",
                         quantity: item.refundedQuantity || 0,
-                        amount: (item.refundedAmount || 0) / 100,
+                        amount: pricesHidden ? null : (item.refundedAmount || 0) / 100,
                     })
                 }
             } else {
                 acc.push({
                     refundId: item.refundId,
-                    amount: (item.refundAmount || 0) / 100,
+                    amount: pricesHidden ? null : (item.refundAmount || 0) / 100,
                     reason: item.refundReason || "",
                     status: item.refundStatus || "PENDING",
                     createdAt: item.refundCreatedAt || new Date(),
@@ -77,14 +85,14 @@ export async function GET(
                         orderItemId: item.orderItemId,
                         productName: item.productName || "Unknown",
                         quantity: item.refundedQuantity || 0,
-                        amount: (item.refundedAmount || 0) / 100,
+                        amount: pricesHidden ? null : (item.refundedAmount || 0) / 100,
                     }] : [],
                 })
             }
             return acc
         }, [] as Array<{
             refundId: number
-            amount: number
+            amount: number | null
             reason: string
             status: string
             createdAt: Date
@@ -92,7 +100,7 @@ export async function GET(
                 orderItemId: number
                 productName: string
                 quantity: number
-                amount: number
+                amount: number | null
             }>
         }>)
 
@@ -101,14 +109,16 @@ export async function GET(
             ...(order.receiptData as any),
             status: order.status
         } : null
+        const safeReceiptData = pricesHidden ? redactReceiptPrices(finalReceiptData) : finalReceiptData
 
         return NextResponse.json({
             orderId: order.id,
             orderTid: order.tid,
             status: order.status,
-            receiptData: finalReceiptData,
+            receiptData: safeReceiptData,
             refundHistory,
-            totalRefundAmount: (order.refundAmountCents || 0) / 100,
+            totalRefundAmount: pricesHidden ? null : (order.refundAmountCents || 0) / 100,
+            pricesHidden,
         })
     } catch (e: any) {
         console.error("Receipt retrieval error:", e)

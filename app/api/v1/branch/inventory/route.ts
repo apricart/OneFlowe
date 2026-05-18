@@ -8,6 +8,7 @@ import { alias } from "drizzle-orm/pg-core"
 import { getEffectiveProductData } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { shouldHidePricesForRole } from "@/lib/price-visibility"
 
 // GET /api/v1/branch/inventory - List products in branch inventory
 export async function GET(req: NextRequest) {
@@ -77,6 +78,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid organization ID" }, { status: 400 })
     }
 
+    const pricesHidden = await shouldHidePricesForRole(userRole, orgIdNum)
+
     // Build conditions - products must be in branchInventory for this branch
     const conditions: (SQL | undefined)[] = [
       eq(branchInventory.branchId, branchId),
@@ -117,8 +120,8 @@ export async function GET(req: NextRequest) {
     }
     const whereClause = and(...conditions)
 
-    const cacheKey = scopedCacheKey('branch-inv', { branchId, orgId: orgIdNum }, {
-      search, visibility, category, subCategory, page: pageNum, limit: limitNum
+    const cacheKey = scopedCacheKey('branch-inv', { branchId, orgId: orgIdNum, role: userRole }, {
+      search, visibility, category, subCategory, page: pageNum, limit: limitNum, pricesHidden
     })
 
     const subCats = alias(categories, "subCategories")
@@ -175,10 +178,18 @@ export async function GET(req: NextRequest) {
       ])
 
       const total = Number(totalResult[0]?.count || 0)
-      return { items, total, page: pageNum, limit: limitNum }
+      return {
+        items: pricesHidden
+          ? items.map((item) => ({ ...item, basePrice: null, customPrice: null }))
+          : items,
+        total,
+        page: pageNum,
+        limit: limitNum,
+        pricesHidden,
+      }
     }, CACHE_TTL.INVENTORY)
 
-    return NextResponse.json(result)
+    return NextResponse.json({ ...result, pricesHidden })
   } catch (error: any) {
     console.error("Error fetching branch inventory:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

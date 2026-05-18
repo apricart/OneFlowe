@@ -271,10 +271,14 @@ export function OrdersDirectory({
                   </div>
 
                   <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between relative z-10">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total</p>
-                    <p className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                      {formatPKR(order.totalCents / 100)}
-                    </p>
+                    {order.totalCents !== null && order.totalCents !== undefined && (
+                      <>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total</p>
+                        <p className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                          {formatPKR(order.totalCents / 100)}
+                        </p>
+                      </>
+                    )}
                   </div>
                 </motion.div>
               )
@@ -330,7 +334,7 @@ export function OrdersDirectory({
                         {format(new Date(order.createdAt), "dd MMM yyyy")}
                       </td>
                       <td className="py-4 pr-6 text-right font-bold text-slate-800 dark:text-slate-200">
-                        {formatPKR(order.totalCents / 100)}
+                        {order.totalCents !== null && order.totalCents !== undefined ? formatPKR(order.totalCents / 100) : "-"}
                       </td>
                     </motion.tr>
                   )
@@ -393,7 +397,9 @@ export function OrdersDirectory({
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1">
                       <CreditCard className="h-3 w-3" /> Total
                     </p>
-                    <p className="text-xl font-black text-slate-900 dark:text-white tracking-tight">{formatPKR(viewingOrder.totalCents / 100)}</p>
+                    {viewingOrder.totalCents !== null && viewingOrder.totalCents !== undefined && (
+                      <p className="text-xl font-black text-slate-900 dark:text-white tracking-tight">{formatPKR(viewingOrder.totalCents / 100)}</p>
+                    )}
                   </div>
                   <div className="space-y-1 text-right">
                     <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center justify-end gap-1">

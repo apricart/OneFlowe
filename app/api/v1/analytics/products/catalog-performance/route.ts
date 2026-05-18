@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, orderItems, branches, globalProducts, categories, organizationInventory, branchInventory } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, isNull, sql, exists, or, isNotNull } from "drizzle-orm"
 import { getCached, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 export async function GET(req: NextRequest) {
     try {
@@ -14,6 +15,8 @@ export async function GET(req: NextRequest) {
         const userRole = ((session.user as any).role || "").toUpperCase().replace(/\s+/g, '_')
         const userOrgId = (session.user as any).organizationId
         const userBranchId = (session.user as any).branchId
+        const pricesHidden = await shouldHidePricesForRole(userRole, userOrgId)
+        const isBranchScopedRole = userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL"
 
         const url = new URL(req.url)
         const startDateParam = url.searchParams.get("startDate")
@@ -34,10 +37,11 @@ export async function GET(req: NextRequest) {
 
         // RBAC Context Parsing
         let branchIds: number[] = []
-        if (branchIdsParam) {
-            branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
-        } else if (userRole === "BRANCH_ADMIN" || userRole === "BRANCH_MANAGER" || userRole === "ORDER_PORTAL") {
+        if (isBranchScopedRole) {
+            if (!userBranchId) return NextResponse.json({ error: "Branch not assigned" }, { status: 403 })
             branchIds = [userBranchId]
+        } else if (branchIdsParam) {
+            branchIds = branchIdsParam.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id > 0)
         }
 
         // If specific groups selected, resolve branches for them
@@ -122,7 +126,9 @@ export async function GET(req: NextRequest) {
 
 
             // Determine which organization ID to use for customPrice (take the first specific one or session org)
-            const targetOrgId = parsedOrganizationIds.length === 1 ? parsedOrganizationIds[0] : userOrgId
+            const targetOrgId = isBranchScopedRole
+                ? userOrgId
+                : parsedOrganizationIds.length === 1 ? parsedOrganizationIds[0] : userOrgId
 
             const productsQuery = db.select({
                 id: globalProducts.id,
@@ -225,7 +231,9 @@ export async function GET(req: NextRequest) {
             return { data }
         }, CACHE_TTL.ANALYTICS)
 
-        return NextResponse.json(result)
+        return NextResponse.json(
+            pricesHidden ? redactAnalyticsPrices({ ...result, pricesHidden: true }) : result
+        )
 
     } catch (error: any) {
         console.error("Error fetching catalog performance:", error)

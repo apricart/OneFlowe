@@ -8,6 +8,7 @@ import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 import { logOrderActivity, logTokenGenerated, logFulfillmentAttempt } from "@/lib/global-logger"
 import { generateApprovalToken, hashApprovalToken, verifyApprovalToken } from "@/lib/approval-token"
 import { generateReceiptData } from "@/lib/receipt-generator"
+import { shouldHidePricesForRole } from "@/lib/price-visibility"
 
 
 
@@ -99,6 +100,8 @@ export async function GET(req: NextRequest) {
       if (typeof orgIdNum === "number") conditions.push(eq(orders.organizationId, orgIdNum))
       if (typeof branchIdFromUser === "number") conditions.push(eq(orders.branchId, branchIdFromUser))
     }
+
+    const pricesHidden = await shouldHidePricesForRole(role, orgIdNum)
 
     if (status) conditions.push(eq(orders.status, status))
     if (idParam && /^\d+$/.test(idParam)) conditions.push(eq(orders.id, Number(idParam)))
@@ -224,8 +227,18 @@ export async function GET(req: NextRequest) {
         role === "SUPER_ADMIN" ||
         role === "BRANCH_ADMIN";
 
+      const safeItem = pricesHidden
+        ? {
+          ...item,
+          subtotalCents: null,
+          taxCents: null,
+          totalCents: null,
+          refundAmountCents: null,
+        }
+        : item
+
       return {
-        ...item,
+        ...safeItem,
         approvalToken: canSeeToken ? item.approvalToken : null
       }
     })
@@ -267,11 +280,21 @@ export async function GET(req: NextRequest) {
 
         const totalApprovedAmount = approvedRefunds.reduce((sum, r) => sum + (r.amount || 0), 0)
 
-        return NextResponse.json({ items: [{ ...order, orderItems: itemsData, refundAmountCents: totalApprovedAmount }] })
+        return NextResponse.json({
+          items: [{
+            ...order,
+            orderItems: pricesHidden
+              ? itemsData.map((item) => ({ ...item, priceCents: null }))
+              : itemsData,
+            refundAmountCents: pricesHidden ? null : totalApprovedAmount,
+            pricesHidden,
+          }],
+          pricesHidden,
+        })
       }
     }
 
-    return NextResponse.json({ items: filtered })
+    return NextResponse.json({ items: filtered, pricesHidden })
   } catch (e: any) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
@@ -310,6 +333,7 @@ export async function POST(req: NextRequest) {
 
     const branchId = role === "HEAD_OFFICE" || role === "SUPER_ADMIN" ? parseInt(String(branchIdInput)) : parseInt(String((session.user as any).branchId))
     if (!Number.isFinite(branchId)) return NextResponse.json({ error: "Branch context required" }, { status: 400 })
+    const pricesHidden = await shouldHidePricesForRole(role, organizationId)
 
     // Fetch inventory details and prices
     const orgInvIds = items.map(i => i.organizationInventoryId)
@@ -434,7 +458,9 @@ export async function POST(req: NextRequest) {
 
     if (total > remaining) {
       return NextResponse.json({
-        error: `Insufficient budget. Required: ${(total / 100).toFixed(2)} PKR, Available: ${(remaining / 100).toFixed(2)} PKR`
+        error: pricesHidden
+          ? "Insufficient budget. Please contact head office."
+          : `Insufficient budget. Required: ${(total / 100).toFixed(2)} PKR, Available: ${(remaining / 100).toFixed(2)} PKR`
       }, { status: 400 })
     }
 
@@ -570,9 +596,18 @@ export async function POST(req: NextRequest) {
       return { ...ord, _plainToken: plainToken }
     })
 
+    const safeOrder = pricesHidden
+      ? {
+        ...created,
+        subtotalCents: null,
+        taxCents: null,
+        totalCents: null,
+      }
+      : created
+
     return NextResponse.json({
       message: 'Order created',
-      order: created,
+      order: safeOrder,
       approvalToken: created._plainToken,
       warning: 'SAVE THIS TOKEN! It is required by Super Admins to fulfill the order.'
     })

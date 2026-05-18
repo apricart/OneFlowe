@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, branches } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 import { metricExpressions } from "@/lib/metric-utils"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
 
   const scope = await getRequestScope()
   const role = scope?.role
+  const pricesHidden = await shouldHidePricesForRole(role, scope?.organizationId)
 
   // Get filter parameters from query string (for UI context selection)
   const { searchParams } = new URL(req.url)
@@ -131,11 +133,14 @@ export async function GET(req: NextRequest) {
     orderCount: salesMap[month]?.orderCount || 0,
   }))
 
-  return ok({
+  const payload = {
     year,
     monthlySales: monthlyData,
     totalSales: monthlyData.reduce((sum, month) => sum + month.sales, 0),
     totalOrders: monthlyData.reduce((sum, month) => sum + month.orderCount, 0),
-  })
+    pricesHidden,
+  }
+
+  return ok(pricesHidden ? redactAnalyticsPrices(payload) : payload)
 }
 

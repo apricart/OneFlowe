@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { groups, branches, orders, organizations, budgets } from "@/db/schema"
 import { and, eq, sql, isNull, gte, lte, desc, inArray } from "drizzle-orm"
 import { metricExpressions, REVENUE_ELIGIBLE_FILTER } from "@/lib/metric-utils"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 export async function GET(req: NextRequest) {
     try {
@@ -12,6 +13,7 @@ export async function GET(req: NextRequest) {
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         const role = (session.user as any).role
+        const normalizedRole = typeof role === "string" ? role.toUpperCase().replace(/\s+/g, "_") : role
         let orgId = role === "SUPER_ADMIN" ? null : (session.user as any).organizationId
         const { searchParams } = new URL(req.url)
         const orgIdParam = searchParams.get("organizationId")
@@ -45,6 +47,10 @@ export async function GET(req: NextRequest) {
         if (!orgId && role !== "SUPER_ADMIN") {
             return NextResponse.json({ error: "Organization ID required" }, { status: 400 })
         }
+        const pricesHidden = await shouldHidePricesForRole(normalizedRole, orgId)
+        const respond = (payload: any) => NextResponse.json(
+            pricesHidden ? redactAnalyticsPrices({ ...payload, pricesHidden: true }) : payload
+        )
 
         const parsedGroupIds = groupIdsParam ? groupIdsParam.split(',').map(Number).filter(id => !isNaN(id)) : []
         const parsedBranchIds = branchIdsParam ? branchIdsParam.split(',').map(Number).filter(id => !isNaN(id)) : []
@@ -187,7 +193,7 @@ export async function GET(req: NextRequest) {
                     .groupBy(sql`TO_CHAR(${orders.createdAt}, 'YYYY-MM')`)
             }
 
-            return NextResponse.json({ trend: trendData, compareTrend })
+            return respond({ trend: trendData, compareTrend })
         }
 
         // 1. Fetch Group stats with branch-level breakdown
@@ -517,10 +523,10 @@ export async function GET(req: NextRequest) {
         }
 
         if (summaryOnly) {
-            return NextResponse.json({ summary: outSummary, comparison: comparisonSummary })
+            return respond({ summary: outSummary, comparison: comparisonSummary })
         }
 
-        return NextResponse.json({
+        return respond({
             summary: outSummary,
             comparison: comparisonSummary,
             groups: groupsWithBranches,

@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, orderItems, globalProducts, categories, users, branches, refundItems } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, sql } from "drizzle-orm"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 export async function GET(req: NextRequest) {
     try {
@@ -13,6 +14,8 @@ export async function GET(req: NextRequest) {
         const userRole = ((session.user as any).role || "").toUpperCase().replace(/\s+/g, '_')
         const userOrgId = (session.user as any).organizationId
         const userBranchId = (session.user as any).branchId
+        const pricesHidden = await shouldHidePricesForRole(userRole, userOrgId)
+        const respond = (payload: any) => NextResponse.json(pricesHidden ? redactAnalyticsPrices({ ...payload, pricesHidden }) : { ...payload, pricesHidden })
 
         const url = new URL(req.url)
         const startDateParam = url.searchParams.get("startDate")
@@ -172,7 +175,7 @@ export async function GET(req: NextRequest) {
         // Sort final user list by total revenue
         data.sort((a, b) => b.totalProductRevenueCents - a.totalProductRevenueCents)
 
-        return NextResponse.json({ data })
+        return respond({ data })
     } catch (error: any) {
         console.error("User Products Analytics Request failed: ", error)
         return NextResponse.json({ error: "Failed to fetch user product analytics" }, { status: 500 })

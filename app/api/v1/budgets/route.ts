@@ -6,6 +6,7 @@ import { budgets, branches, auditLogs, budgetAddons, groups, orders } from "@/db
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 /**
  * Validate numeric ID parameter
@@ -71,6 +72,7 @@ export async function GET(req: NextRequest) {
     }
 
     const role = (session.user as any).role
+    const normalizedRole = typeof role === "string" ? role.toUpperCase().replace(/\s+/g, "_") : role
     let orgId = (session.user as any).organizationId
     const userBranchId = (session.user as any).branchId
 
@@ -467,7 +469,7 @@ export async function GET(req: NextRequest) {
 
     const remainingCents = (allocated + credited) - (spent + held)
 
-    return NextResponse.json({
+    const budgetPayload = {
       branchId,
       amountAllocatedCents: allocated,
       amountSpentCents: spent,
@@ -476,7 +478,14 @@ export async function GET(req: NextRequest) {
       remainingCents,
       baselineBudgetCents: b.baselineBudgetCents || 0,
       period: b.period || currentMonth,
-    })
+    }
+    const hideBudgetPrices = await shouldHidePricesForRole(normalizedRole, orgId || b.orgIdFromBranch || b.organizationId)
+
+    return NextResponse.json(
+      hideBudgetPrices
+        ? redactAnalyticsPrices({ ...budgetPayload, pricesHidden: true })
+        : budgetPayload
+    )
   } catch (e: any) {
     logError(e, 'BUDGETS_GET')
     logError(e, 'BUDGETS_GET')

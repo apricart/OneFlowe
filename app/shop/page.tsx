@@ -32,7 +32,7 @@ interface Product {
   id: number
   name: string
   code: string
-  priceCents: number
+  priceCents: number | null
   unit: string
   imageUrl?: string
   stock?: number
@@ -53,7 +53,7 @@ interface Order {
   id: number
   tid: string
   status: string
-  totalCents: number
+  totalCents: number | null
   createdAt: string
   refundAmountCents?: number | null
   refundedAt?: string | null
@@ -84,6 +84,7 @@ const getRefundState = (order: Pick<Order, "status" | "totalCents" | "refundAmou
 
   const refundAmount = order.refundAmountCents || 0
   if (refundAmount <= 0) return "none"
+  if (order.totalCents === null) return "partial"
   return refundAmount >= order.totalCents ? "full" : "partial"
 }
 
@@ -201,6 +202,7 @@ export default function OrderPortalPage() {
       revalidateOnReconnect: true,
     }
   )
+  const pricesHidden = Boolean(inventoryData?.pricesHidden || ordersData?.pricesHidden || orderDetailsData?.pricesHidden)
 
   React.useEffect(() => {
     const freshOrder = orderDetailsData?.items?.[0]
@@ -254,7 +256,7 @@ export default function OrderPortalPage() {
       id: item.organizationInventoryId,
       name: item.customName || item.productName,
       code: item.productCode,
-      priceCents: item.customPrice ?? item.basePrice,
+      priceCents: item.customPrice ?? item.basePrice ?? null,
       unit: item.unit,
       imageUrl: item.productImageUrl,
       stock: item.stockQuantity,
@@ -286,12 +288,12 @@ export default function OrderPortalPage() {
       })
     }
 
-    if (sortBy === "price-low") filtered.sort((a, b) => a.priceCents - b.priceCents)
-    else if (sortBy === "price-high") filtered.sort((a, b) => b.priceCents - a.priceCents)
+    if (!pricesHidden && sortBy === "price-low") filtered.sort((a, b) => (a.priceCents || 0) - (b.priceCents || 0))
+    else if (!pricesHidden && sortBy === "price-high") filtered.sort((a, b) => (b.priceCents || 0) - (a.priceCents || 0))
     else if (sortBy === "rating") filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0))
     else filtered.sort((a, b) => a.name.localeCompare(b.name))
     return filtered
-  }, [products, searchQuery, sortBy, activeCategory, inventoryData])
+  }, [products, searchQuery, sortBy, activeCategory, inventoryData, pricesHidden])
 
   // Reset to first page when filters change
   React.useEffect(() => {
@@ -314,10 +316,10 @@ export default function OrderPortalPage() {
     return filteredProducts.slice(start, end)
   }, [filteredProducts, currentPage, pageSize])
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.priceCents * item.quantity, 0)
+  const cartTotal = pricesHidden ? 0 : cart.reduce((sum, item) => sum + (item.priceCents || 0) * item.quantity, 0)
   const remainingBudget = budget?.remainingCents || 0
   const totalBudgetLimit = (budget?.amountAllocatedCents || 0) + (budget?.amountCreditedCents || 0)
-  const canCheckout = cartTotal <= remainingBudget && cart.length > 0
+  const canCheckout = pricesHidden ? cart.length > 0 : cartTotal <= remainingBudget && cart.length > 0
   const rawBudgetPercent = ((((totalBudgetLimit || 0) - remainingBudget) / (totalBudgetLimit || 1)) * 100)
   const budgetPercent = Math.min(100, Math.max(0, rawBudgetPercent || 0))
   const isLoadingInventory = !inventoryData && !inventoryError
@@ -524,7 +526,7 @@ export default function OrderPortalPage() {
             )}
 
             {/* Budget Status */}
-            <div className="hidden md:flex items-center gap-3 px-3 py-2 rounded-lg min-w-[220px] shadow-sm bg-slate-100/80 dark:bg-slate-800/80">
+            {!pricesHidden && <div className="hidden md:flex items-center gap-3 px-3 py-2 rounded-lg min-w-[220px] shadow-sm bg-slate-100/80 dark:bg-slate-800/80">
               <div
                 className="flex h-7 w-7 items-center justify-center rounded-full"
                 style={{
@@ -555,7 +557,7 @@ export default function OrderPortalPage() {
                   />
                 </div>
               </div>
-            </div>
+            </div>}
 
             {/* Cart Button */}
             <Button
@@ -610,7 +612,9 @@ export default function OrderPortalPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold truncate text-slate-900 dark:text-white">{item.name}</p>
                         <p className="text-xs text-muted-foreground">{item.code}</p>
-                        <p className="text-xs mt-1 text-slate-500">PKR {(item.priceCents / 100).toFixed(2)} / {item.unit}</p>
+                        {!pricesHidden && item.priceCents !== null && (
+                          <p className="text-xs mt-1 text-slate-500">PKR {(item.priceCents / 100).toFixed(2)} / {item.unit}</p>
+                        )}
                         {item.stock !== undefined && item.quantity > item.stock && (
                           <p className="text-xs mt-1 text-red-600 dark:text-red-400 font-medium">
                             ⚠️ Only {item.stock} available (quantity adjusted)
@@ -669,14 +673,18 @@ export default function OrderPortalPage() {
                   <span>Items</span>
                   <span>{cart.length}</span>
                 </div>
-                <div className="flex justify-between text-base font-semibold text-slate-900 dark:text-white">
-                  <span>Total</span>
-                  <span>PKR {(cartTotal / 100).toFixed(2)}</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Remaining budget after checkout: PKR {((remainingBudget - cartTotal) / 100).toFixed(2)}
-                </p>
-                {cartTotal > remainingBudget && (
+                {!pricesHidden && (
+                  <>
+                    <div className="flex justify-between text-base font-semibold text-slate-900 dark:text-white">
+                      <span>Total</span>
+                      <span>PKR {(cartTotal / 100).toFixed(2)}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Remaining budget after checkout: PKR {((remainingBudget - cartTotal) / 100).toFixed(2)}
+                    </p>
+                  </>
+                )}
+                {!pricesHidden && cartTotal > remainingBudget && (
                   <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-600 dark:border-red-900 dark:bg-red-950">
                     <AlertTriangle className="h-4 w-4" />
                     Cart exceeds remaining budget.
@@ -801,7 +809,9 @@ export default function OrderPortalPage() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="font-bold text-lg text-slate-900 dark:text-white">PKR {(order.totalCents / 100).toFixed(2)}</p>
+                            {!pricesHidden && order.totalCents !== null && (
+                              <p className="font-bold text-lg text-slate-900 dark:text-white">PKR {(order.totalCents / 100).toFixed(2)}</p>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {(() => {
                                 const s = (order.status || "").toLowerCase()
@@ -937,8 +947,8 @@ export default function OrderPortalPage() {
                   className="px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-base font-medium"
                 >
                   <option value="name">Sort: Name (A-Z)</option>
-                  <option value="price-low">Price: Low to High</option>
-                  <option value="price-high">Price: High to Low</option>
+                  {!pricesHidden && <option value="price-low">Price: Low to High</option>}
+                  {!pricesHidden && <option value="price-high">Price: High to Low</option>}
                   <option value="rating">Rating: Highest</option>
                 </select>
               </div>
@@ -965,7 +975,7 @@ export default function OrderPortalPage() {
               </div>
 
               {/* Budget Warning */}
-              {cartTotal > remainingBudget && (
+              {!pricesHidden && cartTotal > remainingBudget && (
                 <div className="p-3 bg-red-50/50 backdrop-blur-sm dark:bg-red-950/30 border border-red-200/50 dark:border-red-800/50 rounded-xl flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
                   <p className="text-sm font-medium text-red-700 dark:text-red-300">Cart exceeds remaining budget</p>
@@ -1074,7 +1084,7 @@ export default function OrderPortalPage() {
                           </Badge>
 
                           {/* Discount Badge */}
-                          {product.discountActive && (
+                          {!pricesHidden && product.discountActive && (
                             <Badge
                               className="absolute bottom-2 left-2 bg-red-500 text-white text-[10px] px-1.5 py-0.5 border-0 font-bold"
                             >
@@ -1122,7 +1132,7 @@ export default function OrderPortalPage() {
                           <div className="flex flex-col gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
                             <div className="flex items-center justify-between">
                               <div>
-                                {product.discountActive && product.discountType && (
+                                {!pricesHidden && product.discountActive && product.discountType && product.priceCents !== null && (
                                   <div className="flex items-center gap-2">
                                     <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                                       PKR {((product.priceCents - (product.discountType === 'percent' ? (product.priceCents * (product.discountValue || 0) / 100) : ((product.discountValue || 0) * 100))) / 100).toFixed(2)}
@@ -1132,7 +1142,7 @@ export default function OrderPortalPage() {
                                     </p>
                                   </div>
                                 )}
-                                {!product.discountActive && (
+                                {!pricesHidden && !product.discountActive && product.priceCents !== null && (
                                   <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                                     PKR {(product.priceCents / 100).toFixed(2)}
                                   </p>
@@ -1334,7 +1344,7 @@ export default function OrderPortalPage() {
                   </div>
                   <div className="flex flex-col items-start leading-tight">
                     <span className="text-[10px] uppercase tracking-widest font-bold text-blue-100">Checkout</span>
-                    <span className="text-sm font-bold text-white font-mono">{formatPKR(cartTotal / 100)}</span>
+                    {!pricesHidden && <span className="text-sm font-bold text-white font-mono">{formatPKR(cartTotal / 100)}</span>}
                   </div>
                 </Button>
               </div>
@@ -1389,10 +1399,14 @@ export default function OrderPortalPage() {
 
                 <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                   <div>
-                    <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                      PKR {(selectedProduct.priceCents / 100).toFixed(2)}
-                    </p>
-                    <p className="text-sm text-muted-foreground">per {selectedProduct.unit}</p>
+                    {!pricesHidden && selectedProduct.priceCents !== null && (
+                      <>
+                        <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                          PKR {(selectedProduct.priceCents / 100).toFixed(2)}
+                        </p>
+                        <p className="text-sm text-muted-foreground">per {selectedProduct.unit}</p>
+                      </>
+                    )}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Stock</p>
@@ -1498,14 +1512,16 @@ export default function OrderPortalPage() {
               {cart.map(item => (
                 <div key={item.id} className="flex justify-between text-sm">
                   <span>{item.name} x{item.quantity}</span>
-                  <span className="font-semibold">PKR {((item.priceCents * item.quantity) / 100).toFixed(2)}</span>
+                  {!pricesHidden && item.priceCents !== null && (
+                    <span className="font-semibold">PKR {((item.priceCents * item.quantity) / 100).toFixed(2)}</span>
+                  )}
                 </div>
               ))}
             </div>
 
             <div className="h-px bg-slate-200 dark:bg-slate-700" />
 
-            <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+            {!pricesHidden && <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
               <div className="flex justify-between font-bold text-lg">
                 <span>Total:</span>
                 <span className="text-blue-600 dark:text-blue-400">
@@ -1515,7 +1531,7 @@ export default function OrderPortalPage() {
               <p className="text-xs text-muted-foreground">
                 Remaining Budget: PKR {((remainingBudget - cartTotal) / 100).toFixed(2)}
               </p>
-            </div>
+            </div>}
           </div>
 
           <DialogFooter>
@@ -1604,22 +1620,25 @@ export default function OrderPortalPage() {
                               {isPartiallyRefunded && <Badge variant="outline" className="text-[10px] h-4 border-yellow-500 text-yellow-600">PARTIAL REFUND</Badge>}
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              Qty: <span className="font-semibold">{item.quantity}</span> × {formatPKR(item.priceCents / 100)}
+                              Qty: <span className="font-semibold">{item.quantity}</span>
+                              {!pricesHidden && item.priceCents !== null && <> x {formatPKR(item.priceCents / 100)}</>}
                               {item.quantityRefunded > 0 && (
                                 <span className="ml-2 text-red-500 font-medium">(-{item.quantityRefunded} refunded)</span>
                               )}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <p className={`font-semibold text-sm ${isFullyRefunded ? "line-through text-muted-foreground" : "text-slate-900 dark:text-white"}`}>
-                              {formatPKR((item.priceCents * item.quantity) / 100)}
-                            </p>
-                            {item.quantityRefunded > 0 && (
-                              <p className="text-[10px] text-red-500 font-bold">
-                                - {formatPKR((item.priceCents * (item.quantityRefunded || 0)) / 100)}
+                          {!pricesHidden && item.priceCents !== null && (
+                            <div className="text-right">
+                              <p className={`font-semibold text-sm ${isFullyRefunded ? "line-through text-muted-foreground" : "text-slate-900 dark:text-white"}`}>
+                                {formatPKR((item.priceCents * item.quantity) / 100)}
                               </p>
-                            )}
-                          </div>
+                              {item.quantityRefunded > 0 && (
+                                <p className="text-[10px] text-red-500 font-bold">
+                                  - {formatPKR((item.priceCents * (item.quantityRefunded || 0)) / 100)}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )
                     })
@@ -1632,7 +1651,7 @@ export default function OrderPortalPage() {
               </div>
 
               {/* Itemized Refund Summary */}
-              {orderDetailsData?.items?.[0]?.orderItems?.some((item: any) => (item.quantityRefunded || 0) > 0) && (
+              {!pricesHidden && orderDetailsData?.items?.[0]?.orderItems?.some((item: any) => (item.quantityRefunded || 0) > 0) && (
                 <div className="rounded-lg border border-yellow-200 dark:border-yellow-800 bg-yellow-50/30 dark:bg-yellow-900/10 overflow-hidden">
                   <div className="px-4 py-2 border-b border-yellow-100 dark:border-yellow-900 bg-yellow-100/50 dark:bg-yellow-900/30">
                     <p className="text-xs font-bold text-yellow-800 dark:text-yellow-200 uppercase tracking-wider">Refund Summary</p>
@@ -1654,19 +1673,19 @@ export default function OrderPortalPage() {
                 </div>
               )}
 
-              <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+              {!pricesHidden && selectedOrder.totalCents !== null && <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                 <div className="flex justify-between">
                   <span className="font-bold">Total</span>
                   <span className="font-bold text-lg text-blue-600 dark:text-blue-400">
                     PKR {(selectedOrder.totalCents / 100).toFixed(2)}
                   </span>
                 </div>
-              </div>
+              </div>}
 
               {/* Refund Management */}
               {/* Refund Management - Disabled for Order Portal */}
               
-              <RefundManagement
+              {!pricesHidden && selectedOrder.totalCents !== null && <RefundManagement
                 orderId={selectedOrder.id}
                 orderTotalCents={selectedOrder.totalCents}
                 orderStatus={selectedOrder.status}
@@ -1678,7 +1697,7 @@ export default function OrderPortalPage() {
                 refundAmountCents={selectedOrder.refundAmountCents}
                 refundedAt={selectedOrder.refundedAt}
                 refundReason={selectedOrder.refundReason}
-              />
+              />}
              
             </div>
           )}

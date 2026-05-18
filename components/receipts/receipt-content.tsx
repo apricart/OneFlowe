@@ -57,6 +57,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
     }
 
     const receiptData = data?.receiptData
+    const pricesHidden = Boolean(data?.pricesHidden)
 
     if (isLoading) {
         return (
@@ -287,9 +288,11 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                 <Button onClick={handlePrint} variant="outline" size="sm" className="gap-2 h-9 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 font-semibold shadow-sm">
                     <Printer className="h-4 w-4" /> Print Receipt
                 </Button>
-                <Button onClick={handleDownload} disabled={isDownloading} size="sm" className="gap-2 h-9 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md">
-                    <Download className="h-4 w-4" /> {isDownloading ? "Generating..." : "Download PDF"}
-                </Button>
+                {!pricesHidden && (
+                    <Button onClick={handleDownload} disabled={isDownloading} size="sm" className="gap-2 h-9 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md">
+                        <Download className="h-4 w-4" /> {isDownloading ? "Generating..." : "Download PDF"}
+                    </Button>
+                )}
                 {onClose && (
                     <Button onClick={onClose} variant="ghost" size="sm" className="h-9 w-9 p-0">
                         <X className="h-4 w-4 text-slate-400" />
@@ -398,10 +401,10 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                             <span className="detail-label">Items:</span>
                             <span className="detail-value">{receiptData?.items?.reduce((acc: number, c: any) => acc + (c.items?.length || 0), 0) || 0}</span>
                         </div>
-                        <div className="detail-row">
+                        {!pricesHidden && <div className="detail-row">
                             <span className="detail-label">Subtotal:</span>
                             <span className="detail-value">PKR {Number(receiptData.subtotal).toLocaleString()}</span>
-                        </div>
+                        </div>}
 
                     </div>
                 </div>
@@ -412,22 +415,22 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                         <tr>
                             <th className="w-12 text-center">#</th>
                             <th>Description</th>
-                            <th className="text-right w-24">Price</th>
+                            {!pricesHidden && <th className="text-right w-24">Price</th>}
                             <th className="text-center w-20">Qty</th>
-                            <th className="text-right w-28">Total</th>
+                            {!pricesHidden && <th className="text-right w-28">Total</th>}
                         </tr>
                     </thead>
                     <tbody>
                         {receiptData?.items?.map((cat: any, i: number) => (
                             <React.Fragment key={i}>
                                 <tr className="cat-row">
-                                    <td colSpan={5}>{cat.mainCategoryName || cat.categoryName}</td>
+                                    <td colSpan={pricesHidden ? 3 : 5}>{cat.mainCategoryName || cat.categoryName}</td>
                                 </tr>
                                 {(cat.subCategories || [{ subCategoryName: "", items: cat.items }]).map((sub: any, si: number) => (
                                     <React.Fragment key={`${i}-${si}`}>
                                         {sub.subCategoryName && (
                                             <tr className="subcat-row">
-                                                <td colSpan={5}><ChevronRight className="inline h-3 w-3 mr-1" /> {sub.subCategoryName}</td>
+                                                <td colSpan={pricesHidden ? 3 : 5}><ChevronRight className="inline h-3 w-3 mr-1" /> {sub.subCategoryName}</td>
                                             </tr>
                                         )}
                                         {sub.items?.map((item: any, ii: number) => {
@@ -436,9 +439,9 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                                                 <tr key={`${i}-${si}-${ii}`}>
                                                     <td className="text-center text-slate-400 font-medium">{serialCounter}</td>
                                                     <td className="text-slate-800 font-medium">{item.description}</td>
-                                                    <td className="text-right tabular-nums text-slate-600">{Number(item.rate).toLocaleString()}</td>
+                                                    {!pricesHidden && <td className="text-right tabular-nums text-slate-600">{Number(item.rate).toLocaleString()}</td>}
                                                     <td className="text-center tabular-nums text-slate-600">{item.quantity}</td>
-                                                    <td className="text-right tabular-nums font-bold text-slate-900">{Number(item.total).toLocaleString()}</td>
+                                                    {!pricesHidden && <td className="text-right tabular-nums font-bold text-slate-900">{Number(item.total).toLocaleString()}</td>}
                                                 </tr>
                                             )
                                         })}
@@ -450,7 +453,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                 </table>
 
                 {/* Summary & Payable */}
-                <div className="summary-block">
+                {!pricesHidden && <div className="summary-block">
                     <div className="summary-table">
                         <div className="summary-row">
                             <span className="text-slate-400 font-medium">Subtotal Amount</span>
@@ -476,7 +479,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                             <span className="payable-value">PKR {Number(receiptData.totalAmount).toLocaleString()}</span>
                         </div>
                     </div>
-                </div>
+                </div>}
 
                 {/* Footer */}
                 <div className="mt-16 pt-8 border-t border-slate-100 flex justify-between items-end">

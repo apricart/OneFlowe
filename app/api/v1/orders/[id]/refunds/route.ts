@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { refunds, orders, budgets, auditLogs, users, orderItems, refundItems } from "@/db/schema"
 import { eq, sql, desc, inArray, and } from "drizzle-orm"
+import { shouldHidePricesForRole } from "@/lib/price-visibility"
 
 export async function GET(
   req: NextRequest,
@@ -25,6 +26,9 @@ export async function GET(
     const userRole = (session.user as any).role
     const userOrgId = (session.user as any).organizationId
     const userBranchId = (session.user as any).branchId
+    if (await shouldHidePricesForRole(userRole, order.organizationId)) {
+      return NextResponse.json({ error: "Refund details are unavailable while prices are hidden" }, { status: 403 })
+    }
 
     // Check permissions
     if (userRole === "BRANCH_ADMIN" && (order as any).branchId !== userBranchId) {
@@ -155,6 +159,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const userId = (session.user as any).id as string
     const userOrgId = (session.user as any).organizationId
     const userBranchId = (session.user as any).branchId
+    if (await shouldHidePricesForRole(userRole, orderData.organizationId)) {
+      return NextResponse.json({ error: "Refund requests are unavailable while prices are hidden" }, { status: 403 })
+    }
 
     // Verify user has permission for this order
     if (userRole === "BRANCH_ADMIN" && orderData.branchId !== userBranchId) {

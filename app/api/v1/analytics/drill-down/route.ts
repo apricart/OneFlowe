@@ -4,6 +4,7 @@ import { requireApiRole, ok, error } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders, users, orderItems, branches, organizations, refundItems, refunds } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
+import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest) {
 
     const scope = await getRequestScope()
     const role = (scope?.role || "").toUpperCase().replace(/\s+/g, '_')
+    const pricesHidden = await shouldHidePricesForRole(role, scope?.organizationId)
 
     const { searchParams } = new URL(req.url)
     const type = searchParams.get("type")?.toUpperCase() // REVENUE, REJECTED, FULFILLED, ORDERS
@@ -543,7 +545,8 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        return ok({ items: formattedData, summary, comparison: comparisonSummary, total: rawData.length })
+        const payload = { items: formattedData, summary, comparison: comparisonSummary, total: rawData.length, pricesHidden }
+        return ok(pricesHidden ? redactAnalyticsPrices(payload) : payload)
     } catch (e) {
         console.error("[DrillDown] Error:", e)
         return error("Internal BI processing error")
