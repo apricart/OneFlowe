@@ -6,6 +6,7 @@ import { groups, branches, orders, organizations, budgets } from "@/db/schema"
 import { and, eq, sql, isNull, gte, lte, desc, inArray } from "drizzle-orm"
 import { metricExpressions, REVENUE_ELIGIBLE_FILTER } from "@/lib/metric-utils"
 import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
+import { buildAppMonthPeriods, getAppMonthPeriod, parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 export async function GET(req: NextRequest) {
     try {
@@ -88,14 +89,12 @@ export async function GET(req: NextRequest) {
 
         if (parsedMonths.length === 0 && parsedYears.length === 0) {
             if (startDate) {
-                const start = new Date(startDate)
-                start.setHours(0, 0, 0, 0)
-                orderConditions.push(gte(orders.createdAt, start))
+                const start = parseStartDateParam(startDate)
+                if (start) orderConditions.push(gte(orders.createdAt, start))
             }
             if (endDate) {
-                const end = new Date(endDate)
-                end.setHours(23, 59, 59, 999)
-                orderConditions.push(lte(orders.createdAt, end))
+                const end = parseEndDateParam(endDate)
+                if (end) orderConditions.push(lte(orders.createdAt, end))
             }
         }
 
@@ -110,15 +109,13 @@ export async function GET(req: NextRequest) {
                 })
             })
         } else if (startDate && endDate) {
-            let curr = new Date(startDate)
-            const end = new Date(endDate)
-            while (curr <= end) {
-                periodList.push(`${curr.getFullYear()}-${String(curr.getMonth() + 1).padStart(2, '0')}`)
-                curr.setMonth(curr.getMonth() + 1)
-            }
+            periodList.push(...buildAppMonthPeriods(
+                parseStartDateParam(startDate) || new Date(startDate),
+                parseEndDateParam(endDate) || new Date(endDate)
+            ))
         } else {
             // Default to current month if no filters
-            periodList.push(new Date().toISOString().slice(0, 7))
+            periodList.push(getAppMonthPeriod(new Date()))
         }
 
         // Build group conditions
@@ -156,9 +153,9 @@ export async function GET(req: NextRequest) {
             if (compare) {
                 let prevStart: Date, prevEnd: Date
                 if (compareStartDateParam && compareEndDateParam) {
-                    prevStart = new Date(compareStartDateParam); prevEnd = new Date(compareEndDateParam)
+                    prevStart = parseStartDateParam(compareStartDateParam) || new Date(compareStartDateParam); prevEnd = parseEndDateParam(compareEndDateParam) || new Date(compareEndDateParam)
                 } else if (startDate && endDate) {
-                    const start = new Date(startDate); const end = new Date(endDate)
+                    const start = parseStartDateParam(startDate) || new Date(startDate); const end = parseEndDateParam(endDate) || new Date(endDate)
                     const duration = end.getTime() - start.getTime()
                     prevStart = new Date(start.getTime() - duration - 1); prevEnd = new Date(start.getTime() - 1)
                 } else {
@@ -260,14 +257,12 @@ export async function GET(req: NextRequest) {
             }
             if (parsedMonths.length === 0 && parsedYears.length === 0) {
                 if (startDate) {
-                    const start = new Date(startDate)
-                    start.setHours(0, 0, 0, 0)
-                    refundConditions.push(gte(orders.createdAt, start))
+                    const start = parseStartDateParam(startDate)
+                    if (start) refundConditions.push(gte(orders.createdAt, start))
                 }
                 if (endDate) {
-                    const end = new Date(endDate)
-                    end.setHours(23, 59, 59, 999)
-                    refundConditions.push(lte(orders.createdAt, end))
+                    const end = parseEndDateParam(endDate)
+                    if (end) refundConditions.push(lte(orders.createdAt, end))
                 }
             }
 
@@ -302,14 +297,12 @@ export async function GET(req: NextRequest) {
                 refundByBranchMap[row.branchId] = row.totalRefundCents || 0
             })
 
-            // Calculate group budgets separately to ensure we sum baseline for missing periods correctly
-            // For each branch in each group, we want:
-            // SUM(budget record for period OR baseline)
+            // Calculate group budgets from actual budget rows only.
+            // Missing period rows should not project the branch baseline into reports.
             const allBudgets = await db
                 .select({
                     branchId: branches.id,
                     groupId: branches.groupId,
-                    baselineBudgetCents: branches.baselineBudgetCents,
                     period: budgets.period,
                     amountAllocatedCents: budgets.amountAllocatedCents,
                     amountCreditedCents: budgets.amountCreditedCents,
@@ -323,14 +316,12 @@ export async function GET(req: NextRequest) {
 
             // Map branch -> period -> budget
             const branchBudgetMatrix: Record<number, Record<string, { allocated: number, credited: number }>> = {}
-            const branchBaselines: Record<number, number> = {}
             const branchesInGroups: Record<number, Set<number>> = {}
 
             allBudgets.forEach(b => {
                 if (!b.groupId) return
                 if (!branchesInGroups[b.groupId]) branchesInGroups[b.groupId] = new Set()
                 branchesInGroups[b.groupId].add(b.branchId)
-                branchBaselines[b.branchId] = b.baselineBudgetCents || 0
                 
                 if (b.period) {
                     if (!branchBudgetMatrix[b.branchId]) branchBudgetMatrix[b.branchId] = {}
@@ -349,12 +340,7 @@ export async function GET(req: NextRequest) {
                 branchIds.forEach(bid => {
                     periodList.forEach(period => {
                         const record = branchBudgetMatrix[bid]?.[period]
-                        if (record) {
-                            totalGroupBudget += record.allocated + record.credited
-                        } else {
-                            // Fallback to baseline if no record for this period
-                            totalGroupBudget += branchBaselines[bid] || 0
-                        }
+                        if (record) totalGroupBudget += record.allocated + record.credited
                     })
                 })
                 groupBudgetMap[gid] = totalGroupBudget
@@ -390,7 +376,7 @@ export async function GET(req: NextRequest) {
                     let totalBranchBudget = 0
                     periodList.forEach(period => {
                         const record = branchBudgetMatrix[bs.id]?.[period]
-                        totalBranchBudget += record ? (record.allocated + record.credited) : (branchBaselines[bs.id] || 0)
+                        if (record) totalBranchBudget += record.allocated + record.credited
                     })
 
                     branchStatsMap[bs.groupId].push({
@@ -445,10 +431,12 @@ export async function GET(req: NextRequest) {
         if (compare && (startDate || parsedCompMonths.length > 0)) {
             let prevStart: Date, prevEnd: Date
             if (compareStartDateParam && compareEndDateParam) {
-                prevStart = new Date(compareStartDateParam); prevEnd = new Date(compareEndDateParam)
+                prevStart = parseStartDateParam(compareStartDateParam) || new Date(compareStartDateParam); prevEnd = parseEndDateParam(compareEndDateParam) || new Date(compareEndDateParam)
             } else if (startDate && endDate) {
-                const duration = new Date(endDate).getTime() - new Date(startDate).getTime()
-                prevStart = new Date(new Date(startDate).getTime() - duration - 1); prevEnd = new Date(new Date(startDate).getTime() - 1)
+                const start = parseStartDateParam(startDate) || new Date(startDate)
+                const end = parseEndDateParam(endDate) || new Date(endDate)
+                const duration = end.getTime() - start.getTime()
+                prevStart = new Date(start.getTime() - duration - 1); prevEnd = new Date(start.getTime() - 1)
             } else {
                 prevStart = new Date(); prevEnd = new Date()
             }

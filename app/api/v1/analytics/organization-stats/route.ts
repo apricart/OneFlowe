@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, users, branches, organizations } from "@/db/schema"
 import { and, eq, gte, lte, sql, count, inArray } from "drizzle-orm"
 import { metricExpressions } from "@/lib/metric-utils"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions)
@@ -102,8 +103,10 @@ export async function GET(req: NextRequest) {
         
         // Fallback to explicit dates if no arrays provided
         if (mArray.length === 0 && yArray.length === 0 && start && end) {
-            conditions.push(gte(orders.createdAt, new Date(start)))
-            conditions.push(lte(orders.createdAt, new Date(end)))
+            const startBoundary = parseStartDateParam(start)
+            const endBoundary = parseEndDateParam(end)
+            if (startBoundary) conditions.push(gte(orders.createdAt, startBoundary))
+            if (endBoundary) conditions.push(lte(orders.createdAt, endBoundary))
         } else if (mArray.length === 0 && yArray.length === 0 && !start && !end) {
             // No filters provided (All Time implies no conditions on createdAt)
         }
@@ -223,8 +226,10 @@ export async function GET(req: NextRequest) {
         if (yArray.length > 0) conditions.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(yArray, sql`, `)})`)
         
         if (mArray.length === 0 && yArray.length === 0 && start && end) {
-            conditions.push(gte(orders.createdAt, new Date(start)))
-            conditions.push(lte(orders.createdAt, new Date(end)))
+            const startBoundary = parseStartDateParam(start)
+            const endBoundary = parseEndDateParam(end)
+            if (startBoundary) conditions.push(gte(orders.createdAt, startBoundary))
+            if (endBoundary) conditions.push(lte(orders.createdAt, endBoundary))
         }
 
         return await db.select({

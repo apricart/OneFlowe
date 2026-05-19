@@ -9,6 +9,7 @@ import { logOrderActivity, logTokenGenerated, logFulfillmentAttempt } from "@/li
 import { generateApprovalToken, hashApprovalToken, verifyApprovalToken } from "@/lib/approval-token"
 import { generateReceiptData } from "@/lib/receipt-generator"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 
 
@@ -121,11 +122,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Date range filtering (standardized)
-    if (startDate) conditions.push(gte(orders.createdAt, new Date(startDate)))
+    if (startDate) {
+      const start = parseStartDateParam(startDate)
+      if (start) conditions.push(gte(orders.createdAt, start))
+    }
     if (endDate) {
-      const end = new Date(endDate)
-      end.setHours(23, 59, 59, 999)
-      conditions.push(lte(orders.createdAt, end))
+      const end = parseEndDateParam(endDate)
+      if (end) conditions.push(lte(orders.createdAt, end))
     }
 
     // Arbitrary month/year filtering from GlobalDateFilter.
@@ -138,8 +141,14 @@ export async function GET(req: NextRequest) {
     }
 
     // Legacy date filters
-    if (from && !startDate) conditions.push(gte(orders.createdAt, new Date(from)))
-    if (to && !endDate) conditions.push(lte(orders.createdAt, new Date(to)))
+    if (from && !startDate) {
+      const start = parseStartDateParam(from)
+      if (start) conditions.push(gte(orders.createdAt, start))
+    }
+    if (to && !endDate) {
+      const end = parseEndDateParam(to)
+      if (end) conditions.push(lte(orders.createdAt, end))
+    }
 
     // --- Audit Logging for Group Access ---
     if (groupId && /^\d+$/.test(groupId)) {

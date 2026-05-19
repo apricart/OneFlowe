@@ -6,6 +6,7 @@ import { orders, users, branches, roles, organizations } from "@/db/schema"
 import { and, eq, gte, lte, inArray, desc, sql } from "drizzle-orm"
 import { metricExpressions } from "@/lib/metric-utils"
 import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 export async function GET(req: NextRequest) {
     try {
@@ -76,10 +77,8 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "No branches resolved" }, { status: 400 })
         }
 
-        let startDate = startDateParam ? new Date(startDateParam) : undefined
-        let endDate = endDateParam ? new Date(endDateParam) : undefined
-        if (startDate) startDate.setHours(0, 0, 0, 0)
-        if (endDate) endDate.setHours(23, 59, 59, 999)
+        const startDate = parseStartDateParam(startDateParam)
+        const endDate = parseEndDateParam(endDateParam)
 
         const baseConditions: any[] = [inArray(orders.branchId, branchIds)]
         
@@ -132,13 +131,11 @@ export async function GET(req: NextRequest) {
             let prevEnd: Date
             
             if (compareStartDateParam && compareEndDateParam) {
-                prevStart = new Date(compareStartDateParam)
-                prevEnd = new Date(compareEndDateParam)
-                prevStart.setHours(0, 0, 0, 0)
-                prevEnd.setHours(23, 59, 59, 999)
+                prevStart = parseStartDateParam(compareStartDateParam) || new Date(compareStartDateParam)
+                prevEnd = parseEndDateParam(compareEndDateParam) || new Date(compareEndDateParam)
             } else {
-                const start = new Date(startDateParam)
-                const end = new Date(endDateParam)
+                const start = parseStartDateParam(startDateParam) || new Date(startDateParam)
+                const end = parseEndDateParam(endDateParam) || new Date(endDateParam)
                 const duration = end.getTime() - start.getTime()
                 prevStart = new Date(start.getTime() - duration - 1)
                 prevEnd = new Date(start.getTime() - 1)
@@ -249,11 +246,8 @@ export async function GET(req: NextRequest) {
                                     if (parsedCompMonths.length > 0) compCond.push(sql`EXTRACT(MONTH FROM ${orders.createdAt}) IN (${sql.join(parsedCompMonths, sql`, `)})`)
                                     if (parsedCompYears.length > 0) compCond.push(sql`EXTRACT(YEAR FROM ${orders.createdAt}) IN (${sql.join(parsedCompYears, sql`, `)})`)
                                 } else {
-                                    const cStart = new Date(compareStartDateParam!)
-                                    const cEnd = new Date(compareEndDateParam!)
-                                    cStart.setHours(0,0,0,0)
-                                    cEnd.setHours(23,59,59,999)
-                                    compCond.push(lte(orders.createdAt, cEnd))
+                                    const cEnd = parseEndDateParam(compareEndDateParam!)
+                                    if (cEnd) compCond.push(lte(orders.createdAt, cEnd))
                                 }
                                 if (userIds.length > 0) {
                                     compCond.push(inArray(orders.createdByUserId, userIds))

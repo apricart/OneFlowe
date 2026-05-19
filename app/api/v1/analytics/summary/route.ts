@@ -6,6 +6,7 @@ import { orders, users, roles, branches, organizations, groups, orderItems, refu
 import { and, desc, eq, gte, lte, sql, sum, count, inArray } from "drizzle-orm"
 import { metricExpressions } from "@/lib/metric-utils"
 import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions)
@@ -131,14 +132,12 @@ export async function GET(req: NextRequest) {
 
     // Date Filtering - Inclusive
     if (startDate && !monthsRaw && !yearsRaw) {
-        const start = new Date(startDate)
-        start.setHours(0, 0, 0, 0)
-        conditions.push(gte(orders.createdAt, start))
+        const start = parseStartDateParam(startDate)
+        if (start) conditions.push(gte(orders.createdAt, start))
     }
     if (endDate && !monthsRaw && !yearsRaw) {
-        const end = new Date(endDate)
-        end.setHours(23, 59, 59, 999)
-        conditions.push(lte(orders.createdAt, end))
+        const end = parseEndDateParam(endDate)
+        if (end) conditions.push(lte(orders.createdAt, end))
     }
 
     // Advanced Multi-Select Date Filtering (Months / Years arrays)
@@ -175,13 +174,11 @@ export async function GET(req: NextRequest) {
             let prevStart: Date
             let prevEnd: Date
             if (compareStartDateParam && compareEndDateParam) {
-                prevStart = new Date(compareStartDateParam)
-                prevEnd = new Date(compareEndDateParam)
-                prevStart.setHours(0, 0, 0, 0)
-                prevEnd.setHours(23, 59, 59, 999)
+                prevStart = parseStartDateParam(compareStartDateParam) || new Date(compareStartDateParam)
+                prevEnd = parseEndDateParam(compareEndDateParam) || new Date(compareEndDateParam)
             } else if (startDate && endDate && parsedMonths.length === 0 && parsedYears.length === 0) {
-                const start = new Date(startDate)
-                const end = new Date(endDate)
+                const start = parseStartDateParam(startDate) || new Date(startDate)
+                const end = parseEndDateParam(endDate) || new Date(endDate)
                 const duration = end.getTime() - start.getTime()
                 prevStart = new Date(start.getTime() - duration - 1)
                 prevEnd = new Date(start.getTime() - 1)

@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, users, orderItems, branches, organizations, refundItems, refunds } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 const allowedRoles = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"] as const
 
@@ -145,14 +146,12 @@ export async function GET(req: NextRequest) {
 
     if (parsedMonths.length === 0 && parsedYears.length === 0) {
         if (startDateParam) {
-            const start = new Date(startDateParam)
-            start.setHours(0, 0, 0, 0)
-            conditions.push(gte(orders.createdAt, start))
+            const start = parseStartDateParam(startDateParam)
+            if (start) conditions.push(gte(orders.createdAt, start))
         }
         if (endDateParam) {
-            const end = new Date(endDateParam)
-            end.setHours(23, 59, 59, 999)
-            conditions.push(lte(orders.createdAt, end))
+            const end = parseEndDateParam(endDateParam)
+            if (end) conditions.push(lte(orders.createdAt, end))
         }
     }
 
@@ -448,13 +447,11 @@ export async function GET(req: NextRequest) {
             let prevEnd: Date
             
             if (compareStartDateParam && compareEndDateParam) {
-                prevStart = new Date(compareStartDateParam)
-                prevEnd = new Date(compareEndDateParam)
-                prevStart.setHours(0, 0, 0, 0)
-                prevEnd.setHours(23, 59, 59, 999)
+                prevStart = parseStartDateParam(compareStartDateParam) || new Date(compareStartDateParam)
+                prevEnd = parseEndDateParam(compareEndDateParam) || new Date(compareEndDateParam)
             } else {
-                const start = new Date(startDateParam)
-                const end = new Date(endDateParam)
+                const start = parseStartDateParam(startDateParam) || new Date(startDateParam)
+                const end = parseEndDateParam(endDateParam) || new Date(endDateParam)
                 const duration = end.getTime() - start.getTime()
                 prevStart = new Date(start.getTime() - duration - 1)
                 prevEnd = new Date(start.getTime() - 1)

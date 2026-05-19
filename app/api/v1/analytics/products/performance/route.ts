@@ -6,6 +6,7 @@ import { orders, orderItems, branches, globalProducts, categories, refundItems, 
 import { and, eq, gte, lte, inArray, desc, isNull, sql, exists } from "drizzle-orm"
 import { aliasedTable } from "drizzle-orm"
 import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
+import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
 export async function GET(req: NextRequest) {
     try {
@@ -81,10 +82,8 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "No branches resolved" }, { status: 400 })
         }
 
-        let startDate = startDateParam ? new Date(startDateParam) : undefined
-        let endDate = endDateParam ? new Date(endDateParam) : undefined
-        if (startDate) startDate.setHours(0, 0, 0, 0)
-        if (endDate) endDate.setHours(23, 59, 59, 999)
+        const startDate = parseStartDateParam(startDateParam)
+        const endDate = parseEndDateParam(endDateParam)
 
         const applyDateFilters = (
             conditions: any[],
@@ -335,13 +334,11 @@ export async function GET(req: NextRequest) {
             let prevEnd: Date
             
             if (compareStartDateParam && compareEndDateParam) {
-                prevStart = new Date(compareStartDateParam)
-                prevEnd = new Date(compareEndDateParam)
-                prevStart.setHours(0, 0, 0, 0)
-                prevEnd.setHours(23, 59, 59, 999)
+                prevStart = parseStartDateParam(compareStartDateParam) || new Date(compareStartDateParam)
+                prevEnd = parseEndDateParam(compareEndDateParam) || new Date(compareEndDateParam)
             } else {
-                const start = new Date(startDateParam)
-                const end = new Date(endDateParam)
+                const start = parseStartDateParam(startDateParam) || new Date(startDateParam)
+                const end = parseEndDateParam(endDateParam) || new Date(endDateParam)
                 const duration = end.getTime() - start.getTime()
                 prevStart = new Date(start.getTime() - duration - 1)
                 prevEnd = new Date(start.getTime() - 1)
