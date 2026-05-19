@@ -501,7 +501,7 @@ export default function OrdersManagementPage() {
 
       {/* ═══ ULTRA-COMPACT UNIFIED FILTERS ═══ */}
       <section className="animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-300 fill-mode-both relative z-40">
-        <Card className="border-none shadow-[0_15px_60px_rgb(0,0,0,0.05)] dark:shadow-[0_15px_60px_rgb(0,0,0,0.3)] bg-white/80 dark:bg-[#050b1a]/80 backdrop-blur-xl rounded-[2.5rem] overflow-hidden">
+        <Card className="border-none shadow-[0_15px_60px_rgb(0,0,0,0.05)] dark:shadow-[0_15px_60px_rgb(0,0,0,0.3)] bg-white/80 dark:bg-[#050b1a]/80 backdrop-blur-xl rounded-[2.5rem] overflow-visible">
           <div className="p-3 md:p-4 space-y-3">
             {/* Top Row: Core Tools */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">

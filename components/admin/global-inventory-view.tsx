@@ -8,12 +8,14 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatPKR, cn } from "@/lib/utils"
 import { Search, Package, Sparkles, Plus, Edit, Trash2, Building2, AlertTriangle, Loader2, RefreshCw, CheckCircle, XCircle } from "lucide-react"
 import { ProductForm } from "@/components/global-inventory/product-form"
 import { useToast } from "@/hooks/use-toast"
 import { useDebounce } from "@/hooks/use-debounce"
 import { Loader } from "lucide-react"
+import { GlobalInventoryExport } from "@/components/admin/global-inventory-export"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 const PAGE_SIZE = 50
@@ -274,43 +276,56 @@ export default function GlobalInventoryView() {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
-                        <select
-                            value={categoryFilter}
-                            onChange={(e) => {
-                                setCategoryFilter(e.target.value)
+                        <Select
+                            value={categoryFilter || "__all_categories"}
+                            onValueChange={(value) => {
+                                setCategoryFilter(value === "__all_categories" ? "" : value)
                                 setSubCategoryFilter("") // Reset subcategory when parent changes
                             }}
-                            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-auto"
                         >
-                            <option value="">All categories</option>
-                            {categoriesData?.items.map((cat) => (
-                                <option key={cat.id} value={cat.id.toString()}>
-                                    {cat.name}
-                                </option>
-                            ))}
-                        </select>
-                        <select
-                            value={subCategoryFilter}
-                            onChange={(e) => setSubCategoryFilter(e.target.value)}
+                            <SelectTrigger className="w-full bg-background lg:w-auto">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all_categories">All categories</SelectItem>
+                                {categoriesData?.items.map((cat) => (
+                                    <SelectItem key={cat.id} value={cat.id.toString()}>
+                                        {cat.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={subCategoryFilter || "__all_subcategories"}
+                            onValueChange={(value) => setSubCategoryFilter(value === "__all_subcategories" ? "" : value)}
                             disabled={!categoryFilter}
-                            className="rounded-md border border-input bg-background px-3 py-2 text-sm w-full lg:w-auto disabled:opacity-50"
                         >
-                            <option value="">All subcategories</option>
-                            {subcategoriesData?.items.map((sub) => (
-                                <option key={sub.id} value={sub.id.toString()}>
-                                    {sub.name}
-                                </option>
-                            ))}
-                        </select>
-                        <select
+                            <SelectTrigger className="w-full bg-background lg:w-auto">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__all_subcategories">All subcategories</SelectItem>
+                                {subcategoriesData?.items.map((sub) => (
+                                    <SelectItem key={sub.id} value={sub.id.toString()}>
+                                        {sub.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Select
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                            onValueChange={setStatusFilter}
                         >
-                            <option value="all">All statuses</option>
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                        </select>
+                            <SelectTrigger className="w-full bg-background lg:w-auto">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All statuses</SelectItem>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="inactive">Inactive</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <GlobalInventoryExport products={paginatedProducts} />
                     </div>
 
                     <div className="overflow-x-auto">
