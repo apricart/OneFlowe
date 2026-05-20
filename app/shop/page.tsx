@@ -503,7 +503,7 @@ export default function OrderPortalPage() {
                 Order Portal
               </h1>
               <div className="text-xs text-muted-foreground space-y-0.5">
-                <p>Welcome, <span className="font-medium text-foreground/80">{userName}</span></p>
+                <p>Welcome, <span >{userName}</span></p>
                 <div className="flex items-center gap-2 opacity-75">
                   <span className="flex items-center gap-1">
                     <Building2 className="h-3 w-3" />
