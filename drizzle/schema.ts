@@ -1105,7 +1105,120 @@ export const budgets = pgTable("budgets", {
 			columns: [table.organizationId],
 			foreignColumns: [organizations.id],
 			name: "budgets_organization_id_organizations_id_fk"
+	}),
+]);
+
+export const productQuantityBudgets = pgTable("product_quantity_budgets", {
+	id: serial().primaryKey().notNull(),
+	organizationId: integer("organization_id").notNull(),
+	branchId: integer("branch_id").notNull(),
+	organizationInventoryId: integer("organization_inventory_id").notNull(),
+	globalProductId: integer("global_product_id").notNull(),
+	period: varchar({ length: 16 }).notNull(),
+	allocatedQuantity: integer("allocated_quantity").default(0).notNull(),
+	heldQuantity: integer("held_quantity").default(0).notNull(),
+	usedQuantity: integer("used_quantity").default(0).notNull(),
+	creditedQuantity: integer("credited_quantity").default(0).notNull(),
+	amountAllocatedCents: bigint("amount_allocated_cents", { mode: "number" }).default(0).notNull(),
+	amountCreditedCents: bigint("amount_credited_cents", { mode: "number" }).default(0).notNull(),
+	createdByUserId: uuid("created_by_user_id"),
+	updatedByUserId: uuid("updated_by_user_id"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+}, (table) => [
+	index("product_quantity_budgets_branch_idx").using("btree", table.branchId.asc().nullsLast().op("int4_ops")),
+	uniqueIndex("product_quantity_budgets_branch_product_period_uq").using("btree", table.branchId.asc().nullsLast().op("int4_ops"), table.organizationInventoryId.asc().nullsLast().op("int4_ops"), table.period.asc().nullsLast().op("text_ops")),
+	index("product_quantity_budgets_org_idx").using("btree", table.organizationId.asc().nullsLast().op("int4_ops")),
+	index("product_quantity_budgets_period_idx").using("btree", table.period.asc().nullsLast().op("text_ops")),
+	index("product_quantity_budgets_product_idx").using("btree", table.globalProductId.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.branchId],
+			foreignColumns: [branches.id],
+			name: "product_quantity_budgets_branch_id_branches_id_fk"
 		}),
+	foreignKey({
+			columns: [table.createdByUserId],
+			foreignColumns: [users.id],
+			name: "product_quantity_budgets_created_by_user_id_users_id_fk"
+		}),
+	foreignKey({
+			columns: [table.globalProductId],
+			foreignColumns: [globalProducts.id],
+			name: "product_quantity_budgets_global_product_id_global_products_id_fk"
+		}),
+	foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organizations.id],
+			name: "product_quantity_budgets_organization_id_organizations_id_fk"
+		}),
+	foreignKey({
+			columns: [table.organizationInventoryId],
+			foreignColumns: [organizationInventory.id],
+			name: "product_quantity_budgets_organization_inventory_id_organization"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.updatedByUserId],
+			foreignColumns: [users.id],
+			name: "product_quantity_budgets_updated_by_user_id_users_id_fk"
+		}),
+]);
+
+export const productQuantityBudgetAllocations = pgTable("product_quantity_budget_allocations", {
+	id: serial().primaryKey().notNull(),
+	quantityBudgetId: integer("quantity_budget_id").notNull(),
+	budgetId: integer("budget_id"),
+	organizationId: integer("organization_id").notNull(),
+	branchId: integer("branch_id").notNull(),
+	organizationInventoryId: integer("organization_inventory_id").notNull(),
+	globalProductId: integer("global_product_id").notNull(),
+	period: varchar({ length: 16 }).notNull(),
+	allocationType: varchar("allocation_type", { length: 32 }).notNull(),
+	quantity: integer().notNull(),
+	priceCents: bigint("price_cents", { mode: "number" }).notNull(),
+	amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
+	createdByUserId: uuid("created_by_user_id"),
+	metadata: jsonb().default({}),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+}, (table) => [
+	index("product_quantity_budget_allocations_branch_idx").using("btree", table.branchId.asc().nullsLast().op("int4_ops")),
+	index("product_quantity_budget_allocations_budget_idx").using("btree", table.quantityBudgetId.asc().nullsLast().op("int4_ops")),
+	index("product_quantity_budget_allocations_period_idx").using("btree", table.period.asc().nullsLast().op("text_ops")),
+	index("product_quantity_budget_allocations_product_idx").using("btree", table.globalProductId.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.branchId],
+			foreignColumns: [branches.id],
+			name: "product_quantity_budget_allocations_branch_id_branches_id_fk"
+		}),
+	foreignKey({
+			columns: [table.budgetId],
+			foreignColumns: [budgets.id],
+			name: "product_quantity_budget_allocations_budget_id_budgets_id_fk"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.createdByUserId],
+			foreignColumns: [users.id],
+			name: "product_quantity_budget_allocations_created_by_user_id_users_id_fk"
+		}),
+	foreignKey({
+			columns: [table.globalProductId],
+			foreignColumns: [globalProducts.id],
+			name: "product_quantity_budget_allocations_global_product_id_global_products_id_fk"
+		}),
+	foreignKey({
+			columns: [table.organizationId],
+			foreignColumns: [organizations.id],
+			name: "product_quantity_budget_allocations_organization_id_organizations_id_fk"
+		}),
+	foreignKey({
+			columns: [table.organizationInventoryId],
+			foreignColumns: [organizationInventory.id],
+			name: "product_quantity_budget_allocations_organization_inventory_id"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.quantityBudgetId],
+			foreignColumns: [productQuantityBudgets.id],
+			name: "product_quantity_budget_allocations_quantity_budget_id_fk"
+		}).onDelete("cascade"),
 ]);
 
 export const restockRequests = pgTable("restock_requests", {

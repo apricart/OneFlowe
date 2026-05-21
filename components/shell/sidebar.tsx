@@ -34,6 +34,7 @@ const getNavigationByRole = (role: string) => {
       },
       { href: "/groups", label: "Groups", icon: FolderTree },
       { href: "/budgets", label: "Budgets", icon: Wallet },
+      { href: "/budget-by-quantity", label: "Budget by Quantity", icon: Wallet },
       {
         href: "/reports",
         label: "Reports",
@@ -61,6 +62,7 @@ const getNavigationByRole = (role: string) => {
       { href: "/inventory", label: "Inventory", icon: Boxes },
       { href: "/groups", label: "Groups", icon: FolderTree },
       { href: "/budgets", label: "Budgets", icon: Wallet },
+      { href: "/budget-by-quantity", label: "Budget by Quantity", icon: Wallet },
       {
         href: "/reports",
         label: "Reports",

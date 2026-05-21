@@ -850,6 +850,80 @@ export const branchInventory = pgTable(
   }),
 )
 
+export const productQuantityBudgets = pgTable(
+  "product_quantity_budgets",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    branchId: integer("branch_id")
+      .references(() => branches.id)
+      .notNull(),
+    organizationInventoryId: integer("organization_inventory_id")
+      .references(() => organizationInventory.id, { onDelete: "cascade" })
+      .notNull(),
+    globalProductId: integer("global_product_id")
+      .references(() => globalProducts.id)
+      .notNull(),
+    period: varchar("period", { length: 16 }).notNull(),
+    allocatedQuantity: integer("allocated_quantity").notNull().default(0),
+    heldQuantity: integer("held_quantity").notNull().default(0),
+    usedQuantity: integer("used_quantity").notNull().default(0),
+    creditedQuantity: integer("credited_quantity").notNull().default(0),
+    amountAllocatedCents: bigint("amount_allocated_cents", { mode: "number" }).notNull().default(0),
+    amountCreditedCents: bigint("amount_credited_cents", { mode: "number" }).notNull().default(0),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    updatedByUserId: uuid("updated_by_user_id").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    branchProductPeriodUq: uniqueIndex("product_quantity_budgets_branch_product_period_uq").on(t.branchId, t.organizationInventoryId, t.period),
+    orgIdx: index("product_quantity_budgets_org_idx").on(t.organizationId),
+    branchIdx: index("product_quantity_budgets_branch_idx").on(t.branchId),
+    productIdx: index("product_quantity_budgets_product_idx").on(t.globalProductId),
+    periodIdx: index("product_quantity_budgets_period_idx").on(t.period),
+  }),
+)
+
+export const productQuantityBudgetAllocations = pgTable(
+  "product_quantity_budget_allocations",
+  {
+    id: serial("id").primaryKey(),
+    quantityBudgetId: integer("quantity_budget_id")
+      .references(() => productQuantityBudgets.id, { onDelete: "cascade" })
+      .notNull(),
+    budgetId: integer("budget_id").references(() => budgets.id, { onDelete: "cascade" }),
+    organizationId: integer("organization_id")
+      .references(() => organizations.id)
+      .notNull(),
+    branchId: integer("branch_id")
+      .references(() => branches.id)
+      .notNull(),
+    organizationInventoryId: integer("organization_inventory_id")
+      .references(() => organizationInventory.id, { onDelete: "cascade" })
+      .notNull(),
+    globalProductId: integer("global_product_id")
+      .references(() => globalProducts.id)
+      .notNull(),
+    period: varchar("period", { length: 16 }).notNull(),
+    allocationType: varchar("allocation_type", { length: 32 }).notNull(),
+    quantity: integer("quantity").notNull(),
+    priceCents: bigint("price_cents", { mode: "number" }).notNull(),
+    amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    quantityBudgetIdx: index("product_quantity_budget_allocations_budget_idx").on(t.quantityBudgetId),
+    branchIdx: index("product_quantity_budget_allocations_branch_idx").on(t.branchId),
+    productIdx: index("product_quantity_budget_allocations_product_idx").on(t.globalProductId),
+    periodIdx: index("product_quantity_budget_allocations_period_idx").on(t.period),
+  }),
+)
+
 // Employee Credentials - For Order Portal access
 export const employeeCredentials = pgTable(
   "employee_credentials",
