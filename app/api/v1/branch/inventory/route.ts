@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { branchInventory, globalProducts, organizationInventory, categories, auditLogs } from "@/db/schema"
+import { branchInventory, globalProducts, organizationInventory, categories, auditLogs, productQuantityBudgets } from "@/db/schema"
 import { eq, and, like, ilike, or, desc, sql, isNull, SQL, inArray } from "drizzle-orm"
 import { alias } from "drizzle-orm/pg-core"
 import { getEffectiveProductData } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
+import { getBudgetAllocationModeForOrganization } from "@/lib/server/budget-allocation-mode"
 
 // GET /api/v1/branch/inventory - List products in branch inventory
 export async function GET(req: NextRequest) {
@@ -68,6 +69,7 @@ export async function GET(req: NextRequest) {
     const visibility = searchParams.get("visibility") || ""
     const category = searchParams.get("category") || ""
     const subCategory = searchParams.get("subCategory") || ""
+    const includeQuantityBudget = searchParams.get("includeQuantityBudget") === "true"
     const pageNum = Math.max(1, parseInt(searchParams.get("page") || "1") || 1)
     const limitNum = Math.max(1, parseInt(searchParams.get("limit") || "50") || 50)
     const offset = (pageNum - 1) * limitNum
@@ -79,6 +81,23 @@ export async function GET(req: NextRequest) {
     }
 
     const pricesHidden = await shouldHidePricesForRole(userRole, orgIdNum)
+    const budgetAllocationMode = await getBudgetAllocationModeForOrganization(orgIdNum)
+    const shouldApplyQuantityBudget = includeQuantityBudget && budgetAllocationMode === "quantity"
+    const currentPeriod = new Date().toISOString().slice(0, 7)
+    const positiveQuantityBudgetTotal = sql`(${productQuantityBudgets.allocatedQuantity} + ${productQuantityBudgets.creditedQuantity}) > 0`
+    const [quantityBudgetModeRow] = shouldApplyQuantityBudget
+      ? await db
+        .select({ id: productQuantityBudgets.id })
+        .from(productQuantityBudgets)
+        .where(and(
+          eq(productQuantityBudgets.organizationId, orgIdNum),
+          eq(productQuantityBudgets.branchId, branchId),
+          eq(productQuantityBudgets.period, currentPeriod),
+          positiveQuantityBudgetTotal,
+        ))
+        .limit(1)
+      : []
+    const quantityBudgetCatalogActive = Boolean(quantityBudgetModeRow)
 
     // Build conditions - products must be in branchInventory for this branch
     const conditions: (SQL | undefined)[] = [
@@ -90,6 +109,18 @@ export async function GET(req: NextRequest) {
       // Only show products that are active at the organization level
       eq(organizationInventory.isActive, true),
     ]
+
+    if (quantityBudgetCatalogActive) {
+      conditions.push(sql`EXISTS (
+        SELECT 1
+        FROM ${productQuantityBudgets}
+        WHERE ${productQuantityBudgets.organizationId} = ${orgIdNum}
+          AND ${productQuantityBudgets.branchId} = ${branchId}
+          AND ${productQuantityBudgets.period} = ${currentPeriod}
+          AND ${productQuantityBudgets.organizationInventoryId} = ${branchInventory.organizationInventoryId}
+          AND (${productQuantityBudgets.allocatedQuantity} + ${productQuantityBudgets.creditedQuantity}) > 0
+      )`)
+    }
 
     if (search) {
       conditions.push(
@@ -121,7 +152,14 @@ export async function GET(req: NextRequest) {
     const whereClause = and(...conditions)
 
     const cacheKey = scopedCacheKey('branch-inv', { branchId, orgId: orgIdNum, role: userRole }, {
-      search, visibility, category, subCategory, page: pageNum, limit: limitNum, pricesHidden
+      search,
+      visibility,
+      category,
+      subCategory,
+      page: pageNum,
+      limit: limitNum,
+      pricesHidden,
+      quantityBudgetCatalogActive,
     })
 
     const subCats = alias(categories, "subCategories")
@@ -189,7 +227,55 @@ export async function GET(req: NextRequest) {
       }
     }, CACHE_TTL.INVENTORY)
 
-    return NextResponse.json({ ...result, pricesHidden })
+    if (!shouldApplyQuantityBudget || !quantityBudgetCatalogActive) {
+      return NextResponse.json({
+        ...result,
+        ...(includeQuantityBudget ? { quantityBudgetCatalogActive } : {}),
+        pricesHidden,
+      })
+    }
+
+    // Keep the filtered inventory listing cached, but fetch remaining units fresh
+    // so cart guidance tracks used/held quantities.
+    const organizationInventoryIds = result.items.map((item) => item.organizationInventoryId)
+    const quantityBudgetRows = organizationInventoryIds.length > 0
+      ? await db
+        .select({
+          organizationInventoryId: productQuantityBudgets.organizationInventoryId,
+          allocatedQuantity: productQuantityBudgets.allocatedQuantity,
+          creditedQuantity: productQuantityBudgets.creditedQuantity,
+          heldQuantity: productQuantityBudgets.heldQuantity,
+          usedQuantity: productQuantityBudgets.usedQuantity,
+        })
+        .from(productQuantityBudgets)
+        .where(and(
+          eq(productQuantityBudgets.organizationId, orgIdNum),
+          eq(productQuantityBudgets.branchId, branchId),
+          eq(productQuantityBudgets.period, currentPeriod),
+          positiveQuantityBudgetTotal,
+          inArray(productQuantityBudgets.organizationInventoryId, organizationInventoryIds),
+        ))
+      : []
+
+    const quantityRemainingByInventoryId = new Map(
+      quantityBudgetRows.map((quantityBudget) => [
+        quantityBudget.organizationInventoryId,
+        quantityBudget.allocatedQuantity +
+          quantityBudget.creditedQuantity -
+          quantityBudget.usedQuantity -
+          quantityBudget.heldQuantity,
+      ])
+    )
+
+    return NextResponse.json({
+      ...result,
+      items: result.items.map((item) => ({
+        ...item,
+        quantityBudgetRemaining: quantityRemainingByInventoryId.get(item.organizationInventoryId) ?? null,
+      })),
+      quantityBudgetCatalogActive,
+      pricesHidden,
+    })
   } catch (error: any) {
     console.error("Error fetching branch inventory:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

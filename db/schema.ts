@@ -419,6 +419,8 @@ export const orderItems = pgTable(
   {
     id: serial("id").primaryKey(),
     organizationId: integer("organization_id").references(() => organizations.id),
+    // Snapshot the organization inventory item used for branch quantity budget tracking.
+    organizationInventoryId: integer("organization_inventory_id"),
     orderId: integer("order_id")
       .references(() => orders.id)
       .notNull(),
@@ -436,6 +438,7 @@ export const orderItems = pgTable(
   (t) => ({
     orderIdx: index("order_items_order_idx").on(t.orderId),
     orderItemsOrgIdx: index("order_items_org_idx").on(t.organizationId),
+    organizationInventoryIdx: index("order_items_organization_inventory_idx").on(t.organizationInventoryId),
     globalProductIdx: index("order_items_product_idx").on(t.globalProductId),
     orderItemsProductOrderIdx: index("order_items_product_order_idx").on(t.globalProductId, t.orderId),
   }),

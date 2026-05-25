@@ -2,12 +2,17 @@ import { ok, error, requireApiRole, readJson } from "@/lib/api"
 export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
-import { organizations as orgsTable } from "@/db/schema"
+import { organizationSettings, organizations as orgsTable } from "@/db/schema"
 import { and, desc, eq } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import {
+  BUDGET_ALLOCATION_MODE_SETTING_KEY,
+  DEFAULT_BUDGET_ALLOCATION_MODE,
+  isBudgetAllocationMode,
+} from "@/lib/budget-allocation-mode"
 
 /**
  * GET /api/v1/organizations - List organizations
@@ -102,6 +107,14 @@ export async function POST(req: Request) {
       return error(`Status must be one of: ${validStatuses.join(', ')}`, 400)
     }
 
+    const budgetAllocationMode = body.budgetAllocationMode === undefined
+      ? DEFAULT_BUDGET_ALLOCATION_MODE
+      : String(body.budgetAllocationMode)
+
+    if (!isBudgetAllocationMode(budgetAllocationMode)) {
+      return error("Budget allocation mode must be either money or quantity", 400)
+    }
+
     // Check for duplicate name
     const existingName = await db
       .select({ id: orgsTable.id })
@@ -124,18 +137,28 @@ export async function POST(req: Request) {
       return error(`Organization with code '${code}' already exists`, 400)
     }
 
-    // Insert organization
-    const [item] = await db
-      .insert(orgsTable)
-      .values({
-        name,
-        code,
-        status
+    const item = await db.transaction(async (tx) => {
+      const [createdOrganization] = await tx
+        .insert(orgsTable)
+        .values({
+          name,
+          code,
+          status
+        })
+        .returning()
+
+      await tx.insert(organizationSettings).values({
+        organizationId: createdOrganization.id,
+        key: BUDGET_ALLOCATION_MODE_SETTING_KEY,
+        value: budgetAllocationMode,
       })
-      .returning()
+
+      return createdOrganization
+    })
 
     // Invalidate organizations cache
     await invalidateByPrefix('organizations')
+    await invalidateByPrefix('settings')
 
     return ok({
       item,

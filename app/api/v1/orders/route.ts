@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, refunds, systemLogs, groupAuditLogs, organizations, refundItems } from "@/db/schema"
+import { budgets, orders, orderItems, organizationInventory, auditLogs, branches, globalProducts, productQuantityBudgets, refunds, systemLogs, groupAuditLogs, organizations, refundItems } from "@/db/schema"
 import { headers } from "next/headers"
 import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 import { logOrderActivity, logTokenGenerated, logFulfillmentAttempt } from "@/lib/global-logger"
@@ -10,6 +10,7 @@ import { generateApprovalToken, hashApprovalToken, verifyApprovalToken } from "@
 import { generateReceiptData } from "@/lib/receipt-generator"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
 import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
+import { getBudgetAllocationModeForOrganization } from "@/lib/server/budget-allocation-mode"
 
 
 
@@ -343,6 +344,7 @@ export async function POST(req: NextRequest) {
     const branchId = role === "HEAD_OFFICE" || role === "SUPER_ADMIN" ? parseInt(String(branchIdInput)) : parseInt(String((session.user as any).branchId))
     if (!Number.isFinite(branchId)) return NextResponse.json({ error: "Branch context required" }, { status: 400 })
     const pricesHidden = await shouldHidePricesForRole(role, organizationId)
+    const budgetAllocationMode = await getBudgetAllocationModeForOrganization(Number(organizationId))
 
     // Fetch inventory details and prices
     const orgInvIds = items.map(i => i.organizationInventoryId)
@@ -405,6 +407,7 @@ export async function POST(req: NextRequest) {
       const line = unitPrice * (i.quantity || 0)
       subtotal += line
       return {
+        organizationInventoryId: i.organizationInventoryId,
         globalProductId: inv.globalProductId,
         quantity: i.quantity,
         priceCents: unitPrice,
@@ -476,6 +479,75 @@ export async function POST(req: NextRequest) {
     const tid = generateTid()
 
     const created = await db.transaction(async (tx) => {
+      const budgetId = currentBudget?.id
+      if (!budgetId) throw new Error("Budget ID missing")
+
+      // Re-check the money budget under lock before placing a hold.
+      const [lockedBudget] = await tx.select()
+        .from(budgets)
+        .where(eq(budgets.id, budgetId))
+        .for('update')
+
+      if (!lockedBudget) throw new Error(`Budget not configured for current month (${currentMonth})`)
+
+      const lockedMoneyRemaining =
+        (lockedBudget.amountAllocatedCents + lockedBudget.amountCreditedCents) -
+        (lockedBudget.amountSpentCents + lockedBudget.amountHeldCents)
+
+      if (lockedMoneyRemaining < 0) {
+        throw new Error("Budget is in negative state. Please contact head office.")
+      }
+
+      if (total > lockedMoneyRemaining) {
+        throw new Error(pricesHidden
+          ? "Insufficient budget. Please contact head office."
+          : `Insufficient budget. Required: ${(total / 100).toFixed(2)} PKR, Available: ${(lockedMoneyRemaining / 100).toFixed(2)} PKR`)
+      }
+
+      const positiveQuantityBudgetTotal = sql`(${productQuantityBudgets.allocatedQuantity} + ${productQuantityBudgets.creditedQuantity}) > 0`
+      const quantityBudgetModeActive = budgetAllocationMode === "quantity"
+
+      const quantityBudgetRows = quantityBudgetModeActive
+        ? await tx.select()
+          .from(productQuantityBudgets)
+          .where(and(
+            eq(productQuantityBudgets.organizationId, Number(organizationId)),
+            eq(productQuantityBudgets.branchId, Number(branchId)),
+            eq(productQuantityBudgets.period, currentMonth),
+            positiveQuantityBudgetTotal,
+            inArray(productQuantityBudgets.organizationInventoryId, calculatedItems.map((item) => item.organizationInventoryId)),
+          ))
+          .for('update')
+        : []
+
+      const quantityBudgetByOrgInventoryId = new Map(
+        quantityBudgetRows.map((row) => [row.organizationInventoryId, row])
+      )
+
+      for (const item of calculatedItems) {
+        const quantityBudget = quantityBudgetByOrgInventoryId.get(item.organizationInventoryId)
+        if (!quantityBudget) {
+          if (quantityBudgetModeActive) {
+            throw new Error(`Quantity budget is not allocated for ${item.productName}. Please select an allocated product.`)
+          }
+          continue
+        }
+
+        const quantityRemaining =
+          quantityBudget.allocatedQuantity +
+          quantityBudget.creditedQuantity -
+          quantityBudget.usedQuantity -
+          quantityBudget.heldQuantity
+
+        if (quantityRemaining < 0) {
+          throw new Error(`Quantity budget for ${item.productName} is in negative state. Please contact head office.`)
+        }
+
+        if (item.quantity > quantityRemaining) {
+          throw new Error(`Insufficient quantity budget for ${item.productName}. Available: ${quantityRemaining}, Requested: ${item.quantity}`)
+        }
+      }
+
       // 1. Lock global products to update stock safely
       const gpIdsForLock = calculatedItems.map(i => i.globalProductId)
       const lockedGps = await tx.select()
@@ -555,10 +627,19 @@ export async function POST(req: NextRequest) {
         // Don't fail the order if receipt generation fails
       }
 
-      const budgetId = currentBudget?.id
-      if (!budgetId) throw new Error("Budget ID missing")
-
       await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} + ${total}` }).where(eq(budgets.id, budgetId))
+
+      for (const item of calculatedItems) {
+        const quantityBudget = quantityBudgetByOrgInventoryId.get(item.organizationInventoryId)
+        if (!quantityBudget) continue
+
+        await tx.update(productQuantityBudgets)
+          .set({
+            heldQuantity: sql`${productQuantityBudgets.heldQuantity} + ${item.quantity}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(productQuantityBudgets.id, quantityBudget.id))
+      }
 
       // --- NEW: Detailed File Logging ---
       try {
@@ -624,12 +705,17 @@ export async function POST(req: NextRequest) {
     console.error("Order creation error:", e)
     console.error("Error stack:", e.stack)
 
-    if (e.message && (
-      e.message.startsWith("Insufficient stock") ||
-      e.message.startsWith("Budget not configured") ||
-      e.message.includes("Insufficient budget")
+    const orderErrorMessage = String(e.message || "")
+    const normalizedOrderErrorMessage = orderErrorMessage.toLowerCase()
+
+    if (orderErrorMessage && (
+      orderErrorMessage.startsWith("Insufficient stock") ||
+      orderErrorMessage.startsWith("Budget not configured") ||
+      orderErrorMessage.includes("Insufficient budget") ||
+      normalizedOrderErrorMessage.includes("quantity budget") ||
+      normalizedOrderErrorMessage.includes("negative state")
     )) {
-      return NextResponse.json({ error: e.message }, { status: 400 })
+      return NextResponse.json({ error: orderErrorMessage }, { status: 400 })
     }
 
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })

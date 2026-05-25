@@ -7,6 +7,10 @@ import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
 import { getRequestScope } from "@/lib/auth"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import {
+  BUDGET_ALLOCATION_MODE_SETTING_KEY,
+  isBudgetAllocationMode,
+} from "@/lib/budget-allocation-mode"
 import { PRICE_VISIBILITY_SETTING_KEYS, isPriceVisibilitySettingKey } from "@/lib/price-visibility"
 
 // Valid setting keys
@@ -19,6 +23,7 @@ const VALID_SETTING_KEYS = new Set([
   'session_timeout_minutes',
   'low_stock_threshold',
   'enable_notifications',
+  BUDGET_ALLOCATION_MODE_SETTING_KEY,
   ...PRICE_VISIBILITY_SETTING_KEYS
 ])
 
@@ -107,6 +112,10 @@ export async function POST(req: NextRequest) {
       return err("Forbidden: Cannot modify settings for other organizations", 403)
     }
 
+    if (key === BUDGET_ALLOCATION_MODE_SETTING_KEY && scope?.role !== "SUPER_ADMIN") {
+      return err("Only Super Admin can set budget allocation mode", 403)
+    }
+
     if (!key || typeof key !== 'string') {
       return err("key is required and must be a string", 400)
     }
@@ -151,6 +160,10 @@ export async function POST(req: NextRequest) {
       return err("default_currency must be a 3-letter currency code", 400)
     }
 
+    if (key === BUDGET_ALLOCATION_MODE_SETTING_KEY && !isBudgetAllocationMode(value)) {
+      return err("budget_allocation_mode must be either money or quantity", 400)
+    }
+
     // Check if setting already exists
     const existing = await db
       .select()
@@ -162,6 +175,10 @@ export async function POST(req: NextRequest) {
         )
       )
       .limit(1)
+
+    if (key === BUDGET_ALLOCATION_MODE_SETTING_KEY && existing.length > 0) {
+      return err("Budget allocation mode cannot be changed once it has been set", 400)
+    }
 
     let result
     if (existing.length > 0) {

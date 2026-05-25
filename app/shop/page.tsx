@@ -43,6 +43,7 @@ interface Product {
   discountStartAt?: string | null
   discountEndAt?: string | null
   discountActive?: boolean
+  quantityBudgetRemaining?: number | null
 }
 
 interface CartItem extends Product {
@@ -162,7 +163,7 @@ export default function OrderPortalPage() {
 
   // Build API URLs using context
   const branchInventoryUrl = activeBranchId
-    ? `/api/v1/branch/inventory?visibility=visible${needsContextParams ? `&branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
+    ? `/api/v1/branch/inventory?visibility=visible&includeQuantityBudget=true${needsContextParams ? `&branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
     : null
   const budgetsUrl = activeBranchId
     ? `/api/v1/budgets${needsContextParams ? `?branchId=${activeBranchId}${activeOrgId ? `&organizationId=${activeOrgId}` : ""}` : ""}`
@@ -240,19 +241,25 @@ export default function OrderPortalPage() {
     return branchesData?.items?.find((b: any) => b.id === activeBranchId)?.name || "Loading..."
   }, [branchesData, activeBranchId])
 
+  const shopInventoryItems = useMemo(() => {
+    const items = inventoryData?.items || []
+    if (!inventoryData?.quantityBudgetCatalogActive) return items
+
+    return items.filter((item: any) => typeof item.quantityBudgetRemaining === "number")
+  }, [inventoryData])
+
   const categories = useMemo(() => {
-    if (!inventoryData?.items) return ["All"]
+    if (shopInventoryItems.length === 0) return ["All"]
     const cats = new Set<string>()
     cats.add("All")
-    inventoryData.items.forEach((item: any) => {
+    shopInventoryItems.forEach((item: any) => {
       if (item.categoryName) cats.add(item.categoryName)
     })
     return Array.from(cats)
-  }, [inventoryData])
+  }, [shopInventoryItems])
 
   const mappedProducts = useMemo(() => {
-    if (!inventoryData?.items) return []
-    return inventoryData.items.map((item: any) => ({
+    return shopInventoryItems.map((item: any) => ({
       id: item.organizationInventoryId,
       name: item.customName || item.productName,
       code: item.productCode,
@@ -266,11 +273,15 @@ export default function OrderPortalPage() {
       discountValue: item.discountValue,
       discountStartAt: item.discountStartAt,
       discountEndAt: item.discountEndAt,
-      discountActive: item.discountActive
+      discountActive: item.discountActive,
+      quantityBudgetRemaining: typeof item.quantityBudgetRemaining === "number"
+        ? item.quantityBudgetRemaining
+        : null,
     }))
-  }, [inventoryData])
+  }, [shopInventoryItems])
 
   const products: Product[] = mappedProducts
+  const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products])
 
   const filteredProducts = useMemo(() => {
     let filtered = [...products]
@@ -283,7 +294,7 @@ export default function OrderPortalPage() {
 
     if (activeCategory !== "All") {
       filtered = filtered.filter(p => {
-        const item = inventoryData?.items?.find((i: any) => i.organizationInventoryId === p.id)
+        const item = shopInventoryItems.find((i: any) => i.organizationInventoryId === p.id)
         return item?.categoryName === activeCategory
       })
     }
@@ -293,7 +304,7 @@ export default function OrderPortalPage() {
     else if (sortBy === "rating") filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0))
     else filtered.sort((a, b) => a.name.localeCompare(b.name))
     return filtered
-  }, [products, searchQuery, sortBy, activeCategory, inventoryData, pricesHidden])
+  }, [products, searchQuery, sortBy, activeCategory, shopInventoryItems, pricesHidden])
 
   // Reset to first page when filters change
   React.useEffect(() => {
@@ -323,6 +334,7 @@ export default function OrderPortalPage() {
   const rawBudgetPercent = ((((totalBudgetLimit || 0) - remainingBudget) / (totalBudgetLimit || 1)) * 100)
   const budgetPercent = Math.min(100, Math.max(0, rawBudgetPercent || 0))
   const isLoadingInventory = !inventoryData && !inventoryError
+  const showQuantityRemainingBadge = isOrderPortal && Boolean(inventoryData?.quantityBudgetCatalogActive)
 
   const openProductDetail = (product: Product) => {
     setSelectedProduct(product)
@@ -356,7 +368,9 @@ export default function OrderPortalPage() {
       if (newTotalQty > availableStock) {
         toast({
           title: "Insufficient stock",
-          description: `Only ${availableStock} available for ${product.name}. You already have ${currentQtyInCart} in cart.`,
+          description: isOrderPortal
+            ? `${product.name} is not available in the requested quantity.`
+            : `Only ${availableStock} available for ${product.name}. You already have ${currentQtyInCart} in cart.`,
           variant: "destructive"
         })
         return prev
@@ -383,7 +397,9 @@ export default function OrderPortalPage() {
       if (qty > availableStock) {
         toast({
           title: "Insufficient stock",
-          description: `Only ${availableStock} available for ${itemInCart.name}.`,
+          description: isOrderPortal
+            ? `${itemInCart.name} is not available in the requested quantity.`
+            : `Only ${availableStock} available for ${itemInCart.name}.`,
           variant: "destructive"
         })
         // If qty exceeds stock, cap it to available stock
@@ -606,7 +622,14 @@ export default function OrderPortalPage() {
           ) : (
             <div className="space-y-4">
               <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
-                {cart.map(item => (
+                {cart.map(item => {
+                  const currentProduct = productsById.get(item.id)
+                  const quantityBudgetRemaining = currentProduct?.quantityBudgetRemaining ?? item.quantityBudgetRemaining
+                  const quantityBudgetAfterCart = typeof quantityBudgetRemaining === "number"
+                    ? quantityBudgetRemaining - item.quantity
+                    : null
+
+                  return (
                   <Card key={item.id} className="p-3">
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
@@ -615,14 +638,26 @@ export default function OrderPortalPage() {
                         {!pricesHidden && item.priceCents !== null && (
                           <p className="text-xs mt-1 text-slate-500">PKR {(item.priceCents / 100).toFixed(2)} / {item.unit}</p>
                         )}
-                        {item.stock !== undefined && item.quantity > item.stock && (
+                        {!isOrderPortal && item.stock !== undefined && item.quantity > item.stock && (
                           <p className="text-xs mt-1 text-red-600 dark:text-red-400 font-medium">
                             ⚠️ Only {item.stock} available (quantity adjusted)
                           </p>
                         )}
-                        {item.stock !== undefined && item.stock > 0 && item.stock <= 10 && item.quantity <= item.stock && (
+                        {!isOrderPortal && item.stock !== undefined && item.stock > 0 && item.stock <= 10 && item.quantity <= item.stock && (
                           <p className="text-xs mt-1 text-yellow-600 dark:text-yellow-400">
                             Low stock: {item.stock} remaining
+                          </p>
+                        )}
+                        {quantityBudgetAfterCart !== null && (
+                          <p className={cn(
+                            "mt-1 text-xs font-medium",
+                            quantityBudgetAfterCart < 0
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-indigo-600 dark:text-indigo-300"
+                          )}>
+                            {quantityBudgetAfterCart < 0
+                              ? `Cart exceeds quantity budget by ${Math.abs(quantityBudgetAfterCart)} ${item.unit}.`
+                              : `Quantity budget remaining after cart: ${quantityBudgetAfterCart} ${item.unit}.`}
                           </p>
                         )}
                       </div>
@@ -645,7 +680,9 @@ export default function OrderPortalPage() {
                             } else {
                               toast({
                                 title: "Maximum stock reached",
-                                description: `Only ${maxStock} available for ${item.name}.`,
+                                description: isOrderPortal
+                                  ? `${item.name} is not available in a higher quantity.`
+                                  : `Only ${maxStock} available for ${item.name}.`,
                                 variant: "destructive"
                               })
                             }
@@ -665,7 +702,8 @@ export default function OrderPortalPage() {
                       </Button>
                     </div>
                   </Card>
-                ))}
+                  )
+                })}
               </div>
 
               <div className="space-y-2 rounded-lg border bg-slate-50 dark:bg-slate-800 p-3 text-sm">
@@ -1051,8 +1089,8 @@ export default function OrderPortalPage() {
                             </div>
                           )}
 
-                          {/* Stock Badge */}
-                          {product.stock !== undefined && (
+                          {/* Stock / quantity budget badge */}
+                          {!isOrderPortal && product.stock !== undefined && (
                             <Badge
                               className={cn(
                                 "absolute top-2 right-2 border-0 shadow-sm",
@@ -1066,6 +1104,19 @@ export default function OrderPortalPage() {
                               <div className="flex items-center gap-1.5 px-0.5">
                                 <div className={cn("h-1.5 w-1.5 rounded-full bg-white", product.stock > 0 && "animate-ping")} />
                                 {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+                              </div>
+                            </Badge>
+                          )}
+                          {showQuantityRemainingBadge && typeof product.quantityBudgetRemaining === "number" && (
+                            <Badge
+                              className={cn(
+                                "absolute top-2 right-2 border-0 shadow-sm text-white",
+                                product.quantityBudgetRemaining < 10 ? "bg-rose-500" : "bg-emerald-500"
+                              )}
+                            >
+                              <div className="flex items-center gap-1.5 px-0.5">
+                                <div className="h-1.5 w-1.5 rounded-full bg-white" />
+                                {product.quantityBudgetRemaining} remaining
                               </div>
                             </Badge>
                           )}
@@ -1408,12 +1459,14 @@ export default function OrderPortalPage() {
                       </>
                     )}
                   </div>
+                  {!isOrderPortal && (
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Stock</p>
                     <p className="text-2xl font-bold text-slate-900 dark:text-white">
                       {selectedProduct.stock || 0}
                     </p>
                   </div>
+                  )}
                 </div>
 
                 {/* Rating hidden until product rating is supported.
@@ -1468,7 +1521,7 @@ export default function OrderPortalPage() {
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
-                  {selectedProduct.stock !== undefined && selectedProduct.stock < 10 && (
+                  {!isOrderPortal && selectedProduct.stock !== undefined && selectedProduct.stock < 10 && (
                     <p className="text-xs text-yellow-600 dark:text-yellow-400">
                       {selectedProduct.stock === 0
                         ? "Out of stock"

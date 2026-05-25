@@ -113,6 +113,13 @@
       "when": 1779325200000,
       "tag": "20260521010000_add_product_quantity_budgets",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1779411600000,
+      "tag": "20260522010000_add_order_item_organization_inventory",
+      "breakpoints": true
     }
   ]
 }

@@ -20,6 +20,9 @@ import { PremiumAlert, type AlertType } from "@/components/premium/premium-alert
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Search } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
+import {
+  type BudgetAllocationMode,
+} from "@/lib/budget-allocation-mode"
 
 const LEGACY_HIDE_PRICES_SETTING_KEY = "hide_prices_for_branch_and_order_portal"
 const HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY = "hide_prices_for_branch_admin"
@@ -833,11 +836,21 @@ function CreateOrgDialog({
   const [name, setName] = useState("")
   const [code, setCode] = useState("")
   const [status, setStatus] = useState<boolean>(true)
-  async function submit() {
+  const [budgetAllocationMode, setBudgetAllocationMode] = useState<BudgetAllocationMode>("money")
+  const [confirmModeOpen, setConfirmModeOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function createCompany() {
+    setSaving(true)
     try {
       const res = await fetch("/api/v1/organizations", {
         method: "POST",
-        body: JSON.stringify({ name, code, status: status ? "active" : "inactive" }),
+        body: JSON.stringify({
+          name,
+          code,
+          status: status ? "active" : "inactive",
+          budgetAllocationMode,
+        }),
         headers: { "Content-Type": "application/json" }
       })
       const data = await res.json()
@@ -847,73 +860,129 @@ function CreateOrgDialog({
       setName("")
       setCode("")
       setStatus(true)
+      setBudgetAllocationMode("money")
+      setConfirmModeOpen(false)
       onCreated(data.item)
     } catch (e: any) {
       showFeedback(e.message, "error")
+    } finally {
+      setSaving(false)
     }
   }
+
+  function submit() {
+    if (!name || !code || saving) return
+    setConfirmModeOpen(true)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant={variant} className={cn("gap-2", className)}>
-          <Building2 className="h-4 w-4" />
-          Create Company
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Create Company</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Set up a new tenant with a memorable code and status. These values sync everywhere in the portal.
-          </p>
-        </DialogHeader>
-        <div className="space-y-5">
-          <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Company name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Acme Inc."
-                />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogTrigger asChild>
+          <Button variant={variant} className={cn("gap-2", className)}>
+            <Building2 className="h-4 w-4" />
+            Create Company
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create Company</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Set up a new tenant with a memorable code, status, and budget allocation model.
+            </p>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="rounded-lg border bg-muted/20 p-4 space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Company name</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Acme Inc."
+                    disabled={saving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="code">Code</Label>
+                  <Input
+                    id="code"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    placeholder="ACME"
+                    disabled={saving}
+                  />
+                  <p className="text-xs text-muted-foreground">Short & unique ID used in reports and APIs.</p>
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="code">Code</Label>
-                <Input
-                  id="code"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  placeholder="ACME"
-                />
-                <p className="text-xs text-muted-foreground">Short & unique ID used in reports and APIs.</p>
+                <Label>Budget allocation model</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setBudgetAllocationMode("money")}
+                    disabled={saving}
+                    className={cn(
+                      "rounded-md border bg-background p-3 text-left transition-colors",
+                      budgetAllocationMode === "money" ? "border-indigo-500 ring-2 ring-indigo-100 dark:ring-indigo-900/40" : "hover:bg-muted/50"
+                    )}
+                  >
+                    <span className="text-sm font-semibold">Money value</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">Allocate budgets directly in PKR.</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBudgetAllocationMode("quantity")}
+                    disabled={saving}
+                    className={cn(
+                      "rounded-md border bg-background p-3 text-left transition-colors",
+                      budgetAllocationMode === "quantity" ? "border-indigo-500 ring-2 ring-indigo-100 dark:ring-indigo-900/40" : "hover:bg-muted/50"
+                    )}
+                  >
+                    <span className="text-sm font-semibold">Quantity</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">Allocate product quantities that calculate budget value.</span>
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
-              <div>
-                <Label htmlFor="org-status">Status</Label>
-                <p className="text-xs text-muted-foreground">Inactive companies remain hidden from assignments.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="org-status"
-                  checked={status}
-                  onCheckedChange={(v: boolean | "indeterminate") => setStatus(Boolean(v))}
-                />
-                <Badge variant={status ? "default" : "outline"}>{status ? "Active" : "Inactive"}</Badge>
+              <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                <div>
+                  <Label htmlFor="org-status">Status</Label>
+                  <p className="text-xs text-muted-foreground">Inactive companies remain hidden from assignments.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="org-status"
+                    checked={status}
+                    onCheckedChange={(v: boolean | "indeterminate") => setStatus(Boolean(v))}
+                    disabled={saving}
+                  />
+                  <Badge variant={status ? "default" : "outline"}>{status ? "Active" : "Inactive"}</Badge>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-        <DialogFooter>
-          <Button onClick={submit} className="gap-2" disabled={!name || !code}>
-            <Save className="h-4 w-4" />
-            Save Company
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button onClick={submit} className="gap-2" disabled={!name || !code || saving}>
+              <Save className="h-4 w-4" />
+              Save Company
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <PremiumConfirmDialog
+        open={confirmModeOpen}
+        onOpenChange={setConfirmModeOpen}
+        onConfirm={createCompany}
+        title="Confirm Budget Model"
+        description={`This company will use ${budgetAllocationMode === "quantity" ? "quantity-based" : "money-value"} budget allocation. This action cannot be undone after the company is created.`}
+        confirmText="Create Company"
+        cancelText="Review"
+        type="warning"
+        isLoading={saving}
+      />
+    </>
   )
 }
 

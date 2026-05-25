@@ -8,6 +8,7 @@ import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
 import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 import { buildAppMonthPeriods, getAppMonthPeriod, parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
+import { getBudgetAllocationModeForOrganization } from "@/lib/server/budget-allocation-mode"
 
 /**
  * Validate numeric ID parameter
@@ -541,6 +542,13 @@ export async function PUT(req: NextRequest) {
     if (role === "HEAD_OFFICE" && branch.organizationId !== orgId) {
       return NextResponse.json({
         error: "Unauthorized: Branch belongs to different organization"
+      }, { status: 403 })
+    }
+
+    const budgetAllocationMode = await getBudgetAllocationModeForOrganization(branch.organizationId)
+    if (budgetAllocationMode === "quantity") {
+      return NextResponse.json({
+        error: "This organization uses quantity-based budgeting. Allocate budgets from Budget by Quantity."
       }, { status: 403 })
     }
 

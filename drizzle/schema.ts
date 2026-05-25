@@ -686,6 +686,7 @@ export const users = pgTable("users", {
 export const orderItems = pgTable("order_items", {
 	id: serial().primaryKey().notNull(),
 	organizationId: integer("organization_id"),
+	organizationInventoryId: integer("organization_inventory_id"),
 	orderId: integer("order_id").notNull(),
 	globalProductId: integer("global_product_id").notNull(),
 	productName: varchar("product_name", { length: 255 }).notNull(),
@@ -698,6 +699,7 @@ export const orderItems = pgTable("order_items", {
 }, (table) => [
 	index("order_items_order_idx").using("btree", table.orderId.asc().nullsLast().op("int4_ops")),
 	index("order_items_org_idx").using("btree", table.organizationId.asc().nullsLast().op("int4_ops")),
+	index("order_items_organization_inventory_idx").using("btree", table.organizationInventoryId.asc().nullsLast().op("int4_ops")),
 	index("order_items_product_idx").using("btree", table.globalProductId.asc().nullsLast().op("int4_ops")),
 	index("order_items_product_order_idx").using("btree", table.globalProductId.asc().nullsLast().op("int4_ops"), table.orderId.asc().nullsLast().op("int4_ops")),
 	foreignKey({

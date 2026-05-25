@@ -17,6 +17,7 @@ import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/glob
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
 import { type DateRange } from "@/lib/hooks/use-sales-performance"
+import { BUDGET_ALLOCATION_MODE_SETTING_KEY, parseBudgetAllocationMode } from "@/lib/budget-allocation-mode"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -121,7 +122,13 @@ export default function BudgetsPage() {
     return `/api/v1/budgets?${params.toString()}`
   }, [isHeadOffice, isInitialized, organizationId, dateRange, activePreset, selectedMonths, selectedYears, contextBranchIds, selectedGroupIds])
 
+  const settingsEndpoint = useMemo(() => {
+    if (!isHeadOffice || !isInitialized || !organizationId) return null
+    return `/api/v1/settings?organizationId=${organizationId}`
+  }, [isHeadOffice, isInitialized, organizationId])
+
   const { data: budgetsData, mutate } = useSWR<any>(budgetsEndpoint, fetcher)
+  const { data: settingsData } = useSWR<any>(settingsEndpoint, fetcher)
 
   const resetBudgetFilters = useCallback(() => {
     handleDateChange(null, "all")
@@ -132,6 +139,13 @@ export default function BudgetsPage() {
   }, [handleDateChange, mutate, setContextBranchIds])
 
   const budgets: BudgetAllocation[] = budgetsData?.budgets || []
+  const budgetAllocationMode = parseBudgetAllocationMode(
+    settingsData?.data?.find((setting: any) => setting.key === BUDGET_ALLOCATION_MODE_SETTING_KEY)?.value
+  )
+  const isQuantityBudgetMode = budgetAllocationMode === "quantity"
+  const moneyAllocationDisabledTitle = isQuantityBudgetMode
+    ? "This organization uses quantity-based budgeting. Allocate budgets from Budget by Quantity."
+    : undefined
 
   const formatAmount = (cents: number) => formatPKR(cents / 100)
 
@@ -467,10 +481,10 @@ export default function BudgetsPage() {
           />
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <Button onClick={() => setShowBulkDialog(true)} variant="outline" className="flex-1 font-bold uppercase text-[10px] tracking-widest border-slate-200 dark:border-slate-800 rounded-xl px-6">
+          <Button onClick={() => setShowBulkDialog(true)} disabled={isQuantityBudgetMode} title={moneyAllocationDisabledTitle} variant="outline" className="flex-1 font-bold uppercase text-[10px] tracking-widest border-slate-200 dark:border-slate-800 rounded-xl px-6">
             <Zap className="h-3.5 w-3.5 mr-2 text-amber-500" /> Bulk Allocate
           </Button>
-          <Button onClick={() => setShowEmptyAllDialog(true)} variant="outline" className="flex-1 font-bold uppercase text-[10px] tracking-widest border-slate-200 dark:border-slate-800 rounded-xl px-6 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 transition-colors">
+          <Button onClick={() => setShowEmptyAllDialog(true)} disabled={isQuantityBudgetMode} title={moneyAllocationDisabledTitle} variant="outline" className="flex-1 font-bold uppercase text-[10px] tracking-widest border-slate-200 dark:border-slate-800 rounded-xl px-6 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 transition-colors">
             <Trash2 className="h-3.5 w-3.5 mr-2" /> Empty All
           </Button>
         </div>
@@ -583,6 +597,8 @@ export default function BudgetsPage() {
                         <Button
                           size="sm"
                           onClick={() => handleEditBudget(budget)}
+                          disabled={isQuantityBudgetMode}
+                          title={moneyAllocationDisabledTitle}
                           className="h-7 px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold uppercase tracking-wide shadow-sm"
                         >
                           <Edit2 className="h-3 w-3 mr-1" />
@@ -592,8 +608,9 @@ export default function BudgetsPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleEmptyBudget(budget)}
+                          disabled={isQuantityBudgetMode}
                           className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                          title="Reset budget to zero"
+                          title={moneyAllocationDisabledTitle || "Reset budget to zero"}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
