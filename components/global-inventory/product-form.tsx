@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { formatPKR } from "@/lib/utils"
 import { useRouter } from "next/navigation"
-import useSWR from "swr"
+import useSWR, { useSWRConfig } from "swr"
 import { fetcher } from "@/lib/fetcher"
 
 type GlobalProduct = {
@@ -64,9 +64,16 @@ type ProductFormProps = {
   onSuccess?: () => void
 }
 
+type NextProductCodeResponse = {
+  productCode: string
+}
+
+const NEXT_PRODUCT_CODE_ENDPOINT = "/api/v1/admin/global-inventory/next-code"
+
 export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: ProductFormProps) {
   const { toast } = useToast()
   const router = useRouter()
+  const { mutate: mutateSWRCache } = useSWRConfig()
 
   const [productData, setProductData] = useState<ProductFormState>({
     productCode: "",
@@ -85,6 +92,12 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
     discountEndAt: "",
     discountActive: false,
   })
+
+  const { data: nextProductCodeData } = useSWR<NextProductCodeResponse>(
+    mode === "create" ? NEXT_PRODUCT_CODE_ENDPOINT : null,
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnMount: true, dedupingInterval: 0 }
+  )
 
   useEffect(() => {
     if (initialProduct && mode === "edit") {
@@ -113,6 +126,18 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
       })
     }
   }, [initialProduct, mode])
+
+  useEffect(() => {
+    if (mode !== "create" || !nextProductCodeData?.productCode) {
+      return
+    }
+
+    setProductData((prev) => (
+      prev.productCode
+        ? prev
+        : { ...prev, productCode: nextProductCodeData.productCode }
+    ))
+  }, [mode, nextProductCodeData?.productCode])
 
   const [imageUploadMode, setImageUploadMode] = useState<"upload" | "url">("upload")
   const [isUploadingImage, setIsUploadingImage] = useState(false)
@@ -350,6 +375,9 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
           title: mode === "edit" ? "Product updated" : "Product created",
           description: result.message,
         })
+        if (mode === "create") {
+          await mutateSWRCache(NEXT_PRODUCT_CODE_ENDPOINT)
+        }
         onSuccess ? onSuccess() : router.push("/global-inventory")
       } else {
         // Detailed error message from backend

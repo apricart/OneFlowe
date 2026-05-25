@@ -44,6 +44,10 @@ interface Modifier {
   status: string
 }
 
+interface NextProductCodeResponse {
+  productCode: string
+}
+
 interface ProductFormProps {
   product?: Product
   onSubmit: (product: Omit<Product, 'id'>) => void
@@ -53,6 +57,7 @@ interface ProductFormProps {
 }
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
+const NEXT_PRODUCT_CODE_ENDPOINT = "/api/v1/admin/global-inventory/next-code"
 
 const MODIFIER_TYPES = [
   { value: "unit", label: "Unit" },
@@ -84,6 +89,12 @@ export function ProductForm({
   })
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const { data: nextProductCodeData } = useSWR<NextProductCodeResponse>(
+    product ? null : NEXT_PRODUCT_CODE_ENDPOINT,
+    fetcher,
+    { revalidateOnFocus: false, revalidateOnMount: true, dedupingInterval: 0 }
+  )
 
   // Fetch categories
   const { data: categoriesData } = useSWR<{ items: Category[] }>(
@@ -124,6 +135,18 @@ export function ProductForm({
       })
     }
   }, [product])
+
+  useEffect(() => {
+    if (product || !nextProductCodeData?.productCode) {
+      return
+    }
+
+    setFormData(prev => (
+      prev.productCode
+        ? prev
+        : { ...prev, productCode: nextProductCodeData.productCode }
+    ))
+  }, [product, nextProductCodeData?.productCode])
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
