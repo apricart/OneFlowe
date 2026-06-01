@@ -17,7 +17,7 @@ import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/glob
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
 import { type DateRange } from "@/lib/hooks/use-sales-performance"
-import { BUDGET_ALLOCATION_MODE_SETTING_KEY, parseBudgetAllocationMode } from "@/lib/budget-allocation-mode"
+import { BUDGET_ALLOCATION_MODE_SETTING_KEY, parseBudgetAllocationMode, type BudgetAllocationMode } from "@/lib/budget-allocation-mode"
 
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
@@ -33,7 +33,17 @@ interface BudgetAllocation {
   amountCreditedCents: number
   remainingCents: number
   baselineBudgetCents: number
+  budgetAllocationMode?: BudgetAllocationMode
 }
+
+const BUDGET_ALLOCATION_MODE_LABELS: Record<BudgetAllocationMode, string> = {
+  money: "Money-based",
+  quantity: "Quantity-based",
+}
+const QUANTITY_ALLOCATION_DISABLED_TITLE = "This branch belongs to a quantity-based organization. Allocate budgets from Budget by Quantity."
+
+const getRowBudgetAllocationMode = (budget: BudgetAllocation, fallbackMode: BudgetAllocationMode) =>
+  parseBudgetAllocationMode(budget.budgetAllocationMode ?? fallbackMode)
 
 const getBudgetUsagePercentage = (budget: BudgetAllocation) => {
   const total = (budget.amountAllocatedCents || 0) + (budget.amountCreditedCents || 0)
@@ -159,6 +169,12 @@ export default function BudgetsPage() {
     })
   }, [budgets, organizationId, contextBranchIds, selectedGroupIds])
 
+  const moneyBasedScopedBudgets = useMemo(
+    () => scopedBudgets.filter((budget) => getRowBudgetAllocationMode(budget, budgetAllocationMode) === "money"),
+    [scopedBudgets, budgetAllocationMode]
+  )
+  const quantityBasedScopedBudgetCount = scopedBudgets.length - moneyBasedScopedBudgets.length
+
   const filteredBudgets = useMemo(() => {
     return scopedBudgets.filter((b) =>
       b.branchName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -175,6 +191,14 @@ export default function BudgetsPage() {
     : 0
 
   const handleEditBudget = (budget: BudgetAllocation) => {
+    if (getRowBudgetAllocationMode(budget, budgetAllocationMode) === "quantity") {
+      return toast({
+        title: "Allocation unavailable",
+        description: QUANTITY_ALLOCATION_DISABLED_TITLE,
+        variant: "destructive",
+      })
+    }
+
     setEditingBudget(budget)
     setNewAmount("") // Start with empty field since we're adding, not replacing
     setAllocationType("addon")
@@ -183,6 +207,14 @@ export default function BudgetsPage() {
 
   const handleSaveBudget = async () => {
     if (!editingBudget || !newAmount) return
+    if (getRowBudgetAllocationMode(editingBudget, budgetAllocationMode) === "quantity") {
+      return toast({
+        title: "Allocation unavailable",
+        description: QUANTITY_ALLOCATION_DISABLED_TITLE,
+        variant: "destructive",
+      })
+    }
+
     const amountCents = Math.round(parseFloat(newAmount) * 100)
     if (!Number.isFinite(amountCents) || amountCents < 0) {
       return toast({ title: "Invalid amount", variant: "destructive" })
@@ -239,12 +271,27 @@ export default function BudgetsPage() {
   }
 
   const handleEmptyBudget = (budget: BudgetAllocation) => {
+    if (getRowBudgetAllocationMode(budget, budgetAllocationMode) === "quantity") {
+      return toast({
+        title: "Reset unavailable",
+        description: QUANTITY_ALLOCATION_DISABLED_TITLE,
+        variant: "destructive",
+      })
+    }
+
     setEmptyingBudget(budget)
     setShowEmptyDialog(true)
   }
 
   const handleConfirmEmptyBudget = async () => {
     if (!emptyingBudget) return
+    if (getRowBudgetAllocationMode(emptyingBudget, budgetAllocationMode) === "quantity") {
+      return toast({
+        title: "Reset unavailable",
+        description: QUANTITY_ALLOCATION_DISABLED_TITLE,
+        variant: "destructive",
+      })
+    }
 
     // Client-side validation: Cannot empty budget if there is spending
     const currentSpentCents = (emptyingBudget.amountSpentCents || 0) + (emptyingBudget.amountHeldCents || 0)
@@ -321,6 +368,14 @@ export default function BudgetsPage() {
 
   const handleBulkAllocate = async () => {
     if (!bulkAmount) return
+    if (moneyBasedScopedBudgets.length === 0) {
+      return toast({
+        title: "No money-based branches",
+        description: "Quantity-based organizations are skipped for money budget allocation.",
+        variant: "destructive",
+      })
+    }
+
     const amountCents = Math.round(parseFloat(bulkAmount) * 100)
     if (!Number.isFinite(amountCents) || amountCents < 0) {
       return toast({ title: "Invalid amount", variant: "destructive" })
@@ -328,8 +383,8 @@ export default function BudgetsPage() {
 
     try {
       let successCount = 0
-      // Apply only to branches in current context scope
-      for (const budget of scopedBudgets) {
+      // Apply only to money-based branches in the current context scope.
+      for (const budget of moneyBasedScopedBudgets) {
         const res = await fetch("/api/v1/budgets", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -343,7 +398,7 @@ export default function BudgetsPage() {
 
       toast({
         title: "Bulk Allocation Complete",
-        description: `Allocated ${formatPKR(parseFloat(bulkAmount))} to ${successCount}/${scopedBudgets.length} branches in view`
+        description: `Allocated ${formatPKR(parseFloat(bulkAmount))} to ${successCount}/${moneyBasedScopedBudgets.length} money-based branches.${quantityBasedScopedBudgetCount > 0 ? ` Skipped ${quantityBasedScopedBudgetCount} quantity-based branches.` : ""}`
       })
       setShowBulkDialog(false)
       setBulkAmount("")
@@ -481,7 +536,13 @@ export default function BudgetsPage() {
           />
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <Button onClick={() => setShowBulkDialog(true)} disabled={isQuantityBudgetMode} title={moneyAllocationDisabledTitle} variant="outline" className="flex-1 font-bold uppercase text-[10px] tracking-widest border-slate-200 dark:border-slate-800 rounded-xl px-6">
+          <Button
+            onClick={() => setShowBulkDialog(true)}
+            disabled={scopedBudgets.length > 0 && moneyBasedScopedBudgets.length === 0}
+            title={moneyBasedScopedBudgets.length === 0 ? moneyAllocationDisabledTitle || "No money-based branches available for bulk allocation." : quantityBasedScopedBudgetCount > 0 ? "Quantity-based branches will be skipped." : undefined}
+            variant="outline"
+            className="flex-1 font-bold uppercase text-[10px] tracking-widest border-slate-200 dark:border-slate-800 rounded-xl px-6"
+          >
             <Zap className="h-3.5 w-3.5 mr-2 text-amber-500" /> Bulk Allocate
           </Button>
           <Button onClick={() => setShowEmptyAllDialog(true)} disabled={isQuantityBudgetMode} title={moneyAllocationDisabledTitle} variant="outline" className="flex-1 font-bold uppercase text-[10px] tracking-widest border-slate-200 dark:border-slate-800 rounded-xl px-6 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-rose-600 transition-colors">
@@ -524,6 +585,9 @@ export default function BudgetsPage() {
                 const isMedium = spendingPercent >= 70
                 const totalBudget = budget.amountAllocatedCents + (budget.amountCreditedCents || 0)
                 const hasNoBudget = totalBudget === 0 && budget.baselineBudgetCents === 0
+                const rowBudgetAllocationMode = parseBudgetAllocationMode(budget.budgetAllocationMode ?? budgetAllocationMode)
+                const rowIsQuantityBudgetMode = rowBudgetAllocationMode === "quantity"
+                const rowMoneyAllocationDisabledTitle = rowIsQuantityBudgetMode ? QUANTITY_ALLOCATION_DISABLED_TITLE : undefined
 
                 return (
                   <TableRow
@@ -545,6 +609,17 @@ export default function BudgetsPage() {
                         <span className="font-semibold text-[13px] text-slate-800 dark:text-slate-200 truncate" title={budget.branchName}>
                           {budget.branchName}
                         </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "shrink-0 whitespace-nowrap rounded-md px-2 py-0.5 text-[9px] font-semibold uppercase tracking-widest",
+                            rowBudgetAllocationMode === "quantity"
+                              ? "border-indigo-200/70 bg-indigo-50/70 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300"
+                              : "border-sky-200/70 bg-sky-50/70 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300"
+                          )}
+                        >
+                          {BUDGET_ALLOCATION_MODE_LABELS[rowBudgetAllocationMode]}
+                        </Badge>
                       </div>
                     </TableCell>
 
@@ -597,8 +672,8 @@ export default function BudgetsPage() {
                         <Button
                           size="sm"
                           onClick={() => handleEditBudget(budget)}
-                          disabled={isQuantityBudgetMode}
-                          title={moneyAllocationDisabledTitle}
+                          disabled={rowIsQuantityBudgetMode}
+                          title={rowMoneyAllocationDisabledTitle}
                           className="h-7 px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold uppercase tracking-wide shadow-sm"
                         >
                           <Edit2 className="h-3 w-3 mr-1" />
@@ -608,9 +683,9 @@ export default function BudgetsPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleEmptyBudget(budget)}
-                          disabled={isQuantityBudgetMode}
+                          disabled={rowIsQuantityBudgetMode}
                           className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                          title={moneyAllocationDisabledTitle || "Reset budget to zero"}
+                          title={rowMoneyAllocationDisabledTitle || "Reset budget to zero"}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -777,13 +852,22 @@ export default function BudgetsPage() {
           <DialogHeader>
             <DialogTitle className="text-slate-900 dark:text-white">Allocate Budget to All Branches</DialogTitle>
             <DialogDescription>
-              Quickly allocate the same monthly budget to all {scopedBudgets.length} branches in the current context
+              Quickly allocate the same monthly budget to {moneyBasedScopedBudgets.length} money-based branches in the current context.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
-              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">This will update ALL branches to the same amount</p>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                This will update eligible money-based branches to the same amount.
+              </p>
             </div>
+            {quantityBasedScopedBudgetCount > 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800/50 dark:bg-amber-950/20">
+                <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                  {quantityBasedScopedBudgetCount} quantity-based branch{quantityBasedScopedBudgetCount === 1 ? "" : "es"} will not be included in this bulk allocation.
+                </p>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-semibold mb-2 text-slate-900 dark:text-white">Monthly Budget Amount (PKR)</label>
               <div className="relative">
@@ -791,13 +875,13 @@ export default function BudgetsPage() {
                 <Input type="number" value={bulkAmount} onChange={(e) => setBulkAmount(e.target.value)} placeholder="0.00" step="0.01" min="0" className="pl-12 text-lg font-bold h-11" />
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                This amount will be assigned to all {scopedBudgets.length} branches currently in view
+                This amount will be assigned to {moneyBasedScopedBudgets.length} money-based branch{moneyBasedScopedBudgets.length === 1 ? "" : "es"} currently in view.
               </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowBulkDialog(false)}>Cancel</Button>
-            <Button onClick={handleBulkAllocate} className="gap-2">
+            <Button onClick={handleBulkAllocate} disabled={moneyBasedScopedBudgets.length === 0} className="gap-2">
               <Zap className="h-4 w-4" />
               Allocate All Branches
             </Button>

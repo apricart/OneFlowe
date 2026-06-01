@@ -76,6 +76,9 @@ function getLoginErrorMessage(errorCode: string) {
   if (errorCode === "USER_INACTIVE") {
     return "Your account has been deactivated. Please contact support."
   }
+  if (errorCode === "AUTH_DATABASE_ERROR") {
+    return "We couldn't reach the authentication service. Please try again or contact support."
+  }
   return errorCode
 }
 

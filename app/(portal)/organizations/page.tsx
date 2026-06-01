@@ -1,6 +1,6 @@
 "use client"
 import { useOrganizations, useBranches } from "@/lib/hooks/use-api"
-type Organization = { id: number; name: string; code: string; status?: "active" | "inactive" }
+type Organization = { id: number; name: string; code: string; status?: "active" | "inactive"; budgetAllocationMode?: BudgetAllocationMode }
 type Branch = { id: number; name: string; code: string; organizationId: number; status?: "active" | "inactive" }
 import { Button } from "@/components/ui/button"
 import { Loader2, Pencil, Trash2, Building2, GitBranch, Save } from "lucide-react"
@@ -22,11 +22,17 @@ import { Search } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import {
   type BudgetAllocationMode,
+  parseBudgetAllocationMode,
 } from "@/lib/budget-allocation-mode"
+import { Loader } from "lucide-react";
 
 const LEGACY_HIDE_PRICES_SETTING_KEY = "hide_prices_for_branch_and_order_portal"
 const HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY = "hide_prices_for_branch_admin"
 const HIDE_ORDER_PORTAL_PRICES_SETTING_KEY = "hide_prices_for_order_portal"
+const BUDGET_ALLOCATION_MODE_LABELS: Record<BudgetAllocationMode, string> = {
+  money: "Money-based",
+  quantity: "Quantity-based",
+}
 
 type PriceVisibilitySettings = {
   hideBranchAdminPrices: boolean
@@ -388,6 +394,7 @@ export default function OrganizationsPage() {
                         title={org.name}
                         subtitle={`${org.code} • ${branchesByOrgId.get(org.id)?.length || 0} branches`}
                         status={isActiveStatus(org.status)}
+                        budgetAllocationMode={org.budgetAllocationMode}
                       >
                         <EditOrgDialog
                           org={org}
@@ -641,6 +648,7 @@ function OrganizationListItem({
   children,
   status,
   badgeLabel,
+  budgetAllocationMode,
 }: {
   title: string
   subtitle: string
@@ -649,6 +657,7 @@ function OrganizationListItem({
   children?: ReactNode
   status?: boolean
   badgeLabel?: string
+  budgetAllocationMode?: BudgetAllocationMode
 }) {
   const initials = title
     .split(" ")
@@ -657,6 +666,9 @@ function OrganizationListItem({
     .join("")
     .slice(0, 2)
     .toUpperCase()
+  const normalizedBudgetAllocationMode = budgetAllocationMode
+    ? parseBudgetAllocationMode(budgetAllocationMode)
+    : null
 
   return (
     <div
@@ -710,21 +722,36 @@ function OrganizationListItem({
           </div>
           <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{subtitle}</p>
         </div>
-        <div className="flex w-full shrink-0 items-center justify-between gap-2 pt-1 sm:w-[96px] sm:flex-col sm:items-end sm:justify-start sm:pt-0">
-          {typeof status === "boolean" ? (
-            <Badge variant={status ? "outline" : "secondary"} className={cn(
-              "text-[9px] uppercase font-semibold tracking-widest px-2 py-0.5 rounded-md",
-              status
-                ? "border-emerald-200/50 bg-emerald-50/50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
-                : "bg-slate-100 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400"
-            )}>
-              {status ? "Active" : "Inactive"}
-            </Badge>
-          ) : badgeLabel ? (
-            <Badge variant="secondary" className="text-[9px] uppercase font-semibold tracking-widest px-2 py-0.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded-md border-transparent shadow-none">
-              {badgeLabel}
-            </Badge>
-          ) : null}
+        <div className="flex w-full shrink-0 flex-col items-end gap-2 pt-1 sm:w-[180px] sm:pt-0">
+          <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:justify-end">
+            {normalizedBudgetAllocationMode && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[9px] uppercase font-semibold tracking-widest px-2 py-0.5 rounded-md whitespace-nowrap",
+                  normalizedBudgetAllocationMode === "quantity"
+                    ? "border-indigo-200/70 bg-indigo-50/70 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300"
+                    : "border-sky-200/70 bg-sky-50/70 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300"
+                )}
+              >
+                {BUDGET_ALLOCATION_MODE_LABELS[normalizedBudgetAllocationMode]}
+              </Badge>
+            )}
+            {typeof status === "boolean" ? (
+              <Badge variant={status ? "outline" : "secondary"} className={cn(
+                "text-[9px] uppercase font-semibold tracking-widest px-2 py-0.5 rounded-md",
+                status
+                  ? "border-emerald-200/50 bg-emerald-50/50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
+                  : "bg-slate-100 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400"
+              )}>
+                {status ? "Active" : "Inactive"}
+              </Badge>
+            ) : badgeLabel ? (
+              <Badge variant="secondary" className="text-[9px] uppercase font-semibold tracking-widest px-2 py-0.5 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 rounded-md border-transparent shadow-none">
+                {badgeLabel}
+              </Badge>
+            ) : null}
+          </div>
           {children && (
             <div
               className="flex min-w-[72px] items-center justify-end gap-1"
@@ -837,6 +864,8 @@ function CreateOrgDialog({
   const [code, setCode] = useState("")
   const [status, setStatus] = useState<boolean>(true)
   const [budgetAllocationMode, setBudgetAllocationMode] = useState<BudgetAllocationMode>("money")
+  const [hideBranchAdminPrices, setHideBranchAdminPrices] = useState(false)
+  const [hideOrderPortalPrices, setHideOrderPortalPrices] = useState(false)
   const [confirmModeOpen, setConfirmModeOpen] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -850,6 +879,10 @@ function CreateOrgDialog({
           code,
           status: status ? "active" : "inactive",
           budgetAllocationMode,
+          priceVisibility: {
+            hideBranchAdminPrices,
+            hideOrderPortalPrices,
+          },
         }),
         headers: { "Content-Type": "application/json" }
       })
@@ -861,6 +894,8 @@ function CreateOrgDialog({
       setCode("")
       setStatus(true)
       setBudgetAllocationMode("money")
+      setHideBranchAdminPrices(false)
+      setHideOrderPortalPrices(false)
       setConfirmModeOpen(false)
       onCreated(data.item)
     } catch (e: any) {
@@ -958,6 +993,36 @@ function CreateOrgDialog({
                     disabled={saving}
                   />
                   <Badge variant={status ? "default" : "outline"}>{status ? "Active" : "Inactive"}</Badge>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                  <div>
+                    <Label htmlFor="create-hide-branch-admin-price-visibility">Hide Branch Admin prices</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Hide product and order prices from branch admin users.
+                    </p>
+                  </div>
+                  <Switch
+                    id="create-hide-branch-admin-price-visibility"
+                    checked={hideBranchAdminPrices}
+                    onCheckedChange={setHideBranchAdminPrices}
+                    disabled={saving}
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
+                  <div>
+                    <Label htmlFor="create-hide-order-portal-price-visibility">Hide Order Portal prices</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Hide product and order prices from order portal users.
+                    </p>
+                  </div>
+                  <Switch
+                    id="create-hide-order-portal-price-visibility"
+                    checked={hideOrderPortalPrices}
+                    onCheckedChange={setHideOrderPortalPrices}
+                    disabled={saving}
+                  />
                 </div>
               </div>
             </div>
@@ -1267,7 +1332,7 @@ function EditOrgDialog({
               }
             }}
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? "Saving..." : "Save Changes"}
           </Button>
         </DialogFooter>

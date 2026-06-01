@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { budgets, branches, auditLogs, budgetAddons, groups, orders } from "@/db/schema"
+import { budgets, branches, auditLogs, budgetAddons, groups, orders, organizationSettings } from "@/db/schema"
 import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
 import { redactAnalyticsPrices, shouldHidePricesForRole } from "@/lib/price-visibility"
 import { buildAppMonthPeriods, getAppMonthPeriod, parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 import { getBudgetAllocationModeForOrganization } from "@/lib/server/budget-allocation-mode"
+import {
+  BUDGET_ALLOCATION_MODE_SETTING_KEY,
+  DEFAULT_BUDGET_ALLOCATION_MODE,
+  parseBudgetAllocationMode,
+} from "@/lib/budget-allocation-mode"
 
 /**
  * Validate numeric ID parameter
@@ -37,6 +42,46 @@ const parseNumberList = (value: string | null, min = 1, max = Number.MAX_SAFE_IN
 
 const buildBudgetPeriods = (startDate: Date, endDate: Date, months: number[], years: number[]) => {
   return buildAppMonthPeriods(startDate, endDate, months, years)
+}
+
+async function withBudgetAllocationModes<T extends { organizationId: number | null }>(items: T[]) {
+  const organizationIds = Array.from(new Set(
+    items
+      .map((item) => item.organizationId)
+      .filter((id): id is number => typeof id === "number")
+  ))
+
+  if (organizationIds.length === 0) {
+    return items.map((item) => ({
+      ...item,
+      budgetAllocationMode: DEFAULT_BUDGET_ALLOCATION_MODE,
+    }))
+  }
+
+  const settings = await db
+    .select({
+      organizationId: organizationSettings.organizationId,
+      value: organizationSettings.value,
+    })
+    .from(organizationSettings)
+    .where(and(
+      inArray(organizationSettings.organizationId, organizationIds),
+      eq(organizationSettings.key, BUDGET_ALLOCATION_MODE_SETTING_KEY),
+    ))
+
+  const modeByOrganizationId = new Map(
+    settings.map((setting) => [
+      setting.organizationId,
+      parseBudgetAllocationMode(setting.value),
+    ])
+  )
+
+  return items.map((item) => ({
+    ...item,
+    budgetAllocationMode: item.organizationId
+      ? modeByOrganizationId.get(item.organizationId) ?? DEFAULT_BUDGET_ALLOCATION_MODE
+      : DEFAULT_BUDGET_ALLOCATION_MODE,
+  }))
 }
 
 /**
@@ -249,7 +294,7 @@ export async function GET(req: NextRequest) {
             }
           })
 
-          return NextResponse.json({ budgets: aggregatedBudgets })
+          return NextResponse.json({ budgets: await withBudgetAllocationModes(aggregatedBudgets) })
         }
 
         const currentMonth = periodParam && /^\d{4}-\d{2}$/.test(periodParam) 
@@ -353,7 +398,7 @@ export async function GET(req: NextRequest) {
             }
           })
 
-          return NextResponse.json({ budgets: finalBudgets })
+          return NextResponse.json({ budgets: await withBudgetAllocationModes(finalBudgets) })
         }
 
         const budgetsWithRemaining = allBranches.map(b => {
@@ -372,7 +417,7 @@ export async function GET(req: NextRequest) {
           }
         })
 
-        return NextResponse.json({ budgets: budgetsWithRemaining })
+        return NextResponse.json({ budgets: await withBudgetAllocationModes(budgetsWithRemaining) })
       } catch (err: any) {
         logError(err, 'BUDGETS_GET_ALL')
         return NextResponse.json({ error: "Failed to fetch budgets" }, { status: 500 })

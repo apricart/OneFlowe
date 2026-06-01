@@ -217,6 +217,9 @@ export async function POST(req: NextRequest) {
       await invalidateByPrefix('inv:branch-products')
       await invalidateByPrefix('inv:org-products')
     }
+    if (key === BUDGET_ALLOCATION_MODE_SETTING_KEY) {
+      await invalidateByPrefix('organizations')
+    }
 
     return ok({
       data: result,

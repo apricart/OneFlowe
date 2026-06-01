@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { organizationSettings, organizations as orgsTable } from "@/db/schema"
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
@@ -12,7 +12,12 @@ import {
   BUDGET_ALLOCATION_MODE_SETTING_KEY,
   DEFAULT_BUDGET_ALLOCATION_MODE,
   isBudgetAllocationMode,
+  parseBudgetAllocationMode,
 } from "@/lib/budget-allocation-mode"
+import {
+  HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY,
+  HIDE_ORDER_PORTAL_PRICES_SETTING_KEY,
+} from "@/lib/price-visibility"
 
 /**
  * GET /api/v1/organizations - List organizations
@@ -51,7 +56,33 @@ export async function GET() {
         .where(where)
         .orderBy(desc(orgsTable.createdAt))
 
-      return { items, count: items.length }
+      if (items.length === 0) return { items, count: 0 }
+
+      const budgetModeSettings = await db
+        .select({
+          organizationId: organizationSettings.organizationId,
+          value: organizationSettings.value,
+        })
+        .from(organizationSettings)
+        .where(and(
+          inArray(organizationSettings.organizationId, items.map((item) => item.id)),
+          eq(organizationSettings.key, BUDGET_ALLOCATION_MODE_SETTING_KEY),
+        ))
+
+      const budgetModeByOrgId = new Map(
+        budgetModeSettings.map((setting) => [
+          setting.organizationId,
+          parseBudgetAllocationMode(setting.value),
+        ])
+      )
+
+      return {
+        items: items.map((item) => ({
+          ...item,
+          budgetAllocationMode: budgetModeByOrgId.get(item.id) ?? DEFAULT_BUDGET_ALLOCATION_MODE,
+        })),
+        count: items.length,
+      }
     }, CACHE_TTL.LISTING)
 
     return ok(result)
@@ -115,6 +146,24 @@ export async function POST(req: Request) {
       return error("Budget allocation mode must be either money or quantity", 400)
     }
 
+    const priceVisibility = body.priceVisibility && typeof body.priceVisibility === "object"
+      ? body.priceVisibility
+      : {}
+    const hideBranchAdminPrices = priceVisibility.hideBranchAdminPrices === undefined
+      ? false
+      : priceVisibility.hideBranchAdminPrices
+    const hideOrderPortalPrices = priceVisibility.hideOrderPortalPrices === undefined
+      ? false
+      : priceVisibility.hideOrderPortalPrices
+
+    if (typeof hideBranchAdminPrices !== "boolean") {
+      return error("hideBranchAdminPrices must be a boolean", 400)
+    }
+
+    if (typeof hideOrderPortalPrices !== "boolean") {
+      return error("hideOrderPortalPrices must be a boolean", 400)
+    }
+
     // Check for duplicate name
     const existingName = await db
       .select({ id: orgsTable.id })
@@ -147,11 +196,23 @@ export async function POST(req: Request) {
         })
         .returning()
 
-      await tx.insert(organizationSettings).values({
-        organizationId: createdOrganization.id,
-        key: BUDGET_ALLOCATION_MODE_SETTING_KEY,
-        value: budgetAllocationMode,
-      })
+      await tx.insert(organizationSettings).values([
+        {
+          organizationId: createdOrganization.id,
+          key: BUDGET_ALLOCATION_MODE_SETTING_KEY,
+          value: budgetAllocationMode,
+        },
+        {
+          organizationId: createdOrganization.id,
+          key: HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY,
+          value: hideBranchAdminPrices,
+        },
+        {
+          organizationId: createdOrganization.id,
+          key: HIDE_ORDER_PORTAL_PRICES_SETTING_KEY,
+          value: hideOrderPortalPrices,
+        },
+      ])
 
       return createdOrganization
     })
@@ -161,7 +222,10 @@ export async function POST(req: Request) {
     await invalidateByPrefix('settings')
 
     return ok({
-      item,
+      item: {
+        ...item,
+        budgetAllocationMode,
+      },
       message: "Organization created successfully"
     }, { status: 201 })
 

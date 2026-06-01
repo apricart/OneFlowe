@@ -62,6 +62,50 @@ async function getNextAuthCallbackError(response: Response): Promise<string | nu
     }
 }
 
+function sanitizeAuthCallbackError(error: string | null): string | null {
+    if (!error) return error
+
+    const safeErrors = new Set([
+        "CredentialsSignin",
+        "MFA_REQUIRED",
+        "ORGANIZATION_INACTIVE",
+        "BRANCH_INACTIVE",
+        "USER_INACTIVE",
+    ])
+
+    if (safeErrors.has(error)) return error
+
+    const normalized = error.toLowerCase()
+    const looksLikeInternalDbError =
+        normalized.includes("failed query") ||
+        normalized.includes("params:") ||
+        normalized.includes("select ") ||
+        normalized.includes("tenant/user") ||
+        normalized.includes("database")
+
+    return looksLikeInternalDbError ? "AUTH_DATABASE_ERROR" : error
+}
+
+async function sanitizeNextAuthCallbackResponse(response: Response): Promise<Response> {
+    try {
+        const data = await response.clone().json() as { url?: string }
+        if (!data?.url) return response
+
+        const url = new URL(data.url)
+        const rawError = url.searchParams.get("error")
+        const safeError = sanitizeAuthCallbackError(rawError)
+        if (!rawError || safeError === rawError) return response
+
+        url.searchParams.set("error", safeError || "AUTH_DATABASE_ERROR")
+        return NextResponse.json(
+            { ...data, url: url.toString() },
+            { status: response.status }
+        )
+    } catch {
+        return response
+    }
+}
+
 // GET requests pass through (session checks, CSRF token)
 export { handler as GET }
 
@@ -83,14 +127,15 @@ export async function POST(req: NextRequest, context: any) {
 
         const response = await handler(req, context)
         const callbackError = await getNextAuthCallbackError(response)
+        const sanitizedResponse = await sanitizeNextAuthCallbackResponse(response)
 
         // Valid credentials should not consume the brute-force login budget.
         // MFA_REQUIRED is a successful first factor and continues in the MFA flow.
-        if ((response.ok && !callbackError) || (callbackError && callbackError !== "CredentialsSignin")) {
+        if ((response.ok && !callbackError) || (callbackError && sanitizeAuthCallbackError(callbackError) !== "CredentialsSignin")) {
             await resetRateLimit(identifier, "login")
         }
 
-        return response
+        return sanitizedResponse
     }
 
     return handler(req, context)
