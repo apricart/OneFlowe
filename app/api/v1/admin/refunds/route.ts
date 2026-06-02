@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, orderItems, organizations, branches, users, budgets, auditLogs, refunds, refundItems } from "@/db/schema"
 import { eq, or, ilike, sql, and, desc } from "drizzle-orm"
+import { releaseRefundedQuantityBudget } from "@/lib/server/product-quantity-budget-ledger"
 
 /**
  * GET /api/v1/admin/refunds/search?q=<order_tid_or_id>
@@ -510,6 +511,15 @@ export async function POST(req: NextRequest) {
             } else {
                 console.warn(`[Refunds] No budget found for branch ${orderData.branchId}, period ${currentMonth}. Refund credit skipped.`)
             }
+
+            await releaseRefundedQuantityBudget(
+                tx,
+                orderData,
+                refundDetails.map((item) => ({
+                    itemId: item.itemId,
+                    quantity: item.quantity,
+                })),
+            )
 
             // 3. Create audit log
             await tx.insert(auditLogs).values({

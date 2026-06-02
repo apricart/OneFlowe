@@ -45,7 +45,7 @@ export default function BranchReportsPage() {
     const pathname = usePathname()
     const searchParams = useSearchParams()
 
-    const { data: session } = useSession()
+    const { data: session, status: sessionStatus } = useSession()
     const { 
         organizationId: contextOrgId,
         userBranchId: sessionUserBranchId,
@@ -304,8 +304,10 @@ export default function BranchReportsPage() {
             { label: "Branch Name",        value: (b: any) => b.name || "-" },
             { label: "Status",             value: (b: any) => b.status?.toLowerCase() === 'active' ? 'Active' : b.status?.toLowerCase() === 'deleted' ? 'Deleted' : 'Inactive' },
             ...(role !== "BRANCH_ADMIN" ? [{ label: "Cluster / Group", value: (b: any) => b.groupName || "UNGROUPED" }] : []),
-            { label: `${revenueHeader} (PKR)`, value: (b: any) => (b.revenue / 100).toFixed(2) },
-            { label: "Refunds (PKR)",      value: (b: any) => (b.refunds / 100).toFixed(2) },
+            ...(!pricesHidden ? [
+                { label: `${revenueHeader} (PKR)`, value: (b: any) => (b.revenue / 100).toFixed(2) },
+                { label: "Refunds (PKR)",      value: (b: any) => (b.refunds / 100).toFixed(2) },
+            ] : []),
             { label: "Orders",             value: (b: any) => b.totalOrders || 0 },
             { label: "Fulfillment",        value: (b: any) => `${b.fulfilledOrders} / ${b.totalOrders}` }
         ]
@@ -329,18 +331,10 @@ export default function BranchReportsPage() {
     }
 
     const pricesHidden = Boolean((globalData as any)?.pricesHidden || (chartData as any)?.pricesHidden || (reportData as any)?.pricesHidden)
+    const priceVisibilityKnown = [globalData, chartData, reportData].some((data: any) => typeof data?.pricesHidden === "boolean")
+    const isPriceVisibilityPending = role === "BRANCH_ADMIN" && !priceVisibilityKnown
 
-    if (!hasMounted) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950"><Loader2 className="h-8 w-8 animate-spin text-emerald-500" /></div>
-
-    if (pricesHidden) {
-        return (
-            <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] p-6">
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                    Financial branch reports are hidden by organization settings.
-                </div>
-            </div>
-        )
-    }
+    if (!hasMounted || sessionStatus === "loading" || isPriceVisibilityPending) return <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950"><Loader2 className="h-8 w-8 animate-spin text-emerald-500" /></div>
 
     return (
         <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] pb-20">
@@ -393,19 +387,23 @@ export default function BranchReportsPage() {
             <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
                 {/* ━━━ BENTO KPI GRID ━━━ */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <KPICard 
-                        title={revenueLabel}
-                        value={formatPKR(summary.totalRevenue / 100)}
-                        icon={TrendingUp}
-                        colorScheme="emerald"
-                        trend={revenueTrend}
-                    />
-                    <KPICard 
-                        title={avgLabel}
-                        value={formatPKR(summary.totalOrders > 0 ? (summary.totalRevenue / summary.totalOrders) / 100 : 0)}
-                        icon={Calculator}
-                        colorScheme="blue"
-                    />
+                    {!pricesHidden && (
+                        <KPICard
+                            title={revenueLabel}
+                            value={formatPKR(summary.totalRevenue / 100)}
+                            icon={TrendingUp}
+                            colorScheme="emerald"
+                            trend={revenueTrend}
+                        />
+                    )}
+                    {!pricesHidden && (
+                        <KPICard
+                            title={avgLabel}
+                            value={formatPKR(summary.totalOrders > 0 ? (summary.totalRevenue / summary.totalOrders) / 100 : 0)}
+                            icon={Calculator}
+                            colorScheme="blue"
+                        />
+                    )}
                     <KPICard 
                         title="Fulfilled Orders"
                         value={summary.totalOrders.toLocaleString()}
@@ -520,10 +518,10 @@ export default function BranchReportsPage() {
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.3} />
                                                 <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} dy={10} />
                                                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }} tickFormatter={(v) => `₨${v >= 1000 ? (v/1000).toFixed(0)+'K' : v}`} />
-                                                <Tooltip content={(props) => <CustomTooltip {...props} compare={compare} revenueLabel={revenueLabel} />} />
+                                                <Tooltip content={(props) => <CustomTooltip {...props} compare={compare} revenueLabel={revenueLabel} pricesHidden={pricesHidden} />} />
                                                 <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 30, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }} />
-                                                <Bar dataKey="revenue" name={revenueLabel} fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
-                                                {compare && <Bar dataKey="prevRevenue" name={`Prior ${revenueLabel}`} fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />}
+                                                <Bar dataKey={pricesHidden ? "orders" : "revenue"} name={pricesHidden ? "Orders" : revenueLabel} fill="#10b981" radius={[6, 6, 0, 0]} barSize={32} />
+                                                {compare && !pricesHidden && <Bar dataKey="prevRevenue" name={`Prior ${revenueLabel}`} fill="#cbd5e1" radius={[6, 6, 0, 0]} barSize={32} />}
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     </div>
@@ -641,8 +639,8 @@ export default function BranchReportsPage() {
                                             <TableHead className="pl-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Rank & Branch</TableHead>
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Status</TableHead>
                                             {role !== "BRANCH_ADMIN" && <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400">Cluster / Group</TableHead>}
-                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{revenueHeader} (PKR)</TableHead>
-                                            <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>
+                                            {!pricesHidden && <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">{revenueHeader} (PKR)</TableHead>}
+                                            {!pricesHidden && <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right text-rose-500">Refunds</TableHead>}
                                             <TableHead className="h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-right">Orders</TableHead>
                                             <TableHead className="px-8 h-14 font-black text-[10px] uppercase tracking-[0.2em] text-slate-400 text-center">Fulfillment</TableHead>
                                         </TableRow>
@@ -680,12 +678,16 @@ export default function BranchReportsPage() {
                                                             </Badge>
                                                         </TableCell>
                                                     )}
-                                                    <TableCell className="text-right">
-                                                        <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">{formatPKR(branch.revenue / 100)}</span>
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <span className="text-sm font-bold text-rose-500 tracking-tight">{formatPKR(branch.refunds / 100)}</span>
-                                                    </TableCell>
+                                                    {!pricesHidden && (
+                                                        <TableCell className="text-right">
+                                                            <span className="text-sm font-black text-slate-900 dark:text-white tracking-tight">{formatPKR(branch.revenue / 100)}</span>
+                                                        </TableCell>
+                                                    )}
+                                                    {!pricesHidden && (
+                                                        <TableCell className="text-right">
+                                                            <span className="text-sm font-bold text-rose-500 tracking-tight">{formatPKR(branch.refunds / 100)}</span>
+                                                        </TableCell>
+                                                    )}
                                                     <TableCell className="text-right font-black text-sm text-slate-900 dark:text-white tracking-tight">
                                                         {branch.totalOrders.toLocaleString()}
                                                     </TableCell>
@@ -712,7 +714,7 @@ export default function BranchReportsPage() {
     )
 }
 
-function CustomTooltip({ active, payload, label, compare, revenueLabel }: any) {
+function CustomTooltip({ active, payload, label, compare, revenueLabel, pricesHidden }: any) {
     if (active && payload && payload.length) {
         const d = payload[0].payload
         return (
@@ -721,11 +723,11 @@ function CustomTooltip({ active, payload, label, compare, revenueLabel }: any) {
                 <div className="space-y-3">
                     <div className="flex items-center justify-between gap-10">
                         <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full bg-emerald-500" /> {revenueLabel}
+                            <div className="h-2 w-2 rounded-full bg-emerald-500" /> {pricesHidden ? "Orders" : revenueLabel}
                         </span>
-                        <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{formatPKR(payload[0].value)}</span>
+                        <span className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{pricesHidden ? Number(payload[0].value || 0).toLocaleString() : formatPKR(payload[0].value)}</span>
                     </div>
-                    {compare && (
+                    {!pricesHidden && compare && (
                         <div className="flex items-center justify-between gap-10">
                             <span className="text-xs font-bold text-slate-600 dark:text-slate-400 flex items-center gap-2">
                                 <div className="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-600" /> Prior {revenueLabel}

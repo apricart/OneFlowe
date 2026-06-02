@@ -75,27 +75,27 @@ export function PremiumConfirmDialog({
 
     return (
         <AlertDialog open={open} onOpenChange={onOpenChange}>
-            <AlertDialogContent className="max-w-[400px] border-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] p-8 overflow-hidden">
+            <AlertDialogContent className="max-w-[300px] border-none bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl rounded-[1.875rem] shadow-[0_24px_48px_-9px_rgba(0,0,0,0.2)] p-6 overflow-hidden">
                 {/* Abstract Background Elements */}
-                <div className={cn("absolute -top-24 -right-24 w-48 h-48 opacity-20 blur-3xl rounded-full", iconConfig.pulse)} />
+                <div className={cn("absolute -top-[72px] -right-[72px] w-36 h-36 opacity-20 blur-3xl rounded-full", iconConfig.pulse)} />
 
                 <AlertDialogHeader className="relative z-10 flex flex-col items-center sm:items-center text-center">
-                    <div className={cn("w-20 h-20 rounded-[2rem] flex items-center justify-center mb-6 relative group", iconConfig.bg)}>
-                        <div className={cn("absolute inset-0 rounded-[2rem] opacity-40 animate-ping", iconConfig.pulse)} />
-                        <Icon size={40} className={cn("relative z-10", iconConfig.color)} />
+                    <div className={cn("h-[60px] w-[60px] rounded-3xl flex items-center justify-center mb-[18px] relative group", iconConfig.bg)}>
+                        <div className={cn("absolute inset-0 rounded-3xl opacity-40 animate-ping", iconConfig.pulse)} />
+                        <Icon size={30} className={cn("relative z-10", iconConfig.color)} />
                     </div>
-                    <AlertDialogTitle className="text-2xl font-black text-slate-900 dark:text-white leading-tight">
+                    <AlertDialogTitle className="text-lg font-black text-slate-900 dark:text-white leading-tight">
                         {title}
                     </AlertDialogTitle>
                     {description && (
-                        <AlertDialogDescription className="text-slate-500 dark:text-slate-400 font-medium text-base mt-3 leading-relaxed">
+                        <AlertDialogDescription className="text-slate-500 dark:text-slate-400 font-medium text-sm mt-2.5 leading-relaxed">
                             {description}
                         </AlertDialogDescription>
                     )}
                 </AlertDialogHeader>
 
-                <AlertDialogFooter className="flex-col sm:flex-row gap-3 mt-8 relative z-10 w-full sm:justify-center">
-                    <AlertDialogCancel className="w-full sm:w-1/2 h-14 rounded-2xl border-slate-200 dark:border-slate-800 font-bold text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300">
+                <AlertDialogFooter className="flex-col sm:flex-row gap-2.5 mt-6 relative z-10 w-full sm:justify-center">
+                    <AlertDialogCancel className="w-full sm:w-1/2 h-[42px] rounded-xl border-slate-200 dark:border-slate-800 font-bold text-sm text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300">
                         {cancelText}
                     </AlertDialogCancel>
                     <AlertDialogAction
@@ -105,7 +105,7 @@ export function PremiumConfirmDialog({
                         }}
                         disabled={isLoading}
                         className={cn(
-                            "w-full sm:w-1/2 h-14 rounded-2xl font-black text-base shadow-lg shadow-blue-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]",
+                            "w-full sm:w-1/2 h-[42px] rounded-xl font-black text-sm shadow-lg shadow-blue-500/20 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]",
                             iconConfig.button
                         )}
                     >

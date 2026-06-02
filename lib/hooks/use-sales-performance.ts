@@ -7,7 +7,9 @@ import { fetcher } from "@/lib/fetcher"
 export type SalesSeriesPoint = {
     label: string
     sales: number
+    netSales?: number
     orders: number
+    itemQuantity?: number
 }
 
 export type BranchSalesPoint = {
@@ -23,8 +25,11 @@ export type SalesPerformanceResponse = {
     totalSales: number
     totalNetSales?: number
     totalOrders: number
+    totalItemsSold?: number
     avgSales: number
-    peakPeriod: { label: string; sales: number; orders: number } | null
+    avgItemsSold?: number
+    peakPeriod: { label: string; sales: number; orders: number; itemQuantity?: number } | null
+    peakQuantityPeriod?: { label: string; sales: number; orders: number; itemQuantity?: number } | null
     branchSales: BranchSalesPoint[]
     organizationSales?: { organizationId: number; organizationName: string; sales: number; orders: number }[]
     comparison?: {

@@ -148,7 +148,16 @@ export function OrdersDirectory({
         body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : undefined
       })
 
-      const data = await res.json()
+      const responseText = await res.text()
+      const data = responseText
+        ? (() => {
+            try {
+              return JSON.parse(responseText)
+            } catch {
+              return { error: responseText }
+            }
+          })()
+        : {}
       if (!res.ok) throw new Error(data.error || "Action failed")
 
       toast({

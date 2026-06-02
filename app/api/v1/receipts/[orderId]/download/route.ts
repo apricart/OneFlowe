@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders } from "@/db/schema"
-import { eq } from "drizzle-orm"
+import { orders, orderItems, refundItems, refunds } from "@/db/schema"
+import { and, eq, sql } from "drizzle-orm"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
+import { aggregateReceiptRefundItems, getReceiptNetTotal } from "@/lib/receipt-display"
+import { getOrderDerivedStatus } from "@/lib/order-status"
 import { jsPDF } from "jspdf"
 import path from "path"
 import fs from "fs"
@@ -47,9 +49,38 @@ export async function GET(
             return NextResponse.json({ error: "Receipt download is unavailable while prices are hidden" }, { status: 403 })
         }
 
+        const refundRows = await db
+            .select({
+                productName: orderItems.productName,
+                quantity: refundItems.quantity,
+                amount: refundItems.amountCents,
+            })
+            .from(refundItems)
+            .innerJoin(refunds, eq(refundItems.refundId, refunds.id))
+            .innerJoin(orderItems, eq(refundItems.orderItemId, orderItems.id))
+            .where(and(
+                eq(refunds.orderId, orderId),
+                sql`UPPER(${refunds.status}) IN ('APPROVED', 'COMPLETED')`,
+            ))
+
+        const totalApprovedRefundAmount = (order.refundAmountCents || 0) / 100
+        const refundedItems = aggregateReceiptRefundItems(refundRows.map((item) => ({
+            productName: item.productName || "Unknown",
+            quantity: item.quantity || 0,
+            amount: (item.amount || 0) / 100,
+        })))
+        const derivedStatus = getOrderDerivedStatus({
+            status: order.status,
+            refundAmountCents: order.refundAmountCents,
+        }, "fulfilled")
+
         const receiptData = {
             ...(order.receiptData as any),
-            status: order.status
+            status: derivedStatus.label,
+            statusKey: derivedStatus.key,
+            refund: totalApprovedRefundAmount,
+            refundedItems,
+            totalAmount: getReceiptNetTotal(order.receiptData as any, totalApprovedRefundAmount),
         }
 
         // Generate PDF (A4 size: 210mm x 297mm)
@@ -113,7 +144,8 @@ export async function GET(
         doc.text("STATUS:", 155, 54)
         doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2])
         doc.setFont("helvetica", "bold")
-        doc.text(String(receiptData.status || "PENDING").toUpperCase(), 190, 54, { align: "right" })
+        doc.setFontSize(8)
+        doc.text(String(receiptData.status || "PENDING").toUpperCase(), 190, 60, { align: "right" })
 
         // --- Billed To Box ---
         doc.setFillColor(colors.light[0], colors.light[1], colors.light[2])
@@ -238,6 +270,38 @@ export async function GET(
         if (receiptData.deliveryCharges > 0) {
             doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2])
             drawSummaryRow("Delivery:", `PKR ${Number(receiptData.deliveryCharges).toLocaleString()}`)
+        }
+
+        if (Number(receiptData.refund) > 0) {
+            doc.setTextColor(239, 68, 68)
+            doc.setFont("helvetica", "normal")
+            doc.setFontSize(10)
+            doc.text("Refunded:", 130, y)
+            doc.text(`-PKR ${Number(receiptData.refund).toLocaleString()}`, 185, y, { align: "right" })
+            y += 7
+        }
+
+        if (receiptData.refundedItems?.length > 0) {
+            y += 2
+            if (y > 245) { doc.addPage(); y = 20; }
+
+            doc.setTextColor(239, 68, 68)
+            doc.setFont("helvetica", "bold")
+            doc.setFontSize(8)
+            doc.text("REFUNDED ITEMS", 130, y)
+            y += 6
+
+            receiptData.refundedItems.forEach((item: any) => {
+                if (y > 260) { doc.addPage(); y = 20; }
+                doc.setFont("helvetica", "normal")
+                doc.setFontSize(8)
+                doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2])
+                const label = `${item.quantity}x ${String(item.productName || "Unknown").slice(0, 26)}`
+                doc.text(label, 130, y)
+                doc.setTextColor(239, 68, 68)
+                doc.text(`-PKR ${Number(item.amount || 0).toLocaleString()}`, 185, y, { align: "right" })
+                y += 5
+            })
         }
 
         // Total Box

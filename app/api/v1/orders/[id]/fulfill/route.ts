@@ -5,6 +5,7 @@ import { eq, and, sql } from "drizzle-orm"
 import { getCurrentUser } from "@/lib/auth"
 import { verifyApprovalToken } from "@/lib/approval-token"
 import { logFulfillmentAttempt } from "@/lib/global-logger"
+import { moveHeldQuantityBudgetToUsedForOrder } from "@/lib/server/product-quantity-budget-ledger"
 
 export async function POST(
   req: Request,
@@ -81,6 +82,8 @@ export async function POST(
         amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
       }).where(eq(budgets.id, budget.id))
     }
+
+    await moveHeldQuantityBudgetToUsedForOrder(tx, ord)
   })
 
   return ok({ message: "Order fulfilled successfully" })

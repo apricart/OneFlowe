@@ -31,6 +31,7 @@ import { GroupFilter } from "@/components/reports/group-filter"
 import { useAppContext } from "@/components/context/app-context"
 import { cn } from "@/lib/utils"
 import { BUDGET_ALLOCATION_MODE_SETTING_KEY, parseBudgetAllocationMode } from "@/lib/budget-allocation-mode"
+import { CheckCircle } from "lucide-react"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -781,7 +782,7 @@ export default function BudgetByQuantityPage() {
                 disabled={isSavingAllocation || productsLoading || allocationSummary.totalQuantity <= 0 || dialogProductsData?.pricesHidden}
                 className="gap-2 bg-indigo-600 text-white hover:bg-indigo-700"
               >
-                {isSavingAllocation ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {/* {isSavingAllocation ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} */}
                 Apply Quantity Allocation
               </Button>
             </DialogFooter>

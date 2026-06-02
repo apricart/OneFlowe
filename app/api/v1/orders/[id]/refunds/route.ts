@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { refunds, orders, budgets, auditLogs, users, orderItems, refundItems } from "@/db/schema"
 import { eq, sql, desc, inArray, and } from "drizzle-orm"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
+import { releaseRefundedQuantityBudget } from "@/lib/server/product-quantity-budget-ledger"
 
 export async function GET(
   req: NextRequest,
@@ -316,6 +317,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             )
             .where(eq(budgets.id, budget.id))
         }
+
+        await releaseRefundedQuantityBudget(
+          tx,
+          orderData,
+          refundDetails.map((item) => ({
+            orderItemId: item.orderItemId,
+            quantity: item.quantity,
+          })),
+        )
 
         // Update order refund amount and preserve original status
         await tx

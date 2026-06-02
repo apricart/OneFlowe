@@ -11,6 +11,10 @@ import { generateReceiptData } from "@/lib/receipt-generator"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
 import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 import { getBudgetAllocationModeForOrganization } from "@/lib/server/budget-allocation-mode"
+import {
+  moveHeldQuantityBudgetToUsedForOrder,
+  releaseHeldQuantityBudgetForOrder,
+} from "@/lib/server/product-quantity-budget-ledger"
 
 
 
@@ -795,7 +799,9 @@ export async function PUT(req: NextRequest) {
           amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`
         }).where(eq(budgets.id, budget.id))
 
-        // 3. Restore Stock
+        // 3. Release quantity budget and restore stock
+        await releaseHeldQuantityBudgetForOrder(tx, ord)
+
         const orderItemsList = await tx.select().from(orderItems).where(eq(orderItems.orderId, id))
         for (const item of orderItemsList) {
           await tx.update(globalProducts)
@@ -848,6 +854,8 @@ export async function PUT(req: NextRequest) {
           amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,
           amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
         }).where(eq(budgets.id, budget.id))
+
+        await moveHeldQuantityBudgetToUsedForOrder(tx, ord)
 
         logFulfillmentAttempt(id, ord.tid, (session.user as any).id, (session.user as any).email || 'unknown', role, true)
       }

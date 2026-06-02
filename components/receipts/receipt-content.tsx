@@ -6,6 +6,7 @@ import { Download, X, Printer, FileText, CheckCircle2, ChevronRight } from "luci
 import { useToast } from "@/hooks/use-toast"
 import useSWR from "swr"
 import Image from "next/image"
+import { getReceiptItemQuantity } from "@/lib/receipt-display"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -84,6 +85,10 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
     }
 
     let serialCounter = 0
+    const itemQuantity = getReceiptItemQuantity(receiptData.items)
+    const refundedItems = Array.isArray(receiptData.refundedItems) ? receiptData.refundedItems : []
+    const refundAmount = Number(receiptData.refund || 0)
+    const statusKey = String(receiptData.statusKey || receiptData.status || "PENDING").toLowerCase()
 
     return (
         <div className={`receipt-container ${standalone ? 'py-8 px-4' : 'p-2'}`}>
@@ -380,11 +385,13 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                         <div className="detail-row">
                             <span className="detail-label">Status:</span>
                             <span className={`detail-value px-1.5 rounded text-[10px] uppercase ${
-                                (receiptData.status || "PENDING").toLowerCase() === "fulfilled" 
+                                statusKey === "fulfilled" 
                                     ? "text-emerald-600 bg-emerald-50" 
-                                    : (receiptData.status || "PENDING").toLowerCase() === "approved"
+                                    : statusKey === "partially_fulfilled" || statusKey === "partially_refunded"
+                                    ? "text-indigo-600 bg-indigo-50"
+                                    : statusKey === "approved"
                                     ? "text-blue-600 bg-blue-50"
-                                    : (receiptData.status || "PENDING").toLowerCase() === "pending"
+                                    : statusKey === "pending"
                                     ? "text-amber-600 bg-amber-50"
                                     : "text-rose-600 bg-rose-50"
                             }`}>
@@ -399,7 +406,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                         </div>
                         <div className="detail-row">
                             <span className="detail-label">Items:</span>
-                            <span className="detail-value">{receiptData?.items?.reduce((acc: number, c: any) => acc + (c.items?.length || 0), 0) || 0}</span>
+                            <span className="detail-value">{itemQuantity}</span>
                         </div>
                         {!pricesHidden && <div className="detail-row">
                             <span className="detail-label">Subtotal:</span>
@@ -471,6 +478,25 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                             <div className="summary-row">
                                 <span className="text-slate-400 font-medium">Delivery Charges</span>
                                 <span className="font-bold text-slate-700">PKR {Number(receiptData.deliveryCharges).toLocaleString()}</span>
+                            </div>
+                        )}
+                        {refundAmount > 0 && (
+                            <div className="summary-row">
+                                <span className="text-slate-400 font-medium">Refunded</span>
+                                <span className="font-bold text-red-500">-PKR {refundAmount.toLocaleString()}</span>
+                            </div>
+                        )}
+                        {refundedItems.length > 0 && (
+                            <div className="mt-3 rounded-md border border-red-100 bg-red-50/60 p-3">
+                                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-red-500">Refunded Items</p>
+                                <div className="space-y-1.5">
+                                    {refundedItems.map((item: any, index: number) => (
+                                        <div key={`${item.productName}-${index}`} className="flex justify-between gap-3 text-[11px]">
+                                            <span className="font-semibold text-slate-600">{item.quantity}x {item.productName}</span>
+                                            <span className="font-bold text-red-500">-PKR {Number(item.amount || 0).toLocaleString()}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
 

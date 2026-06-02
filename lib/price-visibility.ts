@@ -79,7 +79,11 @@ export function redactReceiptPrices(receiptData: any) {
     tax: null,
     discount: null,
     deliveryCharges: null,
+    refund: null,
     totalAmount: null,
+    refundedItems: Array.isArray(receiptData.refundedItems)
+      ? receiptData.refundedItems.map((item: any) => ({ ...item, amount: null }))
+      : receiptData.refundedItems,
     items: redactReceiptItems(receiptData.items),
   }
 }

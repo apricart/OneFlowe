@@ -5,6 +5,8 @@ import { db } from "@/lib/db"
 import { orders, refunds, refundItems, orderItems } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { shouldHidePricesForRole, redactReceiptPrices } from "@/lib/price-visibility"
+import { aggregateReceiptRefundItems, getReceiptNetTotal } from "@/lib/receipt-display"
+import { getOrderDerivedStatus } from "@/lib/order-status"
 
 export async function GET(
     req: NextRequest,
@@ -104,10 +106,30 @@ export async function GET(
             }>
         }>)
 
+        const approvedRefunds = refundHistory.filter((refund) =>
+            ["APPROVED", "COMPLETED"].includes(String(refund.status || "").toUpperCase())
+        )
+        const totalApprovedRefundAmount = (order.refundAmountCents || 0) / 100
+        const refundedItems = aggregateReceiptRefundItems(
+            approvedRefunds.flatMap((refund) => refund.items.map((item) => ({
+                productName: item.productName,
+                quantity: item.quantity,
+                amount: item.amount,
+            })))
+        )
+        const derivedStatus = getOrderDerivedStatus({
+            status: order.status,
+            refundAmountCents: order.refundAmountCents,
+        }, "fulfilled")
+
         // Dynamically override receipt data status with actual order status for accuracy
         const finalReceiptData = order.receiptData ? {
             ...(order.receiptData as any),
-            status: order.status
+            status: derivedStatus.label,
+            statusKey: derivedStatus.key,
+            refund: totalApprovedRefundAmount,
+            refundedItems,
+            totalAmount: getReceiptNetTotal(order.receiptData as any, totalApprovedRefundAmount),
         } : null
         const safeReceiptData = pricesHidden ? redactReceiptPrices(finalReceiptData) : finalReceiptData
 
@@ -117,7 +139,7 @@ export async function GET(
             status: order.status,
             receiptData: safeReceiptData,
             refundHistory,
-            totalRefundAmount: pricesHidden ? null : (order.refundAmountCents || 0) / 100,
+            totalRefundAmount: pricesHidden ? null : totalApprovedRefundAmount,
             pricesHidden,
         })
     } catch (e: any) {

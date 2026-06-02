@@ -4,7 +4,6 @@ import { useMemo, useState, useCallback, useEffect } from "react"
 import { motion } from "framer-motion"
 import useSWR from "swr"
 import { fetcher } from "@/lib/fetcher"
-import { useLifetimeStats } from "@/lib/hooks/use-dashboard-analytics"
 import { useSalesPerformance, type DateRange } from "@/lib/hooks/use-sales-performance"
 import { Card, CardContent } from "@/components/ui/card"
 import { NotificationRail } from "@/components/notifications/notification-center"
@@ -21,10 +20,11 @@ import { DrillDownSheet, type DrillDownType } from "@/components/dashboard/drill
 import { MultiSelectFilter } from "@/components/reports/multi-select-filter"
 
 import { useAppContext } from "@/components/context/app-context"
-import { startOfDay, endOfDay, format } from "date-fns"
+import { startOfDay, endOfDay } from "date-fns"
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
 export function BranchAdminDashboard() {
-  const { organizationId, branchId } = useAppContext()
+  const { organizationId, branchId, userRole } = useAppContext()
 
   // Branch Admin defaults to 'Today'
   const defaultPreset = "today" as const
@@ -148,6 +148,8 @@ export function BranchAdminDashboard() {
     chartGranularity
   )
   const pricesHidden = Boolean((perfData as any)?.pricesHidden || (chartPerfData as any)?.pricesHidden || (allTimePerf as any)?.pricesHidden)
+  const priceVisibilityKnown = [perfData, chartPerfData, allTimePerf].some((data: any) => typeof data?.pricesHidden === "boolean")
+  const isPriceVisibilityPending = userRole === "BRANCH_ADMIN" && !priceVisibilityKnown
 
   const normalizedChartData = useMemo(() => {
     const raw = chartPerfData?.seriesData ?? []
@@ -170,6 +172,7 @@ export function BranchAdminDashboard() {
           label: String(y),
           sales: match?.sales ?? 0,
           orders: match?.orders ?? 0,
+          itemQuantity: match?.itemQuantity ?? 0,
         }
       })
     }
@@ -186,6 +189,7 @@ export function BranchAdminDashboard() {
         label: monthPrefix,
         sales: match?.sales ?? 0,
         orders: match?.orders ?? 0,
+        itemQuantity: match?.itemQuantity ?? 0,
       }
     })
   }, [chartPerfData, chartQuickFilter, chartMonths, chartYears, activePreset, months, years, hasChartFilters])
@@ -227,6 +231,7 @@ export function BranchAdminDashboard() {
 
   const totalRevenue = perfData?.totalNetSales ?? perfData?.totalSales ?? 0
   const totalOrders = perfData?.totalOrders ?? 0
+  const totalItemsSold = perfData?.totalItemsSold ?? 0
   const pendingCount = pendingData?.totalOrders ?? 0
   const fulfilledCount = fulfilledData?.totalOrders ?? 0
   const partialCount = partialData?.totalOrders ?? 0
@@ -277,17 +282,37 @@ export function BranchAdminDashboard() {
 
       {/* ━━━ KPI Cards ━━━ */}
       <div className="relative z-10 grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {!pricesHidden && <BankingKPICard
-          icon={TrendingUp} title="Purchased"
-          value={formatPKR(totalRevenue, { maximumFractionDigits: 0 })}
-          subtitle={getPresetLabel(activePreset, dateRange)}
-          gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
-          onClick={() => handleKPIOpen("REVENUE")}
-          trend={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.type as "up" | "down" | undefined}
-          trendValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.value}
-          comparisonValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.label}
-          comparisonLabel="VS LAST"
-        />}
+        {isPriceVisibilityPending ? (
+          <BankingKPICard
+            icon={TrendingUp} title="Loading"
+            value="..."
+            subtitle="Checking access"
+            gradient="from-slate-400 to-slate-600" iconBg="text-slate-600 bg-slate-600" delay={0}
+          />
+        ) : pricesHidden ? (
+          <BankingKPICard
+            icon={TrendingUp} title="Items"
+            value={totalItemsSold.toLocaleString()}
+            subtitle={getPresetLabel(activePreset, dateRange)}
+            gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
+            trend={buildTrend(totalItemsSold, perfData?.comparison?.totalItemsSold)?.type as "up" | "down" | undefined}
+            trendValue={buildTrend(totalItemsSold, perfData?.comparison?.totalItemsSold)?.value}
+            comparisonValue={buildTrend(totalItemsSold, perfData?.comparison?.totalItemsSold)?.label}
+            comparisonLabel="VS LAST"
+          />
+        ) : (
+          <BankingKPICard
+            icon={TrendingUp} title="Purchased"
+            value={formatPKR(totalRevenue, { maximumFractionDigits: 0 })}
+            subtitle={getPresetLabel(activePreset, dateRange)}
+            gradient="from-emerald-500 to-teal-600" iconBg="text-emerald-600 bg-emerald-600" delay={0}
+            onClick={() => handleKPIOpen("REVENUE")}
+            trend={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.type as "up" | "down" | undefined}
+            trendValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.value}
+            comparisonValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.label}
+            comparisonLabel="VS LAST"
+          />
+        )}
         <BankingKPICard
           icon={Package} title="Orders"
           value={totalOrders.toLocaleString()}
@@ -369,13 +394,6 @@ export function BranchAdminDashboard() {
 
       {/* ━━━ Sales Performance Chart ━━━ */}
       <div className="space-y-6">
-        {pricesHidden ? (
-          <Card className="border border-slate-200/80 dark:border-slate-800/60 shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
-            <CardContent className="p-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
-              Financial charts are hidden by organization settings.
-            </CardContent>
-          </Card>
-        ) : (
         <Card className="border border-slate-200/80 dark:border-slate-800/60 shadow-sm bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl overflow-hidden glass-card">
           <CardContent className="p-5">
             <div className="flex flex-wrap items-center gap-3 mb-6 p-3 bg-slate-50/50 dark:bg-slate-800/20 rounded-xl border border-slate-100 dark:border-slate-800/50">
@@ -415,10 +433,18 @@ export function BranchAdminDashboard() {
               )}
             </div>
 
-            {isLoadingChart ? (
+            {isLoadingChart || isPriceVisibilityPending ? (
               <div className="h-[400px] flex items-center justify-center rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
                 <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 dark:border-slate-800 border-t-emerald-500" />
               </div>
+            ) : pricesHidden ? (
+              <BranchQuantityBarChart
+                seriesData={normalizedChartData}
+                totalItemsSold={chartPerfData?.totalItemsSold ?? 0}
+                avgItemsSold={chartPerfData?.avgItemsSold ?? 0}
+                peakPeriod={chartPerfData?.peakQuantityPeriod ?? null}
+                granularity={chartGranularity}
+              />
             ) : (
               <SalesPerformanceBarChart
                 seriesData={normalizedChartData}
@@ -435,7 +461,6 @@ export function BranchAdminDashboard() {
             )}
           </CardContent>
         </Card>
-        )}
       </div>
 
       {!pricesHidden && <DrillDownSheet
@@ -454,6 +479,135 @@ export function BranchAdminDashboard() {
         compareYears={compareYears}
       />}
     </motion.main>
+  )
+}
+
+type BranchQuantityPoint = {
+  label: string
+  orders?: number
+  itemQuantity?: number
+}
+
+function QuantityTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null
+  const point = payload[0]?.payload as BranchQuantityPoint | undefined
+
+  return (
+    <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-slate-100 dark:border-slate-800 min-w-[190px]">
+      <p className="font-bold text-slate-800 dark:text-slate-200 text-sm mb-2.5 pb-2 border-b border-slate-100 dark:border-slate-800">{label}</p>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Items</span>
+          <span className="text-sm font-semibold text-slate-900 dark:text-white">{Number(point?.itemQuantity || 0).toLocaleString()}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Orders</span>
+          <span className="text-sm font-semibold text-slate-900 dark:text-white">{Number(point?.orders || 0).toLocaleString()}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BranchQuantityBarChart({
+  seriesData,
+  totalItemsSold,
+  avgItemsSold,
+  peakPeriod,
+  granularity,
+}: {
+  seriesData: BranchQuantityPoint[]
+  totalItemsSold: number
+  avgItemsSold: number
+  peakPeriod: BranchQuantityPoint | null
+  granularity: "hourly" | "daily" | "monthly" | "yearly"
+}) {
+  const isEmpty = !seriesData || seriesData.length === 0 || totalItemsSold === 0
+  const peakLabel = peakPeriod?.label || "-"
+  const peakValue = Number(peakPeriod?.itemQuantity || 0)
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em]">
+            Quantity Distribution
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="rounded-2xl bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/20 p-4">
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Total Items</p>
+          <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">{totalItemsSold.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl bg-blue-500/10 ring-1 ring-inset ring-blue-500/20 p-4">
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Average Items</p>
+          <p className="text-2xl font-black text-blue-600 dark:text-blue-400 tracking-tight">{Math.round(avgItemsSold).toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl bg-amber-500/10 ring-1 ring-inset ring-amber-500/20 p-4">
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-2">Peak Period</p>
+          <p className="text-lg font-black text-amber-600 dark:text-amber-400 tracking-tight truncate">{peakLabel}</p>
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">{peakValue.toLocaleString()} items</p>
+        </div>
+      </div>
+
+      <div className="relative glass-card rounded-[2.5rem] p-8 shadow-2xl overflow-hidden min-h-[440px]">
+        {isEmpty && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/40 dark:bg-slate-950/40 backdrop-blur-[2px]">
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 shadow-inner">
+              <Package className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+            </div>
+            <p className="text-sm font-bold text-slate-400 dark:text-slate-500">No quantity activity recorded for this period</p>
+          </div>
+        )}
+
+        <div className={`h-[380px] w-full transition-opacity duration-500 ${isEmpty ? 'opacity-30 grayscale-[50%]' : 'opacity-100'}`}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={seriesData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+            >
+              <defs>
+                <linearGradient id="branchQuantityBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={1} />
+                  <stop offset="100%" stopColor="#059669" stopOpacity={0.8} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#64748b", fontSize: 11, fontWeight: 700 }}
+                dy={15}
+                minTickGap={10}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#64748b", fontSize: 11, fontWeight: 700 }}
+                tickFormatter={(val) => Number(val).toLocaleString()}
+                width={70}
+                dx={-10}
+              />
+              <Tooltip
+                content={<QuantityTooltip />}
+                cursor={{ fill: "rgba(0,0,0,0.02)" }}
+              />
+              <Bar
+                dataKey="itemQuantity"
+                name="Items"
+                fill="url(#branchQuantityBarGrad)"
+                radius={[4, 4, 0, 0]}
+                animationDuration={1500}
+                barSize={granularity === "daily" && seriesData.length <= 7 ? 60 : undefined}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
   )
 }
 

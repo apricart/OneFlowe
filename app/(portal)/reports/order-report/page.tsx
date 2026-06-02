@@ -95,7 +95,7 @@ export default function OrderReportPage() {
         setBranchIds: setContextBranchIds
     } = useAppContext()
 
-    const { data: session } = useSession()
+    const { data: session, status: sessionStatus } = useSession()
     const role = (session?.user as any)?.role as Role
     const userOrgId = (session?.user as any)?.organizationId
     const organizationId = userOrgId || contextOrgId
@@ -421,9 +421,11 @@ export default function OrderReportPage() {
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
         // Build active column list — single source of truth for both headers and data
+        const financialColumns = new Set(["subtotalValue", "refundValue", "netTotalValue"])
         const activeColumns = ALL_COLUMNS.filter(c => {
             if (role === "BRANCH_ADMIN" && (c.key === "group" || c.key === "branchName")) return false;
             if (role !== "SUPER_ADMIN" && c.key === "organizationName") return false;
+            if (pricesHidden && financialColumns.has(c.key)) return false;
             return isVisible(c.key);
         })
 
@@ -468,18 +470,10 @@ export default function OrderReportPage() {
     }
 
     const pricesHidden = Boolean((globalData as any)?.pricesHidden || (chartData as any)?.pricesHidden || (reportData as any)?.pricesHidden)
+    const priceVisibilityKnown = [globalData, chartData, reportData].some((data: any) => typeof data?.pricesHidden === "boolean")
+    const isPriceVisibilityPending = role === "BRANCH_ADMIN" && !priceVisibilityKnown
 
-    if (!hasMounted) return <div className="flex h-[50vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-400" /></div>
-
-    if (pricesHidden) {
-        return (
-            <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] p-6">
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                    Financial order reports are hidden by organization settings.
-                </div>
-            </div>
-        )
-    }
+    if (!hasMounted || sessionStatus === "loading" || isPriceVisibilityPending) return <div className="flex h-[50vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-indigo-400" /></div>
 
     return (
         <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] transition-colors duration-500 pb-20">
@@ -533,18 +527,22 @@ export default function OrderReportPage() {
             <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
                 {/* ━━━ KPI BENTO GRID ━━━ */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {!pricesHidden && (
+                        <div className="hover:scale-[1.02] transition-all duration-500">
+                            <KPICard title={kpiRevenueLabel} value={formatPKR(summary.totalSales / 100)} icon={TrendingUp} colorScheme="indigo" />
+                        </div>
+                    )}
                     <div className="hover:scale-[1.02] transition-all duration-500">
-                        <KPICard title={kpiRevenueLabel} value={formatPKR(summary.totalSales / 100)} icon={TrendingUp} colorScheme="indigo" />
-                    </div>
-                    <div className="hover:scale-[1.02] transition-all duration-500">
-                        <KPICard title="Refund Impact" value={formatPKR(summary.totalRefunds / 100)} icon={RotateCcw} colorScheme="rose" />
+                        <KPICard title={pricesHidden ? "Items Ordered" : "Refund Impact"} value={pricesHidden ? Number(summary.totalItemsSold || 0).toLocaleString() : formatPKR(summary.totalRefunds / 100)} icon={RotateCcw} colorScheme="rose" />
                     </div>
                     <div className="hover:scale-[1.02] transition-all duration-500">
                         <KPICard title="Total Orders" value={summary.totalOrderCount} icon={Package} colorScheme="blue" />
                     </div>
-                    <div className="hover:scale-[1.02] transition-all duration-500">
-                        <KPICard title={kpiAvgLabel} value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={Calculator} colorScheme="amber" />
-                    </div>
+                    {!pricesHidden && (
+                        <div className="hover:scale-[1.02] transition-all duration-500">
+                            <KPICard title={kpiAvgLabel} value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={Calculator} colorScheme="amber" />
+                        </div>
+                    )}
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
@@ -637,8 +635,8 @@ export default function OrderReportPage() {
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" opacity={0.5} />
                                                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} dy={10} />
                                                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} tickFormatter={(v) => `₨${v / 1000}k`} />
-                                                <RechartsTooltip content={<BarTooltip compare={compare} revenueLabel={chartRevenueLabel} />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
-                                                <Bar dataKey="revenue" fill="url(#revGradient)" radius={[6, 6, 0, 0]} barSize={32} name={`Current ${chartRevenueLabel}`} />
+                                                <RechartsTooltip content={<BarTooltip compare={compare} revenueLabel={chartRevenueLabel} pricesHidden={pricesHidden} />} cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }} />
+                                                <Bar dataKey={pricesHidden ? "orders" : "revenue"} fill="url(#revGradient)" radius={[6, 6, 0, 0]} barSize={32} name={pricesHidden ? "Orders" : `Current ${chartRevenueLabel}`} />
                                                 {compare && <Bar dataKey="prevRevenue" fill="#94a3b8" opacity={0.3} radius={[6, 6, 0, 0]} barSize={32} name={`Prior ${chartRevenueLabel}`} />}
                                                 <Line type="monotone" dataKey="orders" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 2, stroke: '#fff' }} name={chartOrdersLabel} />
                                             </ComposedChart>
@@ -865,9 +863,9 @@ export default function OrderReportPage() {
                                             {isVisible("quantityOrdered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center whitespace-nowrap">Qty Ordered</TableHead>}
                                             {isVisible("quantityDelivered") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-emerald-600 whitespace-nowrap">Qty Delivered</TableHead>}
                                             {isVisible("quantityRefunded") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-center text-rose-500 whitespace-nowrap">Qty Refunded</TableHead>}
-                                            {isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right whitespace-nowrap">Subtotal</TableHead>}
-                                            {isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500 whitespace-nowrap">Refund</TableHead>}
-                                            {isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right whitespace-nowrap">{isBuyer ? "Net Purchased" : "Net Revenue"}</TableHead>}
+                                            {!pricesHidden && isVisible("subtotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right whitespace-nowrap">Subtotal</TableHead>}
+                                            {!pricesHidden && isVisible("refundValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right text-rose-500 whitespace-nowrap">Refund</TableHead>}
+                                            {!pricesHidden && isVisible("netTotalValue") && <TableHead className="h-14 px-8 text-[10px] font-black uppercase tracking-widest text-slate-500 text-right whitespace-nowrap">{isBuyer ? "Net Purchased" : "Net Revenue"}</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -931,9 +929,9 @@ export default function OrderReportPage() {
                                                     {isVisible("quantityOrdered") && <TableCell className="px-8 py-5 text-center text-[12px] font-black font-mono text-slate-900 dark:text-white tabular-nums">{order.quantityOrdered || 0}</TableCell>}
                                                     {isVisible("quantityDelivered") && <TableCell className="px-8 py-5 text-center text-[12px] font-black font-mono text-emerald-600 dark:text-emerald-400 tabular-nums">{(order.quantityOrdered || 0) - (order.quantityRefunded || 0)}</TableCell>}
                                                     {isVisible("quantityRefunded") && <TableCell className="px-8 py-5 text-center text-[12px] font-black font-mono text-rose-500 dark:text-rose-400 tabular-nums">{order.quantityRefunded || 0}</TableCell>}
-                                                    {isVisible("subtotalValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-slate-700 dark:text-slate-200 tabular-nums">{formatPKR(order.subtotalCents / 100)}</TableCell>}
-                                                    {isVisible("refundValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-rose-500 tabular-nums">{order.refundAmountCents > 0 ? `-${formatPKR(order.refundAmountCents / 100)}` : "—"}</TableCell>}
-                                                    {isVisible("netTotalValue") && (
+                                                    {!pricesHidden && isVisible("subtotalValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-slate-700 dark:text-slate-200 tabular-nums">{formatPKR(order.subtotalCents / 100)}</TableCell>}
+                                                    {!pricesHidden && isVisible("refundValue") && <TableCell className="px-8 py-5 text-right text-[11px] font-black font-mono text-rose-500 tabular-nums">{order.refundAmountCents > 0 ? `-${formatPKR(order.refundAmountCents / 100)}` : "—"}</TableCell>}
+                                                    {!pricesHidden && isVisible("netTotalValue") && (
                                                         <TableCell className="px-8 py-5 text-right">
                                                             <div className="inline-flex flex-col items-end">
                                                                 <span className="text-[13px] font-black font-mono text-indigo-600 dark:text-indigo-400 tabular-nums leading-none">
@@ -1000,7 +998,7 @@ function YearFilter({ selected, onChange, allTimeData }: { selected: number[], o
     )
 }
 
-function BarTooltip({ active, payload, label, compare, revenueLabel }: any) {
+function BarTooltip({ active, payload, label, compare, revenueLabel, pricesHidden }: any) {
     if (active && payload && payload.length) {
         return (
             <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 min-w-[200px] backdrop-blur-xl bg-white/90 dark:bg-slate-900/90">
@@ -1021,7 +1019,7 @@ function BarTooltip({ active, payload, label, compare, revenueLabel }: any) {
                                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">{displayName}</span>
                                 </div>
                                 <span className="text-xs font-black text-slate-900 dark:text-white tabular-nums">
-                                    {typeof p.value === 'number' && (p.name.toLowerCase().includes('revenue') || p.name.toLowerCase().includes(revenueLabel.toLowerCase())) ? formatPKR(p.value) : p.value}
+                                    {typeof p.value === 'number' && !pricesHidden && (p.name.toLowerCase().includes('revenue') || p.name.toLowerCase().includes(revenueLabel.toLowerCase())) ? formatPKR(p.value) : p.value}
                                 </span>
                             </div>
                         );

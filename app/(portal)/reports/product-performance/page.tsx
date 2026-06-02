@@ -92,7 +92,7 @@ export default function ProductPerformancePage() {
     }, [tabFromUrl])
     const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
-    const { data: session } = useSession()
+    const { data: session, status: sessionStatus } = useSession()
     const role = (session?.user as any)?.role as Role
     const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
     const [hasMounted, setHasMounted] = useState(false)
@@ -613,12 +613,12 @@ export default function ProductPerformancePage() {
         { key: "productCode", label: "Product Code", value: item.productCode || "-", type: "mono" },
         { key: "productName", label: "Product Name", value: item.productName || "-" },
         { key: "category", label: "Category", value: item.categoryName || "-" },
-        { key: "price", label: priceLabel, value: formatPKR((item.unitPriceCents || item.basePriceCents) / 100), type: "currency" },
+        ...(!pricesHidden ? [{ key: "price", label: priceLabel, value: formatPKR((item.unitPriceCents || item.basePriceCents) / 100), type: "currency" as const }] : []),
         { key: "unit", label: "Unit", value: item.unit || "unit" },
-        { key: "s3", label: "Quantities & Revenue", value: "", type: "section" },
+        { key: "s3", label: pricesHidden ? "Quantities" : "Quantities & Revenue", value: "", type: "section" },
         { key: "qtyOrdered", label: "Qty Ordered", value: String(item.qtyOrdered || 0) },
         { key: "qtyFulfilled", label: "Qty Fulfilled", value: String(item.qtyFulfilled || 0) },
-        { key: "revenue", label: drawerRevenueLabel, value: formatPKR(item.revenueGeneratedCents / 100), type: "currency" },
+        ...(!pricesHidden ? [{ key: "revenue", label: drawerRevenueLabel, value: formatPKR(item.revenueGeneratedCents / 100), type: "currency" as const }] : []),
     ]
 
     const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
@@ -635,8 +635,10 @@ export default function ProductPerformancePage() {
             { label: "Qty Ordered",    value: (p: any) => p.qtyOrdered || 0 },
             { label: "Fulfilled",      value: (p: any) => p.qtyFulfilled || 0 },
             { label: "Refunded",       value: (p: any) => p.qtyRefunded || 0 },
-            { label: isBuyer ? "Unit Price (PKR)" : "Base Price (PKR)", value: (p: any) => ((p.unitPriceCents || p.basePriceCents || 0) / 100).toFixed(2) },
-            { label: exportRevenueHeader, value: (p: any) => ((p.revenueGeneratedCents || 0) / 100).toFixed(2) },
+            ...(!pricesHidden ? [
+                { label: isBuyer ? "Unit Price (PKR)" : "Base Price (PKR)", value: (p: any) => ((p.unitPriceCents || p.basePriceCents || 0) / 100).toFixed(2) },
+                { label: exportRevenueHeader, value: (p: any) => ((p.revenueGeneratedCents || 0) / 100).toFixed(2) },
+            ] : []),
         ]
 
         // ── Reports/Ledger tab columns (role-aware) ──
@@ -647,15 +649,17 @@ export default function ProductPerformancePage() {
             { label: "Trans ID",       value: (p: any) => p.tid || "-" },
             { label: "Order Date",     value: (p: any) => new Date(p.orderCreatedAt).toLocaleDateString() },
             ...(role !== "BRANCH_ADMIN" ? [{ label: "Group",       value: (p: any) => p.group || "N/A" }] : []),
-            { label: "Discount",       value: (_p: any) => "0" },
+            ...(!pricesHidden ? [{ label: "Discount",       value: (_p: any) => "0" }] : []),
             { label: "User Info",      value: (p: any) => `${p.userName || ""}${p.userEmail ? ` (${p.userEmail})` : ""}`.trim() || "-" },
             { label: "Employee ID",    value: (p: any) => p.employeeId || (p.userId ? String(p.userId).split('-')[0] : "N/A") },
             { label: "Item Details",   value: (p: any) => `${p.itemDetails || "-"}${p.itemCode ? ` (${p.itemCode})` : ""}` },
             { label: "Qty Ordered",    value: (p: any) => p.qtyOrdered || 0 },
             { label: "Item Refunded",  value: (p: any) => (p.qtyOrdered || 0) - (p.qtyDelivered || 0) },
             { label: "Net Items",      value: (p: any) => p.qtyDelivered || 0 },
-            { label: "Unit Price (PKR)", value: (p: any) => ((p.priceCents || 0) / 100).toFixed(2) },
-            { label: exportRevenueHeader, value: (p: any) => ((p.netTotalCents || 0) / 100).toFixed(2) },
+            ...(!pricesHidden ? [
+                { label: "Unit Price (PKR)", value: (p: any) => ((p.priceCents || 0) / 100).toFixed(2) },
+                { label: exportRevenueHeader, value: (p: any) => ((p.netTotalCents || 0) / 100).toFixed(2) },
+            ] : []),
         ]
 
         const columns = isReports ? ledgerColumns : performanceColumns
@@ -686,10 +690,12 @@ export default function ProductPerformancePage() {
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl p-4 min-w-[220px]">
                 <p className="font-bold text-sm text-slate-900 dark:text-white mb-2">{d.fullName}</p>
                 <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                        <span className="text-slate-500">{revenueShortLabel}</span>
-                        <span className="font-bold text-indigo-600">{formatPKR(d.revenue)}</span>
-                    </div>
+                    {!pricesHidden && (
+                        <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">{revenueShortLabel}</span>
+                            <span className="font-bold text-indigo-600">{formatPKR(d.revenue)}</span>
+                        </div>
+                    )}
                     <div className="flex justify-between text-xs">
                         <span className="text-slate-500">Ordered</span>
                         <span className="font-semibold">{d.ordered}</span>
@@ -712,21 +718,13 @@ export default function ProductPerformancePage() {
     }
 
     const pricesHidden = Boolean((globalPerfData as any)?.pricesHidden || (chartPerfData as any)?.pricesHidden || (ledgerData as any)?.pricesHidden)
+    const priceVisibilityKnown = [globalPerfData, chartPerfData, ledgerData].some((data: any) => typeof data?.pricesHidden === "boolean")
+    const isPriceVisibilityPending = role === "BRANCH_ADMIN" && !priceVisibilityKnown
 
-    if (!hasMounted) {
+    if (!hasMounted || sessionStatus === "loading" || isPriceVisibilityPending) {
         return (
             <div className="flex h-[50vh] items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-            </div>
-        )
-    }
-
-    if (pricesHidden) {
-        return (
-            <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] p-6">
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                    Financial product reports are hidden by organization settings.
-                </div>
             </div>
         )
     }
@@ -779,15 +777,17 @@ export default function ProductPerformancePage() {
             <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
                 {/* ━━━ KPI BENTO GRID ━━━ */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <KPICard
-                        title={kpiRevenueLabel}
-                        value={formatPKR(totalRevenue / 100)}
-                        icon={TrendingUp}
-                        colorScheme="emerald"
-                        trend={revenueTrend}
-                        comparisonLabel="Prior"
-                        comparisonValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined}
-                    />
+                    {!pricesHidden && (
+                        <KPICard
+                            title={kpiRevenueLabel}
+                            value={formatPKR(totalRevenue / 100)}
+                            icon={TrendingUp}
+                            colorScheme="emerald"
+                            trend={revenueTrend}
+                            comparisonLabel="Prior"
+                            comparisonValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined}
+                        />
+                    )}
                     <KPICard
                         title="Qty Fulfilled"
                         value={totalVolume.toLocaleString()}
@@ -798,8 +798,8 @@ export default function ProductPerformancePage() {
                         comparisonValue={comparison ? comparison.totalVolume.toLocaleString() : undefined}
                     />
                     <KPICard
-                        title="Refund Loss"
-                        value={formatPKR(totalRefundLoss / 100)}
+                        title={pricesHidden ? "Qty Refunded" : "Refund Loss"}
+                        value={pricesHidden ? totalRefunds.toLocaleString() : formatPKR(totalRefundLoss / 100)}
                         icon={AlertOctagon}
                         colorScheme="rose"
                         trend={refundTrend}
@@ -1027,15 +1027,15 @@ export default function ProductPerformancePage() {
                                                     wrapperStyle={{ paddingBottom: 20, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}
                                                 />
                                                 <Bar
-                                                    dataKey="revenue"
-                                                    name={barChartLegendLabel}
+                                                    dataKey={pricesHidden ? "fulfilled" : "revenue"}
+                                                    name={pricesHidden ? "FULFILLED QTY" : barChartLegendLabel}
                                                     fill="#6366f1"
                                                     radius={[6, 6, 0, 0]}
                                                     barSize={24}
                                                 />
                                                 {compare && (
                                                     <Bar
-                                                        dataKey="compareRevenue"
+                                                        dataKey={pricesHidden ? "compareQty" : "compareRevenue"}
                                                         name="PRIOR PERIOD"
                                                         fill="#94a3b8"
                                                         fillOpacity={0.4}
@@ -1095,8 +1095,8 @@ export default function ProductPerformancePage() {
                                             <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">{compare ? "Qty Ord (A/B)" : "Qty Ordered"}</TableHead>
                                             <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-emerald-600">{compare ? "Fulfilled (A/B)" : "Fulfilled"}</TableHead>
                                             <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center text-rose-500">{compare ? "Refunded (A/B)" : "Refunded"}</TableHead>
-                                            <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">{priceLabel}</TableHead>
-                                            <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">{compare ? `${tableRevenueHeader} (A/B)` : tableRevenueHeader}</TableHead>
+                                            {!pricesHidden && <TableHead className="h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">{priceLabel}</TableHead>}
+                                            {!pricesHidden && <TableHead className="text-right pr-6 h-10 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">{compare ? `${tableRevenueHeader} (A/B)` : tableRevenueHeader}</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -1146,15 +1146,19 @@ export default function ProductPerformancePage() {
                                                             {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{p.compareQtyRefunded || 0}</span>}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="text-center font-mono text-xs text-slate-600 dark:text-slate-400">
-                                                        {formatPKR((p.unitPriceCents || p.basePriceCents) / 100)}
-                                                    </TableCell>
-                                                    <TableCell className="text-right font-mono font-bold text-xs text-slate-900 dark:text-white">
-                                                        <div className="flex flex-col items-end">
-                                                            <span>{formatPKR(p.revenueGeneratedCents / 100)}</span>
-                                                            {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{formatPKR((p.compareRevenue || 0) / 100)}</span>}
-                                                        </div>
-                                                    </TableCell>
+                                                    {!pricesHidden && (
+                                                        <TableCell className="text-center font-mono text-xs text-slate-600 dark:text-slate-400">
+                                                            {formatPKR((p.unitPriceCents || p.basePriceCents) / 100)}
+                                                        </TableCell>
+                                                    )}
+                                                    {!pricesHidden && (
+                                                        <TableCell className="text-right font-mono font-bold text-xs text-slate-900 dark:text-white">
+                                                            <div className="flex flex-col items-end">
+                                                                <span>{formatPKR(p.revenueGeneratedCents / 100)}</span>
+                                                                {compare && <span className="text-[10px] text-slate-400 border-t border-slate-100 mt-0.5 font-normal">{formatPKR((p.compareRevenue || 0) / 100)}</span>}
+                                                            </div>
+                                                        </TableCell>
+                                                    )}
                                                 </TableRow>
                                             ))
                                         )}
@@ -1361,14 +1365,14 @@ export default function ProductPerformancePage() {
                                             <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Trans ID</TableHead>
                                             <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Order Date</TableHead>
                                             {role !== "BRANCH_ADMIN" && <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Group</TableHead>}
-                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Discount</TableHead>
+                                            {!pricesHidden && <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Discount</TableHead>}
                                             <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">User Details</TableHead>
                                             <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 min-w-[150px]">Item Details</TableHead>
                                             <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Qty Ordered</TableHead>
                                             <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center text-rose-500">Refunded</TableHead>
                                             <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center text-emerald-600">Net Items</TableHead>
-                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Unit Price</TableHead>
-                                            <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right pr-6">{exportRevenueHeader}</TableHead>
+                                            {!pricesHidden && <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Unit Price</TableHead>}
+                                            {!pricesHidden && <TableHead className="h-10 text-[9px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right pr-6">{exportRevenueHeader}</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -1404,9 +1408,11 @@ export default function ProductPerformancePage() {
                                                                 {item.group || "N/A"}
                                                             </TableCell>
                                                         )}
-                                                        <TableCell className="py-3 text-[10px] whitespace-nowrap text-center text-slate-400 font-mono">
-                                                            0
-                                                        </TableCell>
+                                                        {!pricesHidden && (
+                                                            <TableCell className="py-3 text-[10px] whitespace-nowrap text-center text-slate-400 font-mono">
+                                                                0
+                                                            </TableCell>
+                                                        )}
                                                         <TableCell className="py-3 text-[10px] whitespace-nowrap">
                                                             <div className="flex flex-col">
                                                                 <div className="flex items-center gap-1.5">
@@ -1433,12 +1439,16 @@ export default function ProductPerformancePage() {
                                                         <TableCell className="text-center font-mono text-[11px] font-bold text-emerald-600">
                                                             {item.qtyDelivered}
                                                         </TableCell>
-                                                        <TableCell className="text-center font-mono text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                                                            {formatPKR(item.priceCents / 100)}
-                                                        </TableCell>
-                                                        <TableCell className="text-right pr-6 font-mono text-[11px] font-black text-indigo-600">
-                                                            {formatPKR(item.netTotalCents / 100)}
-                                                        </TableCell>
+                                                        {!pricesHidden && (
+                                                            <TableCell className="text-center font-mono text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                                                                {formatPKR(item.priceCents / 100)}
+                                                            </TableCell>
+                                                        )}
+                                                        {!pricesHidden && (
+                                                            <TableCell className="text-right pr-6 font-mono text-[11px] font-black text-indigo-600">
+                                                                {formatPKR(item.netTotalCents / 100)}
+                                                            </TableCell>
+                                                        )}
                                                     </TableRow>
                                                 )
                                             })

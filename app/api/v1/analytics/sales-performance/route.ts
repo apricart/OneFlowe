@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import { and, eq, gte, lte, sql, or, inArray, desc, gt } from "drizzle-orm"
 import { requireApiRole, ok, error } from "@/lib/api"
 import { db } from "@/lib/db"
-import { orders, branches, organizations } from "@/db/schema"
+import { orders, branches, organizations, orderItems, refunds, refundItems } from "@/db/schema"
 import { getRequestScope } from "@/lib/auth"
 import { getCached, generateCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 import { metricExpressions } from "@/lib/metric-utils"
@@ -230,6 +230,7 @@ export async function GET(req: NextRequest) {
         }
 
         const whereClause = and(...conditions)
+        const revenueEligibleStatus = sql`UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED')`
 
         // ── Series data ──
         let dateExpr: any
@@ -263,22 +264,59 @@ export async function GET(req: NextRequest) {
             .groupBy(dateExpr, labelExpr)
             .orderBy(dateExpr)
 
+        const seriesQuantityRows = await db
+            .select({
+                bucket: dateExpr,
+                label: labelExpr,
+                grossQuantity: sql<number>`COALESCE(SUM(CASE WHEN ${revenueEligibleStatus} THEN COALESCE(${orderItems.quantity}, 0) ELSE 0 END), 0)`.mapWith(Number),
+            })
+            .from(orders)
+            .leftJoin(branches, eq(orders.branchId, branches.id))
+            .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
+            .where(whereClause)
+            .groupBy(dateExpr, labelExpr)
+            .orderBy(dateExpr)
+
+        const seriesRefundQuantityRows = await db
+            .select({
+                bucket: dateExpr,
+                label: labelExpr,
+                refundedQuantity: sql<number>`COALESCE(SUM(CASE WHEN ${revenueEligibleStatus} THEN COALESCE(${refundItems.quantity}, 0) ELSE 0 END), 0)`.mapWith(Number),
+            })
+            .from(orders)
+            .leftJoin(branches, eq(orders.branchId, branches.id))
+            .leftJoin(refunds, and(eq(refunds.orderId, orders.id), eq(sql`UPPER(${refunds.status})`, "APPROVED")))
+            .leftJoin(refundItems, eq(refundItems.refundId, refunds.id))
+            .where(whereClause)
+            .groupBy(dateExpr, labelExpr)
+            .orderBy(dateExpr)
+
+        const grossQuantityByLabel = new Map(seriesQuantityRows.map((r) => [String(r.label), Number(r.grossQuantity || 0)]))
+        const refundedQuantityByLabel = new Map(seriesRefundQuantityRows.map((r) => [String(r.label), Number(r.refundedQuantity || 0)]))
+
         const seriesData = seriesRows.map(r => ({
             label: r.label,
             sales: (r.totalSales || 0) / 100,
             netSales: (r.netSales || 0) / 100,
             orders: Number(r.orderCount || 0),
+            itemQuantity: Math.max(0, (grossQuantityByLabel.get(String(r.label)) || 0) - (refundedQuantityByLabel.get(String(r.label)) || 0)),
         }))
 
         // ── Aggregates ──
         const totalSales = seriesData.reduce((s, r) => s + r.sales, 0)
         const totalNetSales = seriesData.reduce((s, r) => s + r.netSales, 0)
         const totalOrders = seriesData.reduce((s, r) => s + r.orders, 0)
+        const totalItemsSold = seriesData.reduce((s, r) => s + r.itemQuantity, 0)
         const activePeriods = seriesData.filter(r => r.sales > 0)
+        const activeQuantityPeriods = seriesData.filter(r => r.itemQuantity > 0)
         const avgSales = activePeriods.length > 0 ? totalSales / activePeriods.length : 0
+        const avgItemsSold = activeQuantityPeriods.length > 0 ? totalItemsSold / activeQuantityPeriods.length : 0
 
         const peakPeriod = seriesData.length > 0
             ? seriesData.reduce((max, r) => r.sales > max.sales ? r : max, seriesData[0])
+            : null
+        const peakQuantityPeriod = seriesData.length > 0
+            ? seriesData.reduce((max, r) => r.itemQuantity > max.itemQuantity ? r : max, seriesData[0])
             : null
 
         // ── Branch breakdown ──
@@ -451,16 +489,48 @@ export async function GET(req: NextRequest) {
                 .groupBy(dateExpr, labelExpr)
                 .orderBy(dateExpr)
 
+            const compSeriesQuantityRows = await db
+                .select({
+                    bucket: dateExpr,
+                    label: labelExpr,
+                    grossQuantity: sql<number>`COALESCE(SUM(CASE WHEN ${revenueEligibleStatus} THEN COALESCE(${orderItems.quantity}, 0) ELSE 0 END), 0)`.mapWith(Number),
+                })
+                .from(orders)
+                .leftJoin(branches, eq(orders.branchId, branches.id))
+                .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
+                .where(compWhere)
+                .groupBy(dateExpr, labelExpr)
+                .orderBy(dateExpr)
+
+            const compSeriesRefundQuantityRows = await db
+                .select({
+                    bucket: dateExpr,
+                    label: labelExpr,
+                    refundedQuantity: sql<number>`COALESCE(SUM(CASE WHEN ${revenueEligibleStatus} THEN COALESCE(${refundItems.quantity}, 0) ELSE 0 END), 0)`.mapWith(Number),
+                })
+                .from(orders)
+                .leftJoin(branches, eq(orders.branchId, branches.id))
+                .leftJoin(refunds, and(eq(refunds.orderId, orders.id), eq(sql`UPPER(${refunds.status})`, "APPROVED")))
+                .leftJoin(refundItems, eq(refundItems.refundId, refunds.id))
+                .where(compWhere)
+                .groupBy(dateExpr, labelExpr)
+                .orderBy(dateExpr)
+
+            const compGrossQuantityByLabel = new Map(compSeriesQuantityRows.map((r) => [String(r.label), Number(r.grossQuantity || 0)]))
+            const compRefundedQuantityByLabel = new Map(compSeriesRefundQuantityRows.map((r) => [String(r.label), Number(r.refundedQuantity || 0)]))
+
             const compSeriesData = compSeriesRows.map(r => ({
                 label: r.label,
                 sales: (r.totalSales || 0) / 100,
                 netSales: (r.totalNetSales || 0) / 100,
                 orders: Number(r.orderCount || 0),
+                itemQuantity: Math.max(0, (compGrossQuantityByLabel.get(String(r.label)) || 0) - (compRefundedQuantityByLabel.get(String(r.label)) || 0)),
             }))
 
             const compTotalSales = compSeriesData.reduce((s, r) => s + r.sales, 0)
             const compTotalNetSales = compSeriesData.reduce((s, r) => s + r.netSales, 0)
             const compTotalOrders = compSeriesData.reduce((s, r) => s + r.orders, 0)
+            const compTotalItemsSold = compSeriesData.reduce((s, r) => s + r.itemQuantity, 0)
 
             // Aggregated counts for all statuses (for KPI comparison)
             const compAllWhere = compAllStatusConditions.length > 0 ? and(...compAllStatusConditions) : undefined
@@ -481,6 +551,7 @@ export async function GET(req: NextRequest) {
                 totalSales: compTotalSales,
                 totalNetSales: compTotalNetSales,
                 totalOrders: compTotalOrders,
+                totalItemsSold: compTotalItemsSold,
                 fulfilledCount: compStatusCounts[0]?.fulfilledCount || 0,
                 partialCount: compStatusCounts[0]?.partialCount || 0,
                 fulfilledNetSales: (compStatusCounts[0]?.fulfilledNetSales || 0) / 100,
@@ -498,8 +569,11 @@ export async function GET(req: NextRequest) {
             totalSales,
             totalNetSales,
             totalOrders,
+            totalItemsSold,
+            avgItemsSold,
             avgSales,
             peakPeriod,
+            peakQuantityPeriod,
             branchSales,
             organizationSales,
             comparison

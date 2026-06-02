@@ -344,7 +344,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
         setErrors({ [field]: message })
         // Focus on the problematic field
         setTimeout(() => {
-          const fieldElement = document.querySelector(`[name="${field}"]`) as HTMLInputElement
+          const fieldElement = (document.getElementById(field) ||
+            document.querySelector(`[name="${field}"]`)) as HTMLElement | null
           if (fieldElement) {
             fieldElement.focus()
             fieldElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -433,7 +434,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                     <Label htmlFor="firstName">First Name *</Label>
                     <Input
                       id="firstName"
-                      name="firstName"
+                      name="createUserFirstName"
+                      autoComplete="off"
                       value={form.firstName}
                       onChange={e => setForm({ ...form, firstName: e.target.value })}
                       placeholder="Enter first name"
@@ -447,7 +449,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                     <Label htmlFor="lastName">Last Name *</Label>
                     <Input
                       id="lastName"
-                      name="lastName"
+                      name="createUserLastName"
+                      autoComplete="off"
                       value={form.lastName}
                       onChange={e => setForm({ ...form, lastName: e.target.value })}
                       placeholder="Enter last name"
@@ -462,8 +465,9 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   <Label htmlFor="email">Email Address *</Label>
                   <Input
                     id="email"
-                    name="email"
+                    name="createUserEmail"
                     type="email"
+                    autoComplete="off"
                     value={form.email}
                     onChange={e => {
                       const val = e.target.value
@@ -482,7 +486,8 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   <div className="relative">
                     <Input
                       id="username"
-                      name="username"
+                      name="createUserUsername"
+                      autoComplete="off"
                       value={form.username}
                       onChange={e => {
                         const val = e.target.value.toLowerCase()
@@ -535,7 +540,9 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   <Label htmlFor="phone">Phone Number</Label>
                   <Input
                     id="phone"
-                    name="phone"
+                    name="createUserPhone"
+                    autoComplete="off"
+                    inputMode="numeric"
                     value={form.phone}
                     onChange={e => {
                       const val = e.target.value
@@ -554,8 +561,9 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                   <div className="relative">
                     <Input
                       id="password"
-                      name="password"
+                      name="createUserPassword"
                       type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
                       value={form.password}
                       onChange={e => {
                         const val = e.target.value

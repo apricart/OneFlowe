@@ -5,6 +5,10 @@ import { and, eq, sql } from "drizzle-orm"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
+import {
+  moveHeldQuantityBudgetToUsedForOrder,
+  releaseHeldQuantityBudgetForOrder,
+} from "@/lib/server/product-quantity-budget-ledger"
 type OrderStatus = "PENDING" | "APPROVED" | "REJECTED" | "FULFILLED"
 
 export async function GET(
@@ -141,6 +145,7 @@ export async function PATCH(
         await tx.update(budgets).set({ 
           amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}` 
         }).where(eq(budgets.id, budget.id))
+        await releaseHeldQuantityBudgetForOrder(tx, ord)
       }
 
       // Restore stock
@@ -166,6 +171,7 @@ export async function PATCH(
           amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,
           amountSpentCents: sql`${budgets.amountSpentCents} + ${ord.totalCents}`,
         }).where(eq(budgets.id, budget.id))
+        await moveHeldQuantityBudgetToUsedForOrder(tx, ord)
       }
       patch.fulfilledAt = sql`NOW()`
       patch.fulfilledByUserId = session?.user ? (session.user as any).id : null

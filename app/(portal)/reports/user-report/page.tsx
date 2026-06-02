@@ -65,7 +65,7 @@ export default function UserReportPage() {
         branchIds: contextBranchIds,
     } = useAppContext()
 
-    const { data: session } = useSession()
+    const { data: session, status: sessionStatus } = useSession()
     const role = (session?.user as any)?.role as Role
     const isBuyer = role === "HEAD_OFFICE" || role === "BRANCH_ADMIN"
     const userOrgId = (session?.user as any)?.organizationId
@@ -418,7 +418,7 @@ export default function UserReportPage() {
             { label: "Total Orders",     value: (u: any) => u.totalOrders || 0 },
             { label: "Fulfilled",        value: (u: any) => u.fulfilledOrders || 0 },
             { label: "Refunded",         value: (u: any) => u.refundedOrders || 0 },
-            { label: isBuyer ? "Purchased (PKR)" : "Revenue (PKR)", value: (u: any) => ((u.totalSpentCents || 0) / 100).toFixed(2) },
+            ...(!pricesHidden ? [{ label: isBuyer ? "Purchased (PKR)" : "Revenue (PKR)", value: (u: any) => ((u.totalSpentCents || 0) / 100).toFixed(2) }] : []),
         ]
 
         const headers = columns.map(c => c.label)
@@ -442,13 +442,13 @@ export default function UserReportPage() {
     }
 
     const pricesHidden = Boolean((globalData as any)?.pricesHidden || (chartData as any)?.pricesHidden || (reportData as any)?.pricesHidden || (userProductsData as any)?.pricesHidden)
+    const priceVisibilityKnown = [globalData, chartData, reportData, userProductsData].some((data: any) => typeof data?.pricesHidden === "boolean")
+    const isPriceVisibilityPending = role === "BRANCH_ADMIN" && !priceVisibilityKnown
 
-    if (pricesHidden) {
+    if (sessionStatus === "loading" || isPriceVisibilityPending) {
         return (
-            <div className="min-h-screen bg-[#f8fafc] dark:bg-[#020617] p-6">
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                    Financial user reports are hidden by organization settings.
-                </div>
+            <div className="flex h-[50vh] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
             </div>
         )
     }
@@ -499,7 +499,7 @@ export default function UserReportPage() {
                     <KPICard title="Active Employees" value={totalUsers.toLocaleString()} icon={Users} colorScheme="indigo" trend={usersTrend} subtitle="Distinct transacting profiles." comparisonLabel="Prior" comparisonValue={comparison?.totalUsers} />
                     <KPICard title="Gross Orders" value={totalOrders.toLocaleString()} icon={Package} colorScheme="blue" trend={ordersTrend} subtitle="Total volume initiated." comparisonLabel="Prior" comparisonValue={comparison?.totalOrders} />
                     <KPICard title="Order Success" value={`${currentSuccess.toFixed(1)}%`} icon={CheckCircle} colorScheme="emerald" trend={successTrend} subtitle={`${totalFulfilled} fulfilled orders.`} />
-                    <KPICard title={isBuyer ? "Total Purchased" : "Total Revenue"} value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle={isBuyer ? "Net value of purchases." : "Net value of fulfillments."}  />
+                    {!pricesHidden && <KPICard title={isBuyer ? "Total Purchased" : "Total Revenue"} value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle={isBuyer ? "Net value of purchases." : "Net value of fulfillments."}  />}
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
@@ -609,12 +609,14 @@ export default function UserReportPage() {
                                                                                 </div>
                                                                             </>
                                                                         )}
-                                                                        <div className="flex justify-between items-center bg-indigo-500/5 p-2 rounded-xl">
-                                                                            <span className="text-[10px] font-bold text-indigo-600 uppercase">{isBuyer ? "Purchased" : "Yield"} {compare ? '(A/B)' : ''}</span>
-                                                                            <span className="text-[11px] font-black text-indigo-700">
-                                                                                {formatPKR(Number(payload[compare ? 2 : 1]?.value || 0))} {compare ? `/ ${formatPKR(Number(payload[3]?.value || 0))}` : ''}
-                                                                            </span>
-                                                                        </div>
+                                                                        {!pricesHidden && (
+                                                                            <div className="flex justify-between items-center bg-indigo-500/5 p-2 rounded-xl">
+                                                                                <span className="text-[10px] font-bold text-indigo-600 uppercase">{isBuyer ? "Purchased" : "Yield"} {compare ? '(A/B)' : ''}</span>
+                                                                                <span className="text-[11px] font-black text-indigo-700">
+                                                                                    {formatPKR(Number(payload[compare ? 2 : 1]?.value || 0))} {compare ? `/ ${formatPKR(Number(payload[3]?.value || 0))}` : ''}
+                                                                                </span>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             );
@@ -626,7 +628,7 @@ export default function UserReportPage() {
                                                 <Bar yAxisId="left" dataKey="orders" name={compare ? "Orders (A)" : "Total Orders"} fill="url(#barGradient)" radius={[6, 6, 0, 0]} barSize={compare ? 15 : 30} />
                                                 {compare && <Bar yAxisId="left" dataKey="compOrders" name="Orders (B)" fill="#94a3b8" radius={[6, 6, 0, 0]} barSize={15} opacity={0.5} />}
                                                 {/* <Line yAxisId="right" type="monotone" dataKey="spent" name={compare ? (isBuyer ? "Purchased (A)" : "Spent (A)") : (isBuyer ? "Total Purchased" : "Yield")} stroke="#6366f1" strokeWidth={4} dot={{ r: 5, fill: '#6366f1', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8, strokeWidth: 2, stroke: '#fff' }} /> */}
-                                                {compare && <Line yAxisId="right" type="monotone" dataKey="compSpent" name={isBuyer ? "Purchased (B)" : "Spent (B)"} stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 4 }} />}
+                                                {!pricesHidden && compare && <Line yAxisId="right" type="monotone" dataKey="compSpent" name={isBuyer ? "Purchased (B)" : "Spent (B)"} stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 4 }} />}
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     ) : (
@@ -693,7 +695,7 @@ export default function UserReportPage() {
                                                             <h4 className="font-black text-sm text-slate-900 dark:text-white uppercase tracking-tight truncate" title={user.userName}>{user.userName}</h4>
                                                             <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-0.5 min-w-0">
                                                                 <span className="text-[9px] font-black text-indigo-500 font-mono truncate max-w-[90px]">#{user.employeeId || (user.userId ? user.userId.toString().split('-')[0] : 'N/A')}</span>
-                                                                <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate max-w-full"><span className="text-slate-900 dark:text-white font-black">{formatPKR(user.fulfilledProductRevenueCents / 100)}</span> Total</p>
+                                                                {!pricesHidden && <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest truncate max-w-full"><span className="text-slate-900 dark:text-white font-black">{formatPKR(user.fulfilledProductRevenueCents / 100)}</span> Total</p>}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -720,7 +722,7 @@ export default function UserReportPage() {
                                                                     </div>
                                                                 </div>
                                                                 <div className="text-right flex flex-col items-end gap-1.5 shrink-0 min-w-0 w-[42%] max-w-[150px]">
-                                                                    <p className="max-w-full truncate text-[11px] font-black text-slate-700 dark:text-slate-300 tracking-tight mb-0.5" title={formatPKR(product.fulfilledRevenueCents / 100)}>{formatPKR(product.fulfilledRevenueCents / 100)}</p>
+                                                                    {!pricesHidden && <p className="max-w-full truncate text-[11px] font-black text-slate-700 dark:text-slate-300 tracking-tight mb-0.5" title={formatPKR(product.fulfilledRevenueCents / 100)}>{formatPKR(product.fulfilledRevenueCents / 100)}</p>}
                                                                     <div className="flex flex-wrap justify-end gap-1 max-w-full">
                                                                         <span className="max-w-full truncate text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded shadow-sm">QTY: {product.quantity}</span>
                                                                         <span className="max-w-full truncate text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest whitespace-nowrap bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded shadow-sm">FUL: {product.quantity - product.refundedQuantity}</span>
@@ -849,7 +851,7 @@ export default function UserReportPage() {
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Orders {compare && "(A/B)"}</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Fulfilled</TableHead>
                                             <TableHead className="h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Refunded</TableHead>
-                                            <TableHead className="text-right pr-8 h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{isBuyer ? "Purchased" : "Revenue"} {compare && "(A/B)"}</TableHead>
+                                            {!pricesHidden && <TableHead className="text-right pr-8 h-14 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{isBuyer ? "Purchased" : "Revenue"} {compare && "(A/B)"}</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -904,12 +906,12 @@ export default function UserReportPage() {
                                                             {u.refundedOrders}
                                                         </span>
                                                     </TableCell>
-                                                    <TableCell className="text-right pr-8 py-5">
-                                                        <div className="flex flex-col items-end">
-                                                            <span className="font-black text-xs text-slate-950 dark:text-white font-mono tracking-tight">{formatPKR(u.totalSpentCents / 100)}</span>
-                                                            {compare && <span className="text-[9px] text-slate-400 border-t border-slate-100 dark:border-slate-800 mt-0.5 pt-0.5 font-bold tracking-tight">{formatPKR((u.compareTotalSpentCents || 0) / 100)}</span>}
-                                                        </div>
-                                                    </TableCell>
+                                                {!pricesHidden && <TableCell className="text-right pr-8 py-5">
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="font-black text-xs text-slate-950 dark:text-white font-mono tracking-tight">{formatPKR(u.totalSpentCents / 100)}</span>
+                                                        {compare && <span className="text-[9px] text-slate-400 border-t border-slate-100 dark:border-slate-800 mt-0.5 pt-0.5 font-bold tracking-tight">{formatPKR((u.compareTotalSpentCents || 0) / 100)}</span>}
+                                                    </div>
+                                                </TableCell>}
                                                 </TableRow>
                                             ))
                                         )}

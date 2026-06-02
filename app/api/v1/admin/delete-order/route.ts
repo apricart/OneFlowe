@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, orderItems, budgets, systemLogs, globalProducts, refunds } from "@/db/schema"
 import { eq, and, sql } from "drizzle-orm"
+import { releaseQuantityBudgetForDeletedOrder } from "@/lib/server/product-quantity-budget-ledger"
 
 /**
  * DELETE /api/v1/admin/delete-order?id=94
@@ -59,6 +60,8 @@ export async function DELETE(req: NextRequest) {
                     eq(budgets.period, currentMonth)
                 )
             )
+
+            await releaseQuantityBudgetForDeletedOrder(tx, order)
 
             // 3. Delete refunds first (foreign key to order_items)
             await tx.delete(refunds).where(eq(refunds.orderId, orderIdNum))

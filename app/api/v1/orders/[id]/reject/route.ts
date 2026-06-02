@@ -3,6 +3,7 @@ import { db } from "@/lib/db"
 import { orders, budgets, globalProducts, orderItems } from "@/db/schema"
 import { eq, and, sql } from "drizzle-orm"
 import { getCurrentUser } from "@/lib/auth"
+import { releaseHeldQuantityBudgetForOrder } from "@/lib/server/product-quantity-budget-ledger"
 
 export async function POST(
   req: Request,
@@ -60,7 +61,9 @@ export async function POST(
       }).where(eq(budgets.id, budget.id))
     }
 
-    // 3. Restore stock
+    // 3. Release quantity budget and restore stock
+    await releaseHeldQuantityBudgetForOrder(tx, ord)
+
     const items = await tx.select().from(orderItems).where(eq(orderItems.orderId, orderId))
     for (const item of items) {
       await tx.update(globalProducts)
