@@ -50,6 +50,27 @@ export async function PATCH(
 
     const patch: any = {}
     if (body.name !== undefined) patch.name = String(body.name)
+    if (body.province !== undefined) {
+      const province = String(body.province || "").trim()
+      if (province && (province.length < 2 || province.length > 100)) {
+        return error("Branch province must be between 2 and 100 characters", 400)
+      }
+      patch.province = province || null
+    }
+    if (body.city !== undefined) {
+      const city = String(body.city || "").trim()
+      if (city && (city.length < 2 || city.length > 100)) {
+        return error("Branch city must be between 2 and 100 characters", 400)
+      }
+      patch.city = city || null
+    }
+    if (body.address !== undefined) {
+      const address = String(body.address || "").trim()
+      if (address && (address.length < 5 || address.length > 500)) {
+        return error("Branch address must be between 5 and 500 characters", 400)
+      }
+      patch.address = address || null
+    }
     if (body.status !== undefined) {
       const normalized = String(body.status).toLowerCase()
       const validStatuses = ['active', 'inactive', 'suspended']

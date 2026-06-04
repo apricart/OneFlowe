@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { getBudgetAllocationModeForOrganization } from "@/lib/server/budget-allocation-mode"
+import { buildAppMonthPeriods, getAppMonthPeriod, parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 import {
   auditLogs,
   branchInventory,
@@ -57,9 +58,11 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const requestedOrgId = Number(searchParams.get("organizationId"))
     const periodParam = searchParams.get("period")
-    const period = periodParam && periodPattern.test(periodParam)
-      ? periodParam
-      : currentBudgetPeriod()
+    const startDateParam = searchParams.get("startDate")
+    const endDateParam = searchParams.get("endDate")
+    const monthsParam = searchParams.get("months")
+    const yearsParam = searchParams.get("years")
+    const presetParam = searchParams.get("preset") || ""
 
     if (searchParams.get("organizationId") && (!Number.isInteger(requestedOrgId) || requestedOrgId <= 0)) {
       return NextResponse.json({ error: "Invalid organization ID" }, { status: 400 })
@@ -82,6 +85,44 @@ export async function GET(req: NextRequest) {
 
     const groupIds = parseNumberList(searchParams.get("groupIds"))
     const branchIds = parseNumberList(searchParams.get("branchIds"))
+    const parsedMonths = parseNumberList(monthsParam)
+      .filter((month) => month >= 1 && month <= 12)
+    const parsedYears = parseNumberList(yearsParam)
+      .filter((year) => year >= 2000 && year <= 2100)
+
+    let periodList: string[]
+    if (periodParam && periodPattern.test(periodParam)) {
+      periodList = [periodParam]
+    } else {
+      const requestedStartDate = parseStartDateParam(startDateParam)
+      const requestedEndDate = parseEndDateParam(endDateParam)
+      let startDate = requestedStartDate
+      const endDate = requestedEndDate || new Date()
+
+      if (presetParam === "all") {
+        const firstQuantityBudget = await db
+          .select({ period: productQuantityBudgets.period })
+          .from(productQuantityBudgets)
+          .where(eq(productQuantityBudgets.organizationId, scopedOrganizationId))
+          .orderBy(productQuantityBudgets.period)
+          .limit(1)
+
+        startDate = firstQuantityBudget.length > 0
+          ? new Date(`${firstQuantityBudget[0].period}-01T00:00:00.000Z`)
+          : new Date(`${currentBudgetPeriod()}-01T00:00:00.000Z`)
+      } else if (!startDate) {
+        startDate = new Date(`${currentBudgetPeriod()}-01T00:00:00.000Z`)
+      }
+
+      if (!startDateParam) startDate.setHours(0, 0, 0, 0)
+      if (!endDateParam) endDate.setHours(23, 59, 59, 999)
+
+      periodList = buildAppMonthPeriods(startDate, endDate, parsedMonths, parsedYears)
+      if (["today", "3d", "7d", "monthly", "thisMonth"].includes(presetParam)) {
+        periodList = [getAppMonthPeriod(endDate)]
+      }
+      if (periodList.length === 0) periodList = [currentBudgetPeriod()]
+    }
 
     const quantityRows = await db
       .select({
@@ -110,18 +151,32 @@ export async function GET(req: NextRequest) {
       .leftJoin(organizationInventory, eq(productQuantityBudgets.organizationInventoryId, organizationInventory.id))
       .leftJoin(globalProducts, eq(productQuantityBudgets.globalProductId, globalProducts.id))
       .where(and(
-        eq(productQuantityBudgets.period, period),
+        inArray(productQuantityBudgets.period, periodList),
         eq(branches.status, "active"),
         scopedOrganizationId ? eq(productQuantityBudgets.organizationId, scopedOrganizationId) : undefined,
         groupIds.length > 0 ? inArray(branches.groupId, groupIds) : undefined,
         branchIds.length > 0 ? inArray(productQuantityBudgets.branchId, branchIds) : undefined,
       ))
 
-    const products = quantityRows.map((row) => {
-      const totalQuantity = row.baseQuantity + row.addonQuantity
-      const spentQuantity = row.usedQuantity + row.heldQuantity
+    const productSummaryByKey = new Map<string, {
+      quantityBudgetId: number
+      organizationId: number
+      branchId: number
+      organizationInventoryId: number
+      globalProductId: number
+      productCode?: string | null
+      productName: string
+      unit?: string | null
+      baseQuantity: number
+      addonQuantity: number
+      totalQuantity: number
+      spentQuantity: number
+      remainingQuantity: number
+    }>()
 
-      return {
+    for (const row of quantityRows) {
+      const key = `${row.branchId}:${row.organizationInventoryId}`
+      const existing = productSummaryByKey.get(key) || {
         quantityBudgetId: row.quantityBudgetId,
         organizationId: row.organizationId,
         branchId: row.branchId,
@@ -130,13 +185,21 @@ export async function GET(req: NextRequest) {
         productCode: row.productCode,
         productName: row.customName || row.globalProductName || `Product ${row.globalProductId}`,
         unit: row.unit,
-        baseQuantity: row.baseQuantity,
-        addonQuantity: row.addonQuantity,
-        totalQuantity,
-        spentQuantity,
-        remainingQuantity: totalQuantity - spentQuantity,
+        baseQuantity: 0,
+        addonQuantity: 0,
+        totalQuantity: 0,
+        spentQuantity: 0,
+        remainingQuantity: 0,
       }
-    })
+      existing.baseQuantity += row.baseQuantity
+      existing.addonQuantity += row.addonQuantity
+      existing.totalQuantity = existing.baseQuantity + existing.addonQuantity
+      existing.spentQuantity += row.usedQuantity + row.heldQuantity
+      existing.remainingQuantity = existing.totalQuantity - existing.spentQuantity
+      productSummaryByKey.set(key, existing)
+    }
+
+    const products = Array.from(productSummaryByKey.values())
 
     const branchSummaryById = new Map<number, {
       branchId: number
@@ -169,13 +232,177 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      period,
+      period: periodList.length === 1 ? periodList[0] : undefined,
+      periods: periodList,
       branches: Array.from(branchSummaryById.values()),
       products,
     })
   } catch (error: any) {
     console.error("[BudgetQuantity] Quantity summary fetch failed:", error)
     return NextResponse.json({ error: "Failed to fetch quantity budgets" }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const role = (session.user as any).role
+    const userId = (session.user as any).id
+    const rawUserOrgId = (session.user as any).organizationId
+    const userOrgId = Number.isFinite(Number(rawUserOrgId)) ? Number(rawUserOrgId) : undefined
+
+    if (role !== "HEAD_OFFICE" && role !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    if (role === "HEAD_OFFICE" && !userOrgId) {
+      return NextResponse.json({ error: "Organization context required" }, { status: 400 })
+    }
+
+    let body: {
+      organizationId?: number
+      branchIds?: Array<number | string>
+      groupIds?: Array<number | string>
+      period?: string
+    } = {}
+
+    try {
+      body = await req.json()
+    } catch {
+      body = {}
+    }
+
+    const requestedOrgId = Number(body.organizationId)
+    if (body.organizationId !== undefined && (!Number.isInteger(requestedOrgId) || requestedOrgId <= 0)) {
+      return NextResponse.json({ error: "Invalid organization ID" }, { status: 400 })
+    }
+
+    const scopedOrganizationId = role === "HEAD_OFFICE"
+      ? userOrgId
+      : Number.isInteger(requestedOrgId) && requestedOrgId > 0
+        ? requestedOrgId
+        : undefined
+
+    if (!scopedOrganizationId) {
+      return NextResponse.json({ error: "Select an organization before resetting quantity budgets" }, { status: 400 })
+    }
+
+    const budgetAllocationMode = await getBudgetAllocationModeForOrganization(scopedOrganizationId)
+    if (budgetAllocationMode !== "quantity") {
+      return NextResponse.json({ error: "This organization uses money-value budgeting" }, { status: 403 })
+    }
+
+    const requestedBranchIds = Array.isArray(body.branchIds)
+      ? body.branchIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
+      : []
+    const requestedGroupIds = Array.isArray(body.groupIds)
+      ? body.groupIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
+      : []
+    const period = body.period && periodPattern.test(body.period)
+      ? body.period
+      : currentBudgetPeriod()
+
+    const scopedBranches = await db
+      .select({
+        id: branches.id,
+        name: branches.name,
+      })
+      .from(branches)
+      .where(and(
+        eq(branches.organizationId, scopedOrganizationId),
+        eq(branches.status, "active"),
+        requestedBranchIds.length > 0 ? inArray(branches.id, requestedBranchIds) : undefined,
+        requestedGroupIds.length > 0 ? inArray(branches.groupId, requestedGroupIds) : undefined,
+      ))
+
+    if (scopedBranches.length === 0) {
+      return NextResponse.json({
+        message: "No active branches matched the current quantity budget view",
+        reset: { branchCount: 0, period },
+      })
+    }
+
+    const scopedBranchIds = scopedBranches.map((branch) => branch.id)
+
+    const result = await db.transaction(async (tx) => {
+      await tx
+        .update(productQuantityBudgets)
+        .set({
+          allocatedQuantity: 0,
+          creditedQuantity: 0,
+          heldQuantity: 0,
+          usedQuantity: 0,
+          amountAllocatedCents: 0,
+          amountCreditedCents: 0,
+          updatedByUserId: userId,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(productQuantityBudgets.organizationId, scopedOrganizationId),
+          eq(productQuantityBudgets.period, period),
+          inArray(productQuantityBudgets.branchId, scopedBranchIds),
+        ))
+
+      await tx
+        .update(budgets)
+        .set({
+          amountAllocatedCents: 0,
+          amountCreditedCents: 0,
+          amountSpentCents: 0,
+          amountHeldCents: 0,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(budgets.organizationId, scopedOrganizationId),
+          eq(budgets.period, period),
+          inArray(budgets.branchId, scopedBranchIds),
+        ))
+
+      await tx
+        .update(branches)
+        .set({
+          baselineBudgetCents: 0,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(branches.organizationId, scopedOrganizationId),
+          inArray(branches.id, scopedBranchIds),
+        ))
+
+      await tx.insert(auditLogs).values({
+        userId,
+        organizationId: scopedOrganizationId,
+        action: "RESET_ALL_QUANTITY_BUDGETS",
+        entity: "PRODUCT_QUANTITY_BUDGET",
+        entityId: String(scopedOrganizationId),
+        metadata: {
+          period,
+          branchCount: scopedBranchIds.length,
+          branchIds: scopedBranchIds,
+          groupIds: requestedGroupIds,
+          resetMoneyBudgetView: true,
+        },
+      })
+
+      return {
+        branchCount: scopedBranchIds.length,
+      }
+    })
+
+    return NextResponse.json({
+      message: "Quantity budgets reset successfully",
+      reset: {
+        period,
+        branchCount: result.branchCount,
+      },
+    })
+  } catch (error: any) {
+    console.error("[BudgetQuantity] Reset failed:", error)
+    return NextResponse.json({ error: error?.message || "Failed to reset quantity budgets" }, { status: 500 })
   }
 }
 

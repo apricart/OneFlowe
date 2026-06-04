@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useState } from "react"
 import useSWR, { useSWRConfig } from "swr"
 import { useSession } from "next-auth/react"
 import {
@@ -29,8 +29,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { BranchFilter } from "@/components/reports/branch-filter"
 import { GroupFilter } from "@/components/reports/group-filter"
 import { useAppContext } from "@/components/context/app-context"
+import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { cn } from "@/lib/utils"
 import { BUDGET_ALLOCATION_MODE_SETTING_KEY, parseBudgetAllocationMode } from "@/lib/budget-allocation-mode"
+import { type DateRange } from "@/lib/hooks/use-sales-performance"
 import { CheckCircle } from "lucide-react"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -148,9 +150,49 @@ export default function BudgetByQuantityPage() {
   const [allocationType, setAllocationType] = useState<"monthly" | "addon">("addon")
   const [allocationLines, setAllocationLines] = useState<QuantityAllocationLine[]>(() => [createAllocationLine()])
   const [isSavingAllocation, setIsSavingAllocation] = useState(false)
+  const [showEmptyAllDialog, setShowEmptyAllDialog] = useState(false)
+  const [isResettingBudgets, setIsResettingBudgets] = useState(false)
   const [expandedBranchIds, setExpandedBranchIds] = useState<number[]>([])
 
+  const [dateRange, setDateRange] = useState<DateRange | null>(null)
+  const [activePreset, setActivePreset] = useState<FilterPreset>("all")
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([])
+  const [selectedYears, setSelectedYears] = useState<number[]>([])
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([])
+
+  const handleDateChange = useCallback((
+    range: DateRange | null,
+    preset: FilterPreset,
+    _compare?: boolean,
+    _compareRange?: DateRange | null,
+    months?: number[],
+    years?: number[]
+  ) => {
+    setDateRange(range)
+    setActivePreset(preset)
+    setSelectedMonths(months || [])
+    setSelectedYears(years || [])
+  }, [])
+
+  useEffect(() => {
+    if (isInitialized) {
+      handleDateChange(null, "all")
+    }
+  }, [isInitialized, handleDateChange])
+
+  const applyDateFilterParams = useCallback((params: URLSearchParams) => {
+    if (dateRange) {
+      params.set("startDate", dateRange.startDate.toISOString())
+      params.set("endDate", dateRange.endDate.toISOString())
+    }
+    params.set("preset", activePreset)
+    if (selectedMonths.length > 0) params.set("months", selectedMonths.join(","))
+    const effectiveSelectedYears = selectedMonths.length > 0 && selectedYears.length === 0 && !dateRange
+      ? [new Date().getFullYear()]
+      : selectedYears
+    if (effectiveSelectedYears.length > 0) params.set("years", effectiveSelectedYears.join(","))
+  }, [activePreset, dateRange, selectedMonths, selectedYears])
+
   const settingsEndpoint = useMemo(() => {
     if (!isHeadOffice || !isInitialized || !organizationId) return null
     return `/api/v1/settings?organizationId=${organizationId}`
@@ -167,22 +209,24 @@ export default function BudgetByQuantityPage() {
     const params = new URLSearchParams()
     params.set("all", "true")
     if (organizationId) params.set("organizationId", String(organizationId))
+    applyDateFilterParams(params)
     if (selectedGroupIds.length > 0) params.set("groupIds", selectedGroupIds.join(","))
     if (contextBranchIds.length > 0) params.set("branchIds", contextBranchIds.join(","))
 
     return `/api/v1/budgets?${params.toString()}`
-  }, [contextBranchIds, isHeadOffice, isInitialized, isQuantityBudgetMode, organizationId, selectedGroupIds])
+  }, [applyDateFilterParams, contextBranchIds, isHeadOffice, isInitialized, isQuantityBudgetMode, organizationId, selectedGroupIds])
 
   const quantityBudgetsEndpoint = useMemo(() => {
     if (!isHeadOffice || !isInitialized || !organizationId || !isQuantityBudgetMode) return null
 
     const params = new URLSearchParams()
     if (organizationId) params.set("organizationId", String(organizationId))
+    applyDateFilterParams(params)
     if (selectedGroupIds.length > 0) params.set("groupIds", selectedGroupIds.join(","))
     if (contextBranchIds.length > 0) params.set("branchIds", contextBranchIds.join(","))
 
     return `/api/v1/budget-quantity?${params.toString()}`
-  }, [contextBranchIds, isHeadOffice, isInitialized, isQuantityBudgetMode, organizationId, selectedGroupIds])
+  }, [applyDateFilterParams, contextBranchIds, isHeadOffice, isInitialized, isQuantityBudgetMode, organizationId, selectedGroupIds])
 
   const dialogProductsEndpoint = useMemo(() => {
     if (!showDialog || !editingBudget) return null
@@ -258,13 +302,35 @@ export default function BudgetByQuantityPage() {
     )
   }, [allocationLines, productsById])
 
+  const scopedQuantitySummary = useMemo(() => {
+    return scopedBudgets.reduce(
+      (summary, budget) => {
+        const branchSummary = quantitySummaryByBranchId.get(budget.branchId) || emptyQuantitySummary(budget.branchId)
+        summary.baseQuantity += branchSummary.baseQuantity
+        summary.addonQuantity += branchSummary.addonQuantity
+        summary.spentQuantity += branchSummary.spentQuantity
+        summary.remainingQuantity += branchSummary.remainingQuantity
+        summary.totalQuantity += branchSummary.totalQuantity
+        return summary
+      },
+      {
+        baseQuantity: 0,
+        addonQuantity: 0,
+        spentQuantity: 0,
+        remainingQuantity: 0,
+        totalQuantity: 0,
+      }
+    )
+  }, [scopedBudgets, quantitySummaryByBranchId])
+
   const resetBudgetFilters = useCallback(() => {
+    handleDateChange(null, "all")
     setSelectedGroupIds([])
     setContextBranchIds([])
     setSearchQuery("")
     mutate()
     mutateQuantityBudgets()
-  }, [mutate, mutateQuantityBudgets, setContextBranchIds])
+  }, [handleDateChange, mutate, mutateQuantityBudgets, setContextBranchIds])
 
   const handleEditBudget = (budget: BudgetAllocation) => {
     setEditingBudget(budget)
@@ -323,6 +389,57 @@ export default function BudgetByQuantityPage() {
     }
 
     return null
+  }
+
+  const handleEmptyAllBudgets = async () => {
+    if (!organizationId) {
+      return toast({
+        title: "Organization required",
+        description: "Select an organization before resetting quantity budgets.",
+        variant: "destructive",
+      })
+    }
+
+    setIsResettingBudgets(true)
+    try {
+      const res = await fetch("/api/v1/budget-quantity", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId,
+          branchIds: contextBranchIds,
+          groupIds: selectedGroupIds,
+        }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) {
+        return toast({
+          title: "Reset failed",
+          description: json.error || "Quantity budgets could not be reset.",
+          variant: "destructive",
+        })
+      }
+
+      toast({
+        title: "Quantity budgets emptied",
+        description: `Reset ${json.reset?.branchCount ?? scopedBudgets.length} branch budget${(json.reset?.branchCount ?? scopedBudgets.length) === 1 ? "" : "s"} to zero.`,
+      })
+      setShowEmptyAllDialog(false)
+      setExpandedBranchIds([])
+      mutate()
+      mutateQuantityBudgets()
+      globalMutate((key) =>
+        typeof key === "string" &&
+        (key.includes("/api/v1/analytics/budgets/summary") ||
+          key.includes("/api/v1/budgets") ||
+          key.includes("/api/v1/budget-quantity"))
+      )
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" })
+    } finally {
+      setIsResettingBudgets(false)
+    }
   }
 
   const handleSaveQuantityAllocation = async () => {
@@ -429,8 +546,15 @@ export default function BudgetByQuantityPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            <GlobalDateFilter
+              value={dateRange}
+              activePreset={activePreset}
+              onChange={handleDateChange}
+              months={selectedMonths}
+              years={selectedYears}
+            />
             {(role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && (
-              <div className="flex h-6 items-center gap-2">
+              <div className="flex h-6 items-center gap-2 border-l border-slate-200 pl-3 dark:border-slate-800">
                 <GroupFilter
                   selectedIds={selectedGroupIds}
                   onChange={setSelectedGroupIds}
@@ -469,9 +593,20 @@ export default function BudgetByQuantityPage() {
               className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-4 text-sm font-bold uppercase tracking-tight outline-none transition-all focus:ring-2 focus:ring-blue-500 dark:border-slate-800 dark:bg-slate-900"
             />
           </div>
-          <Badge className="w-fit rounded-full bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white dark:bg-white dark:text-slate-950">
-            {filteredBudgets.length} branch{filteredBudgets.length === 1 ? "" : "es"} ready for quantity allocation
-          </Badge>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Badge className="w-fit rounded-full bg-slate-900 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white dark:bg-white dark:text-slate-950">
+              {filteredBudgets.length} branch{filteredBudgets.length === 1 ? "" : "es"} ready for quantity allocation
+            </Badge>
+            <Button
+              variant="outline"
+              onClick={() => setShowEmptyAllDialog(true)}
+              disabled={scopedBudgets.length === 0 || isResettingBudgets}
+              className="w-fit rounded-xl border-slate-200 px-4 text-[10px] font-bold uppercase tracking-widest text-rose-600 transition-colors hover:bg-rose-50 dark:border-slate-800 dark:hover:bg-rose-950/20"
+            >
+              {isResettingBudgets ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-2 h-3.5 w-3.5" />}
+              Empty All
+            </Button>
+          </div>
         </div>
 
         <Card className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:shadow-slate-900/50">
@@ -784,6 +919,40 @@ export default function BudgetByQuantityPage() {
               >
                 {/* {isSavingAllocation ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} */}
                 Apply Quantity Allocation
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showEmptyAllDialog} onOpenChange={setShowEmptyAllDialog}>
+          <DialogContent className="max-w-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+            <DialogHeader>
+              <DialogTitle className="text-slate-900 dark:text-white">Empty All Quantity Budgets</DialogTitle>
+              <DialogDescription className="text-slate-600 dark:text-slate-400">
+                Are you sure you want to reset all quantity budgets in the current view to zero?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="mt-0.5 h-5 w-5 text-red-600 dark:text-red-400" />
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-red-900 dark:text-red-100">
+                    This will reset quantity and money-budget values for the current budget period.
+                  </p>
+                  <p className="text-xs text-red-700 dark:text-red-300">Branches affected: {scopedBudgets.length}</p>
+                  <p className="text-xs text-red-700 dark:text-red-300">Total quantity: {formatQuantity(scopedQuantitySummary.totalQuantity)}</p>
+                  <p className="text-xs text-red-700 dark:text-red-300">Spent quantity: {formatQuantity(scopedQuantitySummary.spentQuantity)}</p>
+                  <p className="text-xs text-red-700 dark:text-red-300">This action can be reversed by allocating new quantity budgets.</p>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEmptyAllDialog(false)} disabled={isResettingBudgets}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleEmptyAllBudgets} disabled={isResettingBudgets} className="gap-2">
+                {isResettingBudgets ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Empty All Budgets
               </Button>
             </DialogFooter>
           </DialogContent>

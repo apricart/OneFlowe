@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, refunds, refundItems, orderItems } from "@/db/schema"
+import { orders, refunds, refundItems, orderItems, users } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { shouldHidePricesForRole, redactReceiptPrices } from "@/lib/price-visibility"
 import { aggregateReceiptRefundItems, getReceiptNetTotal } from "@/lib/receipt-display"
@@ -43,6 +43,29 @@ export async function GET(
 
         const userRole = (session.user as any).role
         const pricesHidden = await shouldHidePricesForRole(userRole, order.organizationId)
+
+        const [creator] = await db
+            .select({
+                fullName: users.fullName,
+                firstName: users.firstName,
+                lastName: users.lastName,
+                username: users.username,
+                email: users.email,
+                phone: users.phone,
+            })
+            .from(users)
+            .where(eq(users.id, order.createdByUserId))
+            .limit(1)
+
+        const creatorName = creator
+            ? (
+                creator.fullName ||
+                [creator.firstName, creator.lastName].filter(Boolean).join(" ") ||
+                creator.username ||
+                creator.email ||
+                "Unknown"
+            )
+            : "Unknown"
 
         // Fetch refund information
         const refundData = await db
@@ -125,6 +148,8 @@ export async function GET(
         // Dynamically override receipt data status with actual order status for accuracy
         const finalReceiptData = order.receiptData ? {
             ...(order.receiptData as any),
+            placedByName: creatorName,
+            placedByPhone: creator?.phone || null,
             status: derivedStatus.label,
             statusKey: derivedStatus.key,
             refund: totalApprovedRefundAmount,

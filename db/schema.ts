@@ -39,6 +39,9 @@ export const branches = pgTable(
       .references(() => organizations.id)
       .notNull(),
     name: varchar("name", { length: 255 }).notNull(),
+    province: varchar("province", { length: 100 }),
+    city: varchar("city", { length: 100 }),
+    address: text("address"),
     // Avoid circular type init between users <-> branches; store admin user id without FK
     adminUserId: uuid("admin_user_id"),
     code: varchar("code", { length: 64 }),

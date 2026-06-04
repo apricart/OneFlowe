@@ -86,6 +86,9 @@ export async function GET(req: Request) {
           id: branchesTable.id,
           organizationId: branchesTable.organizationId,
           name: branchesTable.name,
+          province: branchesTable.province,
+          city: branchesTable.city,
+          address: branchesTable.address,
           code: branchesTable.code,
           status: branchesTable.status,
           groupId: branchesTable.groupId,
@@ -151,6 +154,21 @@ export async function POST(req: Request) {
       return error("Branch name must be between 2 and 100 characters", 400)
     }
 
+    const province = String(body.province || "").trim()
+    if (province.length < 2 || province.length > 100) {
+      return error("Branch province must be between 2 and 100 characters", 400)
+    }
+
+    const city = String(body.city || "").trim()
+    if (city.length < 2 || city.length > 100) {
+      return error("Branch city must be between 2 and 100 characters", 400)
+    }
+
+    const address = String(body.address || "").trim()
+    if (address.length < 5 || address.length > 500) {
+      return error("Branch address must be between 5 and 500 characters", 400)
+    }
+
     // Validate status
     const validStatuses = ['active', 'inactive']
     const status = body.status ? String(body.status).toLowerCase() : 'active'
@@ -201,6 +219,9 @@ export async function POST(req: Request) {
       .values({
         organizationId,
         name,
+        province,
+        city,
+        address,
         code: finalCode,
         status,
       })

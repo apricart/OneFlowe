@@ -5,15 +5,10 @@ import { cn } from "@/lib/utils"
 import { Home, Building2, Users, Package, Boxes, Wallet, BarChart3, Settings, ShieldCheck, ShoppingBag, FolderTree, FolderOpen, ChevronDown, ChevronRight } from "lucide-react"
 import Image from "next/image"
 import { useState } from "react"
-import useSWR from "swr"
 
 import { useSession } from "next-auth/react"
-import { useAppContext } from "@/components/context/app-context"
-import { BUDGET_ALLOCATION_MODE_SETTING_KEY, parseBudgetAllocationMode } from "@/lib/budget-allocation-mode"
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
-
-const getNavigationByRole = (role: string, showQuantityBudgeting: boolean) => {
+const getNavigationByRole = (role: string) => {
   const baseNav = [
     { href: "/dashboard", label: "Dashboard", icon: Home },
   ]
@@ -39,7 +34,7 @@ const getNavigationByRole = (role: string, showQuantityBudgeting: boolean) => {
       },
       { href: "/groups", label: "Groups", icon: FolderTree },
       { href: "/budgets", label: "Budgets", icon: Wallet },
-      ...(showQuantityBudgeting ? [{ href: "/budget-by-quantity", label: "Budget by Quantity", icon: Wallet }] : []),
+      { href: "/budget-by-quantity", label: "Budget by Quantity", icon: Wallet },
       {
         href: "/reports",
         label: "Reports",
@@ -67,7 +62,7 @@ const getNavigationByRole = (role: string, showQuantityBudgeting: boolean) => {
       { href: "/inventory", label: "Inventory", icon: Boxes },
       { href: "/groups", label: "Groups", icon: FolderTree },
       { href: "/budgets", label: "Budgets", icon: Wallet },
-      ...(showQuantityBudgeting ? [{ href: "/budget-by-quantity", label: "Budget by Quantity", icon: Wallet }] : []),
+      { href: "/budget-by-quantity", label: "Budget by Quantity", icon: Wallet },
       {
         href: "/reports",
         label: "Reports",
@@ -113,20 +108,8 @@ export function Sidebar() {
   const pathname = usePathname()
   const { data: session, status } = useSession()
   const role = (session?.user as any)?.role
-  const { organizationId } = useAppContext()
-  const sessionOrganizationId = (session?.user as any)?.organizationId
-  const effectiveOrganizationId = organizationId || (role === "HEAD_OFFICE" ? sessionOrganizationId : null)
-  const settingsEndpoint =
-    (role === "SUPER_ADMIN" || role === "HEAD_OFFICE") && effectiveOrganizationId
-      ? `/api/v1/settings?organizationId=${effectiveOrganizationId}`
-      : null
-  const { data: settingsData } = useSWR<any>(settingsEndpoint, fetcher)
-  const budgetAllocationMode = parseBudgetAllocationMode(
-    settingsData?.data?.find((setting: any) => setting.key === BUDGET_ALLOCATION_MODE_SETTING_KEY)?.value
-  )
-  const showQuantityBudgeting = budgetAllocationMode === "quantity"
   const isLoading = status === "loading"
-  const nav = getNavigationByRole(role || "", showQuantityBudgeting)
+  const nav = getNavigationByRole(role || "")
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
   const toggleExpanded = (href: string) => {

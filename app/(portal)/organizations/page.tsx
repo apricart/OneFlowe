@@ -1,13 +1,23 @@
 "use client"
 import { useOrganizations, useBranches } from "@/lib/hooks/use-api"
 type Organization = { id: number; name: string; code: string; status?: "active" | "inactive"; budgetAllocationMode?: BudgetAllocationMode }
-type Branch = { id: number; name: string; code: string; organizationId: number; status?: "active" | "inactive" }
+type Branch = {
+  id: number
+  name: string
+  code: string
+  organizationId: number
+  province?: string | null
+  city?: string | null
+  address?: string | null
+  status?: "active" | "inactive"
+}
 import { Button } from "@/components/ui/button"
 import { Loader2, Pencil, Trash2, Building2, GitBranch, Save } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
@@ -580,7 +590,15 @@ function BranchesTable({
                   <div className="h-9 w-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-100/50 dark:border-indigo-500/20 group-hover:scale-110 transition-transform">
                     {b.name.charAt(0)}
                   </div>
-                  <span className="font-semibold text-slate-900 dark:text-slate-100 tracking-tight">{b.name}</span>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-900 dark:text-slate-100 tracking-tight">{b.name}</p>
+                    {(b.province || b.city || b.address) && (
+                      <p className="mt-1 truncate text-xs font-medium text-slate-500 dark:text-slate-400">
+                        {[b.province, b.city].filter(Boolean).join(", ")}
+                        {b.address ? `${b.province || b.city ? " • " : ""}${b.address}` : ""}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </td>
               <td className="py-5 pr-3">
@@ -1070,38 +1088,65 @@ function CreateBranchDialog({
 }) {
   const [orgId, setOrgId] = useState<string | undefined>(undefined)
   const [name, setName] = useState("")
+  const [province, setProvince] = useState("")
+  const [city, setCity] = useState("")
+  const [address, setAddress] = useState("")
   const [status, setStatus] = useState<boolean>(true)
+  const [saving, setSaving] = useState(false)
+  const canSubmit = Boolean(
+    orgId &&
+    name.trim() &&
+    province.trim() &&
+    city.trim() &&
+    address.trim()
+  )
   async function submit() {
-    if (!orgId) return
-    console.log("[CreateBranchDialog] 📝 Submitting new branch:", { orgId, name, status })
+    if (!canSubmit || !orgId) return
+    const payload = {
+      organizationId: orgId,
+      name: name.trim(),
+      province: province.trim(),
+      city: city.trim(),
+      address: address.trim(),
+      status: status ? "active" : "inactive",
+    }
+    console.log("[CreateBranchDialog] Submitting new branch:", payload)
 
     try {
+      setSaving(true)
       const res = await fetch("/api/v1/branches", {
         method: "POST",
-        body: JSON.stringify({ organizationId: orgId, name, status: status ? "active" : "inactive" }),
+        body: JSON.stringify(payload),
         headers: { "Content-Type": "application/json" }
       })
       const data = await res.json()
 
-      console.log("[CreateBranchDialog] 📡 API Response:", { ok: res.ok, status: res.status, data })
+      console.log("[CreateBranchDialog] API Response:", { ok: res.ok, status: res.status, data })
 
       if (!res.ok) throw new Error(data.error || "Failed to create branch")
 
       showFeedback("Branch created successfully.", "success")
       setName("")
+      setProvince("")
+      setCity("")
+      setAddress("")
       setStatus(true)
       setOrgId(undefined)
 
-      console.log("[CreateBranchDialog] 🔄 Calling onCreated to trigger refresh...")
+      console.log("[CreateBranchDialog] Calling onCreated to trigger refresh...")
       onCreated(data.item)
-      console.log("[CreateBranchDialog] ✅ onCreated called")
+      console.log("[CreateBranchDialog] onCreated called")
     } catch (e: any) {
-      console.error("[CreateBranchDialog] ❌ Error:", e.message)
+      console.error("[CreateBranchDialog] Error:", e.message)
       showFeedback(e.message, "error")
+    } finally {
+      setSaving(false)
     }
   }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!saving) onOpenChange(nextOpen)
+    }}>
       <DialogTrigger asChild>
         <Button className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:text-slate-950 dark:hover:bg-emerald-400 border-none">
           <GitBranch className="h-4 w-4" />
@@ -1121,7 +1166,7 @@ function CreateBranchDialog({
               <div className="space-y-2">
                 <Label>Company</Label>
                 <Select value={orgId} onValueChange={(v: string) => setOrgId(v)}>
-                  <SelectTrigger>
+                  <SelectTrigger disabled={saving}>
                     <SelectValue placeholder="Select company" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1142,6 +1187,40 @@ function CreateBranchDialog({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Downtown Branch"
+                    disabled={saving}
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="branch-province">Province</Label>
+                    <Input
+                      id="branch-province"
+                      value={province}
+                      onChange={(e) => setProvince(e.target.value)}
+                      placeholder="Punjab"
+                      disabled={saving}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="branch-city">City</Label>
+                    <Input
+                      id="branch-city"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="Lahore"
+                      disabled={saving}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch-address">Address</Label>
+                  <Textarea
+                    id="branch-address"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Street address, area, building, or landmark"
+                    className="min-h-20 resize-none"
+                    disabled={saving}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">Branch code will be automatically generated.</p>
@@ -1157,6 +1236,7 @@ function CreateBranchDialog({
                   id="branch-status"
                   checked={status}
                   onCheckedChange={(v: boolean | "indeterminate") => setStatus(Boolean(v))}
+                  disabled={saving}
                 />
                 <Badge variant={status ? "default" : "outline"}>{status ? "Active" : "Inactive"}</Badge>
               </div>
@@ -1164,9 +1244,9 @@ function CreateBranchDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={submit} disabled={!orgId || !name} className="gap-2">
-            <Save className="h-4 w-4" />
-            Save Branch
+          <Button onClick={submit} disabled={!canSubmit || saving} className="gap-2">
+            {saving ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? "Saving..." : "Save Branch"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1345,13 +1425,19 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(branch.name)
   const [code, setCode] = useState(branch.code)
+  const [province, setProvince] = useState(branch.province ?? "")
+  const [city, setCity] = useState(branch.city ?? "")
+  const [address, setAddress] = useState(branch.address ?? "")
   const [status, setStatus] = useState<boolean>(isActiveStatus(branch.status))
 
   useEffect(() => {
     setName(branch.name)
     setCode(branch.code)
+    setProvince(branch.province ?? "")
+    setCity(branch.city ?? "")
+    setAddress(branch.address ?? "")
     setStatus(isActiveStatus(branch.status))
-  }, [branch.name, branch.code, branch.status])
+  }, [branch.name, branch.code, branch.province, branch.city, branch.address, branch.status])
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -1377,6 +1463,36 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
                 <p className="text-xs text-muted-foreground italic">Branch codes are non-editable.</p>
               </div>
             </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="branch-province-edit">Province</Label>
+                <Input
+                  id="branch-province-edit"
+                  value={province}
+                  onChange={(e) => setProvince(e.target.value)}
+                  placeholder="Punjab"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="branch-city-edit">City</Label>
+                <Input
+                  id="branch-city-edit"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="Lahore"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="branch-address-edit">Address</Label>
+              <Textarea
+                id="branch-address-edit"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Street address, area, building, or landmark"
+                className="min-h-20 resize-none"
+              />
+            </div>
             <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
               <div>
                 <Label htmlFor="branch-status-edit">Status</Label>
@@ -1397,9 +1513,16 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
           <Button
             className="gap-2"
             onClick={() => {
-              onSave({ name, status: status ? "active" : "inactive" })
+              onSave({
+                name: name.trim(),
+                province: province.trim() || null,
+                city: city.trim() || null,
+                address: address.trim() || null,
+                status: status ? "active" : "inactive",
+              })
               setOpen(false)
             }}
+            disabled={!name.trim()}
           >
             <Save className="h-4 w-4" />
             Save Changes

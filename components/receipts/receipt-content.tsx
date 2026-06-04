@@ -361,12 +361,18 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                             <span className="detail-value">{receiptData.buyerName}</span>
                         </div>
                         <div className="detail-row">
-                            <span className="detail-label">Phone:</span>
-                            <span className="detail-value">{receiptData.buyerPhone || "N/A"}</span>
-                        </div>
-                        <div className="detail-row">
                             <span className="detail-label">Address:</span>
                             <span className="detail-value truncate max-w-[140px]">{receiptData.buyerAddress || "—"}</span>
+                        </div>
+                        <div className="detail-row">
+                            <span className="detail-label">Created by:</span>
+                            <span className="detail-value truncate max-w-[140px]">
+                                {receiptData.placedByName || "N/A"}
+                            </span>
+                        </div>
+                        <div className="detail-row">
+                            <span className="detail-label">Phone:</span>
+                            <span className="detail-value">{receiptData.placedByPhone || receiptData.buyerPhone || "N/A"}</span>
                         </div>
                     </div>
 

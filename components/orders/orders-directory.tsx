@@ -23,7 +23,8 @@ import {
   FileCheck,
   Lock,
   Share2,
-  Copy
+  Copy,
+  Send
 } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "@/hooks/use-toast"
@@ -82,6 +83,7 @@ export function OrdersDirectory({
   const [rejectReason, setRejectReason] = useState("")
   const [fulfillToken, setFulfillToken] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isSendingTokenEmail, setIsSendingTokenEmail] = useState(false)
 
   // Helpers
   const getStatusColor = (statusKey: DerivedOrderStatusKey) => {
@@ -184,6 +186,44 @@ export function OrdersDirectory({
       })
     } finally {
       setIsProcessing(false)
+    }
+  }
+
+  const sendTokenToAdmin = async () => {
+    if (!viewingOrder) return
+
+    setIsSendingTokenEmail(true)
+    try {
+      const res = await fetch(`/api/v1/orders/${viewingOrder.id}/send-token-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+
+      const responseText = await res.text()
+      const data = responseText
+        ? (() => {
+            try {
+              return JSON.parse(responseText)
+            } catch {
+              return { error: responseText }
+            }
+          })()
+        : {}
+
+      if (!res.ok) throw new Error(data.error || "Failed to send token email")
+
+      toast({
+        title: "Token sent",
+        description: "Fulfillment token emailed to the admin.",
+      })
+    } catch (err: any) {
+      toast({
+        title: "Email Failed",
+        description: err.message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSendingTokenEmail(false)
     }
   }
 
@@ -475,6 +515,16 @@ export function OrdersDirectory({
                           <Copy className="h-4 w-4" />
                         </Button>
                       </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={isSendingTokenEmail}
+                        onClick={sendTokenToAdmin}
+                        className="w-full h-11 rounded-xl bg-white dark:bg-slate-950 border-indigo-100 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 font-bold text-[11px] uppercase tracking-widest transition-all active:scale-[0.99]"
+                      >
+                        <Send className={cn("mr-2 h-4 w-4", isSendingTokenEmail && "animate-pulse")} />
+                        {isSendingTokenEmail ? "Sending Token..." : "Send Token to Admin"}
+                      </Button>
                       <p className="text-[9px] font-bold text-slate-400 leading-tight">
                         Provide this security token to the Super Admin to mark this order as fulfilled.
                       </p>
