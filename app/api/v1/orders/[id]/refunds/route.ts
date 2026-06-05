@@ -6,6 +6,7 @@ import { refunds, orders, budgets, auditLogs, users, orderItems, refundItems } f
 import { eq, sql, desc, inArray, and } from "drizzle-orm"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
 import { releaseRefundedQuantityBudget } from "@/lib/server/product-quantity-budget-ledger"
+import { orderSelectColumns } from "@/lib/order-select"
 
 export async function GET(
   req: NextRequest,
@@ -21,7 +22,7 @@ export async function GET(
     if (!Number.isFinite(orderId)) return NextResponse.json({ error: "Invalid order ID" }, { status: 400 })
 
     // Get order details first to check permissions
-    const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+    const [order] = await db.select(orderSelectColumns).from(orders).where(eq(orders.id, orderId)).limit(1)
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 })
 
     const userRole = (session.user as any).role
@@ -130,7 +131,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Fetch order with validation
-    const [ord] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+    const [ord] = await db.select(orderSelectColumns).from(orders).where(eq(orders.id, orderId)).limit(1)
 
     if (!ord) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })

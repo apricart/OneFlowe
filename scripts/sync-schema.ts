@@ -45,7 +45,8 @@ async function syncSchema() {
       ADD COLUMN IF NOT EXISTS "tid" varchar(26) NOT NULL DEFAULT gen_random_uuid()::text,
       ADD COLUMN IF NOT EXISTS "subtotal_cents" integer DEFAULT 0 NOT NULL,
       ADD COLUMN IF NOT EXISTS "tax_cents" integer DEFAULT 0 NOT NULL,
-      ADD COLUMN IF NOT EXISTS "notes" text
+      ADD COLUMN IF NOT EXISTS "notes" text,
+      ADD COLUMN IF NOT EXISTS "fulfillment_status" varchar(32) NOT NULL DEFAULT 'NOT_STARTED'
     `).catch((e) => console.log("ℹ️ Orders columns:", e.message))
 
     // Add unique constraint on tid if not exists
@@ -91,6 +92,10 @@ async function syncSchema() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS "orders_tid_idx" ON "orders" USING btree ("tid")
     `).catch((e) => console.log("ℹ️ Orders TID index:", e.message))
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "orders_fulfillment_status_idx" ON "orders" USING btree ("fulfillment_status")
+    `).catch((e) => console.log("ℹ️ Orders fulfillment status index:", e.message))
 
     await client.query(`
       CREATE INDEX IF NOT EXISTS "order_items_product_idx" ON "order_items" USING btree ("global_product_id")

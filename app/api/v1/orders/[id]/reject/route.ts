@@ -4,6 +4,7 @@ import { orders, budgets, globalProducts, orderItems } from "@/db/schema"
 import { eq, and, sql } from "drizzle-orm"
 import { getCurrentUser } from "@/lib/auth"
 import { releaseHeldQuantityBudgetForOrder } from "@/lib/server/product-quantity-budget-ledger"
+import { orderSelectColumns } from "@/lib/order-select"
 
 export async function POST(
   req: Request,
@@ -21,7 +22,7 @@ export async function POST(
   if (!body?.reason) return error("Rejection reason is required", 400)
 
   // Fetch order
-  const [ord] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+  const [ord] = await db.select(orderSelectColumns).from(orders).where(eq(orders.id, orderId)).limit(1)
   if (!ord) return error("Order not found", 404)
 
   // BOLA

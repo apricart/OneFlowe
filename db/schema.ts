@@ -338,6 +338,19 @@ export const orgMetrics = pgTable(
   }),
 )
 
+export const invoiceSequences = pgTable(
+  "invoice_sequences",
+  {
+    organizationId: integer("organization_id")
+      .primaryKey()
+      .references(() => organizations.id)
+      .notNull(),
+    lastValue: integer("last_value").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+)
+
 export const orders = pgTable(
   "orders",
   {
@@ -348,6 +361,7 @@ export const orders = pgTable(
       .references(() => branches.id)
       .notNull(),
     status: varchar("status", { length: 32 }).notNull().default("PENDING"), // PENDING/APPROVED/REJECTED/FULFILLED/REFUNDED
+    fulfillmentStatus: varchar("fulfillment_status", { length: 32 }).notNull().default("NOT_STARTED"), // NOT_STARTED/IN_PROCESS/OUT_FOR_DELIVERY/DELIVERED
     subtotalCents: bigint("subtotal_cents", { mode: "number" }).notNull().default(0),
     taxCents: bigint("tax_cents", { mode: "number" }).notNull().default(0),
     totalCents: bigint("total_cents", { mode: "number" }).notNull().default(0),
@@ -409,6 +423,7 @@ export const orders = pgTable(
     tidIdx: uniqueIndex("orders_tid_idx").on(t.tid),
     branchIdx: index("orders_branch_idx").on(t.branchId),
     statusIdx: index("orders_status_idx").on(t.status),
+    fulfillmentStatusIdx: index("orders_fulfillment_status_idx").on(t.fulfillmentStatus),
     createdIdx: index("orders_created_idx").on(t.createdAt),
     ordersOrgIdx: index("orders_org_idx").on(t.organizationId),
     ordersOrgBranchStatusIdx: index("orders_org_branch_status_idx").on(t.organizationId, t.branchId, t.status),

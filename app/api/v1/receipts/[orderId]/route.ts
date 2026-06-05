@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, refunds, refundItems, orderItems, users } from "@/db/schema"
-import { eq } from "drizzle-orm"
+import { branches, orders, refunds, refundItems, orderItems, users } from "@/db/schema"
+import { and, eq } from "drizzle-orm"
 import { shouldHidePricesForRole, redactReceiptPrices } from "@/lib/price-visibility"
 import { aggregateReceiptRefundItems, getReceiptNetTotal } from "@/lib/receipt-display"
 import { getOrderDerivedStatus } from "@/lib/order-status"
+import { formatBranchAddress } from "@/lib/branch-address"
 
 export async function GET(
     req: NextRequest,
@@ -38,7 +39,7 @@ export async function GET(
         const { verifyResourceAccess } = await import("@/lib/auth")
         const hasAccess = await verifyResourceAccess(order.organizationId, order.branchId)
         if (!hasAccess) {
-            return NextResponse.json({ error: "Forbidden: You do not have access to this receipt" }, { status: 403 })
+            return NextResponse.json({ error: "Forbidden: You do not have access to this invoice" }, { status: 403 })
         }
 
         const userRole = (session.user as any).role
@@ -66,6 +67,23 @@ export async function GET(
                 "Unknown"
             )
             : "Unknown"
+
+        let branchAddress = ""
+        if (order.branchId !== null && order.organizationId !== null) {
+            const [branchDetails] = await db
+                .select({
+                    address: branches.address,
+                    city: branches.city,
+                    province: branches.province,
+                })
+                .from(branches)
+                .where(and(
+                    eq(branches.id, order.branchId),
+                    eq(branches.organizationId, order.organizationId),
+                ))
+                .limit(1)
+            branchAddress = formatBranchAddress(branchDetails)
+        }
 
         // Fetch refund information
         const refundData = await db
@@ -148,6 +166,7 @@ export async function GET(
         // Dynamically override receipt data status with actual order status for accuracy
         const finalReceiptData = order.receiptData ? {
             ...(order.receiptData as any),
+            buyerAddress: branchAddress,
             placedByName: creatorName,
             placedByPhone: creator?.phone || null,
             status: derivedStatus.label,
@@ -168,7 +187,7 @@ export async function GET(
             pricesHidden,
         })
     } catch (e: any) {
-        console.error("Receipt retrieval error:", e)
+        console.error("Invoice retrieval error:", e)
         return NextResponse.json(
             { error: "Internal Server Error" },
             { status: 500 }

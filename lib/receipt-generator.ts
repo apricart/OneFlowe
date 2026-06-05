@@ -1,6 +1,7 @@
 import { db } from "@/lib/db"
 import { branches, categories, globalProducts, orderItems, organizations } from "@/db/schema"
 import { eq, inArray } from "drizzle-orm"
+import { formatBranchAddress } from "@/lib/branch-address"
 
 export interface ReceiptData {
     invoiceNumber: string
@@ -135,7 +136,7 @@ export async function generateReceiptData(params: {
         }),
         status: params.status,
         buyerName: branch.name,
-        buyerAddress: branch.code ? `Branch ${branch.code}` : `Branch ${branch.id}`,
+        buyerAddress: formatBranchAddress(branch),
         organizationName: org.name,
         items: groupedItems,
         subtotal: subtotalCents / 100,

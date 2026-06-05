@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { verifyApprovalToken } from "@/lib/approval-token"
 import { logFulfillmentAttempt } from "@/lib/global-logger"
 import { moveHeldQuantityBudgetToUsedForOrder } from "@/lib/server/product-quantity-budget-ledger"
+import { orderSelectColumns, updateOrderFulfillmentStatusColumn } from "@/lib/order-select"
 
 export async function POST(
   req: Request,
@@ -24,7 +25,7 @@ export async function POST(
   if (!body?.approvalToken) return error("Approval token is required", 400)
 
   // Fetch order
-  const [ord] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+  const [ord] = await db.select(orderSelectColumns).from(orders).where(eq(orders.id, orderId)).limit(1)
   if (!ord) return error("Order not found", 404)
 
   // BOLA
@@ -63,6 +64,7 @@ export async function POST(
       fulfilledByUserId: user.id,
       updatedAt: new Date()
     }).where(eq(orders.id, orderId))
+    await updateOrderFulfillmentStatusColumn(tx, orderId, "DELIVERED")
 
     // 2. Move budget from held to spent
     const orderMonth = ord.createdAt

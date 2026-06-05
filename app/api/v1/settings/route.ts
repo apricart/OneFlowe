@@ -176,10 +176,6 @@ export async function POST(req: NextRequest) {
       )
       .limit(1)
 
-    if (key === BUDGET_ALLOCATION_MODE_SETTING_KEY && existing.length > 0) {
-      return err("Budget allocation mode cannot be changed once it has been set", 400)
-    }
-
     let result
     if (existing.length > 0) {
       // Update existing setting
@@ -219,6 +215,9 @@ export async function POST(req: NextRequest) {
     }
     if (key === BUDGET_ALLOCATION_MODE_SETTING_KEY) {
       await invalidateByPrefix('organizations')
+      await invalidateByPrefix('branch-inv')
+      await invalidateByPrefix('budgets')
+      await invalidateByPrefix('analytics')
     }
 
     return ok({

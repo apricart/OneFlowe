@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { orders, orderItems, budgets, systemLogs, globalProducts, refunds } from "@/db/schema"
 import { eq, and, sql } from "drizzle-orm"
 import { releaseQuantityBudgetForDeletedOrder } from "@/lib/server/product-quantity-budget-ledger"
+import { orderSelectColumns } from "@/lib/order-select"
 
 /**
  * DELETE /api/v1/admin/delete-order?id=94
@@ -36,7 +37,7 @@ export async function DELETE(req: NextRequest) {
         const orderIdNum = Number(orderId)
 
         // Get order details first
-        const [order] = await db.select().from(orders).where(eq(orders.id, orderIdNum))
+        const [order] = await db.select(orderSelectColumns).from(orders).where(eq(orders.id, orderIdNum))
 
         if (!order) {
             return NextResponse.json({ error: `Order ${orderId} not found` }, { status: 404 })

@@ -873,6 +873,7 @@ export const orders = pgTable("orders", {
 	organizationId: integer("organization_id"),
 	branchId: integer("branch_id").notNull(),
 	status: varchar({ length: 32 }).default('PENDING').notNull(),
+	fulfillmentStatus: varchar("fulfillment_status", { length: 32 }).default('NOT_STARTED').notNull(),
 	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
 	subtotalCents: bigint("subtotal_cents", { mode: "number" }).default(0).notNull(),
 	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
@@ -904,6 +905,7 @@ export const orders = pgTable("orders", {
 	index("orders_branch_idx").using("btree", table.branchId.asc().nullsLast().op("int4_ops")),
 	index("orders_branch_status_created_idx").using("btree", table.branchId.asc().nullsLast().op("timestamptz_ops"), table.status.asc().nullsLast().op("text_ops"), table.createdAt.asc().nullsLast().op("int4_ops")),
 	index("orders_created_idx").using("btree", table.createdAt.asc().nullsLast().op("timestamptz_ops")),
+	index("orders_fulfillment_status_idx").using("btree", table.fulfillmentStatus.asc().nullsLast().op("text_ops")),
 	index("orders_org_branch_status_idx").using("btree", table.organizationId.asc().nullsLast().op("text_ops"), table.branchId.asc().nullsLast().op("text_ops"), table.status.asc().nullsLast().op("text_ops")),
 	index("orders_org_created_idx").using("btree", table.organizationId.asc().nullsLast().op("int4_ops"), table.createdAt.asc().nullsLast().op("timestamptz_ops")),
 	index("orders_org_idx").using("btree", table.organizationId.asc().nullsLast().op("int4_ops")),

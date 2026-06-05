@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { Receipt } from "lucide-react"
+import { FileText } from "lucide-react"
 import Link from "next/link"
 import {
     Tooltip,
@@ -28,7 +28,7 @@ export function ReceiptIconButton({
             <Tooltip>
                 <TooltipTrigger asChild>
                     <Link
-                        href={`/receipts/${orderId}`}
+                        href={`/invoices/${orderId}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 gap-1 ${variant === "ghost"
@@ -39,12 +39,12 @@ export function ReceiptIconButton({
                             } ${size === "sm" ? "h-8 px-3" : size === "lg" ? "h-10 px-8" : "h-9 px-4"
                             }`}
                     >
-                        <Receipt className="h-4 w-4" />
-                        {showLabel && "Receipt"}
+                        <FileText className="h-4 w-4" />
+                        {showLabel && "Invoice"}
                     </Link>
                 </TooltipTrigger>
                 <TooltipContent>
-                    <p>View Receipt</p>
+                    <p>View Invoice</p>
                 </TooltipContent>
             </Tooltip>
         </TooltipProvider>

@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { formatPKR } from "@/lib/utils"
 import { buildStatusTimeline } from "@/lib/order-utils"
-import { ArrowLeft, Clock, TrendingDown, CheckCircle, RefreshCw, Package, Receipt, Ban, Copy } from "lucide-react"
+import { ArrowLeft, Clock, TrendingDown, CheckCircle, RefreshCw, Package, Ban, Copy } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { RefundManagement } from "@/components/refund-management"
 

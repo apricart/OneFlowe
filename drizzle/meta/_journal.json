@@ -134,6 +134,20 @@
       "when": 1780614000000,
       "tag": "20260604000000_add_branch_location_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1780700400000,
+      "tag": "20260605000000_add_invoice_sequences",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1780704000000,
+      "tag": "20260605010000_add_order_fulfillment_status",
+      "breakpoints": true
     }
   ]
 }

@@ -31,6 +31,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Search } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import {
+  BUDGET_ALLOCATION_MODE_SETTING_KEY,
   type BudgetAllocationMode,
   parseBudgetAllocationMode,
 } from "@/lib/budget-allocation-mode"
@@ -1059,7 +1060,7 @@ function CreateOrgDialog({
         onOpenChange={setConfirmModeOpen}
         onConfirm={createCompany}
         title="Confirm Budget Model"
-        description={`This company will use ${budgetAllocationMode === "quantity" ? "quantity-based" : "money-value"} budget allocation. This action cannot be undone after the company is created.`}
+        description={`This company will use ${budgetAllocationMode === "quantity" ? "quantity-based" : "money-value"} budget allocation. Super Admins can change this later from Edit Company.`}
         confirmText="Create Company"
         cancelText="Review"
         type="warning"
@@ -1267,6 +1268,9 @@ function EditOrgDialog({
   const [name, setName] = useState(org.name)
   const [code, setCode] = useState(org.code)
   const [status, setStatus] = useState<boolean>(isActiveStatus(org.status))
+  const [budgetAllocationMode, setBudgetAllocationMode] = useState<BudgetAllocationMode>(
+    parseBudgetAllocationMode(org.budgetAllocationMode)
+  )
   const [hideBranchAdminPrices, setHideBranchAdminPrices] = useState(false)
   const [hideOrderPortalPrices, setHideOrderPortalPrices] = useState(false)
   const [loadingSettings, setLoadingSettings] = useState(false)
@@ -1276,7 +1280,8 @@ function EditOrgDialog({
     setName(org.name)
     setCode(org.code)
     setStatus(isActiveStatus(org.status))
-  }, [org.name, org.code, org.status])
+    setBudgetAllocationMode(parseBudgetAllocationMode(org.budgetAllocationMode))
+  }, [org.name, org.code, org.status, org.budgetAllocationMode])
 
   useEffect(() => {
     if (!open || !isSuperAdmin) return
@@ -1291,14 +1296,17 @@ function EditOrgDialog({
         const legacySetting = settings.find((item: any) => item.key === LEGACY_HIDE_PRICES_SETTING_KEY)
         const branchAdminSetting = settings.find((item: any) => item.key === HIDE_BRANCH_ADMIN_PRICES_SETTING_KEY)
         const orderPortalSetting = settings.find((item: any) => item.key === HIDE_ORDER_PORTAL_PRICES_SETTING_KEY)
+        const budgetModeSetting = settings.find((item: any) => item.key === BUDGET_ALLOCATION_MODE_SETTING_KEY)
         const legacyValue = legacySetting?.value === true
         setHideBranchAdminPrices(branchAdminSetting ? branchAdminSetting.value === true : legacyValue)
         setHideOrderPortalPrices(orderPortalSetting ? orderPortalSetting.value === true : legacyValue)
+        setBudgetAllocationMode(parseBudgetAllocationMode(budgetModeSetting?.value ?? org.budgetAllocationMode))
       })
       .catch(() => {
         if (!cancelled) {
           setHideBranchAdminPrices(false)
           setHideOrderPortalPrices(false)
+          setBudgetAllocationMode(parseBudgetAllocationMode(org.budgetAllocationMode))
         }
       })
       .finally(() => {
@@ -1358,6 +1366,38 @@ function EditOrgDialog({
             </div>
             {isSuperAdmin && (
               <div className="space-y-3">
+                <div className="space-y-2 rounded-md border bg-background px-3 py-2">
+                  <Label>Budget allocation model</Label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setBudgetAllocationMode("money")}
+                      disabled={loadingSettings || saving}
+                      className={cn(
+                        "rounded-md border bg-background p-3 text-left transition-colors",
+                        budgetAllocationMode === "money" ? "border-indigo-500 ring-2 ring-indigo-100 dark:ring-indigo-900/40" : "hover:bg-muted/50"
+                      )}
+                    >
+                      <span className="text-sm font-semibold">Money value</span>
+                      <span className="mt-1 block text-xs text-muted-foreground">Allocate budgets directly in PKR.</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBudgetAllocationMode("quantity")}
+                      disabled={loadingSettings || saving}
+                      className={cn(
+                        "rounded-md border bg-background p-3 text-left transition-colors",
+                        budgetAllocationMode === "quantity" ? "border-indigo-500 ring-2 ring-indigo-100 dark:ring-indigo-900/40" : "hover:bg-muted/50"
+                      )}
+                    >
+                      <span className="text-sm font-semibold">Quantity</span>
+                      <span className="mt-1 block text-xs text-muted-foreground">Allocate product quantities that calculate budget value.</span>
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    New orders follow the selected model immediately. Existing orders and reports remain unchanged.
+                  </p>
+                </div>
                 <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
                   <div>
                     <Label htmlFor="hide-branch-admin-price-visibility">Hide Branch Admin prices</Label>
@@ -1398,7 +1438,12 @@ function EditOrgDialog({
               setSaving(true)
               try {
                 const saved = await onSave(
-                  { name, code, status: status ? "active" : "inactive" },
+                  {
+                    name,
+                    code,
+                    status: status ? "active" : "inactive",
+                    ...(isSuperAdmin ? { budgetAllocationMode } : {}),
+                  },
                   isSuperAdmin
                     ? {
                       hideBranchAdminPrices,

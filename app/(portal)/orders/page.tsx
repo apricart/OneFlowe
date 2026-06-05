@@ -27,7 +27,6 @@ import {
   Check,
   X,
   Eye,
-  Receipt,
   XCircle,
   Activity,
 } from "lucide-react"

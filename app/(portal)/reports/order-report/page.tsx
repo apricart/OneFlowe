@@ -885,7 +885,7 @@ export default function OrderReportPage() {
                                                                 </div>
                                                                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                                                                     <div className="h-1 w-1 rounded-full bg-slate-300 dark:bg-slate-700" />
-                                                                    Audit Receipt
+                                                                    Audit Invoice
                                                                 </span>
                                                             </div>
                                                         </TableCell>

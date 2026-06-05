@@ -10,6 +10,11 @@ import { getReceiptItemQuantity } from "@/lib/receipt-display"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
+const toDisplayNameCase = (value: string) =>
+    value
+        .toLowerCase()
+        .replace(/\b[a-z]/g, (char) => char.toUpperCase())
+
 interface ReceiptContentProps {
     orderId: number
     standalone?: boolean
@@ -29,23 +34,23 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
         setIsDownloading(true)
         try {
             const response = await fetch(`/api/v1/receipts/${orderId}/download`)
-            if (!response.ok) throw new Error("Failed to download receipt")
+            if (!response.ok) throw new Error("Failed to download invoice")
 
             const blob = await response.blob()
             const url = window.URL.createObjectURL(blob)
             const a = document.createElement("a")
             a.href = url
-            a.download = `receipt-${data?.receiptData?.invoiceNumber || orderId}.pdf`
+            a.download = `invoice-${data?.receiptData?.invoiceNumber || orderId}.pdf`
             document.body.appendChild(a)
             a.click()
             window.URL.revokeObjectURL(url)
             document.body.removeChild(a)
 
-            toast({ title: "Success", description: "Receipt downloaded successfully" })
+            toast({ title: "Success", description: "Invoice downloaded successfully" })
         } catch (error: any) {
             toast({
                 title: "Error",
-                description: error.message || "Failed to download receipt",
+                description: error.message || "Failed to download invoice",
                 variant: "destructive",
             })
         } finally {
@@ -67,7 +72,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                     <div className="h-10 w-10 rounded-full border-2 border-slate-100" />
                     <div className="absolute inset-0 h-10 w-10 animate-spin rounded-full border-2 border-transparent border-t-slate-800" />
                 </div>
-                <p className="text-sm text-slate-400 mt-4 font-medium">Loading official receipt...</p>
+                <p className="text-sm text-slate-400 mt-4 font-medium">Loading official invoice...</p>
             </div>
         )
     }
@@ -78,7 +83,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                 <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mb-3">
                     <X className="h-5 w-5 text-red-400" />
                 </div>
-                <p className="text-sm text-slate-600 font-medium">Receipt Not Available</p>
+                <p className="text-sm text-slate-600 font-medium">Invoice Not Available</p>
                 <p className="text-xs text-slate-400 mt-1">Check your connection or order ID.</p>
             </div>
         )
@@ -291,7 +296,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
             {/* Action Bar */}
             <div className="flex justify-end gap-2 mb-6 print-hidden max-w-[850px] mx-auto">
                 <Button onClick={handlePrint} variant="outline" size="sm" className="gap-2 h-9 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 font-semibold shadow-sm">
-                    <Printer className="h-4 w-4" /> Print Receipt
+                    <Printer className="h-4 w-4" /> Print Invoice
                 </Button>
                 {!pricesHidden && (
                     <Button onClick={handleDownload} disabled={isDownloading} size="sm" className="gap-2 h-9 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md">
@@ -309,22 +314,22 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
             <div className="official-invoice">
                 {/* Header */}
                 <div className="official-header">
-                    <div>
+                    <div className="col-span-2 flex justify-center">
                         <Image
-                            src="/logo-pos.png"
+                            src="/apricart-logo-blue.png"
                             alt="OneFlowe Logo"
                             width={180}
                             height={50}
                             className="object-contain"
                             priority
                         />
-                        <div className="mt-4">
-                            <p className="text-[11px] font-bold text-slate-800 uppercase tracking-tight">From:</p>
-                            <p className="text-[12px] font-medium text-slate-600">{receiptData.organizationName || "Apricart E-Store Pvt Ltd"}</p>
-                        </div>
+                    </div>
+                    <div className="mt-4">
+                        <p className="text-[11px] font-bold text-slate-800 uppercase tracking-tight">From:</p>
+                        <p className="text-[12px] font-medium text-slate-600">{"Apricart E-Store Pvt Ltd"}</p>
                     </div>
 
-                    <div className="invoice-meta">
+                    {/* <div className="invoice-meta">
                         <h1>INVOICE#: {receiptData.invoiceNumber}</h1>
                         <div className="meta-item">
                             <span className="meta-label">DATE:</span>
@@ -347,7 +352,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                                 </span>
                             </div>
                         </div>
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* Detail Grid */}

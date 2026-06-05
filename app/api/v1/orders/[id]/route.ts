@@ -5,6 +5,7 @@ import { and, eq, sql } from "drizzle-orm"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
+import { orderSelectColumns, updateOrderFulfillmentStatusColumn } from "@/lib/order-select"
 import {
   moveHeldQuantityBudgetToUsedForOrder,
   releaseHeldQuantityBudgetForOrder,
@@ -21,7 +22,7 @@ export async function GET(
   const { id } = params
   const orderId = Number(id)
 
-  const [item] = await db.select().from(orders).where(eq(orders.id, orderId))
+  const [item] = await db.select(orderSelectColumns).from(orders).where(eq(orders.id, orderId))
   if (!item) return error("Not found", 404)
 
   // BOLA Protection: Verify user belongs to the same organization/branch as the order
@@ -96,7 +97,7 @@ export async function PATCH(
   const orderId = Number(id)
 
   // Check existence and ownership first
-  const [ord] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+  const [ord] = await db.select(orderSelectColumns).from(orders).where(eq(orders.id, orderId)).limit(1)
   if (!ord) return error("Order not found", 404)
 
   // BOLA Protection
@@ -124,7 +125,7 @@ export async function PATCH(
     patch.fulfilledAt = sql`NOW()`
   }
 
-  const [item] = await db.transaction(async (tx) => {
+  const item = await db.transaction(async (tx) => {
     // Determine the month the order belongs to for budget lookup
     const orderMonth = ord.createdAt
       ? new Date(ord.createdAt).toISOString().slice(0, 7)
@@ -177,10 +178,17 @@ export async function PATCH(
       patch.fulfilledByUserId = session?.user ? (session.user as any).id : null
     }
 
-    return await tx.update(orders)
+    const [updated] = await tx.update(orders)
       .set(patch)
       .where(eq(orders.id, orderId))
-      .returning()
+      .returning(orderSelectColumns)
+
+    if (body.status === "FULFILLED") {
+      await updateOrderFulfillmentStatusColumn(tx, orderId, "DELIVERED")
+      return { ...updated, fulfillmentStatus: "DELIVERED" }
+    }
+
+    return updated
   })
 
   return ok({ item })
@@ -198,7 +206,7 @@ export async function DELETE(
   const orderId = Number(id)
 
   // Fetch order first to verify it exists
-  const [ord] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+  const [ord] = await db.select(orderSelectColumns).from(orders).where(eq(orders.id, orderId)).limit(1)
   if (!ord) return error("Order not found", 404)
 
   // BOLA Protection: verify resource access

@@ -2,6 +2,10 @@ import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { invalidateByPrefix } from "@/lib/cache-utils"
 import { db } from "@/lib/db"
 import {
+  BUDGET_ALLOCATION_MODE_SETTING_KEY,
+  isBudgetAllocationMode,
+} from "@/lib/budget-allocation-mode"
+import {
   organizations,
   branches,
   users,
@@ -88,13 +92,69 @@ export async function PATCH(
       patch.status = normalized
       console.log(`[Org Update] PATCH /api/v1/organizations/${id} - New status: ${patch.status}`)
     }
+    const budgetAllocationMode = body.budgetAllocationMode === undefined
+      ? undefined
+      : String(body.budgetAllocationMode)
+
+    if (budgetAllocationMode !== undefined && !isBudgetAllocationMode(budgetAllocationMode)) {
+      return error("Budget allocation mode must be either money or quantity", 400)
+    }
+
     patch.updatedAt = new Date()
-    const [item] = await db.update(organizations).set(patch).where(eq(organizations.id, Number(id))).returning()
+    const [item] = await db.transaction(async (tx) => {
+      const [updatedOrganization] = await tx
+        .update(organizations)
+        .set(patch)
+        .where(eq(organizations.id, Number(id)))
+        .returning()
+
+      if (budgetAllocationMode !== undefined) {
+        const [existingSetting] = await tx
+          .select({ id: organizationSettings.id })
+          .from(organizationSettings)
+          .where(and(
+            eq(organizationSettings.organizationId, Number(id)),
+            eq(organizationSettings.key, BUDGET_ALLOCATION_MODE_SETTING_KEY),
+          ))
+          .limit(1)
+
+        if (existingSetting) {
+          await tx
+            .update(organizationSettings)
+            .set({
+              value: budgetAllocationMode,
+              updatedAt: new Date(),
+            })
+            .where(eq(organizationSettings.id, existingSetting.id))
+        } else {
+          await tx
+            .insert(organizationSettings)
+            .values({
+              organizationId: Number(id),
+              key: BUDGET_ALLOCATION_MODE_SETTING_KEY,
+              value: budgetAllocationMode,
+            })
+        }
+      }
+
+      return [updatedOrganization]
+    })
 
     // Invalidate organizations cache so GET returns fresh data immediately
     await invalidateByPrefix('organizations')
+    await invalidateByPrefix('settings')
+    if (budgetAllocationMode !== undefined) {
+      await invalidateByPrefix('branch-inv')
+      await invalidateByPrefix('budgets')
+      await invalidateByPrefix('analytics')
+    }
 
-    return ok({ item })
+    return ok({
+      item: {
+        ...item,
+        ...(budgetAllocationMode !== undefined ? { budgetAllocationMode } : {}),
+      },
+    })
   } catch (e: any) {
     return error(e?.message || "Update failed", 400)
   }

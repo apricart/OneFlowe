@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, refundItems, refunds, users } from "@/db/schema"
+import { branches, orders, orderItems, refundItems, refunds, users } from "@/db/schema"
 import { and, eq, sql } from "drizzle-orm"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
 import { aggregateReceiptRefundItems, getReceiptItemQuantity, getReceiptNetTotal } from "@/lib/receipt-display"
 import { getOrderDerivedStatus } from "@/lib/order-status"
+import { formatBranchAddress } from "@/lib/branch-address"
 import { jsPDF } from "jspdf"
 import path from "path"
 import fs from "fs"
@@ -34,19 +35,19 @@ export async function GET(
             .limit(1)
 
         if (!order || !order.receiptData) {
-            return NextResponse.json({ error: "Receipt not found" }, { status: 404 })
+            return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
         }
 
         const { verifyResourceAccess } = await import("@/lib/auth")
         const hasAccess = await verifyResourceAccess(order.organizationId, order.branchId)
         if (!hasAccess) {
-            return NextResponse.json({ error: "Forbidden: You do not have access to this receipt" }, { status: 403 })
+            return NextResponse.json({ error: "Forbidden: You do not have access to this invoice" }, { status: 403 })
         }
 
         const userRole = (session.user as any).role
         const pricesHidden = await shouldHidePricesForRole(userRole, order.organizationId)
         if (pricesHidden) {
-            return NextResponse.json({ error: "Receipt download is unavailable while prices are hidden" }, { status: 403 })
+            return NextResponse.json({ error: "Invoice download is unavailable while prices are hidden" }, { status: 403 })
         }
 
         const [creator] = await db
@@ -71,6 +72,23 @@ export async function GET(
                 "Unknown"
             )
             : "Unknown"
+
+        let branchAddress = ""
+        if (order.branchId !== null && order.organizationId !== null) {
+            const [branchDetails] = await db
+                .select({
+                    address: branches.address,
+                    city: branches.city,
+                    province: branches.province,
+                })
+                .from(branches)
+                .where(and(
+                    eq(branches.id, order.branchId),
+                    eq(branches.organizationId, order.organizationId),
+                ))
+                .limit(1)
+            branchAddress = formatBranchAddress(branchDetails)
+        }
 
         const refundRows = await db
             .select({
@@ -99,6 +117,7 @@ export async function GET(
 
         const receiptData = {
             ...(order.receiptData as any),
+            buyerAddress: branchAddress,
             placedByName: creatorName,
             placedByPhone: creator?.phone || null,
             status: derivedStatus.label,
@@ -153,7 +172,7 @@ function renderReceiptPagePdf(receiptData: any) {
     drawPageShell(doc)
     drawHeader(doc, receiptData, margin, right)
 
-    let y = 90
+    let y = 70
     drawDetailCards(doc, receiptData, itemQuantity, margin, y, contentWidth)
     y += 44
 
@@ -172,27 +191,47 @@ function renderReceiptPagePdf(receiptData: any) {
     return doc.output("arraybuffer")
 }
 
-function drawPageShell(_doc: any) {
-    // Intentionally blank: the browser receipt has open whitespace, not a framed page.
+function drawPageShell(doc: any) {
+    const margin = 18
+    const right = 192
+    const pageHeight = 297
+    const cardPadding = 8
+    setFill(doc, colors.white)
+    setDraw(doc, colors.border)
+    doc.setLineWidth(0.25)
+    doc.roundedRect(
+        margin - cardPadding,
+        10,
+        right - margin + cardPadding * 2,
+        pageHeight - 20,
+        1.5,
+        1.5,
+        "FD",
+    )
 }
 
 function drawHeader(doc: any, receiptData: any, margin: number, right: number) {
+    const pageWidth = 210
+    const logoWidth = 50
+    const logoHeight = 14
+    const logoX = (pageWidth - logoWidth) / 2
+
     try {
-        const logoPath = path.join(process.cwd(), "public", "logo-pos.png")
+        const logoPath = path.join(process.cwd(), "public", "apricart-logo-blue.png")
         if (fs.existsSync(logoPath)) {
             const logoData = fs.readFileSync(logoPath).toString("base64")
-            doc.addImage(`data:image/png;base64,${logoData}`, "PNG", margin, 22, 50, 14, undefined, "FAST")
+            doc.addImage(`data:image/png;base64,${logoData}`, "PNG", logoX, 22, logoWidth, logoHeight, undefined, "FAST")
         } else {
             setText(doc, colors.primary)
             doc.setFont("helvetica", "bold")
             doc.setFontSize(22)
-            doc.text("ONEFLOWE", margin, 32)
+            doc.text("ONEFLOWE", pageWidth / 2, 32, { align: "center" })
         }
     } catch {
         setText(doc, colors.primary)
         doc.setFont("helvetica", "bold")
         doc.setFontSize(22)
-        doc.text("ONEFLOWE", margin, 32)
+        doc.text("ONEFLOWE", pageWidth / 2, 32, { align: "center" })
     }
 
     doc.setFont("helvetica", "bold")
@@ -201,34 +240,11 @@ function drawHeader(doc: any, receiptData: any, margin: number, right: number) {
     doc.text("FROM:", margin, 47)
     doc.setFont("helvetica", "normal")
     doc.setFontSize(10)
-    doc.text(truncate(receiptData.organizationName || "Apricart E-Store Pvt Ltd", 42), margin, 53)
-
-    const invoiceTitle = `INVOICE#: ${receiptData.invoiceNumber || ""}`
-    setText(doc, colors.primary)
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(invoiceTitle.length > 32 ? 14 : 18)
-    doc.text(invoiceTitle, right, 31, { align: "right" })
-
-    drawMetaRow(doc, "DATE:", receiptData.date || "N/A", right, 41)
-    drawMetaRow(doc, "CONTACT NO:", receiptData.organizationContact || "0333-3182410", right, 49)
-
-    drawMetaRow(doc, "BUYER NAME:", String(receiptData.buyerName || "N/A").toUpperCase(), right, 64, true)
-    drawMetaRow(doc, "DELIVER TO:", receiptData.buyerAddress || "-", right, 71)
+    doc.text(truncate("Apricart E-Store Pvt Ltd", 42), margin, 53)
 
     setDraw(doc, colors.border)
     doc.setLineWidth(0.5)
-    doc.line(margin, 80, right, 80)
-}
-
-function drawMetaRow(doc: any, label: string, value: string, right: number, y: number, boldValue = false) {
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(9)
-    setText(doc, colors.secondary)
-    doc.text(label, right - 45, y, { align: "right" })
-    doc.setFont("helvetica", boldValue ? "bold" : "normal")
-    doc.setFontSize(10)
-    setText(doc, colors.primary)
-    doc.text(truncate(String(value), 34), right, y, { align: "right" })
+    doc.line(margin, 62, right, 62)
 }
 
 function drawDetailCards(doc: any, receiptData: any, itemQuantity: number, x: number, y: number, width: number) {

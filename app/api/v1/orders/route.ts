@@ -8,9 +8,11 @@ import { and, desc, eq, gte, lte, sql, inArray } from "drizzle-orm"
 import { logOrderActivity, logTokenGenerated, logFulfillmentAttempt } from "@/lib/global-logger"
 import { generateApprovalToken, hashApprovalToken, verifyApprovalToken } from "@/lib/approval-token"
 import { generateReceiptData } from "@/lib/receipt-generator"
+import { generateNextInvoiceNumber, hasInvoiceSequenceTable } from "@/lib/invoice-number"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
 import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 import { getBudgetAllocationModeForOrganization } from "@/lib/server/budget-allocation-mode"
+import { orderSelectColumns, updateOrderFulfillmentStatusColumn } from "@/lib/order-select"
 import {
   moveHeldQuantityBudgetToUsedForOrder,
   releaseHeldQuantityBudgetForOrder,
@@ -189,6 +191,7 @@ export async function GET(req: NextRequest) {
         organizationName: organizations.name,
         branchId: orders.branchId,
         status: orders.status,
+        fulfillmentStatus: orderSelectColumns.fulfillmentStatus,
         statusAtRefund: orders.statusAtRefund,
         refundedAt: orders.refundedAt,
         refundedByUserId: orders.refundedByUserId,
@@ -310,6 +313,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ items: filtered, pricesHidden })
   } catch (e: any) {
+    console.error("Orders GET error:", e)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
   }
 }
@@ -481,6 +485,7 @@ export async function POST(req: NextRequest) {
     }
 
     const tid = generateTid()
+    const invoiceSequenceReady = await hasInvoiceSequenceTable(db)
 
     const created = await db.transaction(async (tx) => {
       const budgetId = currentBudget?.id
@@ -587,7 +592,7 @@ export async function POST(req: NextRequest) {
         totalCents: total,
         notes: notes || null,
         createdByUserId: userId,
-      }).returning()
+      }).returning(orderSelectColumns)
 
       // 4. Create Order Items
       await tx.insert(orderItems).values(calculatedItems.map(ci => ({
@@ -607,8 +612,9 @@ export async function POST(req: NextRequest) {
       }
 
       // 6. Generate and store receipt data
+      let receiptData: Awaited<ReturnType<typeof generateReceiptData>> | null = null
       try {
-        const receiptData = await generateReceiptData({
+        receiptData = await generateReceiptData({
           orderId: ord.id,
           orderTid: tid,
           status: 'pending',
@@ -621,14 +627,23 @@ export async function POST(req: NextRequest) {
           discountCents: 0,
           deliveryChargesCents: 0,
         })
-
-        // Update order with receipt data
-        await tx.update(orders)
-          .set({ receiptData: receiptData as any })
-          .where(eq(orders.id, ord.id))
       } catch (receiptErr) {
         console.error("Receipt generation failed during order creation", receiptErr)
         // Don't fail the order if receipt generation fails
+      }
+
+      if (receiptData) {
+        if (invoiceSequenceReady) {
+          receiptData.invoiceNumber = await generateNextInvoiceNumber(tx, Number(organizationId))
+        } else {
+          console.error("Invoice sequence table is missing; falling back to order TID for invoice number. Run the invoice sequence migration.")
+          receiptData.invoiceNumber = tid
+        }
+
+        // Update order with receipt data. If invoice persistence fails, rollback the order and counter.
+        await tx.update(orders)
+          .set({ receiptData: receiptData as any })
+          .where(eq(orders.id, ord.id))
       }
 
       await tx.update(budgets).set({ amountHeldCents: sql`${budgets.amountHeldCents} + ${total}` }).where(eq(budgets.id, budgetId))
@@ -739,7 +754,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Head office users have view-only access" }, { status: 403 })
     }
 
-    const [ord] = await db.select().from(orders).where(eq(orders.id, id)).limit(1)
+    const [ord] = await db.select(orderSelectColumns).from(orders).where(eq(orders.id, id)).limit(1)
     if (!ord) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
 
     // Fetch budget for the ORDER's creation month (not today's month!)
@@ -849,6 +864,7 @@ export async function PUT(req: NextRequest) {
           fulfilledByUserId: (session.user as any).id,
           receiptData: updatedReceiptData as any
         }).where(eq(orders.id, id))
+        await updateOrderFulfillmentStatusColumn(tx, id, "DELIVERED")
 
         await tx.update(budgets).set({
           amountHeldCents: sql`${budgets.amountHeldCents} - ${ord.totalCents}`,

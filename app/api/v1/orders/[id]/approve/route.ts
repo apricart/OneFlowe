@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm"
 import { getCurrentUser } from "@/lib/auth"
 import { generateApprovalToken, hashApprovalToken } from "@/lib/approval-token"
 import { logTokenGenerated } from "@/lib/global-logger"
+import { orderSelectColumns } from "@/lib/order-select"
 
 export async function POST(
   req: Request,
@@ -21,7 +22,7 @@ export async function POST(
   if (!user) return error("Unauthorized", 401)
 
   // Fetch order
-  const [ord] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1)
+  const [ord] = await db.select(orderSelectColumns).from(orders).where(eq(orders.id, orderId)).limit(1)
   if (!ord) return error("Order not found", 404)
 
   // BOLA: Verify user has access to this order's branch

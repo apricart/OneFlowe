@@ -19,12 +19,12 @@ import {
   CreditCard,
   Building,
   AlertTriangle,
-  Receipt,
   FileCheck,
   Lock,
   Share2,
   Copy,
-  Send
+  Send,
+  Truck
 } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "@/hooks/use-toast"
@@ -51,6 +51,12 @@ import {
 import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 import { Separator } from "@/components/ui/separator"
 import { getOrderDerivedStatus, type DerivedOrderStatusKey, type OrderStatusContext } from "@/lib/order-status"
+import {
+  FULFILLMENT_STATUS_LABELS,
+  getNextFulfillmentStatus,
+  normalizeFulfillmentStatus,
+  type FulfillmentStatus,
+} from "@/lib/fulfillment-status"
 
 type OrderItem = any // Avoiding strict type definition for speed, will rely on usage
 type OrdersDirectoryProps = {
@@ -83,6 +89,7 @@ export function OrdersDirectory({
   const [rejectReason, setRejectReason] = useState("")
   const [fulfillToken, setFulfillToken] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isUpdatingProgress, setIsUpdatingProgress] = useState(false)
   const [isSendingTokenEmail, setIsSendingTokenEmail] = useState(false)
 
   // Helpers
@@ -110,6 +117,69 @@ export function OrdersDirectory({
 
   const openFullDetails = (order: OrderItem) => {
     router.push(`/orders/${order.id}#refund-details`)
+  }
+
+  const getFulfillmentProgressColor = (status?: string | null) => {
+    switch (normalizeFulfillmentStatus(status)) {
+      case "DELIVERED":
+        return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
+      case "OUT_FOR_DELIVERY":
+        return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300"
+      case "IN_PROCESS":
+        return "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-300"
+      default:
+        return "border-slate-200 bg-slate-50 text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400"
+    }
+  }
+
+  const shouldShowFulfillmentProgress = (order: OrderItem) => {
+    const status = String(order.status || "").toLowerCase()
+    return status === "approved" || status === "fulfilled"
+  }
+
+  const updateFulfillmentProgress = async (nextStatus: FulfillmentStatus) => {
+    if (!viewingOrder) return
+
+    setIsUpdatingProgress(true)
+    try {
+      const res = await fetch(`/api/v1/orders/${viewingOrder.id}/fulfillment-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fulfillmentStatus: nextStatus }),
+      })
+
+      const responseText = await res.text()
+      const data = responseText
+        ? (() => {
+            try {
+              return JSON.parse(responseText)
+            } catch {
+              return { error: responseText }
+            }
+          })()
+        : {}
+
+      if (!res.ok) throw new Error(data.error || "Failed to update fulfillment progress")
+
+      const updatedOrder = {
+        ...viewingOrder,
+        fulfillmentStatus: data.item?.fulfillmentStatus || nextStatus,
+      }
+      setViewingOrder(updatedOrder)
+      toast({
+        title: "Progress updated",
+        description: `Order marked ${FULFILLMENT_STATUS_LABELS[nextStatus]}.`,
+      })
+      onUpdate()
+    } catch (err: any) {
+      toast({
+        title: "Progress Update Failed",
+        description: err.message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsUpdatingProgress(false)
+    }
   }
 
   const EmptyOrdersState = ({ compact = false }: { compact?: boolean }) => (
@@ -167,8 +237,8 @@ export function OrdersDirectory({
         description: `Order successfully ${actionType}ed.`,
       })
 
-      if (actionType === "approve" && isBranchAdmin && data.fulfillmentToken) {
-        setGeneratedToken(data.fulfillmentToken)
+      if (actionType === "approve" && isBranchAdmin && (data.fulfillmentToken || data.approvalToken)) {
+        setGeneratedToken(data.fulfillmentToken || data.approvalToken)
         setShowTokenDialog(true)
       }
 
@@ -305,6 +375,14 @@ export function OrdersDirectory({
                     >
                       {derivedStatus.label}
                     </Badge>
+                    {shouldShowFulfillmentProgress(order) && (
+                      <Badge
+                        variant="outline"
+                        className={cn("max-w-full whitespace-normal break-words rounded-lg border px-2 py-0.5 text-right text-[9px] font-bold uppercase leading-tight tracking-wider", getFulfillmentProgressColor(order.fulfillmentStatus))}
+                      >
+                        {FULFILLMENT_STATUS_LABELS[normalizeFulfillmentStatus(order.fulfillmentStatus)]}
+                      </Badge>
+                    )}
                   </div>
 
                   <div className="space-y-3 relative z-10">
@@ -378,6 +456,11 @@ export function OrdersDirectory({
                         <Badge variant="outline" className={cn("px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-lg border", statusColors.bg, statusColors.text, statusColors.border)}>
                           {derivedStatus.label}
                         </Badge>
+                        {shouldShowFulfillmentProgress(order) && (
+                          <Badge variant="outline" className={cn("ml-2 px-2 py-0.5 text-[9px] uppercase font-bold tracking-wider rounded-lg border", getFulfillmentProgressColor(order.fulfillmentStatus))}>
+                            {FULFILLMENT_STATUS_LABELS[normalizeFulfillmentStatus(order.fulfillmentStatus)]}
+                          </Badge>
+                        )}
                       </td>
                       <td className="py-4 font-medium text-slate-500 text-xs">
                         {format(new Date(order.createdAt), "dd MMM yyyy")}
@@ -478,6 +561,17 @@ export function OrdersDirectory({
                       <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" /> Branch</span>
                       <span className="text-sm font-bold text-slate-800 dark:text-slate-200 transition-colors group-hover:text-indigo-500">{viewingOrder.branchName || `#${viewingOrder.branchId}`}</span>
                     </div>
+                    {shouldShowFulfillmentProgress(viewingOrder) && (
+                      <div className="flex items-center justify-between gap-3 group">
+                        <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5"><Truck className="h-3.5 w-3.5" /> Progress</span>
+                        <Badge
+                          variant="outline"
+                          className={cn("max-w-[11rem] whitespace-normal break-words rounded-lg border px-2 py-0.5 text-right text-[9px] font-bold uppercase leading-tight tracking-wider", getFulfillmentProgressColor(viewingOrder.fulfillmentStatus))}
+                        >
+                          {FULFILLMENT_STATUS_LABELS[normalizeFulfillmentStatus(viewingOrder.fulfillmentStatus)]}
+                        </Badge>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -565,10 +659,26 @@ export function OrdersDirectory({
                   )}
 
                   {viewingOrder.status.toLowerCase() === "approved" && isSuperAdmin && (
-                    <Button onClick={() => setActionType("fulfill")} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-600/20">
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Fulfill Order
-                    </Button>
+                    <div className="w-full space-y-3">
+                      {(() => {
+                        const nextStatus = getNextFulfillmentStatus(viewingOrder.fulfillmentStatus)
+                        return nextStatus ? (
+                          <Button
+                            type="button"
+                            disabled={isUpdatingProgress}
+                            onClick={() => updateFulfillmentProgress(nextStatus)}
+                            className="w-full h-12 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold shadow-lg shadow-sky-600/20"
+                          >
+                            <Truck className={cn("mr-2 h-4 w-4", isUpdatingProgress && "animate-pulse")} />
+                            {isUpdatingProgress ? "Updating..." : `Mark ${FULFILLMENT_STATUS_LABELS[nextStatus]}`}
+                          </Button>
+                        ) : null
+                      })()}
+                      <Button onClick={() => setActionType("fulfill")} className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-600/20">
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Fulfill Order
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>
