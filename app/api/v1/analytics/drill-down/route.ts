@@ -287,7 +287,7 @@ export async function GET(req: NextRequest) {
         if (orderIds.length > 0) {
             const counts = await db.select({
                 orderId: orderItems.orderId,
-                totalQty: sql<number>`CAST(sum(COALESCE(${orderItems.quantity}, 0)) AS INTEGER)`.mapWith(Number)
+                totalQty: sql<number>`COALESCE(sum(COALESCE(${orderItems.quantity}, 0)), 0)::numeric`.mapWith(Number)
             })
                 .from(orderItems)
                 .where(inArray(orderItems.orderId, orderIds))

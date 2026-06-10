@@ -273,7 +273,7 @@ export async function GET(req: NextRequest) {
             .select({
                 categoryId: globalProducts.categoryId,
                 categoryName: categories.name,
-                spentCents: sql<number>`SUM((${orderItems.priceCents} * ${orderItems.quantity}) - COALESCE((SELECT SUM(amount_cents) FROM refund_items WHERE order_item_id = ${orderItems.id}), 0))`.mapWith(Number)
+                spentCents: sql<number>`SUM(ROUND(${orderItems.priceCents} * ${orderItems.quantity}) - COALESCE((SELECT SUM(amount_cents) FROM refund_items WHERE order_item_id = ${orderItems.id}), 0))`.mapWith(Number)
             })
             .from(orderItems)
             .innerJoin(orders, eq(orderItems.orderId, orders.id))
@@ -290,7 +290,7 @@ export async function GET(req: NextRequest) {
                     )
                 )
             .groupBy(globalProducts.categoryId, categories.name)
-            .orderBy(desc(sql`SUM(${orderItems.priceCents} * ${orderItems.quantity})`))
+            .orderBy(desc(sql`SUM(ROUND(${orderItems.priceCents} * ${orderItems.quantity}))`))
             : []
 
         // 5. MoM Insights calculation (Previous Period)

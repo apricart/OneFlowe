@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import { globalProducts, categories, auditLogs } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { cascadeGlobalProductFieldUpdate } from "@/lib/inventory-cascade"
+import { parseQuantity, sanitizeQuantityStep, validateProductQuantity } from "@/lib/quantity"
 
 function parseCsv(content: string) {
   const lines = content.split("\n").map((line) => line.trim()).filter((line) => line.length > 0)
@@ -48,6 +49,8 @@ function parseCsv(content: string) {
       unit: row.unit || "unit",
       status: row.status || "active",
       stockQuantity: row.stockquantity || row["stock_quantity"] || "0",
+      allowDecimalQuantity: ["true", "yes", "1"].includes(String(row.allowdecimalquantity || row["allow_decimal_quantity"] || "").toLowerCase()),
+      quantityStep: row.quantitystep || row["quantity_step"] || "",
     })
   }
 
@@ -112,12 +115,22 @@ export async function POST(req: NextRequest) {
       }
 
       // Validate stock quantity
+      const allowDecimalQuantity = Boolean(row.allowDecimalQuantity)
+      const quantityStep = sanitizeQuantityStep(allowDecimalQuantity, row.quantityStep)
       let stockQuantity = 0
       if (row.stockQuantity) {
-        const parsedStock = parseInt(row.stockQuantity)
+        const parsedStock = parseQuantity(row.stockQuantity)
         if (isNaN(parsedStock) || parsedStock < 0) {
-          errors.push("Invalid stock quantity format (must be integer >= 0)")
+          errors.push("Invalid stock quantity format")
         } else {
+          const stockValidation = validateProductQuantity(parsedStock, {
+            allowDecimalQuantity,
+            quantityStep,
+            label: "Stock quantity",
+          })
+          if (!stockValidation.ok && parsedStock !== 0) {
+            errors.push(stockValidation.error)
+          }
           stockQuantity = parsedStock
         }
       }
@@ -160,6 +173,8 @@ export async function POST(req: NextRequest) {
               unit: row.unit?.trim() || "unit",
               status: row.status?.toLowerCase() === "inactive" ? "inactive" : "active",
               stockQuantity,
+              allowDecimalQuantity,
+              quantityStep,
               updatedAt: new Date(),
               lastSyncedAt: new Date(),
             })
@@ -200,6 +215,8 @@ export async function POST(req: NextRequest) {
               unit: row.unit?.trim() || "unit",
               status: row.status?.toLowerCase() === "inactive" ? "inactive" : "active",
               stockQuantity,
+              allowDecimalQuantity,
+              quantityStep,
               createdByUserId: (session.user as any).id,
               lastSyncedAt: new Date(),
             })

@@ -148,6 +148,13 @@
       "when": 1780704000000,
       "tag": "20260605010000_add_order_fulfillment_status",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1780963200000,
+      "tag": "20260608000000_add_decimal_product_quantities",
+      "breakpoints": true
     }
   ]
 }

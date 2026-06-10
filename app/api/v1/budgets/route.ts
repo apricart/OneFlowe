@@ -502,7 +502,11 @@ export async function GET(req: NextRequest) {
       baselineBudgetCents: b.baselineBudgetCents || 0,
       period: b.period || currentMonth,
     }
-    const hideBudgetPrices = await shouldHidePricesForRole(normalizedRole, orgId || b.orgIdFromBranch || b.organizationId)
+    // Product prices may be hidden for order portal users, but their own branch
+    // budget remains visible so the portal can show the available limit.
+    const hideBudgetPrices = normalizedRole === "ORDER_PORTAL"
+      ? false
+      : await shouldHidePricesForRole(normalizedRole, orgId || b.orgIdFromBranch || b.organizationId)
 
     return NextResponse.json(
       hideBudgetPrices

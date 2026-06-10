@@ -6,6 +6,7 @@
 import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import { logError } from '@/lib/global-logger'
+import { formatQuantity } from '@/lib/quantity'
 
 // Email configuration from environment variables
 const EMAIL_CONFIG = {
@@ -364,7 +365,7 @@ const generateOrderTokenEmailSVG = (details: OrderTokenEmailDetails) => {
   const itemRows = visibleItems.map((item, index) => {
     const y = 425 + index * 42
     const productLabel = `${item.productCode ? `${item.productCode} - ` : ""}${item.productName}`
-    const quantityLabel = `${item.quantity}${item.unit ? ` ${item.unit}` : ""}`
+    const quantityLabel = `${formatQuantity(item.quantity)}${item.unit ? ` ${item.unit}` : ""}`
     return `
       <text x="64" y="${y}" fill="#1e293b" font-size="20" font-weight="700">${escapeXml(productLabel).slice(0, 62)}</text>
       <text x="920" y="${y}" fill="#4f46e5" font-size="20" font-weight="800" text-anchor="end">${escapeXml(quantityLabel)}</text>
@@ -400,7 +401,7 @@ const generateOrderTokenEmailHTML = (details: OrderTokenEmailDetails) => {
   const items = details.items.map((item) => `
     <tr>
       <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">${escapeHtml(item.productCode ? `${item.productCode} - ${item.productName}` : item.productName)}</td>
-      <td style="padding: 8px 0; color: #4f46e5; font-size: 14px; font-weight: 800; text-align: right;">${escapeHtml(`${item.quantity}${item.unit ? ` ${item.unit}` : ""}`)}</td>
+      <td style="padding: 8px 0; color: #4f46e5; font-size: 14px; font-weight: 800; text-align: right;">${escapeHtml(`${formatQuantity(item.quantity)}${item.unit ? ` ${item.unit}` : ""}`)}</td>
     </tr>
   `).join("")
 

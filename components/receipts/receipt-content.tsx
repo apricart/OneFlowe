@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast"
 import useSWR from "swr"
 import Image from "next/image"
 import { getReceiptItemQuantity } from "@/lib/receipt-display"
+import { formatQuantity } from "@/lib/quantity"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -458,7 +459,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                                                     <td className="text-center text-slate-400 font-medium">{serialCounter}</td>
                                                     <td className="text-slate-800 font-medium">{item.description}</td>
                                                     {!pricesHidden && <td className="text-right tabular-nums text-slate-600">{Number(item.rate).toLocaleString()}</td>}
-                                                    <td className="text-center tabular-nums text-slate-600">{item.quantity}</td>
+                                                    <td className="text-center tabular-nums text-slate-600">{formatQuantity(item.quantity)}</td>
                                                     {!pricesHidden && <td className="text-right tabular-nums font-bold text-slate-900">{Number(item.total).toLocaleString()}</td>}
                                                 </tr>
                                             )
@@ -503,7 +504,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                                 <div className="space-y-1.5">
                                     {refundedItems.map((item: any, index: number) => (
                                         <div key={`${item.productName}-${index}`} className="flex justify-between gap-3 text-[11px]">
-                                            <span className="font-semibold text-slate-600">{item.quantity}x {item.productName}</span>
+                                            <span className="font-semibold text-slate-600">{formatQuantity(item.quantity)}x {item.productName}</span>
                                             <span className="font-bold text-red-500">-PKR {Number(item.amount || 0).toLocaleString()}</span>
                                         </div>
                                     ))}

@@ -108,9 +108,9 @@ export async function GET(req: NextRequest) {
                 productName: globalProducts.name,
                 categoryName: categories.name,
                 totalQuantity: sql<number>`SUM(${orderItems.quantity})`.mapWith(Number),
-                revenueCents: sql<number>`SUM(${orderItems.quantity} * ${orderItems.priceCents})`.mapWith(Number),
+                revenueCents: sql<number>`SUM(ROUND(${orderItems.quantity} * ${orderItems.priceCents}))`.mapWith(Number),
                 fulfilledQuantity: sql<number>`SUM(CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED') THEN ${orderItems.quantity} ELSE 0 END)`.mapWith(Number),
-                fulfilledRevenueCents: sql<number>`SUM(CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED') THEN (${orderItems.quantity} * ${orderItems.priceCents}) ELSE 0 END)`.mapWith(Number),
+                fulfilledRevenueCents: sql<number>`SUM(CASE WHEN UPPER(${orders.status}) IN ('FULFILLED', 'APPROVED', 'PARTIAL', 'PARTIALLY_FULFILLED') THEN ROUND(${orderItems.quantity} * ${orderItems.priceCents}) ELSE 0 END)`.mapWith(Number),
                 refundedQuantity: sql<number>`SUM(COALESCE(${preAggRefunds.refundTotalQty}, 0))`.mapWith(Number),
                 refundedRevenueCents: sql<number>`SUM(COALESCE(${preAggRefunds.refundTotalAmt}, 0))`.mapWith(Number),
             })
@@ -122,7 +122,7 @@ export async function GET(req: NextRequest) {
             .innerJoin(users, eq(orders.createdByUserId, users.id))
             .where(and(...baseConditions))
             .groupBy(users.id, users.fullName, globalProducts.id, globalProducts.name, categories.name)
-            .orderBy(desc(sql<number>`SUM(${orderItems.quantity} * ${orderItems.priceCents})`))
+            .orderBy(desc(sql<number>`SUM(ROUND(${orderItems.quantity} * ${orderItems.priceCents}))`))
 
         const results = await q
 

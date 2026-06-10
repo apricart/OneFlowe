@@ -4,6 +4,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm"
 
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
+import { calculateLineCents, formatQuantity, parseQuantity, validateProductQuantity } from "@/lib/quantity"
 import { getBudgetAllocationModeForOrganization } from "@/lib/server/budget-allocation-mode"
 import { buildAppMonthPeriods, getAppMonthPeriod, parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 import {
@@ -28,7 +29,7 @@ interface QuantityAllocationRequestItem {
 const currentBudgetPeriod = () => new Date().toISOString().slice(0, 7)
 const periodPattern = /^\d{4}-\d{2}$/
 
-const isPositiveInteger = (value: unknown): value is number =>
+const isPositiveId = (value: unknown): value is number =>
   typeof value === "number" && Number.isInteger(value) && value > 0
 
 const parseNumberList = (value: string | null) =>
@@ -452,12 +453,14 @@ export async function POST(req: NextRequest) {
     }
 
     for (const item of items) {
-      if (!isPositiveInteger(item.branchInventoryId)) {
+      if (!isPositiveId(item.branchInventoryId)) {
         return NextResponse.json({ error: "Each item requires a valid branchInventoryId" }, { status: 400 })
       }
-      if (!isPositiveInteger(item.quantity)) {
-        return NextResponse.json({ error: "Each quantity must be a positive whole number" }, { status: 400 })
+      const parsedQuantity = parseQuantity(item.quantity)
+      if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+        return NextResponse.json({ error: "Each quantity must be a positive number" }, { status: 400 })
       }
+      item.quantity = parsedQuantity
     }
 
     const branchInventoryIds = items.map((item) => item.branchInventoryId)
@@ -492,6 +495,8 @@ export async function POST(req: NextRequest) {
         customPrice: organizationInventory.customPrice,
         basePrice: globalProducts.basePrice,
         unit: globalProducts.unit,
+        allowDecimalQuantity: globalProducts.allowDecimalQuantity,
+        quantityStep: globalProducts.quantityStep,
       })
       .from(branchInventory)
       .innerJoin(organizationInventory, eq(branchInventory.organizationInventoryId, organizationInventory.id))
@@ -526,11 +531,18 @@ export async function POST(req: NextRequest) {
         throw new Error(`Pricing is unavailable for ${product.customName || product.productName}`)
       }
 
+      const quantityValidation = validateProductQuantity(quantity, {
+        allowDecimalQuantity: product.allowDecimalQuantity,
+        quantityStep: product.quantityStep,
+        label: `Quantity for ${product.customName || product.productName}`,
+      })
+      if (!quantityValidation.ok) throw new Error(quantityValidation.error)
+
       return {
         ...product,
-        quantity,
+        quantity: quantityValidation.quantity,
         priceCents,
-        amountCents: priceCents * quantity,
+        amountCents: calculateLineCents(priceCents, quantityValidation.quantity),
       }
     })
 
@@ -643,7 +655,7 @@ export async function POST(req: NextRequest) {
           : (existing?.allocatedQuantity || 0) + (existing?.creditedQuantity || 0) + line.quantity
 
         if (proposedQuantityTotal < currentUsedOrHeld) {
-          throw new Error(`Quantity allocation for ${line.customName || line.productName} cannot be lower than already used or held quantity.`)
+          throw new Error(`Quantity allocation for ${line.customName || line.productName} cannot be lower than already used or held quantity (${formatQuantity(currentUsedOrHeld)}).`)
         }
 
         const [quantityBudget] = await tx

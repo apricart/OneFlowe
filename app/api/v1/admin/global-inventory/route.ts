@@ -8,6 +8,7 @@ import { alias } from "drizzle-orm/pg-core"
 import { cascadeGlobalProductDeletion, cascadeGlobalProductStatusChange, cascadeGlobalProductFieldUpdate } from "@/lib/inventory-cascade"
 import { escapeLikePattern } from "@/lib/utils"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { parseQuantity, sanitizeQuantityStep, validateProductQuantity } from "@/lib/quantity"
 
 // Increase body size limit to handle Base64-encoded product images
 export const config = {
@@ -78,6 +79,8 @@ export async function GET(req: NextRequest) {
           unit: globalProducts.unit,
           status: globalProducts.status,
           stockQuantity: globalProducts.stockQuantity,
+          allowDecimalQuantity: globalProducts.allowDecimalQuantity,
+          quantityStep: globalProducts.quantityStep,
           metadata: globalProducts.metadata,
           discountType: globalProducts.discountType,
           discountValue: globalProducts.discountValue,
@@ -205,6 +208,8 @@ export async function GET(req: NextRequest) {
         unit: globalProducts.unit,
         status: globalProducts.status,
         stockQuantity: globalProducts.stockQuantity,
+        allowDecimalQuantity: globalProducts.allowDecimalQuantity,
+        quantityStep: globalProducts.quantityStep,
         metadata: lite ? sql<Record<string, any> | null>`NULL` : globalProducts.metadata,
         discountType: lite ? sql<string | null>`NULL` : globalProducts.discountType,
         discountValue: lite ? sql<number | null>`NULL` : globalProducts.discountValue,
@@ -309,6 +314,8 @@ export async function POST(req: NextRequest) {
       unit,
       status = "active",
       stockQuantity = 0,
+      allowDecimalQuantity = false,
+      quantityStep,
       metadata = {},
       discountType,
       discountValue, // for percent provide number in basis points (e.g., 1000 = 10%) or cents for flat
@@ -336,6 +343,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Product code already exists" }, { status: 400 })
     }
 
+    const decimalEnabled = Boolean(allowDecimalQuantity)
+    const normalizedQuantityStep = sanitizeQuantityStep(decimalEnabled, quantityStep)
+    const stockValidation = validateProductQuantity(parseQuantity(stockQuantity ?? 0), {
+      allowDecimalQuantity: decimalEnabled,
+      quantityStep: normalizedQuantityStep,
+      label: "Stock quantity",
+    })
+
+    if (!stockValidation.ok && parseQuantity(stockQuantity ?? 0) !== 0) {
+      return NextResponse.json({ error: stockValidation.error }, { status: 400 })
+    }
+
+    const normalizedStockQuantity = Math.max(0, parseQuantity(stockQuantity ?? 0) || 0)
+
     const [newProduct] = await db.insert(globalProducts)
       .values({
         productCode,
@@ -346,7 +367,9 @@ export async function POST(req: NextRequest) {
         basePrice: Math.round(parseFloat(basePrice) * 100), // Convert to cents
         unit: unit || "unit",
         status,
-        stockQuantity: stockQuantity !== undefined ? Math.max(0, parseInt(String(stockQuantity)) || 0) : 0,
+        stockQuantity: normalizedStockQuantity,
+        allowDecimalQuantity: decimalEnabled,
+        quantityStep: normalizedQuantityStep,
         metadata,
         discountType: discountType || null,
         discountValue: discountValue !== undefined && discountValue !== null ? parseInt(discountValue) : null,
@@ -403,6 +426,8 @@ export async function PUT(req: NextRequest) {
       unit,
       status,
       stockQuantity,
+      allowDecimalQuantity,
+      quantityStep,
       metadata,
       discountType,
       discountValue,
@@ -443,6 +468,8 @@ export async function PUT(req: NextRequest) {
       description: globalProducts.description,
       imageUrl: globalProducts.imageUrl,
       basePrice: globalProducts.basePrice,
+      allowDecimalQuantity: globalProducts.allowDecimalQuantity,
+      quantityStep: globalProducts.quantityStep,
     })
       .from(globalProducts)
       .where(eq(globalProducts.id, parseInt(id)))
@@ -461,7 +488,27 @@ export async function PUT(req: NextRequest) {
     if (basePrice !== undefined) updateData.basePrice = Math.round(parseFloat(basePrice) * 100)
     if (unit !== undefined) updateData.unit = unit
     if (status !== undefined) updateData.status = status
-    if (stockQuantity !== undefined) updateData.stockQuantity = Math.max(0, parseInt(String(stockQuantity)) || 0)
+    const existingDecimalEnabled = Boolean((existingProduct as any).allowDecimalQuantity)
+    const nextDecimalEnabled = allowDecimalQuantity !== undefined ? Boolean(allowDecimalQuantity) : existingDecimalEnabled
+    const nextQuantityStep = sanitizeQuantityStep(
+      nextDecimalEnabled,
+      quantityStep !== undefined ? quantityStep : (existingProduct as any).quantityStep ?? 1,
+    )
+
+    if (allowDecimalQuantity !== undefined) updateData.allowDecimalQuantity = nextDecimalEnabled
+    if (quantityStep !== undefined || allowDecimalQuantity !== undefined) updateData.quantityStep = nextQuantityStep
+
+    if (stockQuantity !== undefined) {
+      const stockValidation = validateProductQuantity(parseQuantity(stockQuantity), {
+        allowDecimalQuantity: nextDecimalEnabled,
+        quantityStep: nextQuantityStep,
+        label: "Stock quantity",
+      })
+      if (!stockValidation.ok && parseQuantity(stockQuantity) !== 0) {
+        return NextResponse.json({ error: stockValidation.error }, { status: 400 })
+      }
+      updateData.stockQuantity = Math.max(0, parseQuantity(stockQuantity) || 0)
+    }
     if (metadata !== undefined) updateData.metadata = metadata
     if (discountType !== undefined) updateData.discountType = discountType || null
     if (discountValue !== undefined) updateData.discountValue = discountValue !== null ? parseInt(discountValue) : null

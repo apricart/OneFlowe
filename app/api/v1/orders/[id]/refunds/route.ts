@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { refunds, orders, budgets, auditLogs, users, orderItems, refundItems } from "@/db/schema"
+import { refunds, orders, budgets, auditLogs, users, orderItems, refundItems, globalProducts } from "@/db/schema"
 import { eq, sql, desc, inArray, and } from "drizzle-orm"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
 import { releaseRefundedQuantityBudget } from "@/lib/server/product-quantity-budget-ledger"
 import { orderSelectColumns } from "@/lib/order-select"
+import { calculateLineCents, formatQuantity, validateProductQuantity } from "@/lib/quantity"
 
 export async function GET(
   req: NextRequest,
@@ -177,6 +178,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // 1. Fetch original order items to validate prices and quantities
     const orderItemsList = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId))
     const orderItemsMap = new Map(orderItemsList.map(i => [i.id, i]))
+    const productIds = Array.from(new Set(orderItemsList.map((item) => item.globalProductId)))
+    const productQuantityRules = productIds.length > 0
+      ? await db
+        .select({
+          id: globalProducts.id,
+          allowDecimalQuantity: globalProducts.allowDecimalQuantity,
+          quantityStep: globalProducts.quantityStep,
+        })
+        .from(globalProducts)
+        .where(inArray(globalProducts.id, productIds))
+      : []
+    const productQuantityRulesById = new Map(productQuantityRules.map((product) => [product.id, product]))
 
     // Check previously refunded quantities
     // We need to fetch all refund_items associated with refunds for this order
@@ -213,27 +226,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: `Item ${item.id} does not belong to this order` }, { status: 400 })
       }
 
-      if (item.quantity <= 0) {
-        return NextResponse.json({ error: `Invalid quantity for item ${originalItem.productName}` }, { status: 400 })
+      const quantityRule = productQuantityRulesById.get(originalItem.globalProductId)
+      const quantityValidation = validateProductQuantity(item.quantity, {
+        allowDecimalQuantity: quantityRule?.allowDecimalQuantity,
+        quantityStep: quantityRule?.quantityStep,
+        label: `Refund quantity for ${originalItem.productName}`,
+      })
+      if (!quantityValidation.ok) {
+        return NextResponse.json({ error: quantityValidation.error }, { status: 400 })
       }
 
       const approvedRefunded = approvedRefundedMap.get(item.id) || 0
       const pendingRefunded = pendingRefundedMap.get(item.id) || 0
       const remainingQty = originalItem.quantity - (approvedRefunded + pendingRefunded)
 
-      if (item.quantity > remainingQty) {
+      if (quantityValidation.quantity > remainingQty) {
         return NextResponse.json({
-          error: `Cannot refund ${item.quantity} of ${originalItem.productName}. Only ${remainingQty} remaining (Ordered: ${originalItem.quantity}, Approved: ${approvedRefunded}, Pending: ${pendingRefunded})`
+          error: `Cannot refund ${formatQuantity(quantityValidation.quantity)} of ${originalItem.productName}. Only ${formatQuantity(remainingQty)} remaining (Ordered: ${formatQuantity(originalItem.quantity)}, Approved: ${formatQuantity(approvedRefunded)}, Pending: ${formatQuantity(pendingRefunded)})`
         }, { status: 400 })
       }
 
-      const itemTotal = originalItem.priceCents * item.quantity
+      const itemTotal = calculateLineCents(originalItem.priceCents, quantityValidation.quantity)
       totalRefundAmount += itemTotal
 
       refundDetails.push({
         orderItemId: item.id,
         name: originalItem.productName,
-        quantity: item.quantity,
+        quantity: quantityValidation.quantity,
         amount: itemTotal
       })
     }

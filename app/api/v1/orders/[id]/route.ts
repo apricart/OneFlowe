@@ -52,8 +52,10 @@ export async function GET(
       unit: orderItems.unit,
       globalProductId: orderItems.globalProductId,
       imageUrl: globalProducts.imageUrl,
+      allowDecimalQuantity: globalProducts.allowDecimalQuantity,
+      quantityStep: globalProducts.quantityStep,
       quantityRefunded: sql<number>`COALESCE((
-        SELECT SUM(${refundItems.quantity})::int
+        SELECT COALESCE(SUM(${refundItems.quantity}), 0)::numeric
         FROM ${refundItems}
         JOIN ${refunds} ON ${refundItems.refundId} = ${refunds.id}
         WHERE ${refundItems.orderItemId} = ${orderItems.id}

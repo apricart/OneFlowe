@@ -175,6 +175,8 @@ export async function GET(req: NextRequest) {
           isVisible: branchInventory.isVisible,
           isActive: branchInventory.isActive,
           stockQuantity: globalProducts.stockQuantity,
+          allowDecimalQuantity: globalProducts.allowDecimalQuantity,
+          quantityStep: globalProducts.quantityStep,
           reorderThreshold: sql<number>`10`,
           assignedAt: branchInventory.assignedAt,
           updatedAt: branchInventory.updatedAt,

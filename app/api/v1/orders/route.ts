@@ -13,6 +13,7 @@ import { shouldHidePricesForRole } from "@/lib/price-visibility"
 import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 import { getBudgetAllocationModeForOrganization } from "@/lib/server/budget-allocation-mode"
 import { orderSelectColumns, updateOrderFulfillmentStatusColumn } from "@/lib/order-select"
+import { calculateLineCents, formatQuantity, roundQuantity, validateProductQuantity } from "@/lib/quantity"
 import {
   moveHeldQuantityBudgetToUsedForOrder,
   releaseHeldQuantityBudgetForOrder,
@@ -211,7 +212,7 @@ export async function GET(req: NextRequest) {
           AND UPPER(${refunds.status}) = 'PENDING'
         )`,
         itemCount: sql<number>`(
-          SELECT SUM(${orderItems.quantity})::int
+          SELECT COALESCE(SUM(${orderItems.quantity}), 0)::numeric
           FROM ${orderItems}
           WHERE ${orderItems.orderId} = ${orders.id}
         )`,
@@ -277,8 +278,10 @@ export async function GET(req: NextRequest) {
             unit: orderItems.unit,
             globalProductId: orderItems.globalProductId,
             imageUrl: globalProducts.imageUrl,
+            allowDecimalQuantity: globalProducts.allowDecimalQuantity,
+            quantityStep: globalProducts.quantityStep,
             quantityRefunded: sql<number>`COALESCE((
-              SELECT SUM(${refundItems.quantity})::int
+              SELECT COALESCE(SUM(${refundItems.quantity}), 0)::numeric
               FROM ${refundItems}
               JOIN ${refunds} ON ${refundItems.refundId} = ${refunds.id}
               WHERE ${refundItems.orderItemId} = ${orderItems.id}
@@ -333,8 +336,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Items required" }, { status: 400 })
     }
 
+    const normalizedItems = items.map((item) => ({
+      ...item,
+      quantity: roundQuantity(Number(item.quantity)),
+    }))
+
     // Validate quantities are positive
-    if (items.some(i => i.quantity <= 0)) {
+    if (normalizedItems.some(i => !Number.isFinite(i.quantity) || i.quantity <= 0)) {
       return NextResponse.json({ error: "Quantities must be greater than zero" }, { status: 400 })
     }
 
@@ -355,7 +363,7 @@ export async function POST(req: NextRequest) {
     const budgetAllocationMode = await getBudgetAllocationModeForOrganization(Number(organizationId))
 
     // Fetch inventory details and prices
-    const orgInvIds = items.map(i => i.organizationInventoryId)
+    const orgInvIds = normalizedItems.map(i => i.organizationInventoryId)
     const allInvRows = await db.select().from(organizationInventory)
       .where(and(
         eq(organizationInventory.organizationId, organizationId),
@@ -386,7 +394,9 @@ export async function POST(req: NextRequest) {
       name: r.name,
       productCode: r.productCode,
       unit: r.unit,
-      stockQuantity: r.stockQuantity
+      stockQuantity: r.stockQuantity,
+      allowDecimalQuantity: r.allowDecimalQuantity,
+      quantityStep: r.quantityStep,
     }))
 
     console.log("Mapped gp rows:", gpRows)
@@ -398,7 +408,7 @@ export async function POST(req: NextRequest) {
     // to prevent race conditions that lead to negative stock.
 
     let subtotal = 0
-    const calculatedItems = items.map(i => {
+    const calculatedItems = normalizedItems.map(i => {
       const inv = invById.get(i.organizationInventoryId)
       if (!inv) throw new Error(`Inventory item ${i.organizationInventoryId} not found`)
       const gp = gpById.get(inv.globalProductId)
@@ -410,14 +420,21 @@ export async function POST(req: NextRequest) {
         gpId: gp.id,
       })
 
+      const quantityValidation = validateProductQuantity(i.quantity, {
+        allowDecimalQuantity: gp.allowDecimalQuantity,
+        quantityStep: gp.quantityStep,
+        label: `Quantity for ${gp.name}`,
+      })
+      if (!quantityValidation.ok) throw new Error(quantityValidation.error)
+
       const unitPrice = inv.customPrice ?? gp.basePrice
       if (unitPrice === null || unitPrice === undefined) throw new Error(`Price not found for item ${i.organizationInventoryId}. Custom: ${inv.customPrice}, Base: ${gp.basePrice}`)
-      const line = unitPrice * (i.quantity || 0)
+      const line = calculateLineCents(unitPrice, quantityValidation.quantity)
       subtotal += line
       return {
         organizationInventoryId: i.organizationInventoryId,
         globalProductId: inv.globalProductId,
-        quantity: i.quantity,
+        quantity: quantityValidation.quantity,
         priceCents: unitPrice,
         productName: gp.name,
         productCode: gp.productCode,
@@ -553,7 +570,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (item.quantity > quantityRemaining) {
-          throw new Error(`Insufficient quantity budget for ${item.productName}. Available: ${quantityRemaining}, Requested: ${item.quantity}`)
+          throw new Error(`Insufficient quantity budget for ${item.productName}. Available: ${formatQuantity(quantityRemaining)}, Requested: ${formatQuantity(item.quantity)}`)
         }
       }
 
@@ -573,7 +590,7 @@ export async function POST(req: NextRequest) {
 
         if (gp.stockQuantity < ci.quantity) {
           // Inside transaction, throwing error will rollback
-          throw new Error(`Insufficient stock for ${gp.name}. Available: ${gp.stockQuantity}, Requested: ${ci.quantity}`)
+          throw new Error(`Insufficient stock for ${gp.name}. Available: ${formatQuantity(gp.stockQuantity)}, Requested: ${formatQuantity(ci.quantity)}`)
         }
       }
 

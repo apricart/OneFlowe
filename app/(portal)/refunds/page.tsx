@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Search, RefreshCcw, Loader2, AlertTriangle, Building2, Calendar, User, DollarSign, Clock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { calculateLineCents, formatQuantity, parseQuantity, roundQuantity, sanitizeQuantityStep } from "@/lib/quantity"
 
 type OrderItem = {
     id: number
@@ -23,6 +24,8 @@ type OrderItem = {
     refundedQuantity?: number // Added by API
     requestedQuantity?: number // Added by API
     remainingQuantity?: number // Added by API
+    allowDecimalQuantity?: boolean
+    quantityStep?: number
 }
 
 type OrderData = {
@@ -145,10 +148,12 @@ export default function RefundsPage() {
     }
 
     const handleQuantityChange = (itemId: number, value: string, maxQty: number) => {
-        const qty = parseInt(value)
+        const item = order?.items.find((orderItem) => orderItem.id === itemId)
+        const step = sanitizeQuantityStep(Boolean(item?.allowDecimalQuantity), item?.quantityStep ?? 1)
+        const qty = parseQuantity(value)
         if (isNaN(qty) || qty < 0) return
 
-        const finalQty = Math.min(qty, maxQty)
+        const finalQty = Math.min(roundQuantity(Math.round(qty / step) * step), maxQty)
         setSelectedItems(prev => {
             const newMap = new Map(prev)
             if (finalQty === 0) {
@@ -186,7 +191,7 @@ export default function RefundsPage() {
         selectedItems.forEach((qty, itemId) => {
             const item = order.items.find(i => i.id === itemId)
             if (item) {
-                total += item.priceCents * qty
+                total += calculateLineCents(item.priceCents, qty)
             }
         })
         return total
@@ -459,7 +464,8 @@ export default function RefundsPage() {
 
                                             const isSelected = selectedItems.has(item.id)
                                             const refundQty = selectedItems.get(item.id) || remainingQty
-                                            const lineTotal = isSelected ? item.priceCents * refundQty : 0
+                                            const step = sanitizeQuantityStep(Boolean(item.allowDecimalQuantity), item.quantityStep ?? 1)
+                                            const lineTotal = isSelected ? calculateLineCents(item.priceCents, refundQty) : 0
 
                                             return (
                                                 <TableRow
@@ -478,12 +484,12 @@ export default function RefundsPage() {
                                                             {item.productName}
                                                             {(item.requestedQuantity || 0) > 0 && (
                                                                 <span className="text-xs text-blue-600 font-semibold block mt-1">
-                                                                    ({item.requestedQuantity} requested for refund)
+                                                                    ({formatQuantity(item.requestedQuantity)} requested for refund)
                                                                 </span>
                                                             )}
                                                             {refundedQty > 0 && (
                                                                 <span className="text-xs text-amber-600 block mt-1">
-                                                                    ({refundedQty} already refunded)
+                                                                    ({formatQuantity(refundedQty)} already refunded)
                                                                 </span>
                                                             )}
                                                         </div>
@@ -495,16 +501,17 @@ export default function RefundsPage() {
                                                         PKR {(item.priceCents / 100).toFixed(2)}
                                                     </TableCell>
                                                     <TableCell className="text-right text-muted-foreground">
-                                                        {item.quantity} {item.unit}
+                                                        {formatQuantity(item.quantity)} {item.unit}
                                                     </TableCell>
                                                     <TableCell className="text-right font-semibold">
-                                                        {remainingQty} {item.unit}
+                                                        {formatQuantity(remainingQty)} {item.unit}
                                                     </TableCell>
                                                     <TableCell className="text-right">
                                                         {isSelected ? (
                                                             <Input
                                                                 type="number"
-                                                                min="1"
+                                                                min={step}
+                                                                step={step}
                                                                 max={remainingQty}
                                                                 value={refundQty}
                                                                 onChange={(e) => handleQuantityChange(item.id, e.target.value, remainingQty)}

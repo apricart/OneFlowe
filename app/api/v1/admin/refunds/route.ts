@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { orders, orderItems, organizations, branches, users, budgets, auditLogs, refunds, refundItems } from "@/db/schema"
+import { orders, orderItems, organizations, branches, users, budgets, auditLogs, refunds, refundItems, globalProducts } from "@/db/schema"
 import { eq, or, ilike, sql, and, desc } from "drizzle-orm"
 import { releaseRefundedQuantityBudget } from "@/lib/server/product-quantity-budget-ledger"
+import { calculateLineCents, formatQuantity, validateProductQuantity } from "@/lib/quantity"
 
 /**
  * GET /api/v1/admin/refunds/search?q=<order_tid_or_id>
@@ -120,8 +121,12 @@ export async function GET(req: NextRequest) {
                 quantity: orderItems.quantity,
                 priceCents: orderItems.priceCents,
                 unit: orderItems.unit,
+                globalProductId: orderItems.globalProductId,
+                allowDecimalQuantity: globalProducts.allowDecimalQuantity,
+                quantityStep: globalProducts.quantityStep,
             })
             .from(orderItems)
+            .leftJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
             .where(eq(orderItems.orderId, orderData.id))
 
         // Fetch already refunded quantities
@@ -323,8 +328,23 @@ export async function POST(req: NextRequest) {
 
         // ===== FETCH ORDER ITEMS & VALIDATE QUANTITIES =====
         const orderItemsData = await db
-            .select()
+            .select({
+                id: orderItems.id,
+                organizationId: orderItems.organizationId,
+                organizationInventoryId: orderItems.organizationInventoryId,
+                orderId: orderItems.orderId,
+                globalProductId: orderItems.globalProductId,
+                productName: orderItems.productName,
+                productCode: orderItems.productCode,
+                unit: orderItems.unit,
+                quantity: orderItems.quantity,
+                priceCents: orderItems.priceCents,
+                createdAt: orderItems.createdAt,
+                allowDecimalQuantity: globalProducts.allowDecimalQuantity,
+                quantityStep: globalProducts.quantityStep,
+            })
             .from(orderItems)
+            .leftJoin(globalProducts, eq(orderItems.globalProductId, globalProducts.id))
             .where(eq(orderItems.orderId, orderId))
 
         if (orderItemsData.length === 0) {
@@ -396,24 +416,33 @@ export async function POST(req: NextRequest) {
                 }, { status: 400 })
             }
 
+            const quantityValidation = validateProductQuantity(refundItem.quantity, {
+                allowDecimalQuantity: orderItem.allowDecimalQuantity,
+                quantityStep: orderItem.quantityStep,
+                label: `Refund quantity for ${orderItem.productName}`,
+            })
+            if (!quantityValidation.ok) {
+                return NextResponse.json({ error: quantityValidation.error }, { status: 400 })
+            }
+
             const approvedQty = approvedQuantityMap.get(refundItem.itemId) || 0
             const pendingQty = pendingQuantityMap.get(refundItem.itemId) || 0
             const remainingQty = orderItem.quantity - approvedQty
 
             // Validate quantity doesn't exceed remaining amount
-            if (refundItem.quantity > remainingQty) {
+            if (quantityValidation.quantity > remainingQty) {
                 return NextResponse.json({
-                    error: `Refund quantity (${refundItem.quantity}) exceeds remaining quantity (${remainingQty}) for item: ${orderItem.productName} (Approved: ${approvedQty})`
+                    error: `Refund quantity (${formatQuantity(quantityValidation.quantity)}) exceeds remaining quantity (${formatQuantity(remainingQty)}) for item: ${orderItem.productName} (Approved: ${formatQuantity(approvedQty)})`
                 }, { status: 400 })
             }
 
-            const itemTotal = orderItem.priceCents * refundItem.quantity
+            const itemTotal = calculateLineCents(orderItem.priceCents, quantityValidation.quantity)
             totalRefundAmount += itemTotal
 
             refundDetails.push({
                 itemId: refundItem.itemId,
                 productName: orderItem.productName,
-                quantity: refundItem.quantity,
+                quantity: quantityValidation.quantity,
                 priceCents: orderItem.priceCents,
                 totalCents: itemTotal
             })

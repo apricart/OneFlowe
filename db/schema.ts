@@ -11,6 +11,7 @@ import {
   index,
   uniqueIndex,
   bigint,
+  numeric,
 } from "drizzle-orm/pg-core"
 
 export const organizations = pgTable(
@@ -449,7 +450,7 @@ export const orderItems = pgTable(
     productName: varchar("product_name", { length: 255 }).notNull(),
     productCode: varchar("product_code", { length: 128 }),
     unit: varchar("unit", { length: 64 }).notNull(),
-    quantity: integer("quantity").notNull(),
+    quantity: numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
     priceCents: bigint("price_cents", { mode: "number" }).notNull(), // Price at time of order
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
@@ -496,7 +497,7 @@ export const refundItems = pgTable(
     orderItemId: integer("order_item_id")
       .references(() => orderItems.id)
       .notNull(),
-    quantity: integer("quantity").notNull(),
+    quantity: numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
     amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
@@ -598,7 +599,9 @@ export const globalProducts = pgTable(
     unit: varchar("unit", { length: 64 }).notNull().default("unit"), // kg, box, piece, etc.
     status: varchar("status", { length: 32 }).notNull().default("active"), // active, inactive
     // Single source of truth for stock across the system
-    stockQuantity: integer("stock_quantity").notNull().default(0),
+    stockQuantity: numeric("stock_quantity", { precision: 12, scale: 3, mode: "number" }).notNull().default(0),
+    allowDecimalQuantity: boolean("allow_decimal_quantity").notNull().default(false),
+    quantityStep: numeric("quantity_step", { precision: 12, scale: 3, mode: "number" }).notNull().default(1),
     metadata: jsonb("metadata").$type<Record<string, any>>().default({}),
     createdByUserId: uuid("created_by_user_id").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
@@ -702,8 +705,8 @@ export const restockRequests = pgTable(
     branchId: integer("branch_id").references(() => branches.id).notNull(),
     organizationId: integer("organization_id").references(() => organizations.id).notNull(),
     globalProductId: integer("global_product_id").references(() => globalProducts.id).notNull(),
-    requestedQuantity: integer("requested_quantity").notNull(),
-    currentStock: integer("current_stock").notNull(),
+    requestedQuantity: numeric("requested_quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
+    currentStock: numeric("current_stock", { precision: 12, scale: 3, mode: "number" }).notNull(),
     reason: text("reason"),
     status: varchar("status", { length: 32 }).notNull().default("pending"), // pending, approved, rejected, fulfilled
     requestedByUserId: uuid("requested_by_user_id").references(() => users.id).notNull(),
@@ -888,10 +891,10 @@ export const productQuantityBudgets = pgTable(
       .references(() => globalProducts.id)
       .notNull(),
     period: varchar("period", { length: 16 }).notNull(),
-    allocatedQuantity: integer("allocated_quantity").notNull().default(0),
-    heldQuantity: integer("held_quantity").notNull().default(0),
-    usedQuantity: integer("used_quantity").notNull().default(0),
-    creditedQuantity: integer("credited_quantity").notNull().default(0),
+    allocatedQuantity: numeric("allocated_quantity", { precision: 12, scale: 3, mode: "number" }).notNull().default(0),
+    heldQuantity: numeric("held_quantity", { precision: 12, scale: 3, mode: "number" }).notNull().default(0),
+    usedQuantity: numeric("used_quantity", { precision: 12, scale: 3, mode: "number" }).notNull().default(0),
+    creditedQuantity: numeric("credited_quantity", { precision: 12, scale: 3, mode: "number" }).notNull().default(0),
     amountAllocatedCents: bigint("amount_allocated_cents", { mode: "number" }).notNull().default(0),
     amountCreditedCents: bigint("amount_credited_cents", { mode: "number" }).notNull().default(0),
     createdByUserId: uuid("created_by_user_id").references(() => users.id),
@@ -930,7 +933,7 @@ export const productQuantityBudgetAllocations = pgTable(
       .notNull(),
     period: varchar("period", { length: 16 }).notNull(),
     allocationType: varchar("allocation_type", { length: 32 }).notNull(),
-    quantity: integer("quantity").notNull(),
+    quantity: numeric("quantity", { precision: 12, scale: 3, mode: "number" }).notNull(),
     priceCents: bigint("price_cents", { mode: "number" }).notNull(),
     amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
     createdByUserId: uuid("created_by_user_id").references(() => users.id),

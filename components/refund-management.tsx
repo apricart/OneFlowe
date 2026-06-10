@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, TrendingDown, Clock, CheckCircle, Ban } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { calculateLineCents, formatQuantity, parseQuantity, roundQuantity, sanitizeQuantityStep } from "@/lib/quantity"
 import {
     Table,
     TableBody,
@@ -141,9 +142,13 @@ export function RefundManagement({
     }
 
     const handleQuantityChange = (itemId: number, qty: number, maxRefundableQty: number) => {
-        if (qty < 1) qty = 1
-        if (qty > maxRefundableQty) qty = maxRefundableQty
-        setSelectedItems(prev => ({ ...prev, [itemId]: qty }))
+        const item = orderItems.find((orderItem: any) => orderItem.id === itemId)
+        const step = sanitizeQuantityStep(Boolean(item?.allowDecimalQuantity), item?.quantityStep ?? 1)
+        let nextQty = Number.isFinite(qty) ? qty : step
+        if (nextQty < step) nextQty = step
+        if (nextQty > maxRefundableQty) nextQty = maxRefundableQty
+        nextQty = Math.round(nextQty / step) * step
+        setSelectedItems(prev => ({ ...prev, [itemId]: roundQuantity(Math.min(nextQty, maxRefundableQty)) }))
     }
 
     // Detect legacy refunds (amount-based only)
@@ -162,7 +167,7 @@ export function RefundManagement({
     const selectedRefundAmount = useMemo(() => {
         return orderItems.reduce((total: number, item: any) => {
             const qty = selectedItems[item.id] || 0
-            return total + (item.priceCents * qty)
+            return total + calculateLineCents(item.priceCents, qty)
         }, 0)
     }, [orderItems, selectedItems])
 
@@ -320,7 +325,8 @@ export function RefundManagement({
                                                 const currentSelectedQty = selectedItems[item.id] || 0
                                                 const otherItemsTotal = selectedRefundAmount - (costOfOne * currentSelectedQty)
                                                 const availableForThisItem = remainingRefundable - otherItemsTotal
-                                                const maxAffordableQty = Math.floor(availableForThisItem / costOfOne)
+                                                const step = sanitizeQuantityStep(Boolean(item.allowDecimalQuantity), item.quantityStep ?? 1)
+                                                const maxAffordableQty = Math.floor((availableForThisItem / costOfOne) / step) * step
 
                                                 const effectiveMaxQty = Math.min(remainingQty, maxAffordableQty)
 
@@ -351,16 +357,17 @@ export function RefundManagement({
                                                             {(item.priceCents / 100).toFixed(2)}
                                                         </TableCell>
                                                         <TableCell className="text-right font-semibold">
-                                                            {remainingQty}
+                                                            {formatQuantity(remainingQty)}
                                                         </TableCell>
                                                         <TableCell>
                                                             {isSelected ? (
                                                                 <Input
                                                                     type="number"
-                                                                    min="1"
+                                                                    min={step}
+                                                                    step={step}
                                                                     max={effectiveMaxQty}
                                                                     value={selectedItems[item.id]}
-                                                                    onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value), effectiveMaxQty)}
+                                                                    onChange={(e) => handleQuantityChange(item.id, parseQuantity(e.target.value), effectiveMaxQty)}
                                                                     className="h-8 w-20 text-center mx-auto"
                                                                 />
                                                             ) : (
@@ -373,7 +380,7 @@ export function RefundManagement({
                                                         </TableCell>
                                                         <TableCell className="text-right font-medium text-red-600">
                                                             {isSelected
-                                                                ? ((item.priceCents * selectedItems[item.id]) / 100).toFixed(2)
+                                                                ? (calculateLineCents(item.priceCents, selectedItems[item.id]) / 100).toFixed(2)
                                                                 : "0.00"
                                                             }
                                                         </TableCell>
@@ -478,7 +485,7 @@ export function RefundManagement({
                                         <ul className="space-y-1">
                                             {refund.items.map((item: any) => (
                                                 <li key={item.orderItemId} className="flex justify-between text-xs bg-white dark:bg-slate-900 p-2 rounded border">
-                                                    <span>{item.quantity}x {item.productName} ({item.unit})</span>
+                                                    <span>{formatQuantity(item.quantity)}x {item.productName} ({item.unit})</span>
                                                     <span className="font-medium">PKR {(item.amountCents / 100).toFixed(2)}</span>
                                                 </li>
                                             ))}

@@ -31,6 +31,7 @@ import { GroupFilter } from "@/components/reports/group-filter"
 import { useAppContext } from "@/components/context/app-context"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
 import { cn } from "@/lib/utils"
+import { formatQuantity, parseQuantity, validateProductQuantity } from "@/lib/quantity"
 import { BUDGET_ALLOCATION_MODE_SETTING_KEY, parseBudgetAllocationMode } from "@/lib/budget-allocation-mode"
 import { type DateRange } from "@/lib/hooks/use-sales-performance"
 import { CheckCircle } from "lucide-react"
@@ -56,6 +57,8 @@ interface ProductOption {
   customPrice?: number | string | null
   isEnabled?: boolean | null
   isAvailable?: boolean | null
+  allowDecimalQuantity?: boolean | null
+  quantityStep?: number | null
 }
 
 interface QuantityAllocationLine {
@@ -107,8 +110,6 @@ const getProductPriceCents = (product?: ProductOption) => {
   if (!product) return null
   return toCents(product.customPrice) ?? toCents(product.basePrice)
 }
-
-const formatQuantity = (quantity: number) => quantity.toLocaleString()
 
 const emptyQuantitySummary = (branchId: number): QuantityBranchSummary => ({
   branchId,
@@ -289,12 +290,15 @@ export default function BudgetByQuantityPage() {
     return allocationLines.reduce(
       (summary, line) => {
         const product = productsById.get(line.productId)
-        const quantity = Number(line.quantity)
-        const validQuantity = Number.isInteger(quantity) && quantity > 0
+        const quantity = parseQuantity(line.quantity)
+        const validation = validateProductQuantity(quantity, {
+          allowDecimalQuantity: product?.allowDecimalQuantity,
+          quantityStep: product?.quantityStep,
+        })
 
-        if (!product || !validQuantity) return summary
+        if (!product || !validation.ok) return summary
 
-        summary.totalQuantity += quantity
+        summary.totalQuantity += validation.quantity
         summary.items += 1
         return summary
       },
@@ -365,7 +369,7 @@ export default function BudgetByQuantityPage() {
 
   const validateAllocation = () => {
     if (!editingBudget) return "Select a branch before allocating quantity."
-    if (allocationSummary.items === 0) return "Select at least one product and enter a positive whole quantity."
+    if (allocationSummary.items === 0) return "Select at least one product and enter a positive quantity."
 
     const selectedProductIds = allocationLines
       .map((line) => line.productId)
@@ -378,11 +382,16 @@ export default function BudgetByQuantityPage() {
       if (!line.productId && !line.quantity) continue
 
       const product = productsById.get(line.productId)
-      const quantity = Number(line.quantity)
+      const quantity = parseQuantity(line.quantity)
       const priceCents = getProductPriceCents(product)
 
       if (!product) return "Select a product for every allocation row."
-      if (!Number.isInteger(quantity) || quantity <= 0) return "Quantity must be a positive whole number."
+      const quantityValidation = validateProductQuantity(quantity, {
+        allowDecimalQuantity: product.allowDecimalQuantity,
+        quantityStep: product.quantityStep,
+        label: `Quantity for ${getProductName(product)}`,
+      })
+      if (!quantityValidation.ok) return quantityValidation.error
       if (priceCents === null || priceCents <= 0) {
         return `${getProductName(product)} is not available for quantity allocation right now.`
       }
@@ -459,7 +468,7 @@ export default function BudgetByQuantityPage() {
             .filter((line) => line.productId && line.quantity)
             .map((line) => ({
               branchInventoryId: Number(line.productId),
-              quantity: Number(line.quantity),
+              quantity: parseQuantity(line.quantity),
             })),
           type: allocationType,
         }),
@@ -829,6 +838,11 @@ export default function BudgetByQuantityPage() {
 
               <div className="space-y-3">
                 {allocationLines.map((line, index) => {
+                  const selectedProduct = productsById.get(line.productId)
+                  const quantityStep = selectedProduct?.allowDecimalQuantity
+                    ? selectedProduct.quantityStep || 0.1
+                    : 1
+
                   return (
                     <div key={line.id} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 md:grid-cols-[minmax(0,1fr)_160px_36px]">
                       <div className="min-w-0">
@@ -863,9 +877,9 @@ export default function BudgetByQuantityPage() {
                         <label className="mb-1 block text-[10px] font-black uppercase tracking-widest text-slate-400">Quantity</label>
                         <Input
                           type="number"
-                          inputMode="numeric"
-                          min="1"
-                          step="1"
+                          inputMode="decimal"
+                          min={quantityStep}
+                          step={quantityStep}
                           value={line.quantity}
                           onChange={(event) => updateAllocationLine(line.id, { quantity: event.target.value })}
                           placeholder="0"

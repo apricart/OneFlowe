@@ -2,6 +2,7 @@ import { db } from "@/lib/db"
 import { branches, categories, globalProducts, orderItems, organizations } from "@/db/schema"
 import { eq, inArray } from "drizzle-orm"
 import { formatBranchAddress } from "@/lib/branch-address"
+import { calculateLineCents } from "@/lib/quantity"
 
 export interface ReceiptData {
     invoiceNumber: string
@@ -191,7 +192,7 @@ function groupItemsHierarchically(
             quantity: item.quantity,
             rate: item.priceCents / 100,
             tax: 0,
-            total: (item.priceCents * item.quantity) / 100,
+            total: calculateLineCents(item.priceCents, item.quantity) / 100,
             unit: item.unit,
         })
     })

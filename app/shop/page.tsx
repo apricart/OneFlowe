@@ -1,6 +1,7 @@
 "use client"
 import React, { useMemo, useState } from "react"
 import { formatPKR, cn } from "@/lib/utils"
+import { calculateLineCents, formatQuantity, parseQuantity, roundQuantity, sanitizeQuantityStep } from "@/lib/quantity"
 import useSWR from "swr"
 import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
@@ -36,6 +37,8 @@ interface Product {
   unit: string
   imageUrl?: string
   stock?: number
+  allowDecimalQuantity?: boolean
+  quantityStep?: number
   rating?: number
   description?: string
   discountType?: string | null
@@ -94,6 +97,21 @@ const isRefundRelatedOrder = (order: Pick<Order, "status" | "totalCents" | "refu
 
 const isActiveOrder = (order: Pick<Order, "status" | "totalCents" | "refundAmountCents" | "orderItems">) =>
   getRefundState(order) === "none"
+
+const getProductStep = (product: Pick<Product, "allowDecimalQuantity" | "quantityStep">) =>
+  sanitizeQuantityStep(Boolean(product.allowDecimalQuantity), product.quantityStep ?? 1)
+
+const clampProductQuantity = (product: Pick<Product, "stock" | "allowDecimalQuantity" | "quantityStep">, quantity: number) => {
+  const maxStock = product.stock ?? 999
+  if (product.allowDecimalQuantity) {
+    return roundQuantity(Math.min(Math.max(roundQuantity(quantity), 0), maxStock))
+  }
+  const step = getProductStep(product)
+  const minQuantity = step
+  const clamped = Math.min(Math.max(roundQuantity(quantity), minQuantity), maxStock)
+  const stepped = Math.round(clamped / step) * step
+  return roundQuantity(Math.min(Math.max(stepped, minQuantity), maxStock))
+}
 
 export default function OrderPortalPage() {
   const { data: session, status } = useSession()
@@ -204,6 +222,7 @@ export default function OrderPortalPage() {
     }
   )
   const pricesHidden = Boolean(inventoryData?.pricesHidden || ordersData?.pricesHidden || orderDetailsData?.pricesHidden)
+  const budgetVisible = Boolean(budget && !budget.pricesHidden)
 
   React.useEffect(() => {
     const freshOrder = orderDetailsData?.items?.[0]
@@ -267,6 +286,8 @@ export default function OrderPortalPage() {
       unit: item.unit,
       imageUrl: item.productImageUrl,
       stock: item.stockQuantity,
+      allowDecimalQuantity: !!item.allowDecimalQuantity,
+      quantityStep: typeof item.quantityStep === "number" ? item.quantityStep : undefined,
       rating: parseProductRating(item.rating),
       description: item.customDescription || item.productDescription,
       discountType: item.discountType,
@@ -327,7 +348,7 @@ export default function OrderPortalPage() {
     return filteredProducts.slice(start, end)
   }, [filteredProducts, currentPage, pageSize])
 
-  const cartTotal = pricesHidden ? 0 : cart.reduce((sum, item) => sum + (item.priceCents || 0) * item.quantity, 0)
+  const cartTotal = pricesHidden ? 0 : cart.reduce((sum, item) => sum + calculateLineCents(item.priceCents || 0, item.quantity), 0)
   const remainingBudget = budget?.remainingCents || 0
   const totalBudgetLimit = (budget?.amountAllocatedCents || 0) + (budget?.amountCreditedCents || 0)
   const canCheckout = pricesHidden ? cart.length > 0 : cartTotal <= remainingBudget && cart.length > 0
@@ -338,7 +359,7 @@ export default function OrderPortalPage() {
 
   const openProductDetail = (product: Product) => {
     setSelectedProduct(product)
-    setTempQuantity(1)
+    setTempQuantity(product.allowDecimalQuantity ? 1 : getProductStep(product))
     setShowProductDetail(true)
   }
 
@@ -360,10 +381,12 @@ export default function OrderPortalPage() {
       return
     }
 
+    const normalizedQty = clampProductQuantity(product, qty)
+
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id)
       const currentQtyInCart = existing?.quantity || 0
-      const newTotalQty = currentQtyInCart + qty
+      const newTotalQty = roundQuantity(currentQtyInCart + normalizedQty)
 
       if (newTotalQty > availableStock) {
         toast({
@@ -393,8 +416,9 @@ export default function OrderPortalPage() {
       const itemInCart = cart.find(i => i.id === id)
       if (!itemInCart) return
 
+      const normalizedQty = clampProductQuantity(itemInCart, qty)
       const availableStock = itemInCart.stock || 0
-      if (qty > availableStock) {
+      if (normalizedQty > availableStock) {
         toast({
           title: "Insufficient stock",
           description: isOrderPortal
@@ -407,7 +431,7 @@ export default function OrderPortalPage() {
         return
       }
 
-      setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: qty } : i))
+      setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: normalizedQty } : i))
     }
   }
 
@@ -432,7 +456,10 @@ export default function OrderPortalPage() {
           mutateBranchInventory()
           mutateBudget()
         }
-        return toast({ title: "Failed", description: json.error, variant: "destructive" })
+        const description = pricesHidden && budgetVisible && json.error?.toLowerCase().includes("insufficient budget")
+          ? `This order exceeds your remaining budget of PKR ${(remainingBudget / 100).toFixed(2)}. Please reduce quantities or contact head office.`
+          : json.error
+        return toast({ title: "Failed", description, variant: "destructive" })
       }
 
       toast({
@@ -542,7 +569,7 @@ export default function OrderPortalPage() {
             )}
 
             {/* Budget Status */}
-            {!pricesHidden && <div className="hidden md:flex items-center gap-3 px-3 py-2 rounded-lg min-w-[220px] shadow-sm bg-slate-100/80 dark:bg-slate-800/80">
+            {budgetVisible && <div className="hidden md:flex items-center gap-3 px-3 py-2 rounded-lg min-w-[220px] shadow-sm bg-slate-100/80 dark:bg-slate-800/80">
               <div
                 className="flex h-7 w-7 items-center justify-center rounded-full"
                 style={{
@@ -645,7 +672,7 @@ export default function OrderPortalPage() {
                         )}
                         {!isOrderPortal && item.stock !== undefined && item.stock > 0 && item.stock <= 10 && item.quantity <= item.stock && (
                           <p className="text-xs mt-1 text-yellow-600 dark:text-yellow-400">
-                            Low stock: {item.stock} remaining
+                            Low stock: {formatQuantity(item.stock)} remaining
                           </p>
                         )}
                         {quantityBudgetAfterCart !== null && (
@@ -656,8 +683,8 @@ export default function OrderPortalPage() {
                               : "text-indigo-600 dark:text-indigo-300"
                           )}>
                             {quantityBudgetAfterCart < 0
-                              ? `Cart exceeds quantity budget by ${Math.abs(quantityBudgetAfterCart)} ${item.unit}.`
-                              : `Quantity budget remaining after cart: ${quantityBudgetAfterCart} ${item.unit}.`}
+                              ? `Cart exceeds quantity budget by ${formatQuantity(Math.abs(quantityBudgetAfterCart))} ${item.unit}.`
+                              : `Quantity budget remaining after cart: ${formatQuantity(quantityBudgetAfterCart)} ${item.unit}.`}
                           </p>
                         )}
                       </div>
@@ -665,24 +692,24 @@ export default function OrderPortalPage() {
                         <Button
                           size="icon"
                           variant="outline"
-                          onClick={() => updateQty(item.id, item.quantity - 1)}
+                          onClick={() => updateQty(item.id, roundQuantity(item.quantity - (item.allowDecimalQuantity ? 1 : getProductStep(item))))}
                         >
                           <Minus className="h-4 w-4" />
                         </Button>
-                        <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
+                        <span className="w-10 text-center text-sm font-semibold">{formatQuantity(item.quantity)}</span>
                         <Button
                           size="icon"
                           variant="outline"
                           onClick={() => {
                             const maxStock = item.stock || 0
                             if (item.quantity < maxStock) {
-                              updateQty(item.id, item.quantity + 1)
+                              updateQty(item.id, roundQuantity(item.quantity + (item.allowDecimalQuantity ? 1 : getProductStep(item))))
                             } else {
                               toast({
                                 title: "Maximum stock reached",
                                 description: isOrderPortal
                                   ? `${item.name} is not available in a higher quantity.`
-                                  : `Only ${maxStock} available for ${item.name}.`,
+                                  : `Only ${formatQuantity(maxStock)} available for ${item.name}.`,
                                 variant: "destructive"
                               })
                             }
@@ -1064,7 +1091,8 @@ export default function OrderPortalPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {paginatedProducts.map(product => {
                   const itemInCart = cart.find(i => i.id === product.id)
-                  const defaultQty = (product.stock || 0) > 0 ? 1 : 0
+                  const productStep = getProductStep(product)
+                  const defaultQty = (product.stock || 0) > 0 ? (product.allowDecimalQuantity ? 1 : productStep) : 0
                   const selectionQty = cardQuantities[product.id] ?? itemInCart?.quantity ?? defaultQty
                   const isModified = selectionQty !== (itemInCart?.quantity || 0)
 
@@ -1103,7 +1131,7 @@ export default function OrderPortalPage() {
                             >
                               <div className="flex items-center gap-1.5 px-0.5">
                                 <div className={cn("h-1.5 w-1.5 rounded-full bg-white", product.stock > 0 && "animate-ping")} />
-                                {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+                                {product.stock > 0 ? `${formatQuantity(product.stock)} in stock` : "Out of stock"}
                               </div>
                             </Badge>
                           )}
@@ -1116,7 +1144,7 @@ export default function OrderPortalPage() {
                             >
                               <div className="flex items-center gap-1.5 px-0.5">
                                 <div className="h-1.5 w-1.5 rounded-full bg-white" />
-                                {product.quantityBudgetRemaining} remaining
+                                {formatQuantity(product.quantityBudgetRemaining)} remaining
                               </div>
                             </Badge>
                           )}
@@ -1207,9 +1235,10 @@ export default function OrderPortalPage() {
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     if (selectionQty > 0) {
+                                      const step = product.allowDecimalQuantity ? 1 : productStep
                                       setCardQuantities(prev => ({
                                         ...prev,
-                                        [product.id]: selectionQty - 1
+                                        [product.id]: Math.max(0, roundQuantity(selectionQty - step))
                                       }))
                                     }
                                   }}
@@ -1220,17 +1249,41 @@ export default function OrderPortalPage() {
                                 >
                                   <Minus className="h-3.5 w-3.5" />
                                 </Button>
-                                <span className="w-8 text-center text-xs font-bold text-slate-900 dark:text-white">
-                                  {selectionQty}
-                                </span>
+                                {product.allowDecimalQuantity ? (
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    max={product.stock || 999}
+                                    value={selectionQty || ""}
+                                    onChange={(e) => {
+                                      e.stopPropagation()
+                                      const val = parseFloat(e.target.value)
+                                      setCardQuantities(prev => ({
+                                        ...prev,
+                                        [product.id]: Number.isFinite(val) && val >= 0 ? roundQuantity(val) : 0,
+                                      }))
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onFocus={(e) => e.stopPropagation()}
+                                    className="w-12 text-center text-xs font-bold text-slate-900 dark:text-white bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    disabled={product.stock === 0}
+                                    placeholder="0"
+                                  />
+                                ) : (
+                                  <span className="w-8 text-center text-xs font-bold text-slate-900 dark:text-white">
+                                    {formatQuantity(selectionQty)}
+                                  </span>
+                                )}
                                 <Button
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     const maxStock = product.stock || 999
                                     if (selectionQty < maxStock) {
+                                      const step = product.allowDecimalQuantity ? 1 : productStep
                                       setCardQuantities(prev => ({
                                         ...prev,
-                                        [product.id]: selectionQty + 1
+                                        [product.id]: Math.min(maxStock, roundQuantity(selectionQty + step))
                                       }))
                                     } else {
                                       toast({ title: "Max stock reached", variant: "destructive" })
@@ -1272,7 +1325,7 @@ export default function OrderPortalPage() {
                             {itemInCart && !isModified && (
                               <div className="flex items-center gap-1 text-[10px] font-medium text-green-600 dark:text-green-400">
                                 <CheckCircle className="h-3 w-3" />
-                                <span>{itemInCart.quantity} in cart</span>
+                                <span>{formatQuantity(itemInCart.quantity)} in cart</span>
                               </div>
                             )}
                             {isModified && (
@@ -1298,7 +1351,7 @@ export default function OrderPortalPage() {
                                 } else if (itemInCart) {
                                   setShowCart(true)
                                 } else {
-                                  addToCart(product, 1)
+                                  addToCart(product, productStep)
                                 }
                               }}
                               size="sm"
@@ -1308,7 +1361,7 @@ export default function OrderPortalPage() {
                               {isModified ? (
                                 <>
                                   <RefreshCw className="h-4 w-4" />
-                                  <span>{itemInCart ? 'Update Cart' : `Add ${selectionQty} to Cart`}</span>
+                                  <span>{itemInCart ? 'Update Cart' : `Add ${formatQuantity(selectionQty)} to Cart`}</span>
                                 </>
                               ) : itemInCart ? (
                                 <>
@@ -1463,7 +1516,7 @@ export default function OrderPortalPage() {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Stock</p>
                     <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                      {selectedProduct.stock || 0}
+                      {formatQuantity(selectedProduct.stock || 0)}
                     </p>
                   </div>
                   )}
@@ -1493,20 +1546,32 @@ export default function OrderPortalPage() {
                     <Button
                       size="icon"
                       variant="outline"
-                      onClick={() => setTempQuantity(Math.max(1, tempQuantity - 1))}
+                      onClick={() => {
+                        if (selectedProduct.allowDecimalQuantity) {
+                          setTempQuantity(Math.max(0, roundQuantity(tempQuantity - 1)))
+                        } else {
+                          setTempQuantity(clampProductQuantity(selectedProduct, roundQuantity(tempQuantity - getProductStep(selectedProduct))))
+                        }
+                      }}
                     >
                       <Minus className="h-4 w-4" />
                     </Button>
                     <Input
                       type="number"
+                      step={selectedProduct.allowDecimalQuantity ? "any" : getProductStep(selectedProduct)}
                       value={tempQuantity}
                       onChange={(e) => {
-                        const val = parseInt(e.target.value) || 1
-                        const maxStock = selectedProduct.stock || 999
-                        setTempQuantity(Math.max(1, Math.min(val, maxStock)))
+                        const val = parseQuantity(e.target.value)
+                        if (selectedProduct.allowDecimalQuantity) {
+                          if (Number.isFinite(val) && val >= 0) {
+                            setTempQuantity(Math.min(selectedProduct.stock || 999, roundQuantity(val)))
+                          }
+                        } else {
+                          setTempQuantity(clampProductQuantity(selectedProduct, Number.isFinite(val) ? val : getProductStep(selectedProduct)))
+                        }
                       }}
                       className="text-center h-10 font-bold text-lg"
-                      min="1"
+                      min={selectedProduct.allowDecimalQuantity ? 0 : getProductStep(selectedProduct)}
                       max={selectedProduct.stock || 999}
                     />
                     <Button
@@ -1514,7 +1579,8 @@ export default function OrderPortalPage() {
                       variant="outline"
                       onClick={() => {
                         const maxStock = selectedProduct.stock || 999
-                        setTempQuantity(Math.min(maxStock, tempQuantity + 1))
+                        const step = selectedProduct.allowDecimalQuantity ? 1 : getProductStep(selectedProduct)
+                        setTempQuantity(Math.min(maxStock, roundQuantity(tempQuantity + step)))
                       }}
                       disabled={tempQuantity >= (selectedProduct.stock || 999)}
                     >
@@ -1525,7 +1591,7 @@ export default function OrderPortalPage() {
                     <p className="text-xs text-yellow-600 dark:text-yellow-400">
                       {selectedProduct.stock === 0
                         ? "Out of stock"
-                        : `Only ${selectedProduct.stock} available`}
+                        : `Only ${formatQuantity(selectedProduct.stock)} available`}
                     </p>
                   )}
                 </div>
@@ -1564,9 +1630,9 @@ export default function OrderPortalPage() {
             <div className="max-h-48 overflow-y-auto space-y-2">
               {cart.map(item => (
                 <div key={item.id} className="flex justify-between text-sm">
-                  <span>{item.name} x{item.quantity}</span>
+                  <span>{item.name} x{formatQuantity(item.quantity)}</span>
                   {!pricesHidden && item.priceCents !== null && (
-                    <span className="font-semibold">PKR {((item.priceCents * item.quantity) / 100).toFixed(2)}</span>
+                    <span className="font-semibold">PKR {(calculateLineCents(item.priceCents, item.quantity) / 100).toFixed(2)}</span>
                   )}
                 </div>
               ))}
@@ -1673,21 +1739,21 @@ export default function OrderPortalPage() {
                               {isPartiallyRefunded && <Badge variant="outline" className="text-[10px] h-4 border-yellow-500 text-yellow-600">PARTIAL REFUND</Badge>}
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              Qty: <span className="font-semibold">{item.quantity}</span>
+                              Qty: <span className="font-semibold">{formatQuantity(item.quantity)}</span>
                               {!pricesHidden && item.priceCents !== null && <> x {formatPKR(item.priceCents / 100)}</>}
                               {item.quantityRefunded > 0 && (
-                                <span className="ml-2 text-red-500 font-medium">(-{item.quantityRefunded} refunded)</span>
+                                <span className="ml-2 text-red-500 font-medium">(-{formatQuantity(item.quantityRefunded)} refunded)</span>
                               )}
                             </p>
                           </div>
                           {!pricesHidden && item.priceCents !== null && (
                             <div className="text-right">
                               <p className={`font-semibold text-sm ${isFullyRefunded ? "line-through text-muted-foreground" : "text-slate-900 dark:text-white"}`}>
-                                {formatPKR((item.priceCents * item.quantity) / 100)}
+                                {formatPKR((calculateLineCents(item.priceCents, item.quantity)) / 100)}
                               </p>
                               {item.quantityRefunded > 0 && (
                                 <p className="text-[10px] text-red-500 font-bold">
-                                  - {formatPKR((item.priceCents * (item.quantityRefunded || 0)) / 100)}
+                                  - {formatPKR((calculateLineCents(item.priceCents, item.quantityRefunded || 0)) / 100)}
                                 </p>
                               )}
                             </div>
@@ -1714,8 +1780,8 @@ export default function OrderPortalPage() {
                       .filter((item: any) => (item.quantityRefunded || 0) > 0)
                       .map((item: any) => (
                         <div key={`refund-sum-${item.id}`} className="flex justify-between text-xs">
-                          <span>{(item.quantityRefunded || 0)}x {item.productName}</span>
-                          <span className="font-bold text-red-600">-{formatPKR((item.priceCents * (item.quantityRefunded || 0)) / 100)}</span>
+                          <span>{formatQuantity(item.quantityRefunded || 0)}x {item.productName}</span>
+                          <span className="font-bold text-red-600">-{formatPKR((calculateLineCents(item.priceCents, item.quantityRefunded || 0)) / 100)}</span>
                         </div>
                       ))}
                     <div className="pt-2 border-t border-yellow-200 dark:border-yellow-800 flex justify-between font-bold text-sm">

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { formatPKR } from "@/lib/utils"
+import { calculateLineCents, formatQuantity } from "@/lib/quantity"
 import { buildStatusTimeline } from "@/lib/order-utils"
 import { ArrowLeft, Clock, TrendingDown, CheckCircle, RefreshCw, Package, Ban, Copy } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
@@ -260,13 +261,13 @@ export default function SuperAdminOrderDetailsPage() {
                           <div>
                             <p className="font-semibold text-slate-900 dark:text-white">{item.productName}</p>
                             <p className="text-muted-foreground mt-0.5">
-                              {item.quantityRefunded} {item.unit}
+                                    {formatQuantity(item.quantityRefunded)} {item.unit}
                               {item.priceCents !== null && <> @ {formatPKR(item.priceCents / 100)}</>}
                             </p>
                           </div>
                           <div className="text-right">
                             {item.priceCents !== null && <p className="font-bold text-red-600 dark:text-red-400">
-                              - {formatPKR((item.priceCents * (item.quantityRefunded || 0)) / 100)}
+                              - {formatPKR((calculateLineCents(item.priceCents, item.quantityRefunded || 0)) / 100)}
                             </p>}
                           </div>
                         </div>
@@ -397,19 +398,19 @@ export default function SuperAdminOrderDetailsPage() {
                                 )}
                                 {quantityRefunded > 0 && (
                                   <span className="ml-2 font-semibold text-red-600 dark:text-red-400">
-                                    {quantityRefunded} refunded
+                                    {formatQuantity(quantityRefunded)} refunded
                                   </span>
                                 )}
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm font-semibold text-slate-900 dark:text-white">Qty: {item.quantity}</p>
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white">Qty: {formatQuantity(item.quantity)}</p>
                               {!pricesHidden && item.priceCents !== null && <p className={`text-sm font-bold ${isFullyRefunded ? "line-through text-muted-foreground" : "text-indigo-600 dark:text-indigo-400"}`}>
-                                {formatPKR((item.priceCents * item.quantity) / 100)}
+                                {formatPKR((calculateLineCents(item.priceCents, item.quantity)) / 100)}
                               </p>}
                               {!pricesHidden && item.priceCents !== null && quantityRefunded > 0 && (
                                 <p className="text-[11px] font-bold text-red-600 dark:text-red-400">
-                                  - {formatPKR((item.priceCents * quantityRefunded) / 100)}
+                                  - {formatPKR((calculateLineCents(item.priceCents, quantityRefunded)) / 100)}
                                 </p>
                               )}
                             </div>

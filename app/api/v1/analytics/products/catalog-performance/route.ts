@@ -188,9 +188,9 @@ export async function GET(req: NextRequest) {
             const salesData = await db
                 .select({
                     globalProductId: orderItems.globalProductId,
-                    totalQtyOrdered: sql<number>`SUM(${orderItems.quantity})::int`,
-                    totalQtyFulfilled: sql<number>`SUM(COALESCE(${orderItems.quantity}, 0))::int`, 
-                    totalRevenueCents: sql<number>`SUM(COALESCE(${orderItems.quantity}, 0) * COALESCE(${orderItems.priceCents}, 0))::bigint`
+                    totalQtyOrdered: sql<number>`COALESCE(SUM(${orderItems.quantity}), 0)::numeric`,
+                    totalQtyFulfilled: sql<number>`COALESCE(SUM(COALESCE(${orderItems.quantity}, 0)), 0)::numeric`, 
+                    totalRevenueCents: sql<number>`SUM(ROUND(COALESCE(${orderItems.quantity}, 0) * COALESCE(${orderItems.priceCents}, 0)))::bigint`
                 })
                 .from(orderItems)
                 .innerJoin(orders, eq(orders.id, orderItems.orderId))

@@ -25,6 +25,8 @@ type GlobalProduct = {
   unit: string
   status: string
   stockQuantity?: number
+  allowDecimalQuantity?: boolean
+  quantityStep?: number
   categoryName?: string
   discountType?: string | null
   discountValue?: number | null
@@ -50,6 +52,8 @@ type ProductFormState = {
   unit: string
   status: string
   stockQuantity: string
+  allowDecimalQuantity: boolean
+  quantityStep: string
   discountType: string
   discountValue: string
   discountStartAt: string
@@ -86,6 +90,8 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
     unit: "",
     status: "active",
     stockQuantity: "",
+    allowDecimalQuantity: false,
+    quantityStep: "1",
     discountType: "",
     discountValue: "",
     discountStartAt: "",
@@ -114,6 +120,8 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
         unit: initialProduct.unit,
         status: initialProduct.status,
         stockQuantity: initialProduct.stockQuantity?.toString() || "",
+        allowDecimalQuantity: !!initialProduct.allowDecimalQuantity,
+        quantityStep: initialProduct.quantityStep?.toString() || "1",
         discountType: initialProduct.discountType || "",
         discountValue: initialProduct.discountValue?.toString() || "",
         discountStartAt: initialProduct.discountStartAt
@@ -337,7 +345,9 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
           ...productData,
           id: initialProduct?.id,
           basePrice: parseFloat(productData.basePrice),
-          stockQuantity: parseInt(productData.stockQuantity) || 0,
+          stockQuantity: parseFloat(productData.stockQuantity) || 0,
+          allowDecimalQuantity: productData.allowDecimalQuantity,
+          quantityStep: 1,
           categoryId: productData.subcategoryId ? parseInt(productData.subcategoryId) : null, // Save subcategory as categoryId
           metadata,
           discountType: productData.discountType || null,
@@ -555,13 +565,28 @@ export function ProductForm({ mode, initialProduct, onCancel, onSuccess }: Produ
                 <Input
                   type="number"
                   min="0"
-                  step="1"
+                  step={productData.allowDecimalQuantity ? "any" : "1"}
                   value={productData.stockQuantity ?? ""}
                   onChange={(e) => setProductData({ ...productData, stockQuantity: e.target.value })}
                   placeholder="0"
                   required
                 />
                 <p className="mt-1 text-xs text-muted-foreground">Available</p>
+              </div>
+            </div>
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">Allow manual quantities</p>
+                  <p className="text-xs text-muted-foreground">When enabled, users on the order portal can freely type any quantity including decimals (e.g. 1.5 kg). Whole-unit products remain unchanged.</p>
+                </div>
+                <Switch
+                  checked={productData.allowDecimalQuantity}
+                  onCheckedChange={(checked) => setProductData((prev) => ({
+                    ...prev,
+                    allowDecimalQuantity: checked,
+                  }))}
+                />
               </div>
             </div>
             <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
