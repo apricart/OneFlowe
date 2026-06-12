@@ -29,7 +29,7 @@ import {
   systemLogs,
   groupAuditLogs
 } from "@/db/schema"
-import { eq, count, and, ne, isNull } from "drizzle-orm"
+import { eq, count, and, ne, isNull, isNotNull } from "drizzle-orm"
 
 export async function GET(
   _: Request,
@@ -178,20 +178,19 @@ export async function DELETE(
     // 1. Tier 1: Check for Critical Blockers (Data the user must handle manually)
     // These tables contain core business entities that shouldn't be auto-deleted.
 
-    const [activeBranchCount] = await db.select({ val: count() }).from(branches).where(and(eq(branches.organizationId, orgId), eq(branches.status, 'active')))
-    if (activeBranchCount.val > 0) {
-      return error(`Cannot delete: This company has ${activeBranchCount.val} active branch(es). Please remove or deactivate every active branch before deleting the company.`, 400)
+    const [branchCount] = await db.select({ val: count() }).from(branches).where(eq(branches.organizationId, orgId))
+    if (branchCount.val > 0) {
+      return error(`Cannot delete: This company has ${branchCount.val} branch(es). Please delete all branches before deleting the company.`, 400)
     }
 
-    const [activeUserCount] = await db.select({ val: count() }).from(users).where(
+    const [userCount] = await db.select({ val: count() }).from(users).where(
       and(
         eq(users.organizationId, orgId),
-        eq(users.isActive, true),
         isNull(users.deletedAt)
       )
     )
-    if (activeUserCount.val > 0) {
-      return error(`Cannot delete: This company has ${activeUserCount.val} active user(s). Please remove or deactivate every active user before deleting the company.`, 400)
+    if (userCount.val > 0) {
+      return error(`Cannot delete: This company has ${userCount.val} user(s). Please delete all users before deleting the company.`, 400)
     }
 
     const [orderCount] = await db.select({ val: count() }).from(orders).where(eq(orders.organizationId, orgId))
@@ -239,7 +238,12 @@ export async function DELETE(
       await tx.delete(employeeCredentials).where(eq(employeeCredentials.organizationId, orgId))
       await tx.delete(groups).where(eq(groups.organizationId, orgId))
 
-      // 3. Final Step: Delete the Organization
+      // 3. Release FK references from soft-deleted users so the org can be dropped
+      await tx.update(users).set({ organizationId: null }).where(
+        and(eq(users.organizationId, orgId), isNotNull(users.deletedAt))
+      )
+
+      // 4. Final Step: Delete the Organization
       await tx.delete(organizations).where(eq(organizations.id, orgId))
     })
 
