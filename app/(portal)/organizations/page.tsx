@@ -741,8 +741,8 @@ function OrganizationListItem({
           </div>
           <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">{subtitle}</p>
         </div>
-        <div className="flex w-full shrink-0 flex-col items-end gap-2 pt-1 sm:w-[180px] sm:pt-0">
-          <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:justify-end">
+        <div className="flex w-full shrink-0 flex-col items-end gap-2 pt-1 sm:w-auto sm:pt-0">
+          <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end">
             {normalizedBudgetAllocationMode && (
               <Badge
                 variant="outline"
