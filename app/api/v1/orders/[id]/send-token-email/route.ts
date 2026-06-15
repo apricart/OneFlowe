@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm"
 import { getCurrentUser, verifyResourceAccess } from "@/lib/auth"
 import { sendOrderTokenEmail } from "@/lib/email"
 
-const TOKEN_EMAIL_RECIPIENT = process.env.ORDER_TOKEN_ADMIN_EMAIL || "ali_khan87@live.com"
+const TOKEN_EMAIL_RECIPIENT = process.env.ORDER_TOKEN_ADMIN_EMAIL || "oneflowe@apricart.pk"
 
 export async function POST(
   _req: Request,
@@ -76,7 +76,7 @@ export async function POST(
   })
 
   if (!sent) {
-    return error("Failed to send token email through Resend. Please check RESEND_API_KEY and sender configuration.", 400)
+    return error("Failed to send token email through AWS SES. Please check SES sender, region, and credentials configuration.", 400)
   }
 
   await db.insert(auditLogs).values({

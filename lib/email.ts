@@ -1,58 +1,14 @@
 /**
  * Email Service
- * Handles email sending using nodemailer with SMTP configuration
+ * Handles application email sending using AWS SES.
  */
 
-import nodemailer from 'nodemailer'
-import type { Transporter } from 'nodemailer'
 import { logError } from '@/lib/global-logger'
+import { sendAppEmail, validateSesConfig } from '@/lib/email/ses'
 import { formatQuantity } from '@/lib/quantity'
 
-// Email configuration from environment variables
-const EMAIL_CONFIG = {
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  user: process.env.SMTP_USER,
-  pass: process.env.SMTP_PASS?.replace(/\s+/g, ''),
-  from: process.env.SMTP_USER || 'noreply@example.com',
-} as const
-
-// Validate email configuration
-function validateEmailConfig(): boolean {
-  if (!EMAIL_CONFIG.user || !EMAIL_CONFIG.pass) {
-    console.error('[Email] SMTP credentials not configured. Please set SMTP_USER and SMTP_PASS in .env.local')
-    return false
-  }
-  return true
-}
-
-// Create transporter instance (singleton)
-let transporter: Transporter | null = null
-
-function getTransporter(): Transporter | null {
-  if (!validateEmailConfig()) {
-    return null
-  }
-
-  if (!transporter) {
-    try {
-      transporter = nodemailer.createTransport({
-        host: EMAIL_CONFIG.host,
-        port: EMAIL_CONFIG.port,
-        secure: EMAIL_CONFIG.port === 465, // true for 465, false for other ports
-        auth: {
-          user: EMAIL_CONFIG.user,
-          pass: EMAIL_CONFIG.pass,
-        },
-      })
-    } catch (error) {
-      logError(error, 'EMAIL_CREATE_TRANSPORTER')
-      return null
-    }
-  }
-
-  return transporter
-}
+const sanitizeEmailTagValue = (value: string) =>
+  value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 256) || "unknown"
 
 /**
  * Generate HTML email template for OTP
@@ -172,10 +128,8 @@ export async function sendOTPEmail(
       return false
     }
 
-    // Get transporter
-    const transport = getTransporter()
-    if (!transport) {
-      console.error('[Email] Failed to create email transporter. Check SMTP configuration.')
+    if (!validateSesConfig()) {
+      console.error('[Email] Failed to validate AWS SES configuration.')
       return false
     }
 
@@ -183,15 +137,16 @@ export async function sendOTPEmail(
     const typeText = type === 'LOGIN' ? 'Login' : type === 'VERIFY_EMAIL' ? 'Email Verification' : 'Password Reset'
     const subject = `Your OneFlowe ${typeText} Code`
 
-    // Send email
-    const info = await transport.sendMail({
-      from: `"OneFlowe" <${EMAIL_CONFIG.from}>`,
+    await sendAppEmail({
+      fromName: "OneFlowe",
       to,
       subject,
       text: generateOTPEmailText(code, type),
       html: generateOTPEmailHTML(code, type),
+      tags: [
+        { name: "type", value: sanitizeEmailTagValue(`otp_${type.toLowerCase()}`) },
+      ],
     })
-
 
     return true
 
@@ -206,14 +161,9 @@ export async function sendOTPEmail(
  */
 export async function verifyEmailConfig(): Promise<boolean> {
   try {
-    const transport = getTransporter()
-    if (!transport) {
-      return false
-    }
-
-    await transport.verify()
-    console.log('[Email] SMTP configuration verified successfully')
-    return true
+    const verified = validateSesConfig()
+    if (verified) console.log('[Email] AWS SES configuration verified successfully')
+    return verified
   } catch (error) {
     logError(error, 'EMAIL_VERIFY_CONFIG')
     return false
@@ -298,14 +248,13 @@ export async function sendReportEmail(
   fileName: string
 ): Promise<boolean> {
   try {
-    const transport = getTransporter()
-    if (!transport) return false
+    if (!validateSesConfig()) return false
 
     const recipients = Array.isArray(to) ? to.join(', ') : to
     const subject = `[REPORT] ${reportName} - ${new Date().toLocaleDateString()}`
 
-    await transport.sendMail({
-      from: `"OneFlowe BI" <${EMAIL_CONFIG.from}>`,
+    await sendAppEmail({
+      fromName: "OneFlowe BI",
       to: recipients,
       subject,
       html: generateReportEmailHTML(reportName, frequency),
@@ -313,7 +262,12 @@ export async function sendReportEmail(
         {
           filename: fileName,
           content: attachmentData,
+          contentType: "text/csv; charset=utf-8",
         },
+      ],
+      tags: [
+        { name: "type", value: "scheduled_report" },
+        { name: "report", value: sanitizeEmailTagValue(reportName) },
       ],
     })
 
@@ -352,11 +306,6 @@ export type OrderTokenEmailDetails = {
   createdAt: Date | string | null
   items: OrderTokenEmailItem[]
 }
-
-const RESEND_EMAIL_CONFIG = {
-  apiKey: process.env.RESEND_API_KEY,
-  from: process.env.RESEND_ORDER_TOKEN_FROM || process.env.RESEND_FROM || "OneFlowe Orders <onboarding@resend.dev>",
-} as const
 
 const generateOrderTokenEmailSVG = (details: OrderTokenEmailDetails) => {
   const createdAt = details.createdAt ? new Date(details.createdAt).toLocaleString() : "N/A"
@@ -453,53 +402,39 @@ const generateOrderTokenEmailHTML = (details: OrderTokenEmailDetails) => {
 
 export async function sendOrderTokenEmail(details: OrderTokenEmailDetails): Promise<boolean> {
   try {
-    if (!RESEND_EMAIL_CONFIG.apiKey) {
-      console.error("[Email] RESEND_API_KEY is not configured for order token email")
-      return false
-    }
+    if (!validateSesConfig()) return false
 
     const svg = generateOrderTokenEmailSVG(details)
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${RESEND_EMAIL_CONFIG.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: RESEND_EMAIL_CONFIG.from,
-        to: details.to,
-        subject: `Fulfillment token for order ${details.tid}`,
-        html: generateOrderTokenEmailHTML(details),
-        text: [
-          `OneFlowe fulfillment token`,
-          `Token: ${details.token}`,
-          `TID: ${details.tid}`,
-          `Organization: ${details.organizationName}`,
-          `Branch: ${details.branchName}`,
-        ].join("\n"),
-        attachments: [
-          {
-            filename: `oneflowe-token-${details.tid}.svg`,
-            content: Buffer.from(svg, "utf8").toString("base64"),
-          },
-        ],
-        tags: [
-          { name: "type", value: "order_token" },
-          { name: "tid", value: details.tid.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 256) },
-        ],
-      }),
-    })
 
-    if (!response.ok) {
-      const responseText = await response.text()
-      console.error("[Email] Resend order token email failed:", response.status, responseText)
-      return false
-    }
+    await sendAppEmail({
+      fromName: "OneFlowe Orders",
+      to: details.to,
+      subject: `Fulfillment token for order ${details.tid}`,
+      html: generateOrderTokenEmailHTML(details),
+      text: [
+        `OneFlowe fulfillment token`,
+        `Token: ${details.token}`,
+        `TID: ${details.tid}`,
+        `Organization: ${details.organizationName}`,
+        `Branch: ${details.branchName}`,
+      ].join("\n"),
+      attachments: [
+        {
+          filename: `oneflowe-token-${details.tid}.svg`,
+          content: svg,
+          contentType: "image/svg+xml; charset=utf-8",
+        },
+      ],
+      tags: [
+        { name: "type", value: "order_token" },
+        { name: "tid", value: sanitizeEmailTagValue(details.tid) },
+      ],
+    })
 
     return true
   } catch (error) {
-    console.error("[Email] Failed to send order token email with Resend:", error)
-    logError(error, "RESEND_SEND_ORDER_TOKEN", { to: details.to, tid: details.tid })
+    console.error("[Email] Failed to send order token email with AWS SES:", error)
+    logError(error, "SES_SEND_ORDER_TOKEN", { to: details.to, tid: details.tid })
     return false
   }
 }
