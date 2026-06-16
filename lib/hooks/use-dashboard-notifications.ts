@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useAppContext } from "@/components/context/app-context"
-import { useBranches, useOrders, useUsers } from "@/lib/hooks/use-api"
+import { useAPI, useBranches, useOrders, useUsers } from "@/lib/hooks/use-api"
 
 export type NotificationSeverity = "info" | "warning" | "critical"
 
@@ -17,6 +17,19 @@ export type DashboardNotification = {
     href: string
   }
   tag?: string
+}
+
+type ApiNotificationsResponse = {
+  items: DashboardNotification[]
+}
+
+type PendingRefundsResponse = {
+  refunds?: Array<{
+    id: number
+    amountCents?: number | null
+    tid?: string | null
+    branchName?: string | null
+  }>
 }
 
 const getNotificationReadKey = (notification: DashboardNotification) =>
@@ -68,8 +81,19 @@ export function useDashboardNotifications() {
 
   const branchesQuery = useBranches(organizationId || undefined)
   const usersQuery = useUsers(organizationId || undefined)
+  const dbNotificationsQuery = useAPI<ApiNotificationsResponse>("/api/v1/notifications", {
+    refreshInterval: 30000,
+    errorRetryCount: 1,
+  })
+  const pendingRefundsQuery = useAPI<PendingRefundsResponse>(
+    role === "SUPER_ADMIN" ? "/api/v1/admin/refunds?status=pending" : null,
+    {
+      refreshInterval: 30000,
+      errorRetryCount: 1,
+    },
+  )
 
-  const notifications = useMemo<DashboardNotification[]>(() => {
+  const computedNotifications = useMemo<DashboardNotification[]>(() => {
     if (!isInitialized) return []
     const items: DashboardNotification[] = []
     const pendingOrders = pendingOrdersQuery.data?.items || []
@@ -86,6 +110,28 @@ export function useDashboardNotifications() {
         cta: { label: "Review orders", href: role === "BRANCH_ADMIN" ? "/orders" : "/head-office-orders" },
         tag: pendingOrders[0]?.status || "pending",
       })
+    }
+
+    if (role === "SUPER_ADMIN") {
+      const pendingRefunds = pendingRefundsQuery.data?.refunds || []
+      if (pendingRefunds.length > 0) {
+        const latest = pendingRefunds[0]
+        const amountLabel = latest?.amountCents ? `PKR ${(latest.amountCents / 100).toFixed(2)}` : "A refund"
+        const targetLabel = latest?.tid ? ` for Transaction ID ${latest.tid}` : ""
+        const branchLabel = latest?.branchName ? ` from ${latest.branchName}` : ""
+
+        items.push({
+          id: `pending-refunds-${pendingRefunds.map((refund) => refund.id).join("-")}`,
+          title: "Refund requests awaiting review",
+          message:
+            pendingRefunds.length === 1
+              ? `${amountLabel}${targetLabel}${branchLabel} is pending approval.`
+              : `${pendingRefunds.length} refund requests are pending approval.`,
+          severity: pendingRefunds.length > 5 ? "critical" : "warning",
+          cta: { label: "Review refunds", href: "/refunds" },
+          tag: "refund",
+        })
+      }
     }
 
 
@@ -123,15 +169,28 @@ export function useDashboardNotifications() {
     isInitialized,
     role,
     branchesQuery.data?.items,
+    pendingRefundsQuery.data?.refunds,
     pendingOrdersQuery.data?.items,
     usersQuery.data?.items,
   ])
+
+  const dbNotifications = useMemo(
+    () => dbNotificationsQuery.data?.items || [],
+    [dbNotificationsQuery.data?.items],
+  )
+
+  const notifications = useMemo<DashboardNotification[]>(
+    () => [...dbNotifications, ...computedNotifications],
+    [computedNotifications, dbNotifications],
+  )
 
   const isLoading =
     !isInitialized ||
     pendingOrdersQuery.isLoading ||
     branchesQuery.isLoading ||
-    usersQuery.isLoading
+    usersQuery.isLoading ||
+    dbNotificationsQuery.isLoading ||
+    pendingRefundsQuery.isLoading
 
   const unreadNotifications = useMemo(
     () => notifications.filter((notification) => !seenNotificationKeys.has(getNotificationReadKey(notification))),
@@ -155,7 +214,17 @@ export function useDashboardNotifications() {
       }
       return new Set(serializedKeys)
     })
-  }, [notifications, seenStorageKey])
+
+    if (dbNotifications.length > 0) {
+      void fetch("/api/v1/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark-all-read" }),
+      }).catch(() => {
+        // Keep the existing local read state if the server update fails.
+      })
+    }
+  }, [dbNotifications.length, notifications, seenStorageKey])
 
   const criticalCount = unreadNotifications.filter((n) => n.severity !== "info").length
 

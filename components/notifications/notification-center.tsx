@@ -60,9 +60,15 @@ export function NotificationBell() {
         ) : (
           <ScrollArea className="max-h-80">
             <div className="divide-y">
-              {notifications.map((notification) => (
-                <NotificationRow key={notification.id} notification={notification} compact />
-              ))}
+              {notifications.length > 0 ? (
+                notifications.map((notification) => (
+                  <NotificationRow key={notification.id} notification={notification} compact />
+                ))
+              ) : (
+                <div className="px-4 py-6 text-sm text-muted-foreground">
+                  No notifications right now.
+                </div>
+              )}
             </div>
           </ScrollArea>
         )}

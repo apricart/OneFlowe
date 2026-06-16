@@ -2,12 +2,61 @@ import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
-import { refunds, orders, budgets, auditLogs, users, orderItems, refundItems, globalProducts } from "@/db/schema"
-import { eq, sql, desc, inArray, and } from "drizzle-orm"
+import { refunds, orders, budgets, auditLogs, users, orderItems, refundItems, globalProducts, roles, notifications, organizations, branches } from "@/db/schema"
+import { eq, sql, desc, inArray, and, isNull } from "drizzle-orm"
 import { shouldHidePricesForRole } from "@/lib/price-visibility"
 import { releaseRefundedQuantityBudget } from "@/lib/server/product-quantity-budget-ledger"
 import { orderSelectColumns } from "@/lib/order-select"
 import { calculateLineCents, formatQuantity, validateProductQuantity } from "@/lib/quantity"
+import { sendRefundRequestEmail } from "@/lib/email"
+import { ADMIN_OPERATIONS_EMAIL } from "@/lib/email/recipients"
+
+const refundRequestRoles = new Set(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"])
+
+const maskEmailAddress = (email: string) => {
+  const [localPart, domain] = email.split("@")
+  if (!localPart || !domain) return "invalid-email"
+
+  const visibleLocal = localPart.length <= 2
+    ? `${localPart[0] || ""}***`
+    : `${localPart.slice(0, 2)}***${localPart.slice(-1)}`
+
+  return `${visibleLocal}@${domain}`
+}
+
+function canAccessOrderForRefund(
+  userRole: string,
+  orderData: { organizationId: number | null; branchId: number; createdByUserId: string },
+  userOrgId: unknown,
+  userBranchId: unknown,
+  userId: string,
+) {
+  if (!refundRequestRoles.has(userRole)) {
+    return false
+  }
+
+  if (userRole === "SUPER_ADMIN") {
+    return true
+  }
+
+  if (userRole === "HEAD_OFFICE") {
+    return orderData.organizationId === userOrgId
+  }
+
+  if (userRole === "BRANCH_ADMIN") {
+    return orderData.organizationId === userOrgId && orderData.branchId === userBranchId
+  }
+
+  if (userRole === "ORDER_PORTAL") {
+    return (
+      orderData.organizationId === userOrgId &&
+      orderData.branchId === userBranchId &&
+      orderData.createdByUserId === userId
+    )
+  }
+
+  return false
+}
 
 export async function GET(
   req: NextRequest,
@@ -29,15 +78,12 @@ export async function GET(
     const userRole = (session.user as any).role
     const userOrgId = (session.user as any).organizationId
     const userBranchId = (session.user as any).branchId
+    const userId = (session.user as any).id as string
     if (await shouldHidePricesForRole(userRole, order.organizationId)) {
       return NextResponse.json({ error: "Refund details are unavailable while prices are hidden" }, { status: 403 })
     }
 
-    // Check permissions
-    if (userRole === "BRANCH_ADMIN" && (order as any).branchId !== userBranchId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-    if (userRole === "HEAD_OFFICE" && (order as any).organizationId !== userOrgId) {
+    if (!canAccessOrderForRefund(userRole, order, userOrgId, userBranchId, userId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
@@ -166,13 +212,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Refund requests are unavailable while prices are hidden" }, { status: 403 })
     }
 
-    // Verify user has permission for this order
-    if (userRole === "BRANCH_ADMIN" && orderData.branchId !== userBranchId) {
-      return NextResponse.json({ error: "Forbidden: Cannot refund orders from other branches" }, { status: 403 })
-    }
-
-    if (userRole === "HEAD_OFFICE" && orderData.organizationId !== userOrgId) {
-      return NextResponse.json({ error: "Forbidden: Cannot refund orders from other organizations" }, { status: 403 })
+    if (!canAccessOrderForRefund(userRole, orderData, userOrgId, userBranchId, userId)) {
+      return NextResponse.json({ error: "Forbidden: Cannot request a refund for this order" }, { status: 403 })
     }
 
     // 1. Fetch original order items to validate prices and quantities
@@ -278,6 +319,44 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         error: `Refund amount (${(totalRefundAmount / 100).toFixed(2)} PKR) exceeds remaining refundable capacity (Total: ${(orderData.totalCents / 100).toFixed(2)}, Approved: ${(approvedTotal / 100).toFixed(2)}, Pending: ${(pendingTotal / 100).toFixed(2)}).`
       }, { status: 400 })
     }
+
+    const shouldNotifySuperAdmins = userRole !== "SUPER_ADMIN"
+    const refundRequestContext = shouldNotifySuperAdmins
+      ? await db
+        .select({
+          organizationName: organizations.name,
+          branchName: branches.name,
+        })
+        .from(orders)
+        .leftJoin(organizations, eq(orders.organizationId, organizations.id))
+        .leftJoin(branches, eq(orders.branchId, branches.id))
+        .where(eq(orders.id, orderId))
+        .limit(1)
+        .then((rows) => rows[0])
+      : null
+
+    const superAdminRecipients = shouldNotifySuperAdmins
+      ? await db
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+        })
+        .from(users)
+        .innerJoin(roles, eq(users.roleId, roles.id))
+        .where(and(
+          eq(roles.name, "SUPER_ADMIN"),
+          eq(users.isActive, true),
+          isNull(users.deletedAt),
+        ))
+      : []
+
+    const requesterName = String(
+      (session.user as any).fullName ||
+      session.user.email ||
+      "A user",
+    )
+    const refundRequestMessage = `Refund request for Transaction ID ${orderData.tid}: PKR ${(totalRefundAmount / 100).toFixed(2)} from ${refundRequestContext?.branchName || "Unknown branch"}`
 
     // Execute refund in transaction
     await db.transaction(async (tx) => {
@@ -405,6 +484,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             items: refundDetails
           },
         })
+
+        if (superAdminRecipients.length > 0) {
+          await tx.insert(notifications).values(
+            superAdminRecipients.map((recipient) => ({
+              userId: recipient.id,
+              organizationId: orderData.organizationId,
+              branchId: orderData.branchId,
+              type: "REFUND_REQUESTED",
+              targetRole: "SUPER_ADMIN",
+              message: refundRequestMessage,
+            }))
+          )
+        }
       }
 
       // Insert refund items
@@ -419,6 +511,43 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         )
       }
     })
+
+    if (shouldNotifySuperAdmins) {
+      const recipientEmails = [ADMIN_OPERATIONS_EMAIL].filter((email): email is string => Boolean(email))
+
+      if (recipientEmails.length > 0) {
+        const sent = await sendRefundRequestEmail({
+          to: recipientEmails,
+          tid: orderData.tid,
+          organizationName: refundRequestContext?.organizationName || "Unknown organization",
+          branchName: refundRequestContext?.branchName || "Unknown branch",
+          requestedBy: requesterName,
+          amountCents: totalRefundAmount,
+          reason: reason?.trim() || null,
+          items: refundDetails.map((item) => ({
+            productName: item.name,
+            quantity: item.quantity,
+            amountCents: item.amount,
+          })),
+        })
+
+        console.info("[Refunds] Refund request email recipients", {
+          orderId,
+          tid: orderData.tid,
+          recipientCount: recipientEmails.length,
+          recipients: recipientEmails.map(maskEmailAddress),
+          sent,
+        })
+
+        if (!sent) {
+          console.error("[Refunds] Refund request email failed after request creation", {
+            orderId,
+            tid: orderData.tid,
+            recipients: recipientEmails.length,
+          })
+        }
+      }
+    }
 
     return NextResponse.json({
       message: userRole === "SUPER_ADMIN"

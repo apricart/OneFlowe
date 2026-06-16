@@ -508,7 +508,7 @@ export default function OrdersManagementPage() {
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto">
                 {/* Status Tabs */}
                 <div className="flex items-center p-1 bg-slate-100/60 dark:bg-slate-800/50 rounded-xl border border-slate-200/50 dark:border-slate-700/50 overflow-x-auto no-scrollbar max-w-full">
-                  {["all", "approved", "fulfilled", "rejected", "refunded"].map((status) => (
+                  {["all", "pending", "approved", "fulfilled", "rejected", "refunded"].map((status) => (
                     <Button
                       key={status}
                       onClick={() => setStatusFilter(status)}

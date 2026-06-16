@@ -1,16 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Runs the OneFlowe auto-fulfill cron once a day at 07:00 via EventBridge Scheduler.
-  The scheduler calls POST /api/v1/orders/cron/auto-fulfill on your Amplify domain
-  with Authorization: Bearer <CRON_SECRET>.
+  Runs the OneFlowe auto-fulfill cron once a day at 07:00 PKT (02:00 UTC)
+  via EventBridge Rule + API Destination.
 
-  What it does: finds APPROVED orders whose fulfillmentStatus is DELIVERED, have no
-  refund request (in any status), and where at least 48 hours have passed since the
-  order was last updated (proxy for deliveredAt) — then marks them FULFILLED and moves
-  budget from held to spent.
-
-  Deploy once per environment (staging / production).
-  Required parameters: AppUrl and CronSecret.
+  NOTE: EventBridge Rule schedules are always UTC. 02:00 UTC = 07:00 PKT (UTC+5).
+  Change the ScheduleExpression parameter if you need a different time.
 
 Parameters:
   AppUrl:
@@ -20,16 +14,16 @@ Parameters:
   CronSecret:
     Type: String
     NoEcho: true
-    Description: "The CRON_SECRET env var value set in your Amplify app environment variables."
+    Description: "The CRON_SECRET env var value set in your Amplify app."
 
-  ScheduleTimezone:
+  ScheduleExpression:
     Type: String
-    Default: "Asia/Karachi"
-    Description: "IANA timezone for the 07:00 schedule. Default: Asia/Karachi (PKT, UTC+5)."
+    Default: "cron(0 2 * * ? *)"
+    Description: "EventBridge cron in UTC. Default: 02:00 UTC = 07:00 PKT."
 
 Resources:
 
-  # Stores the Authorization header value (Bearer <secret>) for reuse across calls.
+  # Stores the Authorization header (Bearer <secret>) used on every call.
   CronApiConnection:
     Type: AWS::Events::Connection
     Properties:
@@ -40,7 +34,7 @@ Resources:
           ApiKeyName: Authorization
           ApiKeyValue: !Sub "Bearer ${CronSecret}"
 
-  # Points at the auto-fulfill endpoint on your Amplify domain.
+  # HTTP endpoint definition.
   CronApiDestination:
     Type: AWS::Events::ApiDestination
     Properties:
@@ -50,17 +44,18 @@ Resources:
       InvocationEndpoint: !Sub "${AppUrl}/api/v1/orders/cron/auto-fulfill"
       InvocationRateLimitPerSecond: 1
 
-  # IAM role that allows the scheduler to invoke the API destination.
+  # IAM role that allows EventBridge Rule to call the API destination.
+  # Principal must be events.amazonaws.com (not scheduler.amazonaws.com).
   SchedulerRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${AWS::StackName}-scheduler-role"
+      RoleName: !Sub "${AWS::StackName}-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-              Service: scheduler.amazonaws.com
+              Service: events.amazonaws.com
             Action: sts:AssumeRole
       Policies:
         - PolicyName: InvokeApiDestination
@@ -71,29 +66,27 @@ Resources:
                 Action: events:InvokeApiDestination
                 Resource: !GetAtt CronApiDestination.Arn
 
-  # Fires every day at 07:00 in the configured timezone.
-  AutoFulfillScheduler:
-    Type: AWS::Scheduler::Schedule
+  # The rule — fires on schedule and POSTs to the auto-fulfill endpoint.
+  AutoFulfillRule:
+    Type: AWS::Events::Rule
     Properties:
       Name: !Sub "${AWS::StackName}-auto-fulfill"
-      Description: "Auto-fulfills OneFlowe orders that are APPROVED + DELIVERED for 48+ hours with no refund"
-      ScheduleExpression: "cron(0 7 * * ? *)"
-      ScheduleExpressionTimezone: !Ref ScheduleTimezone
+      Description: "Auto-fulfills OneFlowe APPROVED+DELIVERED orders with no refund after 48 h"
+      ScheduleExpression: !Ref ScheduleExpression
       State: ENABLED
-      FlexibleTimeWindow:
-        Mode: "OFF"
-      Target:
-        Arn: !GetAtt CronApiDestination.Arn
-        RoleArn: !GetAtt SchedulerRole.Arn
-        Input: "{}"
-        RetryPolicy:
-          MaximumEventAgeInSeconds: 600
-          MaximumRetryAttempts: 2
+      Targets:
+        - Arn: !GetAtt CronApiDestination.Arn
+          Id: AutoFulfillTarget
+          RoleArn: !GetAtt SchedulerRole.Arn
+          Input: "{}"
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 600
 
 Outputs:
-  SchedulerName:
-    Value: !Ref AutoFulfillScheduler
-    Description: Name of the EventBridge Scheduler schedule
+  RuleName:
+    Value: !Ref AutoFulfillRule
+    Description: EventBridge Rule name
 
   ApiDestinationArn:
     Value: !GetAtt CronApiDestination.Arn

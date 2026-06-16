@@ -39,17 +39,17 @@ let sesClient: SESv2Client | null = null
 let sesClientRegion: string | null = null
 
 function readSesEmailConfig(): { config: SesEmailConfig | null; missing: string[] } {
-  const region = process.env.NAWS_REGION
-  const accessKeyId = process.env.NAWS_ACCESS_KEY_ID
-  const secretAccessKey = process.env.NAWS_SECRET_ACCESS_KEY
+  const region = process.env.NNAWS_REGION || process.env.NAWS_REGION || process.env.AWS_REGION
+  const accessKeyId = process.env.NNAWS_ACCESS_KEY_ID || process.env.NAWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID
+  const secretAccessKey = process.env.NAWS_SECRET_ACCESS_KEY || process.env.NNAWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY
   const sessionToken = process.env.AWS_SESSION_TOKEN
   const fromEmail = process.env.SES_FROM_EMAIL
   const configurationSetName = process.env.SES_CONFIGURATION_SET
 
   const requiredConfig: Array<[string, string | undefined]> = [
-    ["AWS_REGION", region],
-    ["AWS_ACCESS_KEY_ID", accessKeyId],
-    ["AWS_SECRET_ACCESS_KEY", secretAccessKey],
+    ["NNAWS_REGION or NAWS_REGION or AWS_REGION", region],
+    ["NNAWS_ACCESS_KEY_ID or NAWS_ACCESS_KEY_ID or AWS_ACCESS_KEY_ID", accessKeyId],
+    ["NAWS_SECRET_ACCESS_KEY or NNAWS_SECRET_ACCESS_KEY or AWS_SECRET_ACCESS_KEY", secretAccessKey],
     ["SES_FROM_EMAIL", fromEmail],
   ]
 

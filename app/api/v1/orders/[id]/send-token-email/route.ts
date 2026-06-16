@@ -4,8 +4,9 @@ import { auditLogs, branches, orderItems, orders, organizations } from "@/db/sch
 import { eq } from "drizzle-orm"
 import { getCurrentUser, verifyResourceAccess } from "@/lib/auth"
 import { sendOrderTokenEmail } from "@/lib/email"
+import { ADMIN_OPERATIONS_EMAIL } from "@/lib/email/recipients"
 
-const TOKEN_EMAIL_RECIPIENT = process.env.ORDER_TOKEN_ADMIN_EMAIL || "oneflowe@apricart.pk"
+const TOKEN_EMAIL_RECIPIENT = ADMIN_OPERATIONS_EMAIL
 
 export async function POST(
   _req: Request,

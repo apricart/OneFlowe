@@ -307,6 +307,114 @@ export type OrderTokenEmailDetails = {
   items: OrderTokenEmailItem[]
 }
 
+export type RefundRequestEmailItem = {
+  productName: string
+  quantity: number
+  amountCents: number
+}
+
+export type RefundRequestEmailDetails = {
+  to: string | string[]
+  tid: string
+  organizationName: string
+  branchName: string
+  requestedBy: string
+  amountCents: number
+  reason?: string | null
+  items: RefundRequestEmailItem[]
+}
+
+const generateRefundRequestEmailHTML = (details: RefundRequestEmailDetails) => {
+  const itemRows = details.items.map((item) => `
+    <tr>
+      <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 14px; font-weight: 700;">${escapeHtml(item.productName)}</td>
+      <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; color: #475569; font-size: 14px; text-align: right;">${escapeHtml(formatQuantity(item.quantity))}</td>
+      <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; color: #dc2626; font-size: 14px; font-weight: 800; text-align: right;">PKR ${escapeHtml((item.amountCents / 100).toFixed(2))}</td>
+    </tr>
+  `).join("")
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Refund Request</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f8fafc;">
+      <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 32px 0;">
+            <table role="presentation" style="width: 100%; max-width: 640px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0;">
+              <tr>
+                <td style="background-color: #dc2626; padding: 30px;">
+                  <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 900;">Refund Request Submitted</h1>
+                  <p style="margin: 8px 0 0; color: #fee2e2; font-size: 13px; font-weight: 700;">A refund is waiting for super admin review.</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 30px;">
+                  <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="color: #64748b; font-size: 13px; font-weight: 700;">Order TID</td><td style="text-align: right; color: #1e293b; font-size: 13px; font-weight: 800;">${escapeHtml(details.tid)}</td></tr>
+                    <tr><td style="padding-top: 8px; color: #64748b; font-size: 13px; font-weight: 700;">Organization</td><td style="padding-top: 8px; text-align: right; color: #1e293b; font-size: 13px; font-weight: 800;">${escapeHtml(details.organizationName)}</td></tr>
+                    <tr><td style="padding-top: 8px; color: #64748b; font-size: 13px; font-weight: 700;">Branch</td><td style="padding-top: 8px; text-align: right; color: #1e293b; font-size: 13px; font-weight: 800;">${escapeHtml(details.branchName)}</td></tr>
+                    <tr><td style="padding-top: 8px; color: #64748b; font-size: 13px; font-weight: 700;">Requested By</td><td style="padding-top: 8px; text-align: right; color: #1e293b; font-size: 13px; font-weight: 800;">${escapeHtml(details.requestedBy)}</td></tr>
+                    <tr><td style="padding-top: 8px; color: #64748b; font-size: 13px; font-weight: 700;">Refund Amount</td><td style="padding-top: 8px; text-align: right; color: #dc2626; font-size: 16px; font-weight: 900;">PKR ${escapeHtml((details.amountCents / 100).toFixed(2))}</td></tr>
+                  </table>
+                  ${details.reason ? `<div style="margin-top: 22px; padding: 14px; background-color: #f8fafc; border-radius: 10px; color: #475569; font-size: 14px; line-height: 1.5;"><strong>Reason:</strong> ${escapeHtml(details.reason)}</div>` : ""}
+                  <table role="presentation" style="width: 100%; margin-top: 24px; border-collapse: collapse;">
+                    <thead>
+                      <tr>
+                        <th style="padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; color: #64748b; font-size: 11px; text-align: left; text-transform: uppercase;">Item</th>
+                        <th style="padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; color: #64748b; font-size: 11px; text-align: right; text-transform: uppercase;">Qty</th>
+                        <th style="padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; color: #64748b; font-size: 11px; text-align: right; text-transform: uppercase;">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>${itemRows}</tbody>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `
+}
+
+export async function sendRefundRequestEmail(details: RefundRequestEmailDetails): Promise<boolean> {
+  try {
+    if (!validateSesConfig()) return false
+
+    await sendAppEmail({
+      fromName: "OneFlowe Refunds",
+      to: details.to,
+      subject: `Refund request for order ${details.tid}`,
+      html: generateRefundRequestEmailHTML(details),
+      text: [
+        "OneFlowe refund request submitted",
+        `TID: ${details.tid}`,
+        `Organization: ${details.organizationName}`,
+        `Branch: ${details.branchName}`,
+        `Requested by: ${details.requestedBy}`,
+        `Amount: PKR ${(details.amountCents / 100).toFixed(2)}`,
+        details.reason ? `Reason: ${details.reason}` : "",
+      ].filter(Boolean).join("\n"),
+      tags: [
+        { name: "type", value: "refund_request" },
+        { name: "tid", value: sanitizeEmailTagValue(details.tid) },
+      ],
+    })
+
+    return true
+  } catch (error) {
+    console.error("[Email] Failed to send refund request email:", error)
+    logError(error, "EMAIL_SEND_REFUND_REQUEST", { tid: details.tid })
+    return false
+  }
+}
+
 const generateOrderTokenEmailSVG = (details: OrderTokenEmailDetails) => {
   const createdAt = details.createdAt ? new Date(details.createdAt).toLocaleString() : "N/A"
   const visibleItems = details.items.slice(0, 6)
