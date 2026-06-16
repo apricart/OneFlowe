@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Runs the OneFlowe auto-fulfill cron once a day at 07:00 via EventBridge Scheduler.
+  The scheduler calls POST /api/v1/orders/cron/auto-fulfill on your Amplify domain
+  with Authorization: Bearer <CRON_SECRET>.
+
+  What it does: finds APPROVED orders whose fulfillmentStatus is DELIVERED, have no
+  refund request (in any status), and where at least 48 hours have passed since the
+  order was last updated (proxy for deliveredAt) — then marks them FULFILLED and moves
+  budget from held to spent.
+
+  Deploy once per environment (staging / production).
+  Required parameters: AppUrl and CronSecret.
+
+Parameters:
+  AppUrl:
+    Type: String
+    Description: "Full base URL of your Amplify app, no trailing slash. E.g. https://main.abc123.amplifyapp.com"
+
+  CronSecret:
+    Type: String
+    NoEcho: true
+    Description: "The CRON_SECRET env var value set in your Amplify app environment variables."
+
+  ScheduleTimezone:
+    Type: String
+    Default: "Asia/Karachi"
+    Description: "IANA timezone for the 07:00 schedule. Default: Asia/Karachi (PKT, UTC+5)."
+
+Resources:
+
+  # Stores the Authorization header value (Bearer <secret>) for reuse across calls.
+  CronApiConnection:
+    Type: AWS::Events::Connection
+    Properties:
+      Name: !Sub "${AWS::StackName}-connection"
+      AuthorizationType: API_KEY
+      AuthParameters:
+        ApiKeyAuthParameters:
+          ApiKeyName: Authorization
+          ApiKeyValue: !Sub "Bearer ${CronSecret}"
+
+  # Points at the auto-fulfill endpoint on your Amplify domain.
+  CronApiDestination:
+    Type: AWS::Events::ApiDestination
+    Properties:
+      Name: !Sub "${AWS::StackName}-destination"
+      ConnectionArn: !GetAtt CronApiConnection.Arn
+      HttpMethod: POST
+      InvocationEndpoint: !Sub "${AppUrl}/api/v1/orders/cron/auto-fulfill"
+      InvocationRateLimitPerSecond: 1
+
+  # IAM role that allows the scheduler to invoke the API destination.
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-scheduler-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeApiDestination
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: events:InvokeApiDestination
+                Resource: !GetAtt CronApiDestination.Arn
+
+  # Fires every day at 07:00 in the configured timezone.
+  AutoFulfillScheduler:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "${AWS::StackName}-auto-fulfill"
+      Description: "Auto-fulfills OneFlowe orders that are APPROVED + DELIVERED for 48+ hours with no refund"
+      ScheduleExpression: "cron(0 7 * * ? *)"
+      ScheduleExpressionTimezone: !Ref ScheduleTimezone
+      State: ENABLED
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      Target:
+        Arn: !GetAtt CronApiDestination.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: "{}"
+        RetryPolicy:
+          MaximumEventAgeInSeconds: 600
+          MaximumRetryAttempts: 2
+
+Outputs:
+  SchedulerName:
+    Value: !Ref AutoFulfillScheduler
+    Description: Name of the EventBridge Scheduler schedule
+
+  ApiDestinationArn:
+    Value: !GetAtt CronApiDestination.Arn
+    Description: ARN of the EventBridge API destination
