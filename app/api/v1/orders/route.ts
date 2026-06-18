@@ -205,6 +205,9 @@ export async function GET(req: NextRequest) {
         createdAt: orders.createdAt,
         fulfilledAt: orders.fulfilledAt,
         branchName: branches.name,
+        branchAddress: branches.address,
+        branchCity: branches.city,
+        branchProvince: branches.province,
         hasRefundRequests: sql<number>`(
           SELECT COUNT(*)::int
           FROM ${refunds}

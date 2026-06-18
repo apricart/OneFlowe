@@ -561,6 +561,14 @@ export function OrdersDirectory({
                       <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" /> Branch</span>
                       <span className="text-sm font-bold text-slate-800 dark:text-slate-200 transition-colors group-hover:text-indigo-500">{viewingOrder.branchName || `#${viewingOrder.branchId}`}</span>
                     </div>
+                    {(viewingOrder.branchAddress || viewingOrder.branchCity || viewingOrder.branchProvince) && (
+                      <div className="flex items-start justify-between gap-3 group">
+                        <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 shrink-0"><MapPin className="h-3.5 w-3.5" /> Address</span>
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 text-right leading-snug">
+                          {[viewingOrder.branchAddress, viewingOrder.branchCity, viewingOrder.branchProvince].filter(Boolean).join(", ")}
+                        </span>
+                      </div>
+                    )}
                     {shouldShowFulfillmentProgress(viewingOrder) && (
                       <div className="flex items-center justify-between gap-3 group">
                         <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5"><Truck className="h-3.5 w-3.5" /> Progress</span>
