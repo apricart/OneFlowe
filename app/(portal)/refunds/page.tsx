@@ -48,6 +48,20 @@ type OrderData = {
     refundedQuantities?: Record<number, number> // Refunded quantities per order item ID
 }
 
+type PendingRefundRequest = {
+    id: number
+    amountCents: number
+    reason: string | null
+    status: string
+    createdAt: string
+    orderId: number
+    tid: string
+    totalCents: number
+    organizationName: string | null
+    branchName: string | null
+    requestedByName: string | null
+}
+
 import { useSearchParams } from "next/navigation"
 
 export default function RefundsPage() {
@@ -62,7 +76,9 @@ export default function RefundsPage() {
     const [refundReason, setRefundReason] = useState("")
     const [processing, setProcessing] = useState(false)
 
-    const [pendingRefunds, setPendingRefunds] = useState<any[]>([])
+    const [pendingRefunds, setPendingRefunds] = useState<PendingRefundRequest[]>([])
+    const [pendingRefundsLoading, setPendingRefundsLoading] = useState(false)
+    const [pendingRefundsVersion, setPendingRefundsVersion] = useState(0)
 
     // Separate search function to be called from effect or button
     const performSearch = async (tid: string) => {
@@ -108,9 +124,10 @@ export default function RefundsPage() {
         }
     }
 
-    // Fetch pending refunds on mount
+    // Fetch pending refund requests — re-runs when pendingRefundsVersion increments
     useEffect(() => {
         const fetchPendingRefunds = async () => {
+            setPendingRefundsLoading(true)
             try {
                 const response = await fetch('/api/v1/admin/refunds?status=pending')
                 if (response.ok) {
@@ -119,11 +136,13 @@ export default function RefundsPage() {
                 }
             } catch (error) {
                 console.error("Failed to fetch pending refunds", error)
+            } finally {
+                setPendingRefundsLoading(false)
             }
         }
 
         fetchPendingRefunds()
-    }, [])
+    }, [pendingRefundsVersion])
 
     // Auto-search on mount if tid param exists
     useEffect(() => {
@@ -197,6 +216,15 @@ export default function RefundsPage() {
         return total
     }, [selectedItems, order])
 
+    const pendingStats = useMemo(() => {
+        const totalAmountCents = pendingRefunds.reduce((sum, r) => sum + (r.amountCents || 0), 0)
+        const uniqueBranches = new Set(pendingRefunds.map(r => r.branchName).filter(Boolean)).size
+        // API returns desc(createdAt), so last item is the oldest
+        const oldestDate = pendingRefunds.length > 0 ? pendingRefunds[pendingRefunds.length - 1].createdAt : null
+        const daysOld = oldestDate ? Math.floor((Date.now() - new Date(oldestDate).getTime()) / 86400000) : null
+        return { totalCount: pendingRefunds.length, totalAmountCents, uniqueBranches, daysOld }
+    }, [pendingRefunds])
+
     const openRefundDialog = () => {
         if (selectedItems.size === 0) {
             toast({
@@ -253,6 +281,7 @@ export default function RefundsPage() {
             setRefundDialogOpen(false)
             setSelectedItems(new Map())
             searchOrder()
+            setPendingRefundsVersion(v => v + 1)
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : "Failed to process refund"
             toast({
@@ -295,8 +324,182 @@ export default function RefundsPage() {
         <div className="space-y-6 p-6">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Refund Management</h1>
-                <p className="text-muted-foreground">Search by Transaction ID (TID) and select items to refund</p>
+                <p className="text-muted-foreground">Review pending refund requests and process refunds by Transaction ID</p>
             </div>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card>
+                    <CardContent className="pt-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-muted-foreground">Pending Requests</p>
+                                <p className="text-3xl font-bold mt-1">
+                                    {pendingRefundsLoading
+                                        ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                        : pendingStats.totalCount
+                                    }
+                                </p>
+                            </div>
+                            <div className="h-12 w-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                                <Clock className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardContent className="pt-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-muted-foreground">Total Requested</p>
+                                <p className="text-xl font-bold mt-1 text-red-600">
+                                    {pendingRefundsLoading
+                                        ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                        : `PKR ${(pendingStats.totalAmountCents / 100).toFixed(2)}`
+                                    }
+                                </p>
+                            </div>
+                            <div className="h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                                <DollarSign className="h-6 w-6 text-red-600 dark:text-red-400" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardContent className="pt-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-muted-foreground">Branches Affected</p>
+                                <p className="text-3xl font-bold mt-1">
+                                    {pendingRefundsLoading
+                                        ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                        : pendingStats.uniqueBranches
+                                    }
+                                </p>
+                            </div>
+                            <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                                <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardContent className="pt-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-muted-foreground">Oldest Request</p>
+                                <p className="text-3xl font-bold mt-1">
+                                    {pendingRefundsLoading
+                                        ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                                        : pendingStats.daysOld === null
+                                            ? "—"
+                                            : pendingStats.daysOld === 0
+                                                ? "Today"
+                                                : `${pendingStats.daysOld}d ago`
+                                    }
+                                </p>
+                            </div>
+                            <div className="h-12 w-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                                <Calendar className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Pending Refund Requests Table */}
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-500" />
+                            Pending Refund Requests
+                        </CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            Refund requests submitted by branches awaiting admin review
+                        </p>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPendingRefundsVersion(v => v + 1)}
+                        disabled={pendingRefundsLoading}
+                    >
+                        <RefreshCcw className={`h-4 w-4 mr-2 ${pendingRefundsLoading ? "animate-spin" : ""}`} />
+                        Refresh
+                    </Button>
+                </CardHeader>
+                <CardContent>
+                    {pendingRefundsLoading ? (
+                        <div className="flex items-center justify-center py-10">
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : pendingRefunds.length === 0 ? (
+                        <div className="text-center py-10 text-muted-foreground">
+                            <Clock className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                            <p className="font-medium">No pending refund requests</p>
+                            <p className="text-sm mt-1">All caught up!</p>
+                        </div>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Transaction ID</TableHead>
+                                    <TableHead>Organization</TableHead>
+                                    <TableHead>Branch</TableHead>
+                                    <TableHead>Requested By</TableHead>
+                                    <TableHead className="text-right">Amount</TableHead>
+                                    <TableHead>Date Requested</TableHead>
+                                    <TableHead>Reason</TableHead>
+                                    <TableHead className="w-20 text-center">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {pendingRefunds.map((refund) => (
+                                    <TableRow key={refund.id} className="hover:bg-muted/50">
+                                        <TableCell>
+                                            <span className="font-mono text-sm font-semibold">{refund.tid}</span>
+                                        </TableCell>
+                                        <TableCell className="text-sm">{refund.organizationName || "—"}</TableCell>
+                                        <TableCell className="text-sm">{refund.branchName || "—"}</TableCell>
+                                        <TableCell className="text-sm">{refund.requestedByName || "—"}</TableCell>
+                                        <TableCell className="text-right font-semibold text-red-600">
+                                            PKR {(refund.amountCents / 100).toFixed(2)}
+                                        </TableCell>
+                                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                            {new Date(refund.createdAt).toLocaleDateString("en-PK", {
+                                                day: "2-digit",
+                                                month: "short",
+                                                year: "numeric",
+                                            })}
+                                        </TableCell>
+                                        <TableCell className="text-sm text-muted-foreground max-w-[180px]">
+                                            <span className="truncate block" title={refund.reason ?? undefined}>
+                                                {refund.reason || "—"}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setSearchQuery(refund.tid)
+                                                    performSearch(refund.tid)
+                                                }}
+                                            >
+                                                View
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
+                </CardContent>
+            </Card>
 
             <Card>
                 <CardHeader>

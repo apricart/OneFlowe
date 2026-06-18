@@ -40,16 +40,18 @@ export async function GET(req: NextRequest) {
                     orderId: orders.id,
                     tid: orders.tid,
                     totalCents: orders.totalCents,
+                    organizationName: organizations.name,
                     branchName: branches.name,
                     requestedByName: users.fullName,
                 })
                 .from(refunds)
                 .innerJoin(orders, eq(refunds.orderId, orders.id))
+                .leftJoin(organizations, eq(orders.organizationId, organizations.id))
                 .leftJoin(branches, eq(orders.branchId, branches.id))
                 .leftJoin(users, eq(refunds.requestedByUserId, users.id))
                 .where(eq(refunds.status, "PENDING"))
                 .orderBy(desc(refunds.createdAt))
-                .limit(50)
+                .limit(100)
 
             return NextResponse.json({ refunds: pendingRefunds })
         }
