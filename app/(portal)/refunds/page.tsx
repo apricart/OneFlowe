@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search, RefreshCcw, Loader2, AlertTriangle, Building2, Calendar, User, DollarSign, Clock } from "lucide-react"
+import { Search, RefreshCcw, Loader2, AlertTriangle, Building2, Calendar, User, DollarSign, Clock, XCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { calculateLineCents, formatQuantity, parseQuantity, roundQuantity, sanitizeQuantityStep } from "@/lib/quantity"
 
@@ -79,6 +79,8 @@ export default function RefundsPage() {
     const [pendingRefunds, setPendingRefunds] = useState<PendingRefundRequest[]>([])
     const [pendingRefundsLoading, setPendingRefundsLoading] = useState(false)
     const [pendingRefundsVersion, setPendingRefundsVersion] = useState(0)
+    const [cancelTarget, setCancelTarget] = useState<PendingRefundRequest | null>(null)
+    const [cancelling, setCancelling] = useState(false)
 
     // Separate search function to be called from effect or button
     const performSearch = async (tid: string) => {
@@ -295,6 +297,44 @@ export default function RefundsPage() {
         }
     }
 
+    const cancelRefund = async () => {
+        if (!cancelTarget) return
+        setCancelling(true)
+        try {
+            const response = await fetch(`/api/v1/admin/refunds/${cancelTarget.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "cancel" }),
+            })
+            const data = await response.json()
+            if (!response.ok) {
+                toast({
+                    title: "Cancellation Failed",
+                    description: data.error || "Failed to cancel refund request.",
+                    variant: "destructive",
+                    duration: 5000,
+                })
+                return
+            }
+            toast({
+                title: "Refund Request Cancelled",
+                description: `The refund request for ${cancelTarget.tid} has been cancelled.`,
+                duration: 4000,
+            })
+            setCancelTarget(null)
+            setPendingRefundsVersion(v => v + 1)
+            // If the cancelled order is currently shown in search, refresh it
+            if (order && order.tid === cancelTarget.tid) {
+                searchOrder()
+            }
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Failed to cancel refund request"
+            toast({ title: "Error", description: message, variant: "destructive", duration: 5000 })
+        } finally {
+            setCancelling(false)
+        }
+    }
+
     const getStatusBadge = (status: string, statusAtRefund?: string | null) => {
         const statusUpper = status.toUpperCase()
 
@@ -454,7 +494,7 @@ export default function RefundsPage() {
                                     <TableHead className="text-right">Amount</TableHead>
                                     <TableHead>Date Requested</TableHead>
                                     <TableHead>Reason</TableHead>
-                                    <TableHead className="w-20 text-center">Action</TableHead>
+                                    <TableHead className="w-44 text-center">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -482,16 +522,27 @@ export default function RefundsPage() {
                                             </span>
                                         </TableCell>
                                         <TableCell className="text-center">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setSearchQuery(refund.tid)
-                                                    performSearch(refund.tid)
-                                                }}
-                                            >
-                                                View
-                                            </Button>
+                                            <div className="flex items-center justify-center gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setSearchQuery(refund.tid)
+                                                        performSearch(refund.tid)
+                                                    }}
+                                                >
+                                                    View
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-800 dark:hover:bg-rose-950/20"
+                                                    onClick={() => setCancelTarget(refund)}
+                                                >
+                                                    <XCircle className="h-3.5 w-3.5 mr-1" />
+                                                    Cancel
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -746,6 +797,60 @@ export default function RefundsPage() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Cancel Refund Request Confirmation Dialog */}
+            <Dialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTarget(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-rose-600">
+                            <XCircle className="h-5 w-5" />
+                            Cancel Refund Request
+                        </DialogTitle>
+                        <DialogDescription>
+                            This will cancel the pending refund request. The order will remain in its current state and no budget changes will be made.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Transaction ID</span>
+                                <span className="font-mono font-semibold">{cancelTarget?.tid}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Branch</span>
+                                <span className="font-medium">{cancelTarget?.branchName || "—"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Requested By</span>
+                                <span className="font-medium">{cancelTarget?.requestedByName || "—"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Amount</span>
+                                <span className="font-semibold text-rose-600">
+                                    PKR {cancelTarget ? (cancelTarget.amountCents / 100).toFixed(2) : "0.00"}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                            <p className="text-sm text-amber-800 dark:text-amber-200">
+                                The order status and branch budget will <strong>not</strong> be affected. Only the pending request will be removed.
+                            </p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={cancelling}>
+                            Keep Request
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={cancelRefund}
+                            disabled={cancelling}
+                        >
+                            {cancelling ? "Cancelling..." : "Cancel Request"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>
                 <DialogContent className="max-w-md">

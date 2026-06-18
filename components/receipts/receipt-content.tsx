@@ -368,7 +368,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                         </div>
                         <div className="detail-row">
                             <span className="detail-label">Address:</span>
-                            <span className="detail-value truncate max-w-[140px]">{receiptData.buyerAddress || "—"}</span>
+                            <span className="detail-value  max-w-[140px]">{receiptData.buyerAddress || "—"}</span>
                         </div>
                         <div className="detail-row">
                             <span className="detail-label">Created by:</span>
