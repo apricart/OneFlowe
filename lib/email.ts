@@ -287,7 +287,6 @@ const escapeHtml = (value: unknown) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;")
 
-const escapeXml = escapeHtml
 
 export type OrderTokenEmailItem = {
   productName: string
@@ -415,50 +414,13 @@ export async function sendRefundRequestEmail(details: RefundRequestEmailDetails)
   }
 }
 
-const generateOrderTokenEmailSVG = (details: OrderTokenEmailDetails) => {
-  const createdAt = details.createdAt ? new Date(details.createdAt).toLocaleString() : "N/A"
-  const visibleItems = details.items.slice(0, 6)
-  const extraItemsCount = Math.max(0, details.items.length - visibleItems.length)
-  const itemRows = visibleItems.map((item, index) => {
-    const y = 425 + index * 42
-    const productLabel = `${item.productCode ? `${item.productCode} - ` : ""}${item.productName}`
-    const quantityLabel = `${formatQuantity(item.quantity)}${item.unit ? ` ${item.unit}` : ""}`
-    return `
-      <text x="64" y="${y}" fill="#1e293b" font-size="20" font-weight="700">${escapeXml(productLabel).slice(0, 62)}</text>
-      <text x="920" y="${y}" fill="#4f46e5" font-size="20" font-weight="800" text-anchor="end">${escapeXml(quantityLabel)}</text>
-    `
-  }).join("")
-
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="760" viewBox="0 0 1000 760">
-      <rect width="1000" height="760" rx="36" fill="#f8fafc"/>
-      <rect x="36" y="36" width="928" height="692" rx="30" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
-      <rect x="36" y="36" width="928" height="132" rx="30" fill="#4f46e5"/>
-      <text x="64" y="92" fill="#ffffff" font-family="Arial, sans-serif" font-size="34" font-weight="900">OneFlowe Fulfillment Token</text>
-      <text x="64" y="130" fill="#c7d2fe" font-family="Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="4">SHARE WITH SUPER ADMIN</text>
-
-      <text x="64" y="218" fill="#64748b" font-family="Arial, sans-serif" font-size="16" font-weight="800" letter-spacing="3">TOKEN</text>
-      <rect x="64" y="236" width="872" height="92" rx="18" fill="#eef2ff" stroke="#c7d2fe" stroke-width="2"/>
-      <text x="500" y="295" fill="#4338ca" font-family="Courier New, monospace" font-size="46" font-weight="900" text-anchor="middle" letter-spacing="8">${escapeXml(details.token)}</text>
-
-      <text x="64" y="376" fill="#64748b" font-family="Arial, sans-serif" font-size="16" font-weight="800" letter-spacing="3">ORDER DETAILS</text>
-      <text x="64" y="404" fill="#1e293b" font-family="Arial, sans-serif" font-size="19" font-weight="700">TID: ${escapeXml(details.tid)}</text>
-      <text x="360" y="404" fill="#1e293b" font-family="Arial, sans-serif" font-size="19" font-weight="700">Status: ${escapeXml(details.status)}</text>
-      <text x="64" y="654" fill="#475569" font-family="Arial, sans-serif" font-size="18" font-weight="700">Organization: ${escapeXml(details.organizationName)}</text>
-      <text x="64" y="686" fill="#475569" font-family="Arial, sans-serif" font-size="18" font-weight="700">Branch: ${escapeXml(details.branchName)}</text>
-      <text x="64" y="716" fill="#94a3b8" font-family="Arial, sans-serif" font-size="15" font-weight="600">Created: ${escapeXml(createdAt)}</text>
-      ${itemRows}
-      ${extraItemsCount > 0 ? `<text x="64" y="${425 + visibleItems.length * 42}" fill="#64748b" font-family="Arial, sans-serif" font-size="18" font-weight="700">+${extraItemsCount} more item${extraItemsCount === 1 ? "" : "s"}</text>` : ""}
-    </svg>
-  `.trim()
-}
 
 const generateOrderTokenEmailHTML = (details: OrderTokenEmailDetails) => {
   const createdAt = details.createdAt ? new Date(details.createdAt).toLocaleString() : "N/A"
   const items = details.items.map((item) => `
     <tr>
-      <td style="padding: 8px 0; color: #334155; font-size: 14px; font-weight: 600;">${escapeHtml(item.productCode ? `${item.productCode} - ${item.productName}` : item.productName)}</td>
-      <td style="padding: 8px 0; color: #4f46e5; font-size: 14px; font-weight: 800; text-align: right;">${escapeHtml(`${formatQuantity(item.quantity)}${item.unit ? ` ${item.unit}` : ""}`)}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9; color: #334155; font-size: 14px; font-weight: 600;">${escapeHtml(item.productCode ? `${item.productCode} - ${item.productName}` : item.productName)}</td>
+      <td style="padding: 8px 0; border-bottom: 1px solid #f1f5f9; color: #4f46e5; font-size: 14px; font-weight: 800; text-align: right;">${escapeHtml(`${formatQuantity(item.quantity)}${item.unit ? ` ${item.unit}` : ""}`)}</td>
     </tr>
   `).join("")
 
@@ -483,20 +445,29 @@ const generateOrderTokenEmailHTML = (details: OrderTokenEmailDetails) => {
               </tr>
               <tr>
                 <td style="padding: 30px;">
-                  <p style="margin: 0 0 10px; color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: 2px;">TOKEN</p>
+                  <p style="margin: 0 0 10px; color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: 2px;">FULFILLMENT TOKEN</p>
                   <div style="padding: 18px; background-color: #eef2ff; border: 1px solid #c7d2fe; border-radius: 12px; color: #4338ca; font-family: 'Courier New', monospace; font-size: 30px; font-weight: 900; letter-spacing: 6px; text-align: center;">
                     ${escapeHtml(details.token)}
                   </div>
                   <table role="presentation" style="width: 100%; margin-top: 26px; border-collapse: collapse;">
                     <tr><td style="color: #64748b; font-size: 13px; font-weight: 700;">TID</td><td style="text-align: right; color: #1e293b; font-size: 13px; font-weight: 800;">${escapeHtml(details.tid)}</td></tr>
+                    <tr><td style="padding-top: 8px; color: #64748b; font-size: 13px; font-weight: 700;">Status</td><td style="padding-top: 8px; text-align: right; color: #1e293b; font-size: 13px; font-weight: 800;">${escapeHtml(details.status)}</td></tr>
                     <tr><td style="padding-top: 8px; color: #64748b; font-size: 13px; font-weight: 700;">Organization</td><td style="padding-top: 8px; text-align: right; color: #1e293b; font-size: 13px; font-weight: 800;">${escapeHtml(details.organizationName)}</td></tr>
                     <tr><td style="padding-top: 8px; color: #64748b; font-size: 13px; font-weight: 700;">Branch</td><td style="padding-top: 8px; text-align: right; color: #1e293b; font-size: 13px; font-weight: 800;">${escapeHtml(details.branchName)}</td></tr>
                     <tr><td style="padding-top: 8px; color: #64748b; font-size: 13px; font-weight: 700;">Created</td><td style="padding-top: 8px; text-align: right; color: #1e293b; font-size: 13px; font-weight: 800;">${escapeHtml(createdAt)}</td></tr>
                   </table>
-                  <table role="presentation" style="width: 100%; margin-top: 24px; border-collapse: collapse; border-top: 1px solid #e2e8f0;">
-                    ${items}
+                  <p style="margin: 24px 0 8px; color: #64748b; font-size: 12px; font-weight: 800; letter-spacing: 2px;">ORDER ITEMS</p>
+                  <table role="presentation" style="width: 100%; border-collapse: collapse; border-top: 1px solid #e2e8f0;">
+                    <thead>
+                      <tr>
+                        <th style="padding-bottom: 8px; padding-top: 8px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase;">Product</th>
+                        <th style="padding-bottom: 8px; padding-top: 8px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-size: 11px; font-weight: 700; text-align: right; text-transform: uppercase;">Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${items}
+                    </tbody>
                   </table>
-                  <p style="margin: 24px 0 0; color: #64748b; font-size: 13px; line-height: 1.5;">The token card is attached as an image file.</p>
                 </td>
               </tr>
             </table>
@@ -512,27 +483,30 @@ export async function sendOrderTokenEmail(details: OrderTokenEmailDetails): Prom
   try {
     if (!validateSesConfig()) return false
 
-    const svg = generateOrderTokenEmailSVG(details)
+    const createdAt = details.createdAt ? new Date(details.createdAt).toLocaleString() : "N/A"
+    const itemLines = details.items.map((item) =>
+      `  - ${item.productCode ? `${item.productCode} - ` : ""}${item.productName}: ${formatQuantity(item.quantity)}${item.unit ? ` ${item.unit}` : ""}`
+    )
 
     await sendAppEmail({
       fromName: "OneFlowe Orders",
       to: details.to,
-      subject: `Fulfillment token for order ${details.tid}`,
+      subject: `Order ${details.tid} – Fulfillment Token`,
       html: generateOrderTokenEmailHTML(details),
       text: [
-        `OneFlowe fulfillment token`,
-        `Token: ${details.token}`,
-        `TID: ${details.tid}`,
+        `OneFlowe – Fulfillment Token`,
+        ``,
+        `Fulfillment Token: ${details.token}`,
+        ``,
+        `TID:          ${details.tid}`,
+        `Status:       ${details.status}`,
         `Organization: ${details.organizationName}`,
-        `Branch: ${details.branchName}`,
+        `Branch:       ${details.branchName}`,
+        `Created:      ${createdAt}`,
+        ``,
+        `Order Items:`,
+        ...itemLines,
       ].join("\n"),
-      attachments: [
-        {
-          filename: `oneflowe-token-${details.tid}.svg`,
-          content: svg,
-          contentType: "image/svg+xml; charset=utf-8",
-        },
-      ],
       tags: [
         { name: "type", value: "order_token" },
         { name: "tid", value: sanitizeEmailTagValue(details.tid) },

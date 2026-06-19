@@ -97,7 +97,8 @@ export function RefundManagement({
     const isFullyRefunded = totalApproved >= orderTotalCents
     const hasPendingRefunds = totalPending > 0
 
-    const canRefund = ["PENDING", "APPROVED", "FULFILLED", "REFUNDED"].includes(orderStatus.toUpperCase()) && remainingRefundable > 0 && isWithinRefundWindow
+    const isOrderApproved = ["APPROVED", "FULFILLED", "REFUNDED"].includes(orderStatus.toUpperCase())
+    const canRefund = isOrderApproved && remainingRefundable > 0 && isWithinRefundWindow
 
     // Calculate previously refunded quantities per item
     const refundedQuantities = useMemo(() => {
@@ -258,7 +259,13 @@ export function RefundManagement({
                             Request Refund
                         </Button>
                     )}
-                    {!isWithinRefundWindow && remainingRefundable > 0 && !showForm && (
+                    {!isOrderApproved && remainingRefundable > 0 && !showForm && (
+                        <div className="text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-md border border-slate-200 flex items-center gap-2">
+                            <Clock className="h-3 w-3" />
+                            Refund available after approval
+                        </div>
+                    )}
+                    {isOrderApproved && !isWithinRefundWindow && remainingRefundable > 0 && !showForm && (
                         <div className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-md border border-amber-200 flex items-center gap-2">
                             <Clock className="h-3 w-3" />
                             Refund period ended
@@ -268,12 +275,11 @@ export function RefundManagement({
             </div>
 
             {/* Refund window explanation */}
-            {!isWithinRefundWindow && remainingRefundable > 0 && !showForm && (
+            {isOrderApproved && !isWithinRefundWindow && remainingRefundable > 0 && !showForm && (
                 <p className="text-xs text-muted-foreground text-right mt-1">
                     Requests are limited to the calendar month of the order.
                 </p>
-            )
-            }
+            )}
 
             {
                 showForm && (

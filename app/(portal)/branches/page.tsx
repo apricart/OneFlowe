@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
 import {
   Building2, Users, RefreshCcw, Search, Boxes, UserCog, Sparkles,
   ShieldCheck, ChevronLeft, ChevronRight, AlertCircle, LayoutGrid, List,
-  MapPin, CalendarDays, Hash, Layers, X,
+  MapPin, CalendarDays, Hash, Layers, X, Phone,
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useRouter } from "next/navigation"
@@ -42,6 +42,7 @@ type User = {
   firstName?: string
   lastName?: string
   email: string
+  phone?: string | null
   branchId?: number | null
   role?: string
 }
@@ -398,6 +399,11 @@ export default function BranchesPage() {
                                         {[admin.firstName, admin.lastName].filter(Boolean).join(" ") || "Admin User"}
                                       </p>
                                       <p className="text-xs text-slate-500 truncate">{admin.email}</p>
+                                      {admin.phone && (
+                                        <p className="text-xs text-slate-400 truncate flex items-center gap-1 mt-0.5">
+                                          <Phone className="h-3 w-3 shrink-0" />{admin.phone}
+                                        </p>
+                                      )}
                                     </div>
                                   </div>
                                 ) : (
@@ -510,6 +516,11 @@ export default function BranchesPage() {
                                           {[admin.firstName, admin.lastName].filter(Boolean).join(" ") || "Admin User"}
                                         </p>
                                         <p className="text-xs text-slate-400 truncate max-w-[140px]">{admin.email}</p>
+                                        {admin.phone && (
+                                          <p className="text-xs text-slate-400 truncate max-w-[140px] flex items-center gap-1 mt-0.5">
+                                            <Phone className="h-3 w-3 shrink-0" />{admin.phone}
+                                          </p>
+                                        )}
                                       </div>
                                     </div>
                                   ) : (
@@ -695,6 +706,11 @@ export default function BranchesPage() {
                                 {[admin.firstName, admin.lastName].filter(Boolean).join(" ") || "Admin User"}
                               </p>
                               <p className="text-xs text-slate-400 truncate max-w-[180px]">{admin.email}</p>
+                              {admin.phone && (
+                                <p className="text-xs text-slate-400 truncate max-w-[180px] flex items-center gap-1 mt-0.5">
+                                  <Phone className="h-3 w-3 shrink-0" />{admin.phone}
+                                </p>
+                              )}
                             </div>
                             <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
                               {admin.firstName?.[0] || admin.email[0].toUpperCase()}
