@@ -1373,7 +1373,7 @@ export default function BudgetSummaryPage() {
                         </div>
                     </TabsContent>
 
-                    <TabsContent value="reports" className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
+                    <TabsContent value="reports" className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
                         {!organizationId ? (
                             <Card className="border-dashed border-2 p-20 flex flex-col items-center justify-center text-center space-y-4 bg-white/50 dark:bg-slate-900/20 rounded-[2.5rem]">
                                 <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-800">
@@ -1392,24 +1392,24 @@ export default function BudgetSummaryPage() {
                                     transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                                 >
                                     <Card className="border-none shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl overflow-hidden rounded-[2.5rem] border border-white/40 dark:border-slate-800/20">
-                                        <div className="p-10 pb-6 border-b border-indigo-50/50 dark:border-slate-800/50 bg-gradient-to-br from-white/40 via-transparent to-indigo-50/10 dark:from-slate-900/40 dark:to-transparent">
-                                            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-8">
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-12 h-12 rounded-[1.25rem] bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 shadow-xl shadow-indigo-500/20 flex items-center justify-center">
-                                                            <FileText className="h-6 w-6 text-white" />
+                                        <div className="p-4 pb-3 border-b border-indigo-50/50 dark:border-slate-800/50 bg-gradient-to-br from-white/40 via-transparent to-indigo-50/10 dark:from-slate-900/40 dark:to-transparent">
+                                            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 shadow-lg shadow-indigo-500/20 flex items-center justify-center">
+                                                            <FileText className="h-4 w-4 text-white" />
                                                         </div>
-                                                        <h3 className="text-2xl font-[900] text-slate-900 dark:text-white uppercase tracking-tighter italic">
+                                                        <h3 className="text-base font-[900] text-slate-900 dark:text-white uppercase tracking-tighter italic">
                                                             Deployment Audit
                                                         </h3>
-                                                        <Badge className="bg-indigo-600 hover:bg-indigo-600 text-white border-none rounded-full px-4 py-1 text-[10px] font-black tracking-widest uppercase">Live Report</Badge>
+                                                        <Badge className="bg-indigo-600 hover:bg-indigo-600 text-white border-none rounded-full px-3 py-0.5 text-[9px] font-black tracking-widest uppercase">Live Report</Badge>
                                                     </div>
-                                                    <p className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest pl-1 opacity-70">
+                                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest pl-1 opacity-70">
                                                         {getPresetLabel(activePreset, dateRange)}
                                                     </p>
                                                 </div>
 
-                                                <div className="flex flex-wrap items-center gap-3">
+                                                <div className="flex flex-wrap items-center gap-2">
                                                     <GlobalDateFilter
                                                         value={dateRange}
                                                         onChange={(range, preset, nextCompare, nextCompareRange, months, years, nextCompareMonths, nextCompareYears) => {
@@ -1431,10 +1431,10 @@ export default function BudgetSummaryPage() {
                                                     <Popover>
                                                         <PopoverTrigger asChild>
                                                             <Button variant="outline" size="sm" className={cn(
-                                                                "h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
+                                                                "h-8 text-[10px] font-black rounded-lg px-3 gap-1.5 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
                                                                 reportYears.length > 0 ? "border-indigo-500/50 bg-indigo-50/50 text-indigo-600 shadow-sm" : "hover:bg-slate-50"
                                                             )}>
-                                                                <Calendar className="h-3.5 w-3.5" />
+                                                                <Calendar className="h-3 w-3" />
                                                                 {reportYears.length > 0 ? `Year (${reportYears.length})` : "Year"}
                                                                 <ChevronDown className="h-3 w-3 opacity-50" />
                                                             </Button>
@@ -1466,10 +1466,10 @@ export default function BudgetSummaryPage() {
                                                     <Popover>
                                                         <PopoverTrigger asChild>
                                                             <Button variant="outline" size="sm" className={cn(
-                                                                "h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
+                                                                "h-8 text-[10px] font-black rounded-lg px-3 gap-1.5 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
                                                                 reportMonths.length > 0 ? "border-emerald-500/50 bg-emerald-50/50 text-emerald-600 shadow-sm" : "hover:bg-slate-50"
                                                             )}>
-                                                                <Filter className="h-3.5 w-3.5" />
+                                                                <Filter className="h-3 w-3" />
                                                                 {reportMonths.length > 0 ? `Month (${reportMonths.length})` : "Month"}
                                                                 <ChevronDown className="h-3 w-3 opacity-50" />
                                                             </Button>
@@ -1517,10 +1517,10 @@ export default function BudgetSummaryPage() {
                                                     <Popover>
                                                         <PopoverTrigger asChild>
                                                             <Button variant="outline" size="sm" className={cn(
-                                                                "h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
+                                                                "h-8 text-[10px] font-black rounded-lg px-3 gap-1.5 border-slate-200 dark:border-slate-800 transition-all uppercase tracking-widest",
                                                                 reportBranchIds.length > 0 ? "border-amber-500/50 bg-amber-50/50 text-amber-600 shadow-sm" : "hover:bg-slate-50"
                                                             )}>
-                                                                <Building2 className="h-3.5 w-3.5" />
+                                                                <Building2 className="h-3 w-3" />
                                                                 {reportBranchIds.length > 0 ? `Branch (${reportBranchIds.length})` : "Branch"}
                                                                 <ChevronDown className="h-3 w-3 opacity-50" />
                                                             </Button>
@@ -1553,21 +1553,21 @@ export default function BudgetSummaryPage() {
                                                         variant="outline"
                                                         size="sm"
                                                         onClick={resetReportFilters}
-                                                        className="h-10 text-[10px] font-black rounded-xl px-4 gap-2 border-slate-200 dark:border-slate-800 uppercase tracking-widest hover:bg-slate-50"
+                                                        className="h-8 text-[10px] font-black rounded-lg px-3 gap-1.5 border-slate-200 dark:border-slate-800 uppercase tracking-widest hover:bg-slate-50"
                                                         aria-label="Reset report filters"
                                                         title="Reset report filters"
                                                     >
-                                                        <RotateCcw className={cn("h-3.5 w-3.5", isReportLoading && "animate-spin")} />
+                                                        <RotateCcw className={cn("h-3 w-3", isReportLoading && "animate-spin")} />
                                                         Reset
                                                     </Button>
 
-                                                    <div className="h-8 w-px bg-slate-100 dark:bg-slate-800 mx-2" />
+                                                    <div className="h-6 w-px bg-slate-100 dark:bg-slate-800 mx-1" />
 
                                                     <div className="relative group">
-                                                        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-400 group-focus-within:text-indigo-600 transition-all" />
+                                                        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-indigo-400 group-focus-within:text-indigo-600 transition-all" />
                                                         <Input
                                                             placeholder="SEARCH BRANCHES..."
-                                                            className="pl-12 h-12 w-64 text-[11px] font-black bg-white/50 dark:bg-slate-950/50 border-slate-200/60 dark:border-slate-800/60 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/40 rounded-2xl transition-all uppercase tracking-tighter placeholder:text-slate-400 placeholder:font-bold"
+                                                            className="pl-9 h-8 w-48 text-[10px] font-black bg-white/50 dark:bg-slate-950/50 border-slate-200/60 dark:border-slate-800/60 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500/40 rounded-lg transition-all uppercase tracking-tighter placeholder:text-slate-400 placeholder:font-bold"
                                                             value={searchTerm}
                                                             onChange={(e) => setSearchTerm(e.target.value)}
                                                         />
@@ -1576,11 +1576,11 @@ export default function BudgetSummaryPage() {
                                                         <DropdownMenuTrigger asChild>
                                                             <Button
                                                                 variant="outline"
-                                                                className="h-12 border-indigo-100/50 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] gap-3 bg-indigo-50/30 dark:bg-slate-950/30 hover:bg-white dark:hover:bg-slate-900 shadow-sm transition-all rounded-2xl px-6 border-2 group"
+                                                                className="h-8 border-indigo-100/50 dark:border-slate-800 font-black text-[10px] uppercase tracking-[0.2em] gap-2 bg-indigo-50/30 dark:bg-slate-950/30 hover:bg-white dark:hover:bg-slate-900 shadow-sm transition-all rounded-lg px-3 border-2 group"
                                                             >
-                                                                <Upload className="h-5 w-5 text-indigo-600 transition-transform group-hover:-translate-y-0.5" /> 
-                                                                Export Options
-                                                                <ChevronDown className="h-3 w-3 opacity-50 ml-1" />
+                                                                <Upload className="h-3.5 w-3.5 text-indigo-600 transition-transform group-hover:-translate-y-0.5" />
+                                                                Export
+                                                                <ChevronDown className="h-3 w-3 opacity-50 ml-0.5" />
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end" className="w-48 rounded-xl p-2 shadow-xl border-slate-200 dark:border-slate-800">
@@ -1598,18 +1598,18 @@ export default function BudgetSummaryPage() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="p-2 sm:p-10">
+                                        <div className="p-2 sm:p-6">
                                             <div className="overflow-x-auto rounded-[2rem] border border-slate-100/60 dark:border-slate-800/60 shadow-[inset_0_2px_12px_rgba(0,0,0,0.02)]">
                                                 <Table className="border-collapse">
                                                     <TableHeader className="bg-slate-50/30 dark:bg-slate-950/30">
                                                         <TableRow className="hover:bg-transparent border-b border-slate-100 dark:border-slate-800">
-                                                            <TableHead className="pl-10 h-16 text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Branch Identity</TableHead>
-                                                            <TableHead className="h-16 text-[10px] font-black uppercase tracking-[0.25em] text-emerald-600/70 text-right">Standard BASE</TableHead>
-                                                            <TableHead className="h-16 text-[10px] font-black uppercase tracking-[0.25em] text-indigo-600/70 text-right">Add-On (Adj)</TableHead>
-                                                            <TableHead className="h-16 text-[10px] font-black uppercase tracking-[0.25em] text-slate-900 dark:text-white text-right">TOTAL BUDGET</TableHead>
-                                                            <TableHead className="h-16 text-[10px] font-black uppercase tracking-[0.25em] text-rose-500/70 text-right">NET SPENT</TableHead>
-                                                            <TableHead className="h-16 text-[10px] font-black uppercase tracking-[0.25em] text-slate-900 dark:text-white text-right">LIQUID REMAINING</TableHead>
-                                                            <TableHead className="h-16 text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 text-center pr-10">Utilization</TableHead>
+                                                            <TableHead className="pl-6 h-12 text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Branch Identity</TableHead>
+                                                            <TableHead className="h-12 text-[10px] font-black uppercase tracking-[0.25em] text-emerald-600/70 text-right">Standard BASE</TableHead>
+                                                            <TableHead className="h-12 text-[10px] font-black uppercase tracking-[0.25em] text-indigo-600/70 text-right">Add-On (Adj)</TableHead>
+                                                            <TableHead className="h-12 text-[10px] font-black uppercase tracking-[0.25em] text-slate-900 dark:text-white text-right">TOTAL BUDGET</TableHead>
+                                                            <TableHead className="h-12 text-[10px] font-black uppercase tracking-[0.25em] text-rose-500/70 text-right">NET SPENT</TableHead>
+                                                            <TableHead className="h-12 text-[10px] font-black uppercase tracking-[0.25em] text-slate-900 dark:text-white text-right">LIQUID REMAINING</TableHead>
+                                                            <TableHead className="h-12 text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 text-center pr-6">Utilization</TableHead>
                                                         </TableRow>
                                                     </TableHeader>
                                                     <TableBody className="bg-transparent">
@@ -1629,10 +1629,10 @@ export default function BudgetSummaryPage() {
                                                                         transition={{ duration: 0.3, delay: index * 0.02 }}
                                                                         className="hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 border-b border-slate-50 dark:border-slate-800/40 transition-all duration-300 group"
                                                                     >
-                                                                        <TableCell className="pl-10 py-6">
-                                                                            <div className="flex items-center gap-5">
-                                                                                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 group-hover:border-indigo-500/30 group-hover:shadow-lg group-hover:shadow-indigo-500/10 flex items-center justify-center transition-all duration-500">
-                                                                                    <Building2 className="w-5 h-5 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                                                                        <TableCell className="pl-6 py-4">
+                                                                            <div className="flex items-center gap-4">
+                                                                                <div className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 group-hover:border-indigo-500/30 group-hover:shadow-lg group-hover:shadow-indigo-500/10 flex items-center justify-center transition-all duration-500">
+                                                                                    <Building2 className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-colors" />
                                                                                 </div>
                                                                                 <div>
                                                                                     <span className="font-black text-xs text-slate-900 dark:text-slate-100 uppercase tracking-tight block">{b.branchName}</span>
@@ -1640,29 +1640,29 @@ export default function BudgetSummaryPage() {
                                                                                 </div>
                                                                             </div>
                                                                         </TableCell>
-                                                                        <TableCell className="text-right py-6">
+                                                                        <TableCell className="text-right py-4">
                                                                             <span className="font-bold text-xs text-slate-600 dark:text-slate-400 font-mono">{formatPKR(baseline / 100)}</span>
                                                                         </TableCell>
-                                                                        <TableCell className="text-right py-6">
+                                                                        <TableCell className="text-right py-4">
                                                                             <div className="flex flex-col items-end gap-1">
                                                                                 <Badge variant="outline" className={cn("px-2.5 py-1 text-[10px] font-black tracking-widest border-none transition-all", addon > 0 ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" : "text-slate-300 dark:text-slate-700 opacity-40")}>
                                                                                     {addon > 0 ? `+${formatPKR(addon / 100)}` : "—"}
                                                                                 </Badge>
                                                                             </div>
                                                                         </TableCell>
-                                                                        <TableCell className="text-right py-6">
+                                                                        <TableCell className="text-right py-4">
                                                                             <span className="font-black text-xs text-slate-900 dark:text-white font-mono">{formatPKR(totalLimit / 100)}</span>
                                                                         </TableCell>
-                                                                        <TableCell className="text-right py-6">
+                                                                        <TableCell className="text-right py-4">
                                                                             <span className="font-black text-xs text-rose-500 font-mono">{formatPKR(spent / 100)}</span>
                                                                         </TableCell>
-                                                                        <TableCell className="text-right py-6">
+                                                                        <TableCell className="text-right py-4">
                                                                             <span className={cn("text-[11px] font-black uppercase tracking-widest font-mono px-3 py-1.5 rounded-xl border-2 transition-all", remaining < 0 ? "bg-rose-50 border-rose-100 text-rose-600 shadow-sm shadow-rose-100" : "bg-emerald-50 border-emerald-100 text-emerald-600 shadow-sm shadow-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20")}>
                                                                                 {remaining < 0 ? "-" : "+"}{formatPKR(Math.abs(remaining) / 100)}
                                                                             </span>
                                                                         </TableCell>
-                                                                        <TableCell className="text-center pr-10 py-6">
-                                                                            <div className="flex flex-col items-center gap-2.5 min-w-[140px]">
+                                                                        <TableCell className="text-center pr-6 py-4">
+                                                                            <div className="flex flex-col items-center gap-2 min-w-[120px]">
                                                                                 <div className="w-full h-2.5 bg-slate-100/50 dark:bg-slate-950/50 rounded-full overflow-hidden p-[2px] border border-slate-200 dark:border-slate-800">
                                                                                     <motion.div
                                                                                         initial={{ width: 0 }}

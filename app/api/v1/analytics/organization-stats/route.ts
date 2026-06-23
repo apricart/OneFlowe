@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, users, branches, organizations } from "@/db/schema"
-import { and, eq, gte, lte, sql, count, inArray } from "drizzle-orm"
+import { and, eq, gte, lte, sql, count, inArray, isNull } from "drizzle-orm"
 import { metricExpressions } from "@/lib/metric-utils"
 import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
 
@@ -79,15 +79,36 @@ export async function GET(req: NextRequest) {
         organizationName: organizations.name,
         organizationStatus: organizations.status,
         branchStatus: branches.status,
-        activeUserCount: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.branchId} = ${branches.id} AND ${users.isActive} = true)`.mapWith(Number),
-        totalUserCount: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.branchId} = ${branches.id})`.mapWith(Number),
+        activeUserCount: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.branchId} = ${branches.id} AND ${users.isActive} = true AND ${users.deletedAt} IS NULL)`.mapWith(Number),
+        totalUserCount: sql<number>`(SELECT COUNT(*) FROM ${users} WHERE ${users.branchId} = ${branches.id} AND ${users.deletedAt} IS NULL)`.mapWith(Number),
     })
     .from(branches)
     .leftJoin(organizations, eq(branches.organizationId, organizations.id))
     .where(and(...branchConditions))
 
     const branchIdsInScope = branchStats.map(b => b.branchId)
-    
+
+    // Collect org IDs already in scope (inherits RBAC from branchConditions above)
+    const orgIdsInScope = [...new Set(
+        branchStats.map(b => b.organizationId).filter((id): id is number => id != null)
+    )]
+
+    // Head office users: belong to an org but have no branch assignment
+    const headOfficeUserRows = orgIdsInScope.length > 0
+        ? await db.select({
+            organizationId: users.organizationId,
+            totalUserCount: sql<number>`COUNT(*)`.mapWith(Number),
+            activeUserCount: sql<number>`COUNT(CASE WHEN ${users.isActive} = true THEN 1 END)`.mapWith(Number),
+        })
+        .from(users)
+        .where(and(
+            inArray(users.organizationId, orgIdsInScope),
+            isNull(users.branchId),
+            isNull(users.deletedAt),
+        ))
+        .groupBy(users.organizationId)
+        : []
+
     const fetchMetrics = async (start: string | null, end: string | null, mArray: number[] = [], yArray: number[] = []) => {
         if (branchIdsInScope.length === 0) return []
         
@@ -184,6 +205,14 @@ export async function GET(req: NextRequest) {
                 org.comparison.fulfilledCount += (mB.fulfilledCount || 0)
                 org.comparison.refundedCount += (mB.refundedCount || 0)
             }
+        }
+    })
+
+    // Add head office users into each org's totals
+    headOfficeUserRows.forEach(ho => {
+        if (ho.organizationId != null && orgMap[ho.organizationId]) {
+            orgMap[ho.organizationId].totalUserCount += ho.totalUserCount
+            orgMap[ho.organizationId].activeUserCount += ho.activeUserCount
         }
     })
 

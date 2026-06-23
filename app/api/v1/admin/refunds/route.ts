@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
             const pendingRefunds = await db
                 .select({
                     id: refunds.id,
+                    refundNumber: refunds.refundNumber,
                     amountCents: refunds.amountCents,
                     reason: refunds.reason,
                     status: refunds.status,
@@ -582,6 +583,10 @@ export async function POST(req: NextRequest) {
                 status: "APPROVED",
                 processedByUserId: userId,
             }).returning({ id: refunds.id })
+
+            await tx.update(refunds)
+                .set({ refundNumber: `Refund-${String(newRefund.id).padStart(6, '0')}` })
+                .where(eq(refunds.id, newRefund.id))
 
             // 5. Insert refund items
             if (newRefund && refundDetails.length > 0) {

@@ -2,7 +2,7 @@ import { ok, error, readJson, requireApiRole } from "@/lib/api"
 import { invalidateByPrefix } from "@/lib/cache-utils"
 import { db } from "@/lib/db"
 import { branches } from "@/db/schema"
-import { eq } from "drizzle-orm"
+import { and, eq, ne, sql } from "drizzle-orm"
 import { getRequestScope } from "@/lib/auth"
 
 export async function GET(
@@ -37,14 +37,34 @@ export async function PATCH(
     const { id } = params
 
     const scope = await getRequestScope()
+
+    const [currentBranch] = await db
+      .select({ organizationId: branches.organizationId })
+      .from(branches)
+      .where(eq(branches.id, Number(id)))
+    if (!currentBranch) return error("Not found", 404)
+
     if (scope?.role === "HEAD_OFFICE") {
-      const [branch] = await db
-        .select({ organizationId: branches.organizationId })
-        .from(branches)
-        .where(eq(branches.id, Number(id)))
-      if (!branch) return error("Not found", 404)
-      if (!scope.organizationId || scope.organizationId !== branch.organizationId) {
+      if (!scope.organizationId || scope.organizationId !== currentBranch.organizationId) {
         return error("Forbidden", 403)
+      }
+    }
+
+    if (body.name !== undefined) {
+      const newName = String(body.name).trim()
+      if (newName) {
+        const [duplicate] = await db
+          .select({ id: branches.id })
+          .from(branches)
+          .where(and(
+            eq(branches.organizationId, currentBranch.organizationId),
+            sql`lower(${branches.name}) = ${newName.toLowerCase()}`,
+            ne(branches.id, Number(id))
+          ))
+          .limit(1)
+        if (duplicate) {
+          return error("A branch with this name already exists in this organization.", 409)
+        }
       }
     }
 

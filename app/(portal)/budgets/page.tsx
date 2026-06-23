@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw, Trash2, Search } from "lucide-react"
+import { Wallet, AlertCircle, Edit2, Zap, PieChart, CheckCircle2, Clock, AlertTriangle, RefreshCw, Trash2, Search, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
 import { useAppContext } from "@/components/context/app-context"
 import { GlobalDateFilter, type FilterPreset } from "@/components/dashboard/global-date-filter"
@@ -69,6 +69,8 @@ export default function BudgetsPage() {
   const { organizationId, branchId, branchIds: contextBranchIds, setBranchIds: setContextBranchIds, isInitialized } = useAppContext()
 
   const [searchQuery, setSearchQuery] = useState("")
+  const [sortColumn, setSortColumn] = useState<"branch" | "base" | "addon" | "total" | "spent" | "remaining">("total")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
   const [editingBudget, setEditingBudget] = useState<BudgetAllocation | null>(null)
   const [showDialog, setShowDialog] = useState(false)
   const [newAmount, setNewAmount] = useState("")
@@ -181,6 +183,54 @@ export default function BudgetsPage() {
       b.branchId.toString().includes(searchQuery)
     )
   }, [scopedBudgets, searchQuery])
+
+  const handleSort = (col: typeof sortColumn) => {
+    if (sortColumn === col) {
+      setSortDirection(d => d === "asc" ? "desc" : "asc")
+    } else {
+      setSortColumn(col)
+      setSortDirection("desc")
+    }
+  }
+
+  const sortedFilteredBudgets = useMemo(() => {
+    return [...filteredBudgets].sort((a, b) => {
+      let aVal: number | string
+      let bVal: number | string
+      switch (sortColumn) {
+        case "branch":
+          aVal = a.branchName.toLowerCase()
+          bVal = b.branchName.toLowerCase()
+          break
+        case "base":
+          aVal = a.baselineBudgetCents
+          bVal = b.baselineBudgetCents
+          break
+        case "addon":
+          aVal = a.amountCreditedCents || 0
+          bVal = b.amountCreditedCents || 0
+          break
+        case "total":
+          aVal = a.amountAllocatedCents + (a.amountCreditedCents || 0)
+          bVal = b.amountAllocatedCents + (b.amountCreditedCents || 0)
+          break
+        case "spent":
+          aVal = a.amountSpentCents + a.amountHeldCents
+          bVal = b.amountSpentCents + b.amountHeldCents
+          break
+        case "remaining":
+          aVal = a.remainingCents
+          bVal = b.remainingCents
+          break
+        default:
+          return 0
+      }
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        return sortDirection === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
+      }
+      return sortDirection === "asc" ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number)
+    })
+  }, [filteredBudgets, sortColumn, sortDirection])
 
   const totalAllocated = scopedBudgets.reduce((sum, b) => sum + b.amountAllocatedCents + (b.amountCreditedCents || 0), 0)
   const totalSpent = scopedBudgets.reduce((sum, b) => sum + b.amountSpentCents, 0)
@@ -555,12 +605,24 @@ export default function BudgetsPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 border-b border-slate-200 dark:border-slate-700">
-              <TableHead className="font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 pl-5">Branch</TableHead>
-              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">Base</TableHead>
-              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">Add-on</TableHead>
-              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-indigo-500">Total Budget</TableHead>
-              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">Spent</TableHead>
-              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400">Remaining</TableHead>
+              <TableHead className="font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 pl-5 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors" onClick={() => handleSort("branch")}>
+                <span className="flex items-center gap-1">Branch {sortColumn === "branch" ? (sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}</span>
+              </TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors" onClick={() => handleSort("base")}>
+                <span className="flex items-center justify-end gap-1">Base {sortColumn === "base" ? (sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}</span>
+              </TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors" onClick={() => handleSort("addon")}>
+                <span className="flex items-center justify-end gap-1">Add-on {sortColumn === "addon" ? (sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}</span>
+              </TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-indigo-500 cursor-pointer select-none hover:text-indigo-700 transition-colors" onClick={() => handleSort("total")}>
+                <span className="flex items-center justify-end gap-1">Total Budget {sortColumn === "total" ? (sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}</span>
+              </TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors" onClick={() => handleSort("spent")}>
+                <span className="flex items-center justify-end gap-1">Spent {sortColumn === "spent" ? (sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}</span>
+              </TableHead>
+              <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors" onClick={() => handleSort("remaining")}>
+                <span className="flex items-center justify-end gap-1">Remaining {sortColumn === "remaining" ? (sortDirection === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-40" />}</span>
+              </TableHead>
               <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 pr-5">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -579,7 +641,7 @@ export default function BudgetsPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredBudgets.map(budget => {
+              sortedFilteredBudgets.map(budget => {
                 const spendingPercent = getSpendingPercentage(budget)
                 const isNearLimit = spendingPercent >= 90
                 const isMedium = spendingPercent >= 70

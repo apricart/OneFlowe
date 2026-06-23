@@ -112,7 +112,9 @@ export function BranchAdminDashboard() {
     undefined,
     undefined, dateRange, "all", compare, compareRange,
     months, years, compareMonths, compareYears,
-    activePreset === "all" ? "yearly" : undefined
+    activePreset === "all" ? "yearly" : undefined,
+    undefined, // organizationIds
+    true        // includeStatusCounts
   )
 
   // Chart Logic (Local Filters)
@@ -154,11 +156,9 @@ export function BranchAdminDashboard() {
   const normalizedChartData = useMemo(() => {
     const raw = chartPerfData?.seriesData ?? []
 
-    if (chartQuickFilter === "today" || (chartQuickFilter === null && activePreset === "today" && !hasChartFilters)) {
-      return raw
-    }
-
-    if (chartQuickFilter === "7d" || (chartQuickFilter === null && activePreset === "7d" && !hasChartFilters)) {
+    // When no month/year arrays are active, the chart's safeData will scaffold
+    // intervals from the dateRange and match by label — return raw so labels align.
+    if (!hasChartFilters) {
       return raw
     }
 
@@ -192,15 +192,8 @@ export function BranchAdminDashboard() {
         itemQuantity: match?.itemQuantity ?? 0,
       }
     })
-  }, [chartPerfData, chartQuickFilter, chartMonths, chartYears, activePreset, months, years, hasChartFilters])
+  }, [chartPerfData, chartMonths, chartYears, months, years, hasChartFilters])
 
-  // KPI Breakdown Queries
-  const { data: pendingData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "PENDING", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
-  const { data: fulfilledData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "FULFILLED", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
-  const { data: refundedData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "REFUNDED", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
-  const { data: rejectedData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "REJECTED", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
-  const { data: approvedData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "APPROVED", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
-  const { data: partialData } = useSalesPerformance(organizationId, branchId, undefined, undefined, dateRange, "PARTIAL", compare, compareRange, months, years, compareMonths, compareYears, activePreset === "all" ? "yearly" : undefined)
 
   const handleDateChange = useCallback((range: DateRange | null, preset: FilterPreset, compareMode?: boolean, compRange?: DateRange | null, m?: number[], y?: number[], cm?: number[], cy?: number[]) => {
     setDateRange(range)
@@ -232,12 +225,12 @@ export function BranchAdminDashboard() {
   const totalRevenue = perfData?.totalNetSales ?? perfData?.totalSales ?? 0
   const totalOrders = perfData?.totalOrders ?? 0
   const totalItemsSold = perfData?.totalItemsSold ?? 0
-  const pendingCount = pendingData?.totalOrders ?? 0
-  const fulfilledCount = fulfilledData?.totalOrders ?? 0
-  const partialCount = partialData?.totalOrders ?? 0
-  const refundedCount = refundedData?.totalOrders || 0
-  const rejectedCount = rejectedData?.totalOrders || 0
-  const approvedCount = approvedData?.totalOrders || 0
+  const pendingCount = perfData?.statusCounts?.pendingCount ?? 0
+  const fulfilledCount = perfData?.statusCounts?.fulfilledCount ?? 0
+  const partialCount = perfData?.statusCounts?.partialCount ?? 0
+  const refundedCount = perfData?.statusCounts?.refundedCount ?? 0
+  const rejectedCount = perfData?.statusCounts?.rejectedCount ?? 0
+  const approvedCount = perfData?.statusCounts?.approvedCount ?? 0
 
   return (
     <motion.main 
@@ -288,6 +281,7 @@ export function BranchAdminDashboard() {
             value="..."
             subtitle="Checking access"
             gradient="from-slate-400 to-slate-600" iconBg="text-slate-600 bg-slate-600" delay={0}
+            isLoading={isLoadingPerf}
           />
         ) : pricesHidden ? (
           <BankingKPICard
@@ -299,6 +293,7 @@ export function BranchAdminDashboard() {
             trendValue={buildTrend(totalItemsSold, perfData?.comparison?.totalItemsSold)?.value}
             comparisonValue={buildTrend(totalItemsSold, perfData?.comparison?.totalItemsSold)?.label}
             comparisonLabel="VS LAST"
+            isLoading={isLoadingPerf}
           />
         ) : (
           <BankingKPICard
@@ -311,6 +306,7 @@ export function BranchAdminDashboard() {
             trendValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.value}
             comparisonValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.label}
             comparisonLabel="VS LAST"
+            isLoading={isLoadingPerf}
           />
         )}
         <BankingKPICard
@@ -323,6 +319,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(totalOrders, perfData?.comparison?.totalOrders)?.value}
           comparisonValue={buildTrend(totalOrders, perfData?.comparison?.totalOrders)?.label}
           comparisonLabel="VS LAST"
+          isLoading={isLoadingPerf}
         />
         <BankingKPICard
           icon={Activity} title="Pending"
@@ -334,6 +331,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(pendingCount, perfData?.comparison?.pendingCount)?.value}
           comparisonValue={buildTrend(pendingCount, perfData?.comparison?.pendingCount)?.label}
           comparisonLabel="VS LAST"
+          isLoading={isLoadingPerf}
         />
         <BankingKPICard
           icon={CheckCircle2} title="Approved"
@@ -345,6 +343,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(approvedCount, perfData?.comparison?.approvedCount)?.value}
           comparisonValue={buildTrend(approvedCount, perfData?.comparison?.approvedCount)?.label}
           comparisonLabel="VS LAST"
+          isLoading={isLoadingPerf}
         />
         <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
@@ -356,9 +355,10 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.value}
           comparisonValue={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.label}
           comparisonLabel="VS LAST"
+          isLoading={isLoadingPerf}
         />
         <BankingKPICard
-          icon={Package} title="Partial"
+          icon={Package} title="PARTIALLY REFUNDED"
           value={partialCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-indigo-500 to-purple-600" iconBg="text-indigo-600 bg-indigo-600" delay={135}
@@ -367,6 +367,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(partialCount, perfData?.comparison?.partialCount)?.value}
           comparisonValue={buildTrend(partialCount, perfData?.comparison?.partialCount)?.label}
           comparisonLabel="VS LAST"
+          isLoading={isLoadingPerf}
         />
         <BankingKPICard
           icon={RotateCcw} title="Refunded"
@@ -378,6 +379,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(refundedCount, perfData?.comparison?.refundedCount)?.value}
           comparisonValue={buildTrend(refundedCount, perfData?.comparison?.refundedCount)?.label}
           comparisonLabel="VS LAST"
+          isLoading={isLoadingPerf}
         />
         <BankingKPICard
           icon={XCircle} title="Rejected"
@@ -389,6 +391,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(rejectedCount, perfData?.comparison?.rejectedCount)?.value}
           comparisonValue={buildTrend(rejectedCount, perfData?.comparison?.rejectedCount)?.label}
           comparisonLabel="VS LAST"
+          isLoading={isLoadingPerf}
         />
       </div>
 

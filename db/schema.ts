@@ -475,6 +475,7 @@ export const refunds = pgTable(
     reason: varchar("reason", { length: 255 }),
     // New workflow: support pending refund requests
     status: varchar("status", { length: 16 }).notNull().default("PENDING"), // PENDING, APPROVED
+    refundNumber: varchar("refund_number", { length: 20 }).unique(),
     requestedByUserId: uuid("requested_by_user_id").references(() => users.id),
     processedByUserId: uuid("processed_by_user_id").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

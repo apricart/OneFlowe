@@ -226,7 +226,7 @@ export default function OrdersManagementPage() {
 
     if (statusFilter !== "all") {
       if (statusFilter === "refunded") {
-        filtered = filtered.filter((o: OrderItem) => getOrderRefundVariant(o) !== "none")
+        filtered = filtered.filter((o: OrderItem) => o.status.toLowerCase() === "refunded")
       } else if (statusFilter === "fulfilled") {
         filtered = filtered.filter((o: OrderItem) => getOrderFulfillmentVariant(o) !== "none")
       } else if (statusFilter === "rejected") {
@@ -407,8 +407,9 @@ export default function OrdersManagementPage() {
     all: orders.length,
     pending: orders.filter((o: OrderItem) => o.status.toLowerCase() === "pending").length,
     approved: orders.filter((o: OrderItem) => o.status.toLowerCase() === "approved").length,
-    fulfilled: orders.filter((o: OrderItem) => getOrderFulfillmentVariant(o) !== "none").length,
-    refunded: orders.filter((o: OrderItem) => getOrderRefundVariant(o) !== "none").length,
+    fulfilled: orders.filter((o: OrderItem) => getOrderFulfillmentVariant(o) === "full").length,
+    partiallyRefunded: orders.filter((o: OrderItem) => getOrderFulfillmentVariant(o) === "partial").length,
+    refunded: orders.filter((o: OrderItem) => o.status.toLowerCase() === "refunded").length,
     rejected: orders.filter((o: OrderItem) => o.status.toLowerCase() === "rejected" || o.status.toLowerCase() === "cancelled").length,
   }
 
@@ -453,7 +454,7 @@ export default function OrdersManagementPage() {
       </section>
 
       {/* ═══ COMPACT STATS ROW ═══ */}
-      <section className="grid grid-cols-2 md:grid-cols-6 gap-3 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
+      <section className="grid grid-cols-2 md:grid-cols-7 gap-3 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
         <CompactStatCard
           label="Total Orders"
           value={statusCounts.all}
@@ -481,6 +482,13 @@ export default function OrdersManagementPage() {
           icon={<CheckCircle className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-emerald-50 to-teal-50/50 dark:from-emerald-950/40 dark:to-teal-900/20 border-emerald-100 dark:border-emerald-900/50"
           iconBadge="bg-white/60 dark:bg-slate-900/50 text-emerald-600 dark:text-emerald-400"
+        />
+        <CompactStatCard
+          label="Partially Refunded"
+          value={statusCounts.partiallyRefunded}
+          icon={<TrendingDown className="h-5 w-5" />}
+          gradient="bg-gradient-to-br from-indigo-50 to-purple-50/50 dark:from-indigo-950/40 dark:to-purple-900/20 border-indigo-100 dark:border-indigo-900/50"
+          iconBadge="bg-white/60 dark:bg-slate-900/50 text-indigo-600 dark:text-indigo-400"
         />
         <CompactStatCard
           label="Rejected"

@@ -46,6 +46,14 @@ export type SalesPerformanceResponse = {
         partialCount?: number
         seriesData?: SalesSeriesPoint[]
     } | null
+    statusCounts?: {
+        pendingCount: number
+        approvedCount: number
+        fulfilledCount: number
+        partialCount: number
+        refundedCount: number
+        rejectedCount: number
+    } | null
 }
 
 export type DateRange = {
@@ -80,7 +88,8 @@ export function useSalesPerformance(
     compareMonths?: number[],
     compareYears?: number[],
     granularity?: "hourly" | "daily" | "monthly" | "yearly",
-    organizationIds?: string[] // multi-org selection
+    organizationIds?: string[], // multi-org selection
+    includeStatusCounts?: boolean
 ) {
     const url = useMemo(() => {
         const params = new URLSearchParams()
@@ -147,8 +156,12 @@ export function useSalesPerformance(
             }
         }
 
+        if (includeStatusCounts && (!status || status === "all")) {
+            params.set("includeStatusCounts", "true")
+        }
+
         return `/api/v1/analytics/sales-performance?${params.toString()}`
-    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears, granularity, organizationIds])
+    }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears, granularity, organizationIds, includeStatusCounts])
 
     return useSWR<SalesPerformanceResponse>(url, fetcher, {
         revalidateOnFocus: false,

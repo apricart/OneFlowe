@@ -404,9 +404,9 @@ export default function BranchReportsPage() {
                             colorScheme="blue"
                         />
                     )}
-                    <KPICard 
+                    <KPICard
                         title="Fulfilled Orders"
-                        value={summary.totalOrders.toLocaleString()}
+                        value={(summary.fulfilledOrders ?? 0).toLocaleString()}
                         icon={ShoppingBag}
                         colorScheme="indigo"
                         trend={orderTrend}

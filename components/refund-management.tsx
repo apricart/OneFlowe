@@ -455,6 +455,9 @@ export function RefundManagement({
                                     </div>
                                     <div>
                                         <p className="font-medium text-sm">
+                                            <span className="font-mono text-xs text-primary font-semibold mr-2">
+                                                {refund.refundNumber || (refund.id !== 'legacy' ? `Refund-${String(refund.id).padStart(6, '0')}` : '')}
+                                            </span>
                                             PKR {(refund.amountCents / 100).toFixed(2)}
                                             <span className="text-muted-foreground font-normal ml-2">
                                                 via {refund.processedByUser?.fullName || 'System'}

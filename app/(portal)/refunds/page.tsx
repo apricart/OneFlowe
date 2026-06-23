@@ -50,6 +50,7 @@ type OrderData = {
 
 type PendingRefundRequest = {
     id: number
+    refundNumber: string | null
     amountCents: number
     reason: string | null
     status: string
@@ -487,6 +488,7 @@ export default function RefundsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead>Refund ID</TableHead>
                                     <TableHead>Transaction ID</TableHead>
                                     <TableHead>Organization</TableHead>
                                     <TableHead>Branch</TableHead>
@@ -500,6 +502,11 @@ export default function RefundsPage() {
                             <TableBody>
                                 {pendingRefunds.map((refund) => (
                                     <TableRow key={refund.id} className="hover:bg-muted/50">
+                                        <TableCell>
+                                            <span className="font-mono text-xs font-semibold text-primary">
+                                                {refund.refundNumber || `Refund-${String(refund.id).padStart(6, '0')}`}
+                                            </span>
+                                        </TableCell>
                                         <TableCell>
                                             <span className="font-mono text-sm font-semibold">{refund.tid}</span>
                                         </TableCell>

@@ -187,6 +187,20 @@ export async function POST(req: Request) {
       return error(`Organization with ID ${organizationId} not found`, 404)
     }
 
+    // Check for duplicate branch name within the same organization (case-insensitive)
+    const [existingBranchWithName] = await db
+      .select({ id: branchesTable.id })
+      .from(branchesTable)
+      .where(and(
+        eq(branchesTable.organizationId, organizationId),
+        sql`lower(${branchesTable.name}) = ${name.toLowerCase()}`
+      ))
+      .limit(1)
+
+    if (existingBranchWithName) {
+      return error("A branch with this name already exists in this organization.", 409)
+    }
+
     // Auto-generate code if not provided or to ensure standardization
     // Format: {ORG_CODE}-{COUNT+1}
     const [{ count: branchCount }] = await db

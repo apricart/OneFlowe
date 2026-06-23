@@ -17,6 +17,7 @@ type BankingKPICardProps = {
     onClick?: () => void
     comparisonValue?: string | number
     comparisonLabel?: string
+    isLoading?: boolean
 }
 
 /* Decorative background glow */
@@ -46,6 +47,7 @@ export const BankingKPICard = ({
     onClick,
     comparisonValue,
     comparisonLabel,
+    isLoading = false,
 }: BankingKPICardProps) => {
     const isPositive = trend === "up"
 
@@ -83,7 +85,7 @@ export const BankingKPICard = ({
 
                 <div className="flex items-center gap-2">
                     <AnimatePresence>
-                        {trend && trendValue !== "0.0%" && (
+                        {!isLoading && trend && trendValue !== "0.0%" && (
                             <motion.div
                                 initial={{ opacity: 0, x: 10 }}
                                 animate={{ opacity: 1, x: 0 }}
@@ -119,12 +121,16 @@ export const BankingKPICard = ({
                     {title}
                 </p>
                 <div className="flex items-baseline gap-2">
-                    <p className={cn(
-                        "font-extrabold text-slate-900 dark:text-white tracking-tight leading-none",
-                        "text-lg lg:text-xl xl:text-2xl"
-                    )}>
-                        {value}
-                    </p>
+                    {isLoading ? (
+                        <div className="h-7 w-24 rounded-md bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                    ) : (
+                        <p className={cn(
+                            "font-extrabold text-slate-900 dark:text-white tracking-tight leading-none",
+                            "text-lg lg:text-xl xl:text-2xl"
+                        )}>
+                            {value}
+                        </p>
+                    )}
                 </div>
                 
                 {subtitle && (
@@ -137,7 +143,7 @@ export const BankingKPICard = ({
                     </motion.p>
                 )}
 
-                {comparisonValue && trendValue !== "0.0%" && (
+                {!isLoading && comparisonValue && trendValue !== "0.0%" && (
                     <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 flex items-center gap-1">
                         <span className="opacity-50 line-through">vs {comparisonValue}</span>
                         <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700 mx-0.5" />

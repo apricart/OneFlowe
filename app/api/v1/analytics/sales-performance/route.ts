@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
     const parsedYears = yearsRaw ? yearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
     const parsedCompMonths = compareMonthsRaw ? compareMonthsRaw.split(',').map(Number).filter(n => !isNaN(n) && n >= 1 && n <= 12) : []
     const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 2000) : []
+    const includeStatusCounts = searchParams.get("includeStatusCounts") === "true"
 
     let organizationId: number | null = null
     let branchId: number | null = null
@@ -161,6 +162,7 @@ export async function GET(req: NextRequest) {
         compareMonths: parsedCompMonths.join(","),
         compareYears: parsedCompYears.join(","),
         granularity,
+        includeStatusCounts: includeStatusCounts ? "1" : "0",
         pricesHidden,
     })
 
@@ -563,6 +565,41 @@ export async function GET(req: NextRequest) {
             }
         }
 
+        // ── Status counts (single query, replaces 6 separate per-status API calls) ──
+        let statusCounts: {
+            pendingCount: number
+            approvedCount: number
+            fulfilledCount: number
+            partialCount: number
+            refundedCount: number
+            rejectedCount: number
+        } | null = null
+
+        if (includeStatusCounts && (!statusParam || statusParam.toUpperCase() === "ALL")) {
+            const [counts] = await db.select({
+                pendingCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'PENDING' THEN 1 END), 0)`.mapWith(Number),
+                approvedCount: metricExpressions.approvedCount,
+                fulfilledCount: metricExpressions.fulfilledCount,
+                partialCount: metricExpressions.partialCount,
+                refundedCount: metricExpressions.refundedCount,
+                rejectedCount: metricExpressions.rejectedCount,
+            })
+            .from(orders)
+            .leftJoin(branches, eq(orders.branchId, branches.id))
+            .where(whereClause)
+
+            if (counts) {
+                statusCounts = {
+                    pendingCount: counts.pendingCount,
+                    approvedCount: counts.approvedCount,
+                    fulfilledCount: counts.fulfilledCount,
+                    partialCount: counts.partialCount,
+                    refundedCount: counts.refundedCount,
+                    rejectedCount: counts.rejectedCount,
+                }
+            }
+        }
+
         return {
             granularity,
             seriesData,
@@ -576,7 +613,8 @@ export async function GET(req: NextRequest) {
             peakQuantityPeriod,
             branchSales,
             organizationSales,
-            comparison
+            comparison,
+            statusCounts,
         }
     }
 

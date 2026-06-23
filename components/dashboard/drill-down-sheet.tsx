@@ -368,7 +368,7 @@ export function DrillDownSheet({
                                     <BIInsightCard
                                         title={type === "PARTIAL" ? "Partial Orders" : "Fulfilled Orders"}
                                         value={summary.fulfilledOrderCount || 0}
-                                        subvalue={type === "PARTIAL" ? "Partially Fulfilled" : "Total Orders Fulfilled"}
+                                        subvalue={type === "PARTIAL" ? "Partially Refunded" : "Total Orders Fulfilled"}
                                         icon={type === "PARTIAL" ? Package : CheckCircle2}
                                         colorClass={type === "PARTIAL" ? "border-indigo-50 dark:border-indigo-950/20" : "border-emerald-50 dark:border-emerald-950/20"}
                                     />

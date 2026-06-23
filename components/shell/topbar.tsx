@@ -128,7 +128,7 @@ export function Topbar() {
                 className="rounded-full ring-2 ring-slate-200 dark:ring-slate-700"
               />
               <span className="text-sm hidden md:inline font-medium text-slate-900 dark:text-white">
-                {(session?.user as any)?.email?.split("@")[0] || "Account"}
+                {(session?.user as any)?.fullName || (session?.user as any)?.email?.split("@")[0] || "Account"}
               </span>
             </button>
           </DropdownMenuTrigger>

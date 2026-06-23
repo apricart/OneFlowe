@@ -75,6 +75,7 @@ export default function OrganizationsPage() {
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
   const [orgSearch, setOrgSearch] = useState("")
   const [branchStatusFilter, setBranchStatusFilter] = useState<"all" | "active" | "inactive">("all")
+  const [branchSearch, setBranchSearch] = useState("")
   const [confirmDelete, setConfirmDelete] = useState<{ open: boolean; id: string | null; name: string | null }>({
     open: false,
     id: null,
@@ -292,11 +293,18 @@ export default function OrganizationsPage() {
   }, [branches?.items, selectedOrgId])
 
   const filteredBranches = useMemo(() => {
-    if (branchStatusFilter === "all") return visibleBranches
-    return visibleBranches.filter((branch) =>
-      branchStatusFilter === "active" ? isActiveStatus(branch.status) : !isActiveStatus(branch.status)
-    )
-  }, [visibleBranches, branchStatusFilter])
+    let result = visibleBranches
+    if (branchStatusFilter !== "all") {
+      result = result.filter((branch) =>
+        branchStatusFilter === "active" ? isActiveStatus(branch.status) : !isActiveStatus(branch.status)
+      )
+    }
+    if (branchSearch.trim()) {
+      const q = branchSearch.toLowerCase()
+      result = result.filter((b) => b.name.toLowerCase().includes(q) || b.code.toLowerCase().includes(q))
+    }
+    return result
+  }, [visibleBranches, branchStatusFilter, branchSearch])
 
   const orgCount = orgs?.items.length ?? 0
   const branchCount = branches?.items.length ?? 0
@@ -464,7 +472,16 @@ export default function OrganizationsPage() {
                     {selectedOrg ? `Strategic units for ${selectedOrg.name}` : `Full enterprise distribution`}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="relative group">
+                    <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
+                    <Input
+                      placeholder="Search branches..."
+                      value={branchSearch}
+                      onChange={(e) => setBranchSearch(e.target.value)}
+                      className="pl-8 h-10 w-[180px] bg-slate-50/50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-700 focus:border-indigo-500/30 focus:ring-4 focus:ring-indigo-500/10 rounded-xl text-sm transition-all"
+                    />
+                  </div>
                   <div className="flex h-10 items-center px-4 rounded-xl bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200/50 dark:border-slate-700/50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     Filter by status
                   </div>

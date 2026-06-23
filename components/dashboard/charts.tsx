@@ -1157,6 +1157,17 @@ export function SalesPerformanceBarChart({
 
   const hasComparison = !!comparisonSeries && comparisonSeries.length > 0
 
+  const yAxisLabel = useMemo(() => {
+    const unit = activeMetric === 'orders' ? 'Orders' : 'PKR'
+    if (!dateRange?.startDate) return unit
+    const { startDate, endDate } = dateRange
+    const startYear = startDate.getFullYear()
+    const endYear = endDate.getFullYear()
+    if (startYear !== endYear) return `${unit} · ${startYear}–${endYear}`
+    if (startDate.getMonth() !== endDate.getMonth()) return `${unit} · ${startYear}`
+    return `${unit} · ${format(startDate, 'MMM yyyy')}`
+  }, [activeMetric, dateRange])
+
   const safeData = useMemo(() => {
     let dataToMap = seriesData || []
 
@@ -1315,7 +1326,7 @@ export function SalesPerformanceBarChart({
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={safeData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                  margin={{ top: 20, right: 30, left: 40, bottom: 20 }}
                   barGap={hasComparison ? 8 : 0}
                 >
                   <defs>
@@ -1348,6 +1359,13 @@ export function SalesPerformanceBarChart({
                     }}
                     width={80}
                     dx={-10}
+                    label={{
+                      value: yAxisLabel,
+                      angle: -90,
+                      position: 'insideLeft',
+                      offset: -25,
+                      style: { fontSize: 10, fontWeight: 700, fill: isDark ? "#64748b" : "#94a3b8", textAnchor: 'middle' }
+                    }}
                   />
                   <Tooltip
                     content={<SalesPerfTooltip activeMetric={activeMetric} hasComparison={hasComparison} />}

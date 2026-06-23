@@ -91,6 +91,7 @@ export async function GET(
     const refundsData = await db
       .select({
         id: refunds.id,
+        refundNumber: refunds.refundNumber,
         amountCents: refunds.amountCents,
         reason: refunds.reason,
         createdAt: refunds.createdAt,
@@ -379,6 +380,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }).returning({ id: refunds.id })
 
         refundId = insertedRefund.id;
+        await tx.update(refunds)
+          .set({ refundNumber: `Refund-${String(insertedRefund.id).padStart(6, '0')}` })
+          .where(eq(refunds.id, insertedRefund.id))
 
         // Adjust budget - credit back the refunded amount
         const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
@@ -469,6 +473,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }).returning({ id: refunds.id })
 
         refundId = insertedRefund.id;
+        await tx.update(refunds)
+          .set({ refundNumber: `Refund-${String(insertedRefund.id).padStart(6, '0')}` })
+          .where(eq(refunds.id, insertedRefund.id))
 
         await tx.insert(auditLogs).values({
           userId,

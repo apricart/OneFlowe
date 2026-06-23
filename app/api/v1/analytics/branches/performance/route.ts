@@ -148,6 +148,7 @@ export async function GET(req: NextRequest) {
             const [stats] = await db
                 .select({
                     totalOrders: metricExpressions.totalOrderCount,
+                    fulfilledOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' AND COALESCE(${orders.refundAmountCents}, 0) = 0 THEN 1 END)`.mapWith(Number),
                     totalRevenue: metricExpressions.revenue,
                     totalRefunds: metricExpressions.totalRefundAmount,
                     activeBranches: sql<number>`count(distinct ${branches.id})`.mapWith(Number),
@@ -209,7 +210,7 @@ export async function GET(req: NextRequest) {
                 organizationName: organizations.name,
                 groupName: groups.name,
                 totalOrders: sql<number>`count(${orders.id})`.mapWith(Number),
-                fulfilledOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' THEN 1 END)`.mapWith(Number),
+                fulfilledOrders: sql<number>`count(CASE WHEN UPPER(${orders.status}) = 'FULFILLED' AND COALESCE(${orders.refundAmountCents}, 0) = 0 THEN 1 END)`.mapWith(Number),
                 revenue: metricExpressions.revenue,
                 refunds: sql<number>`coalesce(sum(${orders.refundAmountCents}), 0)`.mapWith(Number),
             })
