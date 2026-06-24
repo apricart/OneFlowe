@@ -461,6 +461,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             items: refundDetails
           },
         })
+
+        // Supersede any existing PENDING refund requests so they no longer
+        // block future refund submissions (mirrors what admin/refunds POST does).
+        await tx.update(refunds)
+          .set({ status: "SUPERSEDED", processedByUserId: userId, updatedAt: new Date() })
+          .where(and(eq(refunds.orderId, orderId), eq(refunds.status, "PENDING")))
       } else {
         // Branch Admin / Head Office: create refund REQUEST
         const [insertedRefund] = await tx.insert(refunds).values({

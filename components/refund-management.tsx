@@ -231,9 +231,9 @@ export function RefundManagement({
     }
 
     return (
-        <div className="space-y-4 pt-4 border-t">
+        <div className="min-w-0 space-y-4 pt-4 border-t">
             {/* Refund Metrics Cards */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900/50 rounded-xl p-4 text-center">
                     <p className="text-[10px] uppercase tracking-wider font-semibold text-yellow-600 mb-1">Requested</p>
                     <p className="text-xl font-bold text-yellow-700 dark:text-yellow-400">PKR {(totalPending / 100).toFixed(2)}</p>
@@ -248,9 +248,9 @@ export function RefundManagement({
                 </div>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="font-semibold text-lg">Refund History</h3>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                     {isFullyRefunded && (
                         <Badge variant="outline" className="border-green-600 text-green-600 bg-green-50">Fully Refunded</Badge>
                     )}
@@ -305,15 +305,15 @@ export function RefundManagement({
                             )}
 
                             {/* Items Table */}
-                            <div className="bg-white dark:bg-slate-900 rounded-md border">
-                                <Table>
+                            <div className="min-w-0 bg-white dark:bg-slate-900 rounded-md border">
+                                <Table className="table-fixed">
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead className="w-[50px]"></TableHead>
-                                            <TableHead>Product</TableHead>
+                                            <TableHead className="whitespace-normal">Product</TableHead>
                                             <TableHead className="text-right">Price</TableHead>
-                                            <TableHead className="text-right">Remaining</TableHead>
-                                            <TableHead className="text-center w-[120px]">Qty to Refund</TableHead>
+                                            <TableHead className="text-right whitespace-normal">Remaining</TableHead>
+                                            <TableHead className="text-center whitespace-normal w-[100px]">Qty to Refund</TableHead>
                                             <TableHead className="text-right">Total</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -348,10 +348,10 @@ export function RefundManagement({
                                                                 disabled={isDisable}
                                                             />
                                                         </TableCell>
-                                                        <TableCell>
+                                                        <TableCell className="whitespace-normal break-words">
                                                             <div className="flex flex-col">
-                                                                <span className="font-medium">{item.productName}</span>
-                                                                <span className="text-xs text-muted-foreground flex gap-2">
+                                                                <span className="break-words font-medium">{item.productName}</span>
+                                                                <span className="text-xs text-muted-foreground flex flex-wrap gap-x-2 gap-y-1">
                                                                     <span>{item.unit}</span>
                                                                     <span>• Ordered: {item.quantity}</span>
                                                                     {refundedQty > 0 && <span className="text-green-600 font-medium">• Refunded: {refundedQty}</span>}

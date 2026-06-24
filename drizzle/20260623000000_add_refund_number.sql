@@ -6,5 +6,17 @@ UPDATE "refunds"
 SET "refund_number" = 'Refund-' || LPAD(id::text, 6, '0')
 WHERE "refund_number" IS NULL;
 
--- Add unique constraint to prevent duplicates
-ALTER TABLE "refunds" ADD CONSTRAINT "refunds_refund_number_unique" UNIQUE ("refund_number");
+-- Add the unique constraint only when it has not already been applied manually.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'refunds_refund_number_unique'
+      AND conrelid = 'public.refunds'::regclass
+  ) THEN
+    ALTER TABLE "refunds"
+      ADD CONSTRAINT "refunds_refund_number_unique" UNIQUE ("refund_number");
+  END IF;
+END
+$$;

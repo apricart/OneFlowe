@@ -1669,18 +1669,18 @@ export default function OrderPortalPage() {
 
       {/* Order Detail Dialog */}
       <Dialog open={showOrderDetail} onOpenChange={setShowOrderDetail}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-2rem)] max-h-[90vh] overflow-x-hidden overflow-y-auto sm:max-w-[calc(100vw-2rem)] xl:max-w-6xl">
           <DialogHeader>
             <DialogTitle>Order Details</DialogTitle>
           </DialogHeader>
 
           {selectedOrder && (
-            <div className="space-y-6">
+            <div className="min-w-0 space-y-6">
               {/* Order Information */}
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-muted-foreground mb-1">Transaction ID</p>
-                  <p className="font-mono font-semibold text-slate-900 dark:text-white">{selectedOrder.tid}</p>
+                  <p className="break-all font-mono font-semibold text-slate-900 dark:text-white">{selectedOrder.tid}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Order ID</p>
@@ -1716,7 +1716,7 @@ export default function OrderPortalPage() {
 
               {/* Order Items List */}
               <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-                <div className="bg-slate-50 dark:bg-slate-800/50 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                <div className="bg-slate-50 dark:bg-slate-800/50 px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap justify-between items-center gap-2">
                   <h3 className="font-semibold text-sm">Ordered Items</h3>
                   {orderDetailsData?.items?.[0]?.orderItems?.some((item: any) => (item.quantityRefunded || 0) > 0) && (
                     <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 text-[10px]">
@@ -1731,18 +1731,18 @@ export default function OrderPortalPage() {
                       const isPartiallyRefunded = (item.quantityRefunded || 0) > 0 && !isFullyRefunded
 
                       return (
-                        <div key={item.id} className={`flex justify-between items-center p-4 ${isFullyRefunded ? "opacity-50 bg-slate-50/50" : ""}`}>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-sm text-slate-900 dark:text-white">{item.productName}</p>
+                        <div key={item.id} className={`flex flex-wrap justify-between items-center gap-3 p-4 ${isFullyRefunded ? "opacity-50 bg-slate-50/50" : ""}`}>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="break-words font-medium text-sm text-slate-900 dark:text-white">{item.productName}</p>
                               {isFullyRefunded && <Badge variant="destructive" className="text-[10px] h-4">REFUNDED</Badge>}
                               {isPartiallyRefunded && <Badge variant="outline" className="text-[10px] h-4 border-yellow-500 text-yellow-600">PARTIAL REFUND</Badge>}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground mt-0.5">
                               Qty: <span className="font-semibold">{formatQuantity(item.quantity)}</span>
                               {!pricesHidden && item.priceCents !== null && <> x {formatPKR(item.priceCents / 100)}</>}
                               {item.quantityRefunded > 0 && (
-                                <span className="ml-2 text-red-500 font-medium">(-{formatQuantity(item.quantityRefunded)} refunded)</span>
+                                <span className="text-red-500 font-medium">(-{formatQuantity(item.quantityRefunded)} refunded)</span>
                               )}
                             </p>
                           </div>
@@ -1779,9 +1779,9 @@ export default function OrderPortalPage() {
                     {orderDetailsData.items[0].orderItems
                       .filter((item: any) => (item.quantityRefunded || 0) > 0)
                       .map((item: any) => (
-                        <div key={`refund-sum-${item.id}`} className="flex justify-between text-xs">
-                          <span>{formatQuantity(item.quantityRefunded || 0)}x {item.productName}</span>
-                          <span className="font-bold text-red-600">-{formatPKR((calculateLineCents(item.priceCents, item.quantityRefunded || 0)) / 100)}</span>
+                        <div key={`refund-sum-${item.id}`} className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs">
+                          <span className="min-w-0 break-words">{formatQuantity(item.quantityRefunded || 0)}x {item.productName}</span>
+                          <span className="shrink-0 font-bold text-red-600">-{formatPKR((calculateLineCents(item.priceCents, item.quantityRefunded || 0)) / 100)}</span>
                         </div>
                       ))}
                     <div className="pt-2 border-t border-yellow-200 dark:border-yellow-800 flex justify-between font-bold text-sm">
