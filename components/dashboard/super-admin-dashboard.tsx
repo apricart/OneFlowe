@@ -332,7 +332,7 @@ export function SuperAdminDashboard() {
       animate={{ opacity: 1 }}
       className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 lg:p-6 space-y-6 max-w-[2000px] mx-auto overflow-x-hidden"
     >
-      {/* <NotificationRail className="bg-transparent border-0 shadow-none px-0" /> */}
+      <NotificationRail className="bg-transparent border-0 shadow-none px-0" />
 
       {/* ━━━ Header & Filters ━━━ */}
       <div className="relative z-30 flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">

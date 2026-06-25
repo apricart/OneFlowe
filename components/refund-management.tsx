@@ -309,12 +309,12 @@ export function RefundManagement({
                                 <Table className="table-fixed">
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead className="w-[50px]"></TableHead>
-                                            <TableHead className="whitespace-normal">Product</TableHead>
-                                            <TableHead className="text-right">Price</TableHead>
-                                            <TableHead className="text-right whitespace-normal">Remaining</TableHead>
+                                            <TableHead className="w-10"></TableHead>
+                                            <TableHead className="w-[38%] whitespace-normal">Product</TableHead>
+                                            <TableHead className="w-[14%] text-right">Price</TableHead>
+                                            <TableHead className="w-[14%] text-right whitespace-normal">Remaining</TableHead>
                                             <TableHead className="text-center whitespace-normal w-[100px]">Qty to Refund</TableHead>
-                                            <TableHead className="text-right">Total</TableHead>
+                                            <TableHead className="w-[14%] text-right">Total</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>

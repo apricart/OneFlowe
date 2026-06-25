@@ -6,6 +6,7 @@ import { orders, users, branches, organizations } from "@/db/schema"
 import { and, eq, gte, lte, sql, count, inArray, isNull } from "drizzle-orm"
 import { metricExpressions } from "@/lib/metric-utils"
 import { parseEndDateParam, parseStartDateParam } from "@/lib/date-range-params"
+import { shouldIncludeHeadOfficeUsers } from "@/lib/organization-report-scope"
 
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions)
@@ -93,8 +94,11 @@ export async function GET(req: NextRequest) {
         branchStats.map(b => b.organizationId).filter((id): id is number => id != null)
     )]
 
-    // Head office users: belong to an org but have no branch assignment
-    const headOfficeUserRows = orgIdsInScope.length > 0
+    // Head-office users belong to an organization but not a branch. Include
+    // them for organization-wide reports, but never in an explicitly
+    // branch/group-scoped total.
+    const includeHeadOfficeUsers = shouldIncludeHeadOfficeUsers(branchIdsParam, groupIdsParam)
+    const headOfficeUserRows = includeHeadOfficeUsers && orgIdsInScope.length > 0
         ? await db.select({
             organizationId: users.organizationId,
             totalUserCount: sql<number>`COUNT(*)`.mapWith(Number),

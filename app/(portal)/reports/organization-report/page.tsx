@@ -81,6 +81,7 @@ import { useCallback, useEffect, useRef } from "react"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
+import { resolveOrganizationReportScope } from "@/lib/organization-report-scope"
 
 
 
@@ -156,13 +157,26 @@ export default function OrganizationReportPage() {
     const [statusFilter, setStatusFilter] = useState<string>("all")
 
     // ━━━ TIER 1: GLOBAL SUMMARY DATA ━━━
+    // Page-level selections take precedence when present; otherwise inherit the
+    // tenant scope selected in the application header.
+    const {
+        organizationIds: effectiveGlobalOrgIds,
+        branchIds: effectiveGlobalBranchIds,
+    } = resolveOrganizationReportScope({
+        selectedOrganizationIds: selectedOrgIds,
+        selectedBranchIds,
+        contextOrganizationId: contextOrgId,
+        contextBranchId,
+        contextBranchIds,
+    })
+
     const globalQueryParams = new URLSearchParams()
     if (dateRange) {
         globalQueryParams.set("startDate", dateRange.startDate.toISOString())
         globalQueryParams.set("endDate", dateRange.endDate.toISOString())
     }
-    if (selectedOrgIds.length > 0) globalQueryParams.set("organizationIds", selectedOrgIds.join(","))
-    if (selectedBranchIds.length > 0) globalQueryParams.set("branchIds", selectedBranchIds.join(","))
+    if (effectiveGlobalOrgIds.length > 0) globalQueryParams.set("organizationIds", effectiveGlobalOrgIds.join(","))
+    if (effectiveGlobalBranchIds.length > 0) globalQueryParams.set("branchIds", effectiveGlobalBranchIds.join(","))
     if (selectedMonths.length > 0) globalQueryParams.set("months", selectedMonths.join(","))
     if (selectedYears.length > 0) globalQueryParams.set("years", selectedYears.join(","))
     if (compare) globalQueryParams.set("compare", "true")
@@ -208,13 +222,18 @@ export default function OrganizationReportPage() {
 
     // ━━━ SMART SYNC (Global to Local) ━━━
     useEffect(() => {
-        const hasGlobalChanged = JSON.stringify(contextBranchIds) !== JSON.stringify(lastSyncedBranchIds.current)
-        if (hasGlobalChanged && contextBranchIds.length > 0) {
-            setChartBranchIds([...contextBranchIds])
-            setReportBranchIds([...contextBranchIds])
-            lastSyncedBranchIds.current = [...contextBranchIds]
+        const headerBranchIds = contextBranchIds.length > 0
+            ? contextBranchIds
+            : contextBranchId
+                ? [contextBranchId]
+                : []
+        const hasGlobalChanged = JSON.stringify(headerBranchIds) !== JSON.stringify(lastSyncedBranchIds.current)
+        if (hasGlobalChanged) {
+            setChartBranchIds([...headerBranchIds])
+            setReportBranchIds([...headerBranchIds])
+            lastSyncedBranchIds.current = [...headerBranchIds]
         }
-    }, [contextBranchIds])
+    }, [contextBranchId, contextBranchIds])
 
     const organizationId = userOrgId || (selectedOrgIds.length === 1 ? selectedOrgIds[0] : null)
 

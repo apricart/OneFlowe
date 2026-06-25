@@ -1669,7 +1669,7 @@ export default function OrderPortalPage() {
 
       {/* Order Detail Dialog */}
       <Dialog open={showOrderDetail} onOpenChange={setShowOrderDetail}>
-        <DialogContent className="w-[calc(100vw-2rem)] max-h-[90vh] overflow-x-hidden overflow-y-auto sm:max-w-[calc(100vw-2rem)] xl:max-w-6xl">
+        <DialogContent className="w-[calc(100vw-2rem)] max-h-[90vh] overflow-x-hidden overflow-y-auto sm:max-w-[calc(100vw-2rem)] lg:max-w-[58rem]">
           <DialogHeader>
             <DialogTitle>Order Details</DialogTitle>
           </DialogHeader>
