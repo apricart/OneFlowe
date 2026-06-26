@@ -38,6 +38,13 @@ function clearAuthCookies() {
   }
 }
 
+console.log("SES ENV CHECK", {
+  AWS_REGION: process.env.AWS_REGION,
+  AWS_ACCESS_KEY_ID_EXISTS: !!process.env.AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY_EXISTS: !!process.env.AWS_SECRET_ACCESS_KEY,
+  SES_FROM_EMAIL: process.env.SES_FROM_EMAIL,
+  SES_CONFIGURATION_SET: process.env.SES_CONFIGURATION_SET,
+});
 /**
  * Detect NextAuth client URL constructor errors.
  * These happen when `signIn()` receives a response that does not include the
