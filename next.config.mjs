@@ -76,6 +76,13 @@ const nextConfig = {
     SUPER_ADMIN_EMAIL: process.env.SUPER_ADMIN_EMAIL,
     SUPER_ADMIN_PASSWORD: process.env.SUPER_ADMIN_PASSWORD,
     CRON_SECRET: process.env.CRON_SECRET,
+    // AWS SES email
+    SES_FROM_EMAIL: process.env.SES_FROM_EMAIL,
+    SES_CONFIGURATION_SET: process.env.SES_CONFIGURATION_SET,
+    // AWS credentials — support both clean names and the typo'd names in .env.local
+    AWS_REGION: process.env.AWS_REGION || process.env.NNAWS_REGION || process.env.NAWS_REGION,
+    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID || process.env.NNAWS_ACCESS_KEY_ID || process.env.NAWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY || process.env.NAWS_SECRET_ACCESS_KEY || process.env.NNAWS_SECRET_ACCESS_KEY,
   },
 }
 
