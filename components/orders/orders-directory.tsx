@@ -50,7 +50,7 @@ import {
 } from "@/components/ui/dialog"
 import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 import { Separator } from "@/components/ui/separator"
-import { getOrderDerivedStatus, type DerivedOrderStatusKey, type OrderStatusContext } from "@/lib/order-status"
+import { getOrderDerivedStatus, hasPartialRefund, type DerivedOrderStatusKey, type OrderStatusContext } from "@/lib/order-status"
 import {
   FULFILLMENT_STATUS_LABELS,
   getNextFulfillmentStatus,
@@ -383,6 +383,11 @@ export function OrdersDirectory({
                         {FULFILLMENT_STATUS_LABELS[normalizeFulfillmentStatus(order.fulfillmentStatus)]}
                       </Badge>
                     )}
+                    {hasPartialRefund(order) && (
+                      <Badge variant="outline" className="max-w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[9px] font-bold uppercase leading-tight tracking-wider text-amber-600 dark:text-amber-400">
+                        Partial Refund
+                      </Badge>
+                    )}
                   </div>
 
                   <div className="space-y-3 relative z-10">
@@ -461,6 +466,11 @@ export function OrdersDirectory({
                             {FULFILLMENT_STATUS_LABELS[normalizeFulfillmentStatus(order.fulfillmentStatus)]}
                           </Badge>
                         )}
+                        {hasPartialRefund(order) && (
+                          <Badge variant="outline" className="ml-2 px-2 py-0.5 text-[9px] uppercase font-bold tracking-wider rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                            Partial Refund
+                          </Badge>
+                        )}
                       </td>
                       <td className="py-4 font-medium text-slate-500 text-xs">
                         {format(new Date(order.createdAt), "dd MMM yyyy")}
@@ -517,9 +527,16 @@ export function OrdersDirectory({
                     const derivedStatus = getOrderDerivedStatus(viewingOrder, statusContext)
                     const c = getStatusColor(derivedStatus.key)
                     return (
-                      <Badge variant="outline" className={cn("px-3 py-1 text-[9px] font-bold tracking-widest uppercase rounded-xl border-dashed shadow-sm backdrop-blur-sm", c.bg, c.text, c.border)}>
-                        {derivedStatus.label}
-                      </Badge>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant="outline" className={cn("px-3 py-1 text-[9px] font-bold tracking-widest uppercase rounded-xl border-dashed shadow-sm backdrop-blur-sm", c.bg, c.text, c.border)}>
+                          {derivedStatus.label}
+                        </Badge>
+                        {hasPartialRefund(viewingOrder) && (
+                          <Badge variant="outline" className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                            Partial Refund
+                          </Badge>
+                        )}
+                      </div>
                     )
                   })()}
                 </div>

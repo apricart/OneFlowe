@@ -351,7 +351,7 @@ export default function RefundsPage() {
 
         switch (statusUpper) {
             case "PENDING": return <Badge variant="secondary">Pending</Badge>
-            case "APPROVED": return <Badge className="bg-blue-500">Approved</Badge>
+            case "APPROVED": return <Badge className="bg-blue-500">Active</Badge>
             case "FULFILLED": return <Badge className="bg-green-500">Fulfilled</Badge>
             case "REJECTED": return <Badge variant="destructive">Rejected</Badge>
             case "REFUNDED": return <Badge variant="destructive">Refunded</Badge>

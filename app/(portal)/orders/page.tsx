@@ -408,7 +408,6 @@ export default function OrdersManagementPage() {
     pending: orders.filter((o: OrderItem) => o.status.toLowerCase() === "pending").length,
     approved: orders.filter((o: OrderItem) => o.status.toLowerCase() === "approved").length,
     fulfilled: orders.filter((o: OrderItem) => getOrderFulfillmentVariant(o) === "full").length,
-    partiallyRefunded: orders.filter((o: OrderItem) => getOrderFulfillmentVariant(o) === "partial").length,
     refunded: orders.filter((o: OrderItem) => o.status.toLowerCase() === "refunded").length,
     rejected: orders.filter((o: OrderItem) => o.status.toLowerCase() === "rejected" || o.status.toLowerCase() === "cancelled").length,
   }
@@ -463,14 +462,14 @@ export default function OrdersManagementPage() {
           iconBadge="bg-white/60 dark:bg-slate-900/50 text-indigo-600 dark:text-indigo-400"
         />
         <CompactStatCard
-          label="Pending"
+          label="Pending Approval"
           value={statusCounts.pending}
           icon={<Clock className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-yellow-50 to-amber-50/50 dark:from-yellow-950/40 dark:to-amber-900/20 border-yellow-100 dark:border-yellow-900/50"
           iconBadge="bg-white/60 dark:bg-slate-900/50 text-yellow-600 dark:text-yellow-400"
         />
         <CompactStatCard
-          label="Approved"
+          label="Active"
           value={statusCounts.approved}
           icon={<CheckCircle className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-blue-50 to-cyan-50/50 dark:from-blue-950/40 dark:to-cyan-900/20 border-blue-100 dark:border-blue-900/50"
@@ -482,13 +481,6 @@ export default function OrdersManagementPage() {
           icon={<CheckCircle className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-emerald-50 to-teal-50/50 dark:from-emerald-950/40 dark:to-teal-900/20 border-emerald-100 dark:border-emerald-900/50"
           iconBadge="bg-white/60 dark:bg-slate-900/50 text-emerald-600 dark:text-emerald-400"
-        />
-        <CompactStatCard
-          label="Partially Refunded"
-          value={statusCounts.partiallyRefunded}
-          icon={<TrendingDown className="h-5 w-5" />}
-          gradient="bg-gradient-to-br from-indigo-50 to-purple-50/50 dark:from-indigo-950/40 dark:to-purple-900/20 border-indigo-100 dark:border-indigo-900/50"
-          iconBadge="bg-white/60 dark:bg-slate-900/50 text-indigo-600 dark:text-indigo-400"
         />
         <CompactStatCard
           label="Rejected"
@@ -516,18 +508,25 @@ export default function OrdersManagementPage() {
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full lg:w-auto">
                 {/* Status Tabs */}
                 <div className="flex items-center p-1 bg-slate-100/60 dark:bg-slate-800/50 rounded-xl border border-slate-200/50 dark:border-slate-700/50 overflow-x-auto no-scrollbar max-w-full">
-                  {["all", "pending", "approved", "fulfilled", "rejected", "refunded"].map((status) => (
+                  {([
+                    ["all", "All"],
+                    ["pending", "Pending Approval"],
+                    ["approved", "Active"],
+                    ["fulfilled", "Fulfilled"],
+                    ["rejected", "Rejected"],
+                    ["refunded", "Refunded"],
+                  ] as [string, string][]).map(([status, label]) => (
                     <Button
                       key={status}
                       onClick={() => setStatusFilter(status)}
                       variant={statusFilter === status ? "secondary" : "ghost"}
                       size="sm"
-                      className={`capitalize px-3 h-8 text-xs font-bold rounded-lg transition-all duration-200 shrink-0 ${statusFilter === status
+                      className={`px-3 h-8 text-xs font-bold rounded-lg transition-all duration-200 shrink-0 ${statusFilter === status
                         ? "bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white"
                         : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
                         }`}
                     >
-                      {status}
+                      {label}
                     </Button>
                   ))}
                 </div>

@@ -5,7 +5,7 @@ import type { DashboardStatus } from "@/lib/hooks/use-sales-performance"
 const options: { id: DashboardStatus; label: string; color: string; activeColor: string }[] = [
     { id: "all", label: "All Orders", color: "text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-400", activeColor: "bg-slate-700 text-white border-slate-700 shadow-md shadow-slate-200 dark:shadow-slate-900/40" },
     { id: "FULFILLED", label: "Fulfilled", color: "text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400", activeColor: "bg-emerald-600 text-white border-emerald-700 shadow-md shadow-emerald-200 dark:shadow-emerald-900/40" },
-    { id: "PENDING", label: "Pending", color: "text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:border-amber-400", activeColor: "bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-200 dark:shadow-amber-900/40" },
+    { id: "PENDING", label: "Pending Approval", color: "text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:border-amber-400", activeColor: "bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-200 dark:shadow-amber-900/40" },
     { id: "REFUNDED", label: "Refunded", color: "text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 hover:border-rose-400", activeColor: "bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-200 dark:shadow-rose-900/40" },
 ]
 

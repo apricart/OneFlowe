@@ -11,6 +11,7 @@ import {
     ChevronDown, BarChart3, ListOrdered, Calendar, Hash, Store, Layers, ArrowUpRight, ArrowDownRight, LayoutDashboard, Database, Filter, LayoutGrid
 } from "lucide-react"
 import { formatPKR, cn } from "@/lib/utils"
+import { getOrderDerivedStatus } from "@/lib/order-status"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
@@ -444,7 +445,7 @@ export default function OrderReportPage() {
                 case "organizationName": return order.organizationName || "N/A"
                 case "group": return order.groupName || "-"
                 case "branchName": return order.branchName || "-"
-                case "status": return order.status || "-"
+                case "status": return getOrderDerivedStatus({ status: order.status }).label || "-"
                 case "quantityOrdered": return order.quantityOrdered || 0
                 case "quantityDelivered": return (order.quantityOrdered || 0) - (order.quantityRefunded || 0)
                 case "quantityRefunded": return order.quantityRefunded || 0
@@ -713,8 +714,8 @@ export default function OrderReportPage() {
                         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white dark:bg-slate-900/40 p-5 rounded-[2.5rem] border border-slate-200/60 dark:border-slate-800/60 shadow-sm backdrop-blur-xl">
                             <div className="flex flex-wrap items-center gap-2.5 p-1 bg-slate-50 dark:bg-slate-950/50 rounded-[1.25rem] border border-slate-100 dark:border-slate-800/50">
                                 <button onClick={() => setStatusFilter("all")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "all" ? "bg-white dark:bg-slate-800 text-indigo-600 shadow-md ring-1 ring-slate-200 dark:ring-slate-700" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>All</button>
-                                <button onClick={() => setStatusFilter("pending")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "pending" ? "bg-white dark:bg-slate-800 text-slate-700 shadow-md ring-1 ring-slate-200 dark:ring-slate-700" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>Pending</button>
-                                <button onClick={() => setStatusFilter("approved")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "approved" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>Approved</button>
+                                <button onClick={() => setStatusFilter("pending")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "pending" ? "bg-white dark:bg-slate-800 text-slate-700 shadow-md ring-1 ring-slate-200 dark:ring-slate-700" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>Pending Approval</button>
+                                <button onClick={() => setStatusFilter("approved")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "approved" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/20" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>Active</button>
                                 <button onClick={() => setStatusFilter("fulfilled")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "fulfilled" ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>Fulfilled</button>
                                 <button onClick={() => setStatusFilter("refunded")} className={cn("px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300", statusFilter === "refunded" ? "bg-rose-500 text-white shadow-lg shadow-rose-500/20" : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200")}>Refunds</button>
                             </div>
@@ -911,7 +912,7 @@ export default function OrderReportPage() {
                                                     {isVisible("branchName") && role !== "BRANCH_ADMIN" && <TableCell className="px-8 py-5 text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-tighter whitespace-nowrap">{order.branchName}</TableCell>}
                                                     {isVisible("status") && (
                                                         <TableCell className="px-8 py-5 text-center">
-                                                            <div className="inline-flex">
+                                                            <div className="inline-flex flex-wrap items-center justify-center gap-1">
                                                                 <Badge
                                                                     variant="outline"
                                                                     style={{
@@ -921,8 +922,13 @@ export default function OrderReportPage() {
                                                                     }}
                                                                     className="text-[9px] font-black uppercase tracking-[0.15em] px-3 py-1 rounded-xl border shadow-sm transition-transform group-hover:scale-105 duration-300"
                                                                 >
-                                                                    {order.status}
+                                                                    {getOrderDerivedStatus({ status: order.status }).label}
                                                                 </Badge>
+                                                                {['FULFILLED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes(order.status?.toUpperCase()) && Number(order.refundAmountCents || 0) > 0 && (
+                                                                    <Badge variant="outline" className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                                                                        Partial Refund
+                                                                    </Badge>
+                                                                )}
                                                             </div>
                                                         </TableCell>
                                                     )}

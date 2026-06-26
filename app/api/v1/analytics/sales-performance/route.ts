@@ -191,21 +191,10 @@ export async function GET(req: NextRequest) {
         if (upperStatus && upperStatus !== "ALL") {
             if (upperStatus === "REJECTED") {
                 conditions.push(or(eq(sql`UPPER(${orders.status})`, "REJECTED"), eq(sql`UPPER(${orders.status})`, "CANCELLED")))
-            } else if (upperStatus === "PARTIAL") {
-                // PARTIAL = (Status is FULFILLED AND has refunds) OR (Status is actually PARTIAL)
-                conditions.push(
-                    or(
-                        and(eq(sql`UPPER(${orders.status})`, "FULFILLED"), gt(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0)),
-                        inArray(sql`UPPER(${orders.status})`, ["PARTIAL", "PARTIALLY_FULFILLED"])
-                    )
-                )
             } else if (upperStatus === "FULFILLED") {
-                // FULFILLED (Fully) = Status is FULFILLED AND has NO refunds
+                // FULFILLED = all fulfilled orders including partially refunded ones
                 conditions.push(
-                    and(
-                        eq(sql`UPPER(${orders.status})`, "FULFILLED"),
-                        eq(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0)
-                    )
+                    inArray(sql`UPPER(${orders.status})`, ["FULFILLED", "PARTIAL", "PARTIALLY_FULFILLED"])
                 )
             } else {
                 conditions.push(eq(sql`UPPER(${orders.status})`, upperStatus))

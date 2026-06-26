@@ -237,7 +237,7 @@ export function HeadOfficeDashboard() {
   const totalOrders = perfData?.totalOrders ?? 0
   const pendingCount = perfData?.statusCounts?.pendingCount ?? 0
   const fulfilledCount = perfData?.statusCounts?.fulfilledCount ?? 0
-  const partialCount = perfData?.statusCounts?.partialCount ?? 0
+
   const refundedCount = perfData?.statusCounts?.refundedCount ?? 0
   const rejectedCount = perfData?.statusCounts?.rejectedCount ?? 0
   const approvedCount = perfData?.statusCounts?.approvedCount ?? 0
@@ -316,7 +316,7 @@ export function HeadOfficeDashboard() {
           isLoading={isLoadingPerf}
         />
         <BankingKPICard
-          icon={Activity} title="Pending"
+          icon={Activity} title="Pending Approval"
           value={pendingCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-amber-400 to-orange-500" iconBg="text-amber-600 bg-amber-600" delay={75}
@@ -328,7 +328,7 @@ export function HeadOfficeDashboard() {
           isLoading={isLoadingPerf}
         />
         <BankingKPICard
-          icon={CheckCircle2} title="Approved"
+          icon={CheckCircle2} title="Active"
           value={approvedCount.toLocaleString()}
           subtitle={getPresetLabel(activePreset, dateRange)}
           gradient="from-blue-400 to-indigo-500" iconBg="text-blue-600 bg-blue-600" delay={100}
@@ -348,18 +348,6 @@ export function HeadOfficeDashboard() {
           trend={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.type as "up" | "down" | undefined}
           trendValue={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.value}
           comparisonValue={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.label}
-          comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
-        />
-        <BankingKPICard
-          icon={Package} title="PARTIALLY REFUNDED"
-          value={partialCount.toLocaleString()}
-          subtitle={getPresetLabel(activePreset, dateRange)}
-          gradient="from-indigo-500 to-purple-600" iconBg="text-indigo-600 bg-indigo-600" delay={135}
-          onClick={() => handleKPIOpen("PARTIAL" as any)}
-          trend={buildTrend(partialCount, perfData?.comparison?.partialCount)?.type as "up" | "down" | undefined}
-          trendValue={buildTrend(partialCount, perfData?.comparison?.partialCount)?.value}
-          comparisonValue={buildTrend(partialCount, perfData?.comparison?.partialCount)?.label}
           comparisonLabel="VS LAST"
           isLoading={isLoadingPerf}
         />

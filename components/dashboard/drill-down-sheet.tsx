@@ -93,12 +93,12 @@ const TYPE_CONFIG = {
         color: "text-amber-600 bg-amber-50 dark:bg-amber-900/20",
     },
     PENDING: {
-        title: "Pending Orders",
+        title: "Pending Approval Orders",
         icon: Activity,
         color: "text-orange-600 bg-orange-50 dark:bg-orange-900/20",
     },
     APPROVED: {
-        title: "Approved Orders",
+        title: "Active Orders",
         icon: CheckCircle2,
         color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
     },

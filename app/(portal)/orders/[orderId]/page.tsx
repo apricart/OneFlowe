@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { formatPKR } from "@/lib/utils"
 import { calculateLineCents, formatQuantity } from "@/lib/quantity"
 import { buildStatusTimeline } from "@/lib/order-utils"
+import { getOrderDerivedStatus, hasPartialRefund } from "@/lib/order-status"
 import { ArrowLeft, Clock, TrendingDown, CheckCircle, RefreshCw, Package, Ban, Copy } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { RefundManagement } from "@/components/refund-management"
@@ -127,7 +128,7 @@ export default function SuperAdminOrderDetailsPage() {
             </div>
             <div className="flex items-center gap-2">
               <span className="uppercase tracking-wide text-slate-400 dark:text-slate-500">Status</span>
-              <span className="uppercase font-bold text-slate-900 dark:text-white">{order.status}</span>
+              <span className="uppercase font-bold text-slate-900 dark:text-white">{getOrderDerivedStatus({ status: order.status }).label}</span>
             </div>
           </div>
         )}
@@ -156,8 +157,8 @@ export default function SuperAdminOrderDetailsPage() {
           )}
           <Card className="rounded-2xl border-0 bg-white dark:bg-slate-900 dark:border-slate-800 p-4 shadow-md">
             <p className="text-sm text-muted-foreground">Current status</p>
-            <p className="text-2xl font-semibold capitalize text-slate-900 dark:text-white">
-              {order.status.toLowerCase()}
+            <p className="text-2xl font-semibold text-slate-900 dark:text-white">
+              {getOrderDerivedStatus({ status: order.status }).label}
             </p>
             {order.status.toLowerCase() === 'rejected' && order.rejectionReason && (
               <div className="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300 border border-red-100 dark:border-red-900">
@@ -444,9 +445,16 @@ export default function SuperAdminOrderDetailsPage() {
                     <p className="text-sm font-semibold text-slate-900 dark:text-white">Status timeline</p>
                     <p className="text-xs text-muted-foreground">Track key lifecycle events.</p>
                   </div>
-                  <Badge variant="outline" className="capitalize">
-                    {order.status}
-                  </Badge>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <Badge variant="outline">
+                      {getOrderDerivedStatus({ status: order.status }).label}
+                    </Badge>
+                    {hasPartialRefund(order) && (
+                      <Badge variant="outline" className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                        Partial Refund
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <ol className="space-y-4">
                   {buildStatusTimeline(

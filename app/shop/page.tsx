@@ -18,6 +18,7 @@ import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, 
 import { Skeleton } from "@/components/ui/skeleton"
 import Image from "next/image"
 import { RefundManagement } from "@/components/refund-management"
+import { getOrderDerivedStatus } from "@/lib/order-status"
 import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
 
 const ORDER_PORTAL_REFRESH_INTERVAL_MS = 5000
@@ -858,12 +859,17 @@ export default function OrderPortalPage() {
                       <Card key={order.id} className="p-4 hover:shadow-md transition-shadow dark:bg-slate-900 dark:border-slate-800">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-semibold text-slate-900 dark:text-white">Order {order.tid}</p>
                               <Badge variant="outline" className={`${statusInfo.bg} ${statusInfo.text} border-0`}>
                                 <StatusIcon className="h-3 w-3 mr-1" />
-                                {order.status?.toUpperCase() || "PENDING"}
+                                {getOrderDerivedStatus({ status: order.status }).label}
                               </Badge>
+                              {['FULFILLED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes(order.status?.toUpperCase()) && Number(order.refundAmountCents || 0) > 0 && (
+                                <Badge variant="outline" className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                                  Partial Refund
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">
                               <Calendar className="h-3 w-3 inline mr-1" />
@@ -883,12 +889,10 @@ export default function OrderPortalPage() {
                                 if (s === "pending") return "Awaiting Approval"
                                 if (s === "approved") {
                                   if (refundState === "full") return "Refunded"
-                                  if (refundState === "partial") return "Partially Refunded"
-                                  return "Approved"
+                                  return "Active"
                                 }
                                 if (s === "fulfilled") {
                                   if (refundState === "full") return "Refunded"
-                                  if (refundState === "partial") return "Partially Refunded"
                                   return "Completed"
                                 }
                                 if (s === "rejected") return "Cancelled"
@@ -913,7 +917,7 @@ export default function OrderPortalPage() {
                             {(() => {
                               const s = (order.status || "").toLowerCase()
                               if (s === "pending") return "⏳ Waiting for approval..."
-                              if (s === "approved") return "✓ Approved - Processing"
+                              if (s === "approved") return "✓ Active - Processing"
                               if (s === "fulfilled") return "🎉 Order completed and delivered"
                               if (s === "rejected") return "❌ Order was rejected"
                               if (s === "refunded") return "💰 Order has been refunded"
@@ -945,7 +949,7 @@ export default function OrderPortalPage() {
                             <div className="flex items-center gap-2 text-xs">
                               <TrendingDown className="h-4 w-4 text-red-600" />
                               <span className="text-muted-foreground">
-                                {refundState === "full" ? "Fully Refunded" : "Partially Refunded"}
+                                {refundState === "full" ? "Fully Refunded" : "Partial Refund Applied"}
                               </span>
                             </div>
                           )}
@@ -1691,9 +1695,16 @@ export default function OrderPortalPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Status</p>
-                  <Badge variant="outline" className="w-fit">
-                    {selectedOrder.status}
-                  </Badge>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className="w-fit">
+                      {getOrderDerivedStatus({ status: selectedOrder.status }).label}
+                    </Badge>
+                    {['FULFILLED', 'PARTIAL', 'PARTIALLY_FULFILLED'].includes(selectedOrder.status?.toUpperCase()) && Number(selectedOrder.refundAmountCents || 0) > 0 && (
+                      <Badge variant="outline" className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                        Partial Refund
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Date</p>

@@ -76,6 +76,9 @@ const nextConfig = {
     SUPER_ADMIN_EMAIL: process.env.SUPER_ADMIN_EMAIL,
     SUPER_ADMIN_PASSWORD: process.env.SUPER_ADMIN_PASSWORD,
     CRON_SECRET: process.env.CRON_SECRET,
+    // DB connection pool
+    PGPOOL_MAX: process.env.PGPOOL_MAX,
+    PGPOOL_CONN_TIMEOUT_MS: process.env.PGPOOL_CONN_TIMEOUT_MS,
     // AWS SES email
     SES_FROM_EMAIL: process.env.SES_FROM_EMAIL,
     SES_CONFIGURATION_SET: process.env.SES_CONFIGURATION_SET,

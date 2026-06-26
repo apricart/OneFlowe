@@ -29,12 +29,18 @@ export function getOrderRefundVariant(order: OrderStatusSource): Exclude<OrderSp
   return "none"
 }
 
+export function hasPartialRefund(order: OrderStatusSource): boolean {
+  const status = normalizeStatus(order.status)
+  return (
+    (status === "FULFILLED" || status === "PARTIAL" || status === "PARTIALLY_FULFILLED") &&
+    Number(order.refundAmountCents || 0) > 0
+  )
+}
+
 export function getOrderFulfillmentVariant(order: OrderStatusSource): Exclude<OrderSplitFilter, "all"> | "none" {
   const status = normalizeStatus(order.status)
-  const refundAmountCents = Number(order.refundAmountCents || 0)
 
-  if (status === "PARTIAL" || status === "PARTIALLY_FULFILLED") return "partial"
-  if (status === "FULFILLED" && refundAmountCents > 0) return "partial"
+  if (status === "PARTIAL" || status === "PARTIALLY_FULFILLED") return "full"
   if (status === "FULFILLED") return "full"
   return "none"
 }
@@ -51,7 +57,7 @@ function getBaseStatusKey(order: OrderStatusSource): DerivedOrderStatusKey {
       return "fulfilled"
     case "PARTIAL":
     case "PARTIALLY_FULFILLED":
-      return "partially_fulfilled"
+      return "fulfilled"
     case "REFUNDED":
       return "refunded"
     case "REJECTED":
@@ -81,16 +87,14 @@ export function getOrderDerivedStatus(
   }
 
   if (refundVariant === "full") return { key: "refunded", label: "Refunded" }
-  if (refundVariant === "partial") return { key: "partially_refunded", label: "Partially Refunded" }
-  if (fulfillmentVariant === "partial") return { key: "partially_fulfilled", label: "Partially Fulfilled" }
 
   const key = getBaseStatusKey(order)
 
   switch (key) {
     case "pending":
-      return { key, label: "Pending" }
+      return { key, label: "Pending Approval" }
     case "approved":
-      return { key, label: "Approved" }
+      return { key, label: "Active" }
     case "fulfilled":
       return { key, label: "Fulfilled" }
     case "rejected":
