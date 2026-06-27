@@ -153,6 +153,16 @@ export async function requireApiRole(allowed: Role[]) {
       )
     }
 
+    // Block any API call while the user has a pending password change.
+    // The change-password endpoint uses getCurrentUser() directly (not requireApiRole)
+    // so it remains accessible; all other API routes are blocked here.
+    if (current.mustChangePassword === true) {
+      return NextResponse.json(
+        { error: "Forbidden", message: "Password change required" },
+        { status: 403 }
+      )
+    }
+
     // Validate current user has valid role
     if (!isValidRole(current.role)) {
       console.error('[API] Current user has invalid role:', current.role)

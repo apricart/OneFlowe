@@ -520,3 +520,137 @@ export async function sendOrderTokenEmail(details: OrderTokenEmailDetails): Prom
     return false
   }
 }
+
+function generateWelcomeEmailHTML(firstName: string, username: string, temporaryPassword: string): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Welcome to OneFlowe</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+      <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 40px 0;">
+            <table role="presentation" style="width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <!-- Header -->
+              <tr>
+                <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+                  <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">OneFlowe</h1>
+                  <p style="margin: 10px 0 0 0; color: #ffffff; font-size: 14px; opacity: 0.9;">Your account has been created</p>
+                </td>
+              </tr>
+
+              <!-- Content -->
+              <tr>
+                <td style="padding: 40px 30px;">
+                  <p style="margin: 0 0 20px 0; color: #333333; font-size: 16px; line-height: 1.5;">
+                    Hello ${escapeHtml(firstName)},
+                  </p>
+                  <p style="margin: 0 0 30px 0; color: #333333; font-size: 16px; line-height: 1.5;">
+                    An account has been created for you on <strong>Apricart OneFlowe</strong>. Please use the credentials below to sign in. You will be asked to set a new password immediately after your first login.
+                  </p>
+
+                  <!-- Credentials Box -->
+                  <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 0 0 30px 0;">
+                    <tr>
+                      <td style="padding: 24px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+                        <p style="margin: 0 0 16px 0; color: #495057; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Your Login Credentials</p>
+                        <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                          <tr>
+                            <td style="padding: 8px 0; color: #6c757d; font-size: 14px; width: 140px;">Username</td>
+                            <td style="padding: 8px 0; color: #212529; font-size: 14px; font-weight: 600; font-family: 'Courier New', monospace;">${escapeHtml(username)}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 8px 0; color: #6c757d; font-size: 14px;">Temporary Password</td>
+                            <td style="padding: 8px 0; color: #212529; font-size: 14px; font-weight: 600; font-family: 'Courier New', monospace;">${escapeHtml(temporaryPassword)}</td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <!-- Warning -->
+                  <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 0 0 24px 0;">
+                    <tr>
+                      <td style="padding: 16px; background-color: #fff3cd; border-radius: 8px; border: 1px solid #ffc107;">
+                        <p style="margin: 0; color: #856404; font-size: 14px; line-height: 1.5;">
+                          <strong>Important:</strong> You must change your password immediately after your first login. Keep your credentials confidential and do not share them with anyone.
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e9ecef;">
+                  <p style="margin: 0 0 10px 0; color: #666666; font-size: 14px;">
+                    This is an automated message, please do not reply.
+                  </p>
+                  <p style="margin: 0; color: #999999; font-size: 12px;">
+                    © ${new Date().getFullYear()} OneFlowe. All rights reserved.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `
+}
+
+export async function sendWelcomeEmail(
+  to: string,
+  firstName: string,
+  username: string,
+  temporaryPassword: string
+): Promise<boolean> {
+  try {
+    if (!to || !username || !temporaryPassword) {
+      console.error('[Email] Invalid parameters for sendWelcomeEmail')
+      return false
+    }
+
+    if (!validateSesConfig()) {
+      console.error('[Email] AWS SES not configured — skipping welcome email')
+      return false
+    }
+
+    await sendAppEmail({
+      fromName: "OneFlowe",
+      to,
+      subject: "Your OneFlowe account has been created",
+      html: generateWelcomeEmailHTML(firstName || username, username, temporaryPassword),
+      text: [
+        `Welcome to Apricart OneFlowe`,
+        ``,
+        `Hello ${firstName || username},`,
+        ``,
+        `An account has been created for you. Use the credentials below to sign in.`,
+        `You will be required to change your password immediately after your first login.`,
+        ``,
+        `Username:           ${username}`,
+        `Temporary Password: ${temporaryPassword}`,
+        ``,
+        `Keep your credentials confidential and do not share them with anyone.`,
+        ``,
+        `This is an automated message, please do not reply.`,
+        `© ${new Date().getFullYear()} OneFlowe. All rights reserved.`,
+      ].join("\n"),
+      tags: [
+        { name: "type", value: "welcome" },
+      ],
+    })
+
+    return true
+  } catch (error) {
+    logError(error, 'EMAIL_SEND_WELCOME', { to })
+    return false
+  }
+}

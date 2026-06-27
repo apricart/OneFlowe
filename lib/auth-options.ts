@@ -33,7 +33,8 @@ export const authOptions: NextAuthOptions = {
             fullName: users.fullName,
             mfaEnabled: users.mfaEnabled,
             isActive: users.isActive,
-            sessionVersion: users.sessionVersion
+            sessionVersion: users.sessionVersion,
+            mustChangePassword: users.mustChangePassword,
           })
           .from(users)
           .where(and(or(eq(users.username, username), sql`lower(${users.email}) = ${username}`), isNull(users.deletedAt)))
@@ -93,7 +94,8 @@ export const authOptions: NextAuthOptions = {
           branchId: u.branchId,
           fullName: u.fullName,
           isEmployee: false,
-          sessionVersion: u.sessionVersion
+          sessionVersion: u.sessionVersion,
+          mustChangePassword: u.mustChangePassword,
         } as any
       },
     }),
@@ -125,7 +127,8 @@ export const authOptions: NextAuthOptions = {
             fullName: users.fullName,
             mfaEnabled: users.mfaEnabled,
             isActive: users.isActive,
-            sessionVersion: users.sessionVersion
+            sessionVersion: users.sessionVersion,
+            mustChangePassword: users.mustChangePassword,
           })
           .from(users)
           .where(and(or(eq(users.username, username), sql`lower(${users.email}) = ${username}`), isNull(users.deletedAt)))
@@ -186,7 +189,8 @@ export const authOptions: NextAuthOptions = {
           branchId: u.branchId,
           fullName: u.fullName,
           isEmployee: false,
-          sessionVersion: u.sessionVersion
+          sessionVersion: u.sessionVersion,
+          mustChangePassword: u.mustChangePassword,
         } as any
       },
     }),
@@ -364,6 +368,7 @@ export const authOptions: NextAuthOptions = {
         token.isEmployee = (user as any).isEmployee
         token.employeeId = (user as any).employeeId
         token.sessionVersion = (user as any).sessionVersion
+        token.mustChangePassword = (user as any).mustChangePassword ?? false
       }
       return token
     },
@@ -378,6 +383,7 @@ export const authOptions: NextAuthOptions = {
           ; (session.user as any).username = (token as any).username
           ; (session.user as any).isEmployee = (token as any).isEmployee
           ; (session.user as any).employeeId = (token as any).employeeId
+          ; (session.user as any).mustChangePassword = (token as any).mustChangePassword ?? false
 
         // Bank-grade security: Verify user is still active and not deleted on every session check
         // This ensures that password resets, deletions, or deactivations kick users out immediately

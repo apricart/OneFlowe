@@ -93,6 +93,9 @@ export async function GET(req: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    if ((session.user as any).mustChangePassword === true) {
+      return NextResponse.json({ error: "Forbidden", message: "Password change required" }, { status: 403 })
+    }
 
     const role = (session.user as any).role
     const normalizedRole = typeof role === "string" ? role.toUpperCase().replace(/\s+/g, "_") : role
@@ -529,6 +532,9 @@ export async function PUT(req: NextRequest) {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if ((session.user as any).mustChangePassword === true) {
+      return NextResponse.json({ error: "Forbidden", message: "Password change required" }, { status: 403 })
     }
 
     const role = (session.user as any).role

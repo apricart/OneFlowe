@@ -17,6 +17,7 @@ export type CurrentUser = {
   id: string
   email: string
   role: Role
+  mustChangePassword: boolean
 }
 
 import { cookies } from 'next/headers'
@@ -57,6 +58,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       id: userId,
       email: email,
       role: role as Role || "BRANCH_ADMIN",
+      mustChangePassword: (session.user as any).mustChangePassword === true,
     }
   } catch (error) {
     logError(error, 'GET_CURRENT_USER')

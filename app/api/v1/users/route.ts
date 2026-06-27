@@ -8,6 +8,7 @@ type Role = "SUPER_ADMIN" | "HEAD_OFFICE" | "BRANCH_ADMIN" | "ORDER_PORTAL"
 import { hashPassword } from "@/lib/password"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
 import { assertUniqueUserFields, normalizeEmail, normalizeOptionalText, UserUniqueFieldError } from "@/lib/user-uniqueness"
+import { sendWelcomeEmail } from "@/lib/email"
 
 
 export async function GET(req: Request) {
@@ -195,6 +196,7 @@ export async function POST(req: Request) {
         contactPerson: body.contactPerson ? String(body.contactPerson) : null,
         location: location || null,
         address: body.address ? String(body.address) : null,
+        mustChangePassword: true,
       })
       .returning()
 
@@ -229,6 +231,11 @@ export async function POST(req: Request) {
     } catch (logErr) {
       console.error("[DEBUG] Failed to write audit log:", logErr)
     }
+
+    // Send welcome email with credentials (non-blocking — never fail user creation over email)
+    sendWelcomeEmail(createdUser.email, createdUser.firstName || "", username, password).catch((emailErr) => {
+      console.error("[USERS_API] Failed to send welcome email:", emailErr)
+    })
 
     // Invalidate users cache so lists refresh immediately
     await invalidateByPrefix('users')

@@ -18,6 +18,9 @@ export async function GET(req: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    if ((session.user as any).mustChangePassword === true) {
+      return NextResponse.json({ error: "Forbidden", message: "Password change required" }, { status: 403 })
+    }
 
     const userRole = (session.user as any).role
     let organizationId = (session.user as any).organizationId

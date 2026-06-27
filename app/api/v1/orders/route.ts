@@ -35,6 +35,9 @@ export async function GET(req: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+    if ((session.user as any).mustChangePassword === true) {
+      return NextResponse.json({ error: "Forbidden", message: "Password change required" }, { status: 403 })
+    }
 
     const role = (session.user as any).role
     const organizationIdRaw = (session.user as any).organizationId
@@ -328,6 +331,7 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if ((session.user as any).mustChangePassword === true) return NextResponse.json({ error: "Forbidden", message: "Password change required" }, { status: 403 })
     const role = (session.user as any).role
     let organizationId = (session.user as any).organizationId
     if (organizationId) organizationId = parseInt(String(organizationId))
@@ -765,6 +769,7 @@ export async function PUT(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if ((session.user as any).mustChangePassword === true) return NextResponse.json({ error: "Forbidden", message: "Password change required" }, { status: 403 })
     const role = (session.user as any).role
     const body = await req.json()
     const { id, action, rejectionReason, approvalToken } = body as { id: number, action: 'approve' | 'cancel' | 'fulfill' | 'reject', rejectionReason?: string, approvalToken?: string }

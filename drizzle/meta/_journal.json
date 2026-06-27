@@ -162,6 +162,13 @@
       "when": 1782172800000,
       "tag": "20260623000000_add_refund_number",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1782432000000,
+      "tag": "20260626000000_add_must_change_password",
+      "breakpoints": true
     }
   ]
 }

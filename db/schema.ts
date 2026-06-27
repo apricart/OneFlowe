@@ -119,6 +119,7 @@ export const users = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     sessionVersion: integer("session_version").notNull().default(1),
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
   },
   (t) => ({
     usernameIdx: uniqueIndex("users_username_idx").on(t.username),

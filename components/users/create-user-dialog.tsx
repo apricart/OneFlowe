@@ -780,7 +780,7 @@ export function CreateUserDialog({ onSuccess }: CreateUserDialogProps) {
                               {branches.map((branch: any) => (
                                 <CommandItem
                                   key={branch.id}
-                                  value={branch.name}
+                                  value={`${branch.name}__${branch.id}`}
                                   onSelect={() => {
                                     setForm({ ...form, branchId: String(branch.id) })
                                     setBranchOpen(false)

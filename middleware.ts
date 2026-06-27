@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { logger } from "@/lib/utils"
 import { getToken } from "next-auth/jwt"
 
-const protectedPrefixes = ["/dashboard", "/organizations", "/users", "/orders", "/inventory", "/budgets", "/reports", "/settings", "/branches", "/shop"]
+const protectedPrefixes = ["/dashboard", "/organizations", "/users", "/orders", "/inventory", "/budgets", "/reports", "/settings", "/branches", "/shop", "/change-password"]
 
 /**
  * Inject bank-grade security headers into every response
@@ -65,9 +65,19 @@ export async function middleware(req: NextRequest) {
 
   const role = (token as any).role as string | undefined
 
+  // Force newly-created users to change their password before accessing anything else.
+  // mustChangePassword is set to true on user creation and cleared after the user
+  // sets a new password. The flag lives in the JWT so no extra DB hit per request.
+  const mustChangePassword = (token as any).mustChangePassword === true
+  if (mustChangePassword && !pathname.startsWith("/change-password")) {
+    const url = new URL("/change-password", req.url || "http://localhost")
+    const redirectRes = NextResponse.redirect(url)
+    return withSecurityHeaders(redirectRes, pathname)
+  }
+
   // Role-based routing enforcement
-  // 1. ORDER_PORTAL users can ONLY access /shop
-  if (role === "ORDER_PORTAL" && !pathname.startsWith("/shop")) {
+  // 1. ORDER_PORTAL users can ONLY access /shop (allow /change-password when mustChangePassword is set)
+  if (role === "ORDER_PORTAL" && !pathname.startsWith("/shop") && !pathname.startsWith("/change-password")) {
     const url = new URL("/shop", req.url || "http://localhost")
     const redirectRes = NextResponse.redirect(url)
     return withSecurityHeaders(redirectRes, pathname)
@@ -128,5 +138,7 @@ export const config = {
     "/settings/:path*",
     "/shop",
     "/shop/:path*",
+    "/change-password",
+    "/change-password/:path*",
   ],
 }
