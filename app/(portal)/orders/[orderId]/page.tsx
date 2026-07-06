@@ -7,10 +7,11 @@ import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { formatPKR } from "@/lib/utils"
+import { cn, formatPKR } from "@/lib/utils"
 import { calculateLineCents, formatQuantity } from "@/lib/quantity"
 import { buildStatusTimeline } from "@/lib/order-utils"
 import { getOrderDerivedStatus, hasPartialRefund } from "@/lib/order-status"
+import { PAYMENT_STATUS_LABELS, normalizePaymentStatus } from "@/lib/payment-status"
 import { ArrowLeft, Clock, TrendingDown, CheckCircle, RefreshCw, Package, Ban, Copy } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { RefundManagement } from "@/components/refund-management"
@@ -43,6 +44,7 @@ type OrderDetail = {
   branchId: number
   branchName?: string | null
   status: string
+  paymentStatus?: string | null
   statusAtRefund?: string | null
   refundedAt?: string | null
   refundedByUserId?: string | null
@@ -160,6 +162,14 @@ export default function SuperAdminOrderDetailsPage() {
             <p className="text-2xl font-semibold text-slate-900 dark:text-white">
               {getOrderDerivedStatus({ status: order.status }).label}
             </p>
+            <span className={cn(
+              "mt-2 inline-flex items-center rounded-lg border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+              normalizePaymentStatus(order.paymentStatus) === "PAID"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
+                : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+            )}>
+              {PAYMENT_STATUS_LABELS[normalizePaymentStatus(order.paymentStatus)]}
+            </span>
             {order.status.toLowerCase() === 'rejected' && order.rejectionReason && (
               <div className="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-950/30 dark:text-red-300 border border-red-100 dark:border-red-900">
                 <span className="font-semibold block mb-0.5">Reason:</span>

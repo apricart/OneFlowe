@@ -364,6 +364,9 @@ export const orders = pgTable(
       .notNull(),
     status: varchar("status", { length: 32 }).notNull().default("PENDING"), // PENDING/APPROVED/REJECTED/FULFILLED/REFUNDED
     fulfillmentStatus: varchar("fulfillment_status", { length: 32 }).notNull().default("NOT_STARTED"), // NOT_STARTED/IN_PROCESS/OUT_FOR_DELIVERY/DELIVERED
+    paymentStatus: varchar("payment_status", { length: 16 }).notNull().default("UNPAID"), // UNPAID/PAID — toggled by SUPER_ADMIN only
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    paidByUserId: uuid("paid_by_user_id").references(() => users.id),
     subtotalCents: bigint("subtotal_cents", { mode: "number" }).notNull().default(0),
     taxCents: bigint("tax_cents", { mode: "number" }).notNull().default(0),
     totalCents: bigint("total_cents", { mode: "number" }).notNull().default(0),
@@ -426,6 +429,7 @@ export const orders = pgTable(
     branchIdx: index("orders_branch_idx").on(t.branchId),
     statusIdx: index("orders_status_idx").on(t.status),
     fulfillmentStatusIdx: index("orders_fulfillment_status_idx").on(t.fulfillmentStatus),
+    paymentStatusIdx: index("orders_payment_status_idx").on(t.paymentStatus),
     createdIdx: index("orders_created_idx").on(t.createdAt),
     ordersOrgIdx: index("orders_org_idx").on(t.organizationId),
     ordersOrgBranchStatusIdx: index("orders_org_branch_status_idx").on(t.organizationId, t.branchId, t.status),

@@ -196,6 +196,8 @@ export async function GET(req: NextRequest) {
         branchId: orders.branchId,
         status: orders.status,
         fulfillmentStatus: orderSelectColumns.fulfillmentStatus,
+        paymentStatus: orderSelectColumns.paymentStatus,
+        paidAt: orderSelectColumns.paidAt,
         statusAtRefund: orders.statusAtRefund,
         refundedAt: orders.refundedAt,
         refundedByUserId: orders.refundedByUserId,

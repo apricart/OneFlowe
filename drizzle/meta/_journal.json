@@ -169,6 +169,20 @@
       "when": 1782432000000,
       "tag": "20260626000000_add_must_change_password",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1782910376602,
+      "tag": "20260701125256_yellow_wither",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1783341878023,
+      "tag": "20260706124438_low_the_hood",
+      "breakpoints": true
     }
   ]
 }

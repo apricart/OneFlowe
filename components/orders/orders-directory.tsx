@@ -24,7 +24,8 @@ import {
   Share2,
   Copy,
   Send,
-  Truck
+  Truck,
+  Banknote
 } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "@/hooks/use-toast"
@@ -57,6 +58,11 @@ import {
   normalizeFulfillmentStatus,
   type FulfillmentStatus,
 } from "@/lib/fulfillment-status"
+import {
+  PAYMENT_STATUS_LABELS,
+  normalizePaymentStatus,
+  type PaymentStatus,
+} from "@/lib/payment-status"
 
 type OrderItem = any // Avoiding strict type definition for speed, will rely on usage
 type OrdersDirectoryProps = {
@@ -90,6 +96,7 @@ export function OrdersDirectory({
   const [fulfillToken, setFulfillToken] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
   const [isUpdatingProgress, setIsUpdatingProgress] = useState(false)
+  const [isUpdatingPayment, setIsUpdatingPayment] = useState(false)
   const [isSendingTokenEmail, setIsSendingTokenEmail] = useState(false)
 
   // Helpers
@@ -135,6 +142,62 @@ export function OrdersDirectory({
   const shouldShowFulfillmentProgress = (order: OrderItem) => {
     const status = String(order.status || "").toLowerCase()
     return status === "approved" || status === "fulfilled"
+  }
+
+  const getPaymentStatusColor = (status?: string | null) => {
+    return normalizePaymentStatus(status) === "PAID"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300"
+      : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+  }
+
+  const shouldShowPaymentStatus = (order: OrderItem) => {
+    const status = String(order.status || "").toLowerCase()
+    return status !== "rejected" && status !== "cancelled"
+  }
+
+  const updatePaymentStatus = async (nextStatus: PaymentStatus) => {
+    if (!viewingOrder) return
+
+    setIsUpdatingPayment(true)
+    try {
+      const res = await fetch(`/api/v1/orders/${viewingOrder.id}/payment-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentStatus: nextStatus }),
+      })
+
+      const responseText = await res.text()
+      const data = responseText
+        ? (() => {
+            try {
+              return JSON.parse(responseText)
+            } catch {
+              return { error: responseText }
+            }
+          })()
+        : {}
+
+      if (!res.ok) throw new Error(data.error || "Failed to update payment status")
+
+      const updatedOrder = {
+        ...viewingOrder,
+        paymentStatus: data.item?.paymentStatus || nextStatus,
+      }
+      setViewingOrder(updatedOrder)
+      toast({
+        title: "Payment status updated",
+        description: `Order marked ${PAYMENT_STATUS_LABELS[nextStatus]}.`,
+      })
+      onUpdate()
+    } catch (err: any) {
+      toast({
+        title: "Payment Update Failed",
+        description: err.message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsUpdatingPayment(false)
+    }
   }
 
   const updateFulfillmentProgress = async (nextStatus: FulfillmentStatus) => {
@@ -383,6 +446,14 @@ export function OrdersDirectory({
                         {FULFILLMENT_STATUS_LABELS[normalizeFulfillmentStatus(order.fulfillmentStatus)]}
                       </Badge>
                     )}
+                    {shouldShowPaymentStatus(order) && (
+                      <Badge
+                        variant="outline"
+                        className={cn("max-w-full whitespace-normal break-words rounded-lg border px-2 py-0.5 text-right text-[9px] font-bold uppercase leading-tight tracking-wider", getPaymentStatusColor(order.paymentStatus))}
+                      >
+                        {PAYMENT_STATUS_LABELS[normalizePaymentStatus(order.paymentStatus)]}
+                      </Badge>
+                    )}
                     {hasPartialRefund(order) && (
                       <Badge variant="outline" className="max-w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[9px] font-bold uppercase leading-tight tracking-wider text-amber-600 dark:text-amber-400">
                         Partial Refund
@@ -464,6 +535,11 @@ export function OrdersDirectory({
                         {shouldShowFulfillmentProgress(order) && (
                           <Badge variant="outline" className={cn("ml-2 px-2 py-0.5 text-[9px] uppercase font-bold tracking-wider rounded-lg border", getFulfillmentProgressColor(order.fulfillmentStatus))}>
                             {FULFILLMENT_STATUS_LABELS[normalizeFulfillmentStatus(order.fulfillmentStatus)]}
+                          </Badge>
+                        )}
+                        {shouldShowPaymentStatus(order) && (
+                          <Badge variant="outline" className={cn("ml-2 px-2 py-0.5 text-[9px] uppercase font-bold tracking-wider rounded-lg border", getPaymentStatusColor(order.paymentStatus))}>
+                            {PAYMENT_STATUS_LABELS[normalizePaymentStatus(order.paymentStatus)]}
                           </Badge>
                         )}
                         {hasPartialRefund(order) && (
@@ -597,6 +673,17 @@ export function OrdersDirectory({
                         </Badge>
                       </div>
                     )}
+                    {shouldShowPaymentStatus(viewingOrder) && (
+                      <div className="flex items-center justify-between gap-3 group">
+                        <span className="text-xs font-semibold text-slate-500 flex items-center gap-1.5"><Banknote className="h-3.5 w-3.5" /> Payment</span>
+                        <Badge
+                          variant="outline"
+                          className={cn("max-w-[11rem] whitespace-normal break-words rounded-lg border px-2 py-0.5 text-right text-[9px] font-bold uppercase leading-tight tracking-wider", getPaymentStatusColor(viewingOrder.paymentStatus))}
+                        >
+                          {PAYMENT_STATUS_LABELS[normalizePaymentStatus(viewingOrder.paymentStatus)]}
+                        </Badge>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -665,6 +752,28 @@ export function OrdersDirectory({
                     <TrendingDown className="h-4 w-4" />
                     View Refund Details
                   </Button>
+                )}
+
+                {isSuperAdmin && shouldShowPaymentStatus(viewingOrder) && (
+                  (() => {
+                    const isPaid = normalizePaymentStatus(viewingOrder.paymentStatus) === "PAID"
+                    return (
+                      <Button
+                        type="button"
+                        disabled={isUpdatingPayment}
+                        onClick={() => updatePaymentStatus(isPaid ? "UNPAID" : "PAID")}
+                        className={cn(
+                          "w-full h-12 rounded-xl text-white font-bold shadow-lg",
+                          isPaid
+                            ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+                            : "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/20"
+                        )}
+                      >
+                        <Banknote className={cn("mr-2 h-4 w-4", isUpdatingPayment && "animate-pulse")} />
+                        {isUpdatingPayment ? "Updating..." : isPaid ? "Mark as Unpaid" : "Mark as Paid"}
+                      </Button>
+                    )
+                  })()
                 )}
 
                 <div className="flex bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 h-14 rounded-2xl justify-center items-center border border-dashed border-slate-200 dark:border-slate-700 transition-colors">

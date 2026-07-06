@@ -1,6 +1,7 @@
 import { orders } from "@/db/schema"
 import { sql } from "drizzle-orm"
 import type { FulfillmentStatus } from "@/lib/fulfillment-status"
+import type { PaymentStatus } from "@/lib/payment-status"
 
 export const orderSelectColumns = {
   id: orders.id,
@@ -9,6 +10,9 @@ export const orderSelectColumns = {
   branchId: orders.branchId,
   status: orders.status,
   fulfillmentStatus: sql<FulfillmentStatus>`COALESCE(to_jsonb("orders") ->> 'fulfillment_status', 'NOT_STARTED')`,
+  paymentStatus: sql<PaymentStatus>`COALESCE(to_jsonb("orders") ->> 'payment_status', 'UNPAID')`,
+  paidAt: sql<string | null>`to_jsonb("orders") ->> 'paid_at'`,
+  paidByUserId: sql<string | null>`to_jsonb("orders") ->> 'paid_by_user_id'`,
   subtotalCents: orders.subtotalCents,
   taxCents: orders.taxCents,
   totalCents: orders.totalCents,
@@ -36,6 +40,33 @@ export const orderSelectColumns = {
 
 export function isMissingFulfillmentStatusColumn(error: any) {
   return error?.code === "42703" || error?.cause?.code === "42703"
+}
+
+export async function updateOrderPaymentStatusColumn(
+  client: { execute: (query: any) => Promise<any> },
+  orderId: number,
+  status: PaymentStatus,
+  userId: string,
+) {
+  try {
+    if (status === "PAID") {
+      await client.execute(sql`
+        UPDATE "orders"
+        SET "payment_status" = ${status}, "paid_at" = NOW(), "paid_by_user_id" = ${userId}, "updated_at" = NOW()
+        WHERE "id" = ${orderId}
+      `)
+    } else {
+      await client.execute(sql`
+        UPDATE "orders"
+        SET "payment_status" = ${status}, "paid_at" = NULL, "paid_by_user_id" = NULL, "updated_at" = NOW()
+        WHERE "id" = ${orderId}
+      `)
+    }
+    return true
+  } catch (error) {
+    if (isMissingFulfillmentStatusColumn(error)) return false
+    throw error
+  }
 }
 
 export async function updateOrderFulfillmentStatusColumn(
