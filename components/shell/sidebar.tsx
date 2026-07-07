@@ -32,7 +32,7 @@ const getNavigationByRole = (role: string) => {
           { href: "/products/subcategories", label: "Subcategories" },
         ]
       },
-      { href: "/groups", label: "Groups", icon: FolderTree },
+      { href: "/groups", label: "Group Management", icon: FolderTree },
       { href: "/budgets", label: "Budgets", icon: Wallet },
       { href: "/budget-by-quantity", label: "Budget by Quantity", icon: Wallet },
       {
@@ -60,7 +60,7 @@ const getNavigationByRole = (role: string) => {
       { href: "/users", label: "Users", icon: Users },
       { href: "/orders", label: "Orders", icon: Package },
       { href: "/inventory", label: "Inventory", icon: Boxes },
-      { href: "/groups", label: "Groups", icon: FolderTree },
+      { href: "/groups", label: "Group Management", icon: FolderTree },
       { href: "/budgets", label: "Budgets", icon: Wallet },
       { href: "/budget-by-quantity", label: "Budget by Quantity", icon: Wallet },
       {

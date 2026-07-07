@@ -82,7 +82,7 @@ export function Topbar() {
               className="gap-2 hidden sm:flex border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
             >
               <BarChart3 className="h-4 w-4" />
-              Groups
+              Group Analytics
             </Button>
           </Link>
         )}
