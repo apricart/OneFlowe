@@ -18,7 +18,7 @@ async function main() {
     .from(branches)
     .where(eq(branches.organizationId, ORG_ID))
 
-  const branchMap = new Map<string, { id: number; name: string; code: string }>()
+  const branchMap = new Map<string, { id: number; name: string; code: string | null }>()
   for (const b of allBranches) {
     branchMap.set(b.name.toLowerCase().trim(), b)
   }
