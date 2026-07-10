@@ -24,7 +24,7 @@ import { startOfDay, endOfDay } from "date-fns"
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
 export function BranchAdminDashboard() {
-  const { organizationId, branchId, userRole } = useAppContext()
+  const { organizationId, branchId, userRole, isInitialized } = useAppContext()
 
   // Branch Admin defaults to 'Today'
   const defaultPreset = "today" as const
@@ -43,8 +43,12 @@ export function BranchAdminDashboard() {
   const allTimeEndDate = useMemo(() => new Date().toISOString(), [])
 
   // Fetch all-time data to extract available years from the database for this branch
+  // (deferred until the branch context has hydrated — previously this could fire
+  // with the literal string "branchId=null" before initialization)
   const { data: allTimePerf } = useSWR(
-    `/api/v1/analytics/sales-performance?startDate=2015-01-01T00:00:00.000Z&endDate=${allTimeEndDate}&granularity=yearly&status=all&branchId=${branchId}`,
+    isInitialized && branchId
+      ? `/api/v1/analytics/sales-performance?startDate=2015-01-01T00:00:00.000Z&endDate=${allTimeEndDate}&granularity=yearly&status=all&branchId=${branchId}`
+      : null,
     fetcher
   )
 
@@ -114,7 +118,8 @@ export function BranchAdminDashboard() {
     months, years, compareMonths, compareYears,
     activePreset === "all" ? "yearly" : undefined,
     undefined, // organizationIds
-    true        // includeStatusCounts
+    true,       // includeStatusCounts
+    { enabled: isInitialized, keepPreviousData: true }
   )
 
   // Chart Logic (Local Filters)
@@ -147,7 +152,10 @@ export function BranchAdminDashboard() {
     undefined,
     undefined, chartDateRange, "all", false, null,
     chartMonths, chartYears, [], [],
-    chartGranularity
+    chartGranularity,
+    undefined,
+    undefined,
+    { enabled: isInitialized, keepPreviousData: true }
   )
   const pricesHidden = Boolean((perfData as any)?.pricesHidden || (chartPerfData as any)?.pricesHidden || (allTimePerf as any)?.pricesHidden)
   const priceVisibilityKnown = [perfData, chartPerfData, allTimePerf].some((data: any) => typeof data?.pricesHidden === "boolean")
@@ -231,6 +239,8 @@ export function BranchAdminDashboard() {
   const refundedCount = perfData?.statusCounts?.refundedCount ?? 0
   const rejectedCount = perfData?.statusCounts?.rejectedCount ?? 0
   const approvedCount = perfData?.statusCounts?.approvedCount ?? 0
+  const deliveredCount = perfData?.statusCounts?.deliveredCount ?? 0
+  const notDeliveredCount = perfData?.statusCounts?.notDeliveredCount ?? 0
 
   return (
     <motion.main 
@@ -281,7 +291,7 @@ export function BranchAdminDashboard() {
             value="..."
             subtitle="Checking access"
             gradient="from-slate-400 to-slate-600" iconBg="text-slate-600 bg-slate-600" delay={0}
-            isLoading={isLoadingPerf}
+            isLoading={!perfData}
           />
         ) : pricesHidden ? (
           <BankingKPICard
@@ -293,7 +303,7 @@ export function BranchAdminDashboard() {
             trendValue={buildTrend(totalItemsSold, perfData?.comparison?.totalItemsSold)?.value}
             comparisonValue={buildTrend(totalItemsSold, perfData?.comparison?.totalItemsSold)?.label}
             comparisonLabel="VS LAST"
-            isLoading={isLoadingPerf}
+            isLoading={!perfData}
           />
         ) : (
           <BankingKPICard
@@ -306,7 +316,7 @@ export function BranchAdminDashboard() {
             trendValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.value}
             comparisonValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.label}
             comparisonLabel="VS LAST"
-            isLoading={isLoadingPerf}
+            isLoading={!perfData}
           />
         )}
         <BankingKPICard
@@ -319,7 +329,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(totalOrders, perfData?.comparison?.totalOrders)?.value}
           comparisonValue={buildTrend(totalOrders, perfData?.comparison?.totalOrders)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={Activity} title="Pending Approval"
@@ -331,7 +341,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(pendingCount, perfData?.comparison?.pendingCount)?.value}
           comparisonValue={buildTrend(pendingCount, perfData?.comparison?.pendingCount)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={CheckCircle2} title="Active"
@@ -343,7 +353,11 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(approvedCount, perfData?.comparison?.approvedCount)?.value}
           comparisonValue={buildTrend(approvedCount, perfData?.comparison?.approvedCount)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          details={[
+            { label: "Delivered", value: deliveredCount.toLocaleString() },
+            { label: "Not Delivered", value: notDeliveredCount.toLocaleString() },
+          ]}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
@@ -355,7 +369,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.value}
           comparisonValue={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={RotateCcw} title="Refunded"
@@ -367,7 +381,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(refundedCount, perfData?.comparison?.refundedCount)?.value}
           comparisonValue={buildTrend(refundedCount, perfData?.comparison?.refundedCount)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={XCircle} title="Rejected"
@@ -379,7 +393,7 @@ export function BranchAdminDashboard() {
           trendValue={buildTrend(rejectedCount, perfData?.comparison?.rejectedCount)?.value}
           comparisonValue={buildTrend(rejectedCount, perfData?.comparison?.rejectedCount)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
       </div>
 
@@ -424,7 +438,7 @@ export function BranchAdminDashboard() {
               )}
             </div>
 
-            {isLoadingChart || isPriceVisibilityPending ? (
+            {!chartPerfData || isPriceVisibilityPending ? (
               <div className="h-[400px] flex items-center justify-center rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
                 <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 dark:border-slate-800 border-t-emerald-500" />
               </div>

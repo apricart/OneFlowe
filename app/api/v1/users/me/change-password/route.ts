@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm"
 import { hashPassword } from "@/lib/password"
 import { ok, error, readJson } from "@/lib/api"
 import { getCurrentUser } from "@/lib/auth"
+import { invalidateSessionValidationCache } from "@/lib/session-validation-cache"
 
 export async function POST(req: Request) {
   try {
@@ -36,6 +37,10 @@ export async function POST(req: Request) {
       sessionVersion: (dbUser.sessionVersion || 0) + 1,
       updatedAt: new Date(),
     }).where(eq(users.id, currentUser.id))
+
+    // Drop the cached session-validation result so the sessionVersion bump
+    // takes effect on the next session check across all devices
+    await invalidateSessionValidationCache(currentUser.id)
 
     // Remove physical sessions so all devices are logged out
     await db.delete(sessions).where(eq(sessions.userId, currentUser.id))

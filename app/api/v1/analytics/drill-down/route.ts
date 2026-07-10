@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     const parsedCompYears = compareYearsRaw ? compareYearsRaw.split(',').map(Number).filter((n: any) => !isNaN(n) && n > 2000) : []
     const refundType = searchParams.get("refundType")?.toLowerCase() // all, full, partial
     const sortBy = searchParams.get("sortBy")?.toLowerCase() === "value" ? "value" : "date"
-    if (!type || !["REVENUE", "REJECTED", "FULFILLED", "ORDERS", "REFUNDED", "PENDING", "APPROVED", "PARTIAL"].includes(type)) {
+    if (!type || !["REVENUE", "REJECTED", "FULFILLED", "ORDERS", "REFUNDED", "PENDING", "APPROVED", "PARTIAL", "DELIVERED", "NOT_DELIVERED"].includes(type)) {
         return error("Invalid or missing drill-down type")
     }
 
@@ -195,6 +195,14 @@ export async function GET(req: NextRequest) {
         conditions.push(eq(sql`UPPER(${orders.status})`, "PENDING"))
     } else if (type === "APPROVED") {
         conditions.push(eq(sql`UPPER(${orders.status})`, "APPROVED"))
+    } else if (type === "DELIVERED") {
+        conditions.push(
+            eq(sql`UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED'))`, "DELIVERED")
+        )
+    } else if (type === "NOT_DELIVERED") {
+        conditions.push(
+            sql`UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED')) <> 'DELIVERED'`
+        )
     }
 
     try {
@@ -492,6 +500,18 @@ export async function GET(req: NextRequest) {
                     eq(sql`UPPER(${orders.status})`, "REFUNDED"),
                     gt(sql`COALESCE(${orders.refundAmountCents}, 0)`, 0)
                 ))
+            } else if (type === "PENDING") {
+                compConditions.push(eq(sql`UPPER(${orders.status})`, "PENDING"))
+            } else if (type === "APPROVED") {
+                compConditions.push(eq(sql`UPPER(${orders.status})`, "APPROVED"))
+            } else if (type === "DELIVERED") {
+                compConditions.push(
+                    eq(sql`UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED'))`, "DELIVERED")
+                )
+            } else if (type === "NOT_DELIVERED") {
+                compConditions.push(
+                    sql`UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED')) <> 'DELIVERED'`
+                )
             }
 
             const compWhere = and(...compConditions)

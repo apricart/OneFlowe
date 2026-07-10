@@ -6,6 +6,7 @@ import { eq, and, gt, isNull, sql, or } from "drizzle-orm"
 import { verifyPassword } from "@/lib/password"
 import { checkMfaCooldown, verifyOTP, clearDailyCount } from "@/lib/mfa"
 import { compare } from "bcryptjs"
+import { getSessionValidationCache, setSessionValidationCache } from "@/lib/session-validation-cache"
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },  // 8-hour expiry (bank-grade)
@@ -393,7 +394,39 @@ export const authOptions: NextAuthOptions = {
 
           if (!userId) return session
 
-          let dbUser: { isActive: boolean, deletedAt: Date | null, sessionVersion: number } | null = null
+          // Org/branch status is validated against the token's org/branch (not the user row),
+          // matching the previous per-table lookups. Left joins keep this a single round-trip:
+          // an unmatched join yields NULL status, which fails the 'active' check below.
+          const tokenOrgId = token.organizationId ? Number(token.organizationId) : null
+          const tokenBranchId = token.branchId ? Number(token.branchId) : null
+          const tokenSessionVersion =
+            typeof token.sessionVersion === "number" ? token.sessionVersion : null
+
+          // Fast path: this exact tuple (user, sessionVersion, org, branch) was
+          // validated against the DB within the cache TTL. Only positive results
+          // are ever cached, and user-level security changes (deactivate, delete,
+          // password reset) proactively invalidate the entry — see
+          // lib/session-validation-cache.ts for the propagation guarantees.
+          const cachedValidation = await getSessionValidationCache(userId)
+          if (
+            cachedValidation &&
+            cachedValidation.sv === tokenSessionVersion &&
+            cachedValidation.org === tokenOrgId &&
+            cachedValidation.br === tokenBranchId
+          ) {
+            return session
+          }
+
+          const orgJoinCondition = tokenOrgId ? eq(organizations.id, tokenOrgId) : sql`false`
+          const branchJoinCondition = tokenBranchId ? eq(branches.id, tokenBranchId) : sql`false`
+
+          let dbUser: {
+            isActive: boolean
+            deletedAt: Date | null
+            sessionVersion: number
+            orgStatus: string | null
+            branchStatus: string | null
+          } | null = null
 
           if (isEmployee) {
             // Employee ID in token sub is "emp_123", we need the numeric ID for DB lookup
@@ -402,9 +435,13 @@ export const authOptions: NextAuthOptions = {
               .select({
                 isActive: employeeCredentials.isActive,
                 deletedAt: sql<Date | null>`NULL`,
-                sessionVersion: employeeCredentials.sessionVersion
+                sessionVersion: employeeCredentials.sessionVersion,
+                orgStatus: organizations.status,
+                branchStatus: branches.status,
               })
               .from(employeeCredentials)
+              .leftJoin(organizations, orgJoinCondition)
+              .leftJoin(branches, branchJoinCondition)
               .where(eq(employeeCredentials.id, numericId))
               .limit(1)
             dbUser = emp as any
@@ -413,9 +450,13 @@ export const authOptions: NextAuthOptions = {
               .select({
                 isActive: users.isActive,
                 deletedAt: users.deletedAt,
-                sessionVersion: users.sessionVersion
+                sessionVersion: users.sessionVersion,
+                orgStatus: organizations.status,
+                branchStatus: branches.status,
               })
               .from(users)
+              .leftJoin(organizations, orgJoinCondition)
+              .leftJoin(branches, branchJoinCondition)
               .where(eq(users.id, userId))
               .limit(1)
             dbUser = u as any
@@ -427,21 +468,22 @@ export const authOptions: NextAuthOptions = {
           }
 
           // Also check for organization and branch status in session check
-          if (token.organizationId) {
-            const [org] = await db.select({ status: organizations.status }).from(organizations).where(eq(organizations.id, token.organizationId as number)).limit(1)
-            if (!org || org.status?.toLowerCase() !== 'active') {
-              console.log(`[Auth] Invaliding session for user ${userId}: Org deactivated`)
-              return null as any
-            }
+          if (tokenOrgId && dbUser.orgStatus?.toLowerCase() !== 'active') {
+            console.log(`[Auth] Invaliding session for user ${userId}: Org deactivated`)
+            return null as any
           }
 
-          if (token.branchId) {
-            const [branch] = await db.select({ status: branches.status }).from(branches).where(eq(branches.id, token.branchId as number)).limit(1)
-            if (!branch || branch.status?.toLowerCase() !== 'active') {
-              console.log(`[Auth] Invaliding session for user ${userId}: Branch deactivated`)
-              return null as any
-            }
+          if (tokenBranchId && dbUser.branchStatus?.toLowerCase() !== 'active') {
+            console.log(`[Auth] Invaliding session for user ${userId}: Branch deactivated`)
+            return null as any
           }
+
+          // All checks passed — cache the validated tuple (positive result only)
+          await setSessionValidationCache(userId, {
+            sv: tokenSessionVersion,
+            org: tokenOrgId,
+            br: tokenBranchId,
+          })
         } catch (err) {
           console.error("[Auth] Session validation error:", err)
           // On DB error, we allow the session to continue but log the error

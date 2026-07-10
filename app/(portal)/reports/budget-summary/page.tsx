@@ -116,7 +116,8 @@ export default function BudgetSummaryPage() {
         organizationId,
         branchId: contextBranchId,
         branchIds: contextBranchIds,
-        setBranchIds: setContextBranchIds
+        setBranchIds: setContextBranchIds,
+        isInitialized
     } = useAppContext()
 
     const [searchTerm, setSearchTerm] = useState("")
@@ -262,7 +263,9 @@ export default function BudgetSummaryPage() {
     queryParams.set("granularity", granularity);
 
     // ━━━ PAGE DATA (Global) ━━━
-    const { data: pageData, isLoading: isPageLoading, mutate: mutatePage } = useSWR<BudgetSummaryResponse>(`/api/v1/analytics/budgets/summary?${queryParams.toString()}`, fetcher)
+    // Fetches are deferred until the org/branch context has hydrated, and
+    // keepPreviousData keeps the current numbers on screen during filter changes
+    const { data: pageData, isLoading: isPageLoading, mutate: mutatePage } = useSWR<BudgetSummaryResponse>(isInitialized ? `/api/v1/analytics/budgets/summary?${queryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     // ━━━ CHART DATA (All-Time Independent) ━━━
     const chartQueryParams = new URLSearchParams()
@@ -281,7 +284,7 @@ export default function BudgetSummaryPage() {
     chartQueryParams.set("preset", "all")
     chartQueryParams.set("granularity", "monthly")
 
-    const { data: chartApiData, isLoading: isChartLoading } = useSWR<BudgetSummaryResponse>(`/api/v1/analytics/budgets/summary?${chartQueryParams.toString()}`, fetcher)
+    const { data: chartApiData, isLoading: isChartLoading } = useSWR<BudgetSummaryResponse>(isInitialized ? `/api/v1/analytics/budgets/summary?${chartQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     const reportQueryParams = new URLSearchParams()
     if (role === "BRANCH_ADMIN") {
@@ -302,7 +305,7 @@ export default function BudgetSummaryPage() {
     if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
     reportQueryParams.set("granularity", "monthly")
 
-    const { data: budgetReportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR<BudgetSummaryResponse>(`/api/v1/analytics/budgets/summary?${reportQueryParams.toString()}`, fetcher)
+    const { data: budgetReportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR<BudgetSummaryResponse>(isInitialized ? `/api/v1/analytics/budgets/summary?${reportQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     useEffect(() => {
         setHasMounted(true)
@@ -839,6 +842,7 @@ export default function BudgetSummaryPage() {
                         icon={Wallet}
                         colorScheme="emerald"
                         subtitle={`Base: ${formatPKR(summary.totalAllocated / 100)} | Addon: ${formatPKR(summary.totalCredited / 100)}`}
+                        isLoading={!pageData}
                     />
                     <KPICard
                         title="Total Spent"
@@ -846,6 +850,7 @@ export default function BudgetSummaryPage() {
                         icon={ReceiptText}
                         colorScheme="blue"
                         subtitle="Total purchases processed"
+                        isLoading={!pageData}
                     />
                     <KPICard
                         title="Remaining"
@@ -853,6 +858,7 @@ export default function BudgetSummaryPage() {
                         icon={PiggyBank}
                         colorScheme={summary.totalRemaining < 0 ? "rose" : "indigo"}
                         subtitle="Net Liquidity Asset Projection"
+                        isLoading={!pageData}
                     />
                 </div>
 

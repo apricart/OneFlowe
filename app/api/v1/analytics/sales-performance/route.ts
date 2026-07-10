@@ -196,6 +196,14 @@ export async function GET(req: NextRequest) {
                 conditions.push(
                     inArray(sql`UPPER(${orders.status})`, ["FULFILLED", "PARTIAL", "PARTIALLY_FULFILLED"])
                 )
+            } else if (upperStatus === "DELIVERED") {
+                conditions.push(
+                    eq(sql`UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED'))`, "DELIVERED")
+                )
+            } else if (upperStatus === "NOT_DELIVERED") {
+                conditions.push(
+                    sql`UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED')) <> 'DELIVERED'`
+                )
             } else {
                 conditions.push(eq(sql`UPPER(${orders.status})`, upperStatus))
             }
@@ -436,6 +444,14 @@ export async function GET(req: NextRequest) {
             if (upperStatus && upperStatus !== "ALL") {
                 if (upperStatus === "REJECTED") {
                     compConditions.push(or(eq(sql`UPPER(${orders.status})`, "REJECTED"), eq(sql`UPPER(${orders.status})`, "CANCELLED")))
+                } else if (upperStatus === "DELIVERED") {
+                    compConditions.push(
+                        eq(sql`UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED'))`, "DELIVERED")
+                    )
+                } else if (upperStatus === "NOT_DELIVERED") {
+                    compConditions.push(
+                        sql`UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED')) <> 'DELIVERED'`
+                    )
                 } else {
                     compConditions.push(eq(sql`UPPER(${orders.status})`, upperStatus))
                 }
@@ -533,6 +549,8 @@ export async function GET(req: NextRequest) {
                 rejectedCount: metricExpressions.rejectedCount,
                 approvedCount: metricExpressions.approvedCount,
                 pendingCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'PENDING' THEN 1 END), 0)`.mapWith(Number),
+                deliveredCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' AND UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED')) = 'DELIVERED' THEN 1 END), 0)`.mapWith(Number),
+                notDeliveredCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' AND UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED')) <> 'DELIVERED' THEN 1 END), 0)`.mapWith(Number),
             })
                 .from(orders)
                 .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -550,6 +568,8 @@ export async function GET(req: NextRequest) {
                 rejectedCount: compStatusCounts[0]?.rejectedCount || 0,
                 approvedCount: compStatusCounts[0]?.approvedCount || 0,
                 pendingCount: compStatusCounts[0]?.pendingCount || 0,
+                deliveredCount: compStatusCounts[0]?.deliveredCount || 0,
+                notDeliveredCount: compStatusCounts[0]?.notDeliveredCount || 0,
                 seriesData: compSeriesData
             }
         }
@@ -562,6 +582,8 @@ export async function GET(req: NextRequest) {
             partialCount: number
             refundedCount: number
             rejectedCount: number
+            deliveredCount: number
+            notDeliveredCount: number
         } | null = null
 
         if (includeStatusCounts && (!statusParam || statusParam.toUpperCase() === "ALL")) {
@@ -572,6 +594,8 @@ export async function GET(req: NextRequest) {
                 partialCount: metricExpressions.partialCount,
                 refundedCount: metricExpressions.refundedCount,
                 rejectedCount: metricExpressions.rejectedCount,
+                deliveredCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' AND UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED')) = 'DELIVERED' THEN 1 END), 0)`.mapWith(Number),
+                notDeliveredCount: sql<number>`COALESCE(COUNT(CASE WHEN UPPER(${orders.status}) = 'APPROVED' AND UPPER(COALESCE(${orders.fulfillmentStatus}, 'NOT_STARTED')) <> 'DELIVERED' THEN 1 END), 0)`.mapWith(Number),
             })
             .from(orders)
             .leftJoin(branches, eq(orders.branchId, branches.id))
@@ -585,6 +609,8 @@ export async function GET(req: NextRequest) {
                     partialCount: counts.partialCount,
                     refundedCount: counts.refundedCount,
                     rejectedCount: counts.rejectedCount,
+                    deliveredCount: counts.deliveredCount,
+                    notDeliveredCount: counts.notDeliveredCount,
                 }
             }
         }

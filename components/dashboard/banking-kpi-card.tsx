@@ -18,6 +18,7 @@ type BankingKPICardProps = {
     comparisonValue?: string | number
     comparisonLabel?: string
     isLoading?: boolean
+    details?: Array<{ label: string; value: string | number }>
 }
 
 /* Decorative background glow */
@@ -48,6 +49,7 @@ export const BankingKPICard = ({
     comparisonValue,
     comparisonLabel,
     isLoading = false,
+    details,
 }: BankingKPICardProps) => {
     const isPositive = trend === "up"
 
@@ -141,6 +143,24 @@ export const BankingKPICard = ({
                     >
                         {subtitle}
                     </motion.p>
+                )}
+
+                {!isLoading && details && details.length > 0 && (
+                    <div className="mt-2 grid grid-cols-2 gap-1.5">
+                        {details.map((detail) => (
+                            <div
+                                key={detail.label}
+                                className="rounded-lg border border-slate-200/60 bg-white/45 px-2 py-1 dark:border-slate-700/50 dark:bg-slate-900/35"
+                            >
+                                <p className="text-[8px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                                    {detail.label}
+                                </p>
+                                <p className="text-xs font-extrabold leading-tight text-slate-700 dark:text-slate-200">
+                                    {detail.value}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
                 )}
 
                 {!isLoading && comparisonValue && trendValue !== "0.0%" && (

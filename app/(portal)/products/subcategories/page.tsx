@@ -58,12 +58,15 @@ export default function SubcategoriesPage() {
         items: Subcategory[]
         pagination: { page: number; limit: number; total: number; pages: number }
     }>(`/api/v1/subcategories?${params.toString()}`, fetcher, {
-        fallbackData: { items: [], pagination: { page: 1, limit: 50, total: 0, pages: 0 } },
+        // No fallbackData: zero-filled fallback made the stat cards flash "0"
+        // before the real numbers arrived. keepPreviousData shows the previous
+        // results while a search/filter change loads.
         revalidateOnFocus: false,
+        keepPreviousData: true,
     })
 
     const subcategories = data?.items ?? []
-    const totalSubcategories = data?.pagination.total ?? 0
+    const totalSubcategories = data?.pagination?.total ?? 0
 
     const openCreateDialog = () => {
         setSubcategoryName("")
@@ -213,12 +216,14 @@ export default function SubcategoriesPage() {
                     value={totalSubcategories}
                     icon={<FolderOpen className="h-5 w-5" />}
                     variant="amber"
+                    isLoading={!data}
                 />
                 <StatCard
                     label="Total Products"
                     value={subcategories.reduce((acc, sub) => acc + sub.productsCount, 0)}
                     icon={<Package className="h-5 w-5" />}
                     variant="blue"
+                    isLoading={!data}
                 />
             </div>
 
@@ -227,7 +232,7 @@ export default function SubcategoriesPage() {
                 <CardHeader>
                     <CardTitle className="text-xl text-slate-900 dark:text-white">Subcategories</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                        {totalSubcategories} {totalSubcategories === 1 ? "subcategory" : "subcategories"} in total
+                        {data ? `${totalSubcategories} ${totalSubcategories === 1 ? "subcategory" : "subcategories"} in total` : "Loading…"}
                     </p>
                 </CardHeader>
                 <CardContent>
@@ -427,11 +432,12 @@ export default function SubcategoriesPage() {
     )
 }
 
-function StatCard({ label, value, icon, variant }: { 
-    label: string; 
-    value: string | number; 
+function StatCard({ label, value, icon, variant, isLoading = false }: {
+    label: string;
+    value: string | number;
     icon: React.ReactNode;
     variant: 'blue' | 'green' | 'red' | 'amber' | 'purple'
+    isLoading?: boolean
 }) {
     const variants = {
         blue: "bg-gradient-to-br from-blue-50/80 to-indigo-50/80 border-blue-100/50 text-blue-700 dark:from-blue-900/20 dark:to-indigo-900/20 dark:border-blue-800/30 dark:text-blue-400",
@@ -453,7 +459,11 @@ function StatCard({ label, value, icon, variant }: {
         <div className={cn("flex items-center justify-between p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md", variants[variant])}>
             <div className="space-y-1">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] opacity-80">{label}</p>
-                <p className="text-2xl font-black tracking-tight">{value}</p>
+                {isLoading ? (
+                    <div className="h-8 w-16 rounded-md bg-slate-300/40 dark:bg-slate-600/40 animate-pulse" />
+                ) : (
+                    <p className="text-2xl font-black tracking-tight">{value}</p>
+                )}
             </div>
             <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", iconBadge[variant])}>
                 {icon}

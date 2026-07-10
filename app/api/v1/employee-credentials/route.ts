@@ -8,6 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { getRequestScope } from "@/lib/auth";
 import { assertUniqueUserFields, normalizeEmail, UserUniqueFieldError } from "@/lib/user-uniqueness";
+import { invalidateSessionValidationCache } from "@/lib/session-validation-cache";
 
 async function POST(req: NextRequest) {
   try {
@@ -191,6 +192,11 @@ async function PUT(req: NextRequest) {
       .where(eq(employeeCredentials.id, credId))
       .returning()
 
+    // Drop the cached session-validation result (employee token ids are "emp_<id>")
+    if (securityChange) {
+      await invalidateSessionValidationCache(`emp_${credId}`)
+    }
+
     return ok({ credential: updated, sessionInvalidated: securityChange }, { status: 200 })
   } catch (err: any) {
     if (err instanceof UserUniqueFieldError) {
@@ -246,6 +252,10 @@ async function DELETE(req: NextRequest) {
       .update(employeeCredentials)
       .set({ isActive: false, deactivatedAt: new Date() })
       .where(eq(employeeCredentials.id, credId))
+
+    // Drop the cached session-validation result so deactivation takes effect
+    // on the employee's next session check (employee token ids are "emp_<id>")
+    await invalidateSessionValidationCache(`emp_${credId}`)
 
     return ok({ message: "Credential deactivated" }, { status: 200 })
   } catch (err: any) {

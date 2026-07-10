@@ -72,6 +72,7 @@ type OrdersDirectoryProps = {
   isSuperAdmin: boolean
   isBranchAdmin: boolean
   isHeadOffice?: boolean
+  showCostCenterId?: boolean
   onUpdate: () => void
 }
 
@@ -82,6 +83,7 @@ export function OrdersDirectory({
   isSuperAdmin,
   isBranchAdmin,
   isHeadOffice,
+  showCostCenterId,
   onUpdate
 }: OrdersDirectoryProps) {
   const router = useRouter()
@@ -98,6 +100,7 @@ export function OrdersDirectory({
   const [isUpdatingProgress, setIsUpdatingProgress] = useState(false)
   const [isUpdatingPayment, setIsUpdatingPayment] = useState(false)
   const [isSendingTokenEmail, setIsSendingTokenEmail] = useState(false)
+  const shouldShowCostCenterId = showCostCenterId ?? orders.some((order) => Boolean(order.branchCostCenterId))
 
   // Helpers
   const getStatusColor = (statusKey: DerivedOrderStatusKey) => {
@@ -501,6 +504,7 @@ export function OrdersDirectory({
                 <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
                   <th className="text-left font-bold py-4 pl-6">TID</th>
                   <th className="text-left font-bold py-4">Branch</th>
+                  {shouldShowCostCenterId && <th className="text-left font-bold py-4">Cost Center</th>}
                   <th className="text-left font-bold py-4">Status</th>
                   <th className="text-left font-bold py-4">Date</th>
                   <th className="text-right font-bold py-4 pr-6">Amount</th>
@@ -528,6 +532,13 @@ export function OrdersDirectory({
                           <span className="font-medium text-slate-600 dark:text-slate-400">{order.branchName || `#${order.branchId}`}</span>
                         </div>
                       </td>
+                      {shouldShowCostCenterId && (
+                        <td className="py-4">
+                          <span className="font-mono text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                            {order.branchCostCenterId || "-"}
+                          </span>
+                        </td>
+                      )}
                       <td className="py-4">
                         <Badge variant="outline" className={cn("px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-lg border", statusColors.bg, statusColors.text, statusColors.border)}>
                           {derivedStatus.label}
@@ -559,7 +570,7 @@ export function OrdersDirectory({
                 })}
                 {orders.length === 0 && (
                   <tr>
-                    <td colSpan={5}>
+                    <td colSpan={shouldShowCostCenterId ? 6 : 5}>
                       <EmptyOrdersState compact />
                     </td>
                   </tr>

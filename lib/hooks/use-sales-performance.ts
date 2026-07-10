@@ -43,6 +43,8 @@ export type SalesPerformanceResponse = {
         rejectedCount?: number
         approvedCount?: number
         pendingCount?: number
+        deliveredCount?: number
+        notDeliveredCount?: number
         partialCount?: number
         seriesData?: SalesSeriesPoint[]
     } | null
@@ -53,6 +55,8 @@ export type SalesPerformanceResponse = {
         partialCount: number
         refundedCount: number
         rejectedCount: number
+        deliveredCount: number
+        notDeliveredCount: number
     } | null
 }
 
@@ -61,7 +65,7 @@ export type DateRange = {
     endDate: Date
 }
 
-export type DashboardStatus = "all" | "PENDING" | "FULFILLED" | "REFUNDED" | "REJECTED" | "APPROVED" | "PARTIAL"
+export type DashboardStatus = "all" | "PENDING" | "FULFILLED" | "REFUNDED" | "REJECTED" | "APPROVED" | "PARTIAL" | "DELIVERED" | "NOT_DELIVERED"
 
 const normalizeMonthsForApi = (selectedMonths?: number[]) => {
     if (!selectedMonths || selectedMonths.length === 0) return []
@@ -89,7 +93,15 @@ export function useSalesPerformance(
     compareYears?: number[],
     granularity?: "hourly" | "daily" | "monthly" | "yearly",
     organizationIds?: string[], // multi-org selection
-    includeStatusCounts?: boolean
+    includeStatusCounts?: boolean,
+    options?: {
+        // Pass false to defer fetching (e.g. until org/branch context has
+        // hydrated) — prevents a throwaway request with the wrong scope.
+        enabled?: boolean
+        // Keep showing the previous result while a new key (filter change)
+        // is being fetched, instead of resetting data to undefined.
+        keepPreviousData?: boolean
+    }
 ) {
     const url = useMemo(() => {
         const params = new URLSearchParams()
@@ -163,10 +175,11 @@ export function useSalesPerformance(
         return `/api/v1/analytics/sales-performance?${params.toString()}`
     }, [organizationId, branchId, branchIds, groupId, dateRange, status, compare, compareRange, months, years, compareMonths, compareYears, granularity, organizationIds, includeStatusCounts])
 
-    return useSWR<SalesPerformanceResponse>(url, fetcher, {
+    return useSWR<SalesPerformanceResponse>(options?.enabled === false ? null : url, fetcher, {
         revalidateOnFocus: false,
         revalidateOnReconnect: true,
         refreshInterval: 120_000, // 2 minutes
+        keepPreviousData: options?.keepPreviousData === true,
     })
 }
 

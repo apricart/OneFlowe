@@ -120,8 +120,11 @@ export async function checkRateLimit(
         const config = RATE_LIMITS[type]
         const key = RATE_LIMIT_KEY(type, identifier)
 
-        // Increment counter
-        const current = await redis.incr(key)
+        // Increment counter and read TTL in a single round-trip
+        const pipeline = redis.pipeline()
+        pipeline.incr(key)
+        pipeline.ttl(key)
+        const [current, ttl] = await pipeline.exec<[number, number]>()
 
         // Validate counter value
         if (typeof current !== 'number' || current < 0) {
@@ -129,13 +132,13 @@ export async function checkRateLimit(
             return { allowed: true, remaining: config.requests, resetIn: config.windowSeconds }
         }
 
-        // Set expiry on first request
-        if (current === 1) {
+        // Set expiry on first request. TTL < 0 means the key has no expiry
+        // (-1) — also covers a key whose EXPIRE previously failed, which the
+        // old code left counting forever.
+        if (typeof ttl !== 'number' || ttl < 0) {
             await redis.expire(key, config.windowSeconds)
         }
 
-        // Get TTL for reset time
-        const ttl = await redis.ttl(key)
         const validTTL = typeof ttl === 'number' && ttl > 0 ? ttl : config.windowSeconds
 
         return {

@@ -63,6 +63,7 @@ export default function UserReportPage() {
         organizationId: contextOrgId,
         branchId: contextBranchId,
         branchIds: contextBranchIds,
+        isInitialized,
     } = useAppContext()
 
     const { data: session, status: sessionStatus } = useSession()
@@ -130,8 +131,11 @@ export default function UserReportPage() {
         if (compareMonths.length) globalParams.set("compareMonths", compareMonths.join(","))
         if (compareYears.length) globalParams.set("compareYears", compareYears.join(","))
     }
+    // Fetches are deferred until the org/branch context has hydrated, and
+    // keepPreviousData keeps the current numbers on screen during filter changes
     const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR(
-        `/api/v1/analytics/users/performance?${globalParams.toString()}&summaryOnly=true`, fetcher
+        isInitialized ? `/api/v1/analytics/users/performance?${globalParams.toString()}&summaryOnly=true` : null, fetcher,
+        { keepPreviousData: true }
     )
 
     // Tier 2: Chart/Trend Data
@@ -147,7 +151,8 @@ export default function UserReportPage() {
     if (chartYears.length) chartParams.set("years", chartYears.join(","))
     if (compare) chartParams.set("compare", "true")
     const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR(
-        `/api/v1/analytics/users/performance?${chartParams.toString()}${isChartUserView ? "" : "&trendOnly=true"}`, fetcher
+        isInitialized ? `/api/v1/analytics/users/performance?${chartParams.toString()}${isChartUserView ? "" : "&trendOnly=true"}` : null, fetcher,
+        { keepPreviousData: true }
     )
 
     // Tier 3: Report Table Data
@@ -163,16 +168,18 @@ export default function UserReportPage() {
     if (reportMonths.length) reportParams.set("months", reportMonths.join(","))
     if (reportYears.length) reportParams.set("years", reportYears.join(","))
     const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR(
-        `/api/v1/analytics/users/performance?${reportParams.toString()}`, fetcher
+        isInitialized ? `/api/v1/analytics/users/performance?${reportParams.toString()}` : null, fetcher,
+        { keepPreviousData: true }
     )
 
     // Tier 4: User Products Data
     const { data: userProductsData, isLoading: isUserProductsLoading, mutate: mutateUserProducts } = useSWR(
-        `/api/v1/analytics/users/products?${reportParams.toString()}`, fetcher
+        isInitialized ? `/api/v1/analytics/users/products?${reportParams.toString()}` : null, fetcher,
+        { keepPreviousData: true }
     )
 
     // All-time Data (for year ranges)
-    const { data: allTimeData } = useSWR(organizationId ? `/api/v1/analytics/users/performance?organizationId=${organizationId}&allTime=true` : null, fetcher)
+    const { data: allTimeData } = useSWR(isInitialized && organizationId ? `/api/v1/analytics/users/performance?organizationId=${organizationId}&allTime=true` : null, fetcher)
 
     const isInitialLoad = useRef(true)
     const lastSyncedBranchIds = useRef<string[]>([])
@@ -496,10 +503,10 @@ export default function UserReportPage() {
             <div className="max-w-[1600px] mx-auto px-6 pt-10 space-y-10">
                 {/* ━━━ KPI BENTO GRID ━━━ */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <KPICard title="Active Employees" value={totalUsers.toLocaleString()} icon={Users} colorScheme="indigo" trend={usersTrend} subtitle="Distinct transacting profiles." comparisonLabel="Prior" comparisonValue={comparison?.totalUsers} />
-                    <KPICard title="Gross Orders" value={totalOrders.toLocaleString()} icon={Package} colorScheme="blue" trend={ordersTrend} subtitle="Total volume initiated." comparisonLabel="Prior" comparisonValue={comparison?.totalOrders} />
-                    <KPICard title="Order Success" value={`${currentSuccess.toFixed(1)}%`} icon={CheckCircle} colorScheme="emerald" trend={successTrend} subtitle={`${totalFulfilled} fulfilled orders.`} />
-                    {!pricesHidden && <KPICard title={isBuyer ? "Total Purchased" : "Total Revenue"} value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle={isBuyer ? "Net value of purchases." : "Net value of fulfillments."}  />}
+                    <KPICard title="Active Employees" value={totalUsers.toLocaleString()} icon={Users} colorScheme="indigo" trend={usersTrend} subtitle="Distinct transacting profiles." comparisonLabel="Prior" comparisonValue={comparison?.totalUsers} isLoading={!globalData} />
+                    <KPICard title="Gross Orders" value={totalOrders.toLocaleString()} icon={Package} colorScheme="blue" trend={ordersTrend} subtitle="Total volume initiated." comparisonLabel="Prior" comparisonValue={comparison?.totalOrders} isLoading={!globalData} />
+                    <KPICard title="Order Success" value={`${currentSuccess.toFixed(1)}%`} icon={CheckCircle} colorScheme="emerald" trend={successTrend} subtitle={`${totalFulfilled} fulfilled orders.`} isLoading={!globalData} />
+                    {!pricesHidden && <KPICard title={isBuyer ? "Total Purchased" : "Total Revenue"} value={formatPKR(totalSpent / 100)} icon={TrendingUp} colorScheme="indigo" trend={spentTrend} subtitle={isBuyer ? "Net value of purchases." : "Net value of fulfillments."} isLoading={!globalData} />}
                 </div>
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">

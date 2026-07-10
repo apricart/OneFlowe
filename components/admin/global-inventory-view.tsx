@@ -88,13 +88,12 @@ export default function GlobalInventoryView() {
         }
         pagination: { page: number; limit: number; total: number; totalPages: number }
     }>(`/api/v1/admin/global-inventory?${queryParams}`, fetcher, {
-        fallbackData: {
-            items: [],
-            summary: { totalProducts: 0, activeProducts: 0, inactiveProducts: 0 },
-            pagination: { page: 1, limit: PAGE_SIZE, total: 0, totalPages: 0 }
-        },
+        // No fallbackData: zero-filled fallback made the stat cards flash "0"
+        // before the real numbers arrived. keepPreviousData shows the previous
+        // page's data while a filter/page change loads.
         revalidateOnFocus: false,
         dedupingInterval: 30000,
+        keepPreviousData: true,
     })
 
     const { data: categoriesData } = useSWR<{ items: Array<{ id: number; name: string }> }>(
@@ -245,18 +244,21 @@ export default function GlobalInventoryView() {
                     value={totalProducts}
                     icon={<Package className="h-5 w-5" />}
                     variant="blue"
+                    isLoading={!data}
                 />
                 <StatCard
                     label="Active Products"
                     value={activeProducts}
                     icon={<CheckCircle className="h-5 w-5" />}
                     variant="green"
+                    isLoading={!data}
                 />
                 <StatCard
                     label="Inactive Products"
                     value={inactiveProducts}
                     icon={<XCircle className="h-5 w-5" />}
                     variant="red"
+                    isLoading={!data}
                 />
             </div>
 
@@ -553,11 +555,12 @@ export default function GlobalInventoryView() {
     )
 }
 
-function StatCard({ label, value, icon, variant }: { 
-    label: string; 
-    value: string | number; 
+function StatCard({ label, value, icon, variant, isLoading = false }: {
+    label: string;
+    value: string | number;
     icon: React.ReactNode;
     variant: 'blue' | 'green' | 'red' | 'amber' | 'purple'
+    isLoading?: boolean
 }) {
     const variants = {
         blue: "bg-gradient-to-br from-blue-50/80 to-indigo-50/80 border-blue-100/50 text-blue-700 dark:from-blue-900/20 dark:to-indigo-900/20 dark:border-blue-800/30 dark:text-blue-400",
@@ -579,7 +582,11 @@ function StatCard({ label, value, icon, variant }: {
         <div className={cn("flex items-center justify-between p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md", variants[variant])}>
             <div className="space-y-1">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] opacity-80">{label}</p>
-                <p className="text-2xl font-black tracking-tight">{value}</p>
+                {isLoading ? (
+                    <div className="h-8 w-16 rounded-md bg-slate-300/40 dark:bg-slate-600/40 animate-pulse" />
+                ) : (
+                    <p className="text-2xl font-black tracking-tight">{value}</p>
+                )}
             </div>
             <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", iconBadge[variant])}>
                 {icon}

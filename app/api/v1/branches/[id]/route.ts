@@ -91,6 +91,13 @@ export async function PATCH(
       }
       patch.address = address || null
     }
+    if (body.costCenterId !== undefined) {
+      const costCenterId = String(body.costCenterId || "").trim()
+      if (costCenterId.length > 128) {
+        return error("Cost center ID must be 128 characters or less", 400)
+      }
+      patch.costCenterId = costCenterId || null
+    }
     if (body.status !== undefined) {
       const normalized = String(body.status).toLowerCase()
       const validStatuses = ['active', 'inactive', 'suspended']

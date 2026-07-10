@@ -782,6 +782,7 @@ export const branches = pgTable("branches", {
 	province: varchar({ length: 100 }),
 	city: varchar({ length: 100 }),
 	address: text(),
+	costCenterId: varchar("cost_center_id", { length: 128 }),
 	adminUserId: uuid("admin_user_id"),
 	code: varchar({ length: 64 }),
 	status: varchar({ length: 32 }).default('active'),
@@ -791,6 +792,7 @@ export const branches = pgTable("branches", {
 	// You can use { mode: "bigint" } if numbers are exceeding js number limitations
 	baselineBudgetCents: bigint("baseline_budget_cents", { mode: "number" }).default(0).notNull(),
 }, (table) => [
+	index("branches_cost_center_idx").using("btree", table.costCenterId.asc().nullsLast().op("text_ops")),
 	index("branches_group_idx").using("btree", table.groupId.asc().nullsLast().op("int4_ops")),
 	index("branches_name_idx").using("btree", table.name.asc().nullsLast().op("text_ops")),
 	index("branches_org_idx").using("btree", table.organizationId.asc().nullsLast().op("int4_ops")),

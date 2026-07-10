@@ -213,6 +213,7 @@ export async function GET(req: NextRequest) {
         branchAddress: branches.address,
         branchCity: branches.city,
         branchProvince: branches.province,
+        branchCostCenterId: branches.costCenterId,
         hasRefundRequests: sql<number>`(
           SELECT COUNT(*)::int
           FROM ${refunds}
@@ -269,7 +270,15 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    const filtered = q ? sanitizedItems.filter((o) => o.tid.includes(q)) : sanitizedItems
+    const filtered = q
+      ? sanitizedItems.filter((o) => {
+        const lowerQuery = q.toLowerCase()
+        return (
+          o.tid.toLowerCase().includes(lowerQuery) ||
+          (o.branchCostCenterId || "").toLowerCase().includes(lowerQuery)
+        )
+      })
+      : sanitizedItems
 
     // Single order with items
     if (idParam && /^\d+$/.test(idParam)) {

@@ -51,7 +51,8 @@ export default function BranchReportsPage() {
         userBranchId: sessionUserBranchId,
         branchId: contextBranchId,
         branchIds: contextBranchIds,
-        setBranchIds: setContextBranchIds
+        setBranchIds: setContextBranchIds,
+        isInitialized
     } = useAppContext()
 
     const role = (session?.user as any)?.role as Role
@@ -129,7 +130,9 @@ export default function BranchReportsPage() {
     if (compareMonths.length > 0) globalQueryParams.set("compareMonths", compareMonths.join(","))
     if (compareYears.length > 0) globalQueryParams.set("compareYears", compareYears.join(","))
 
-    const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR<any>(`/api/v1/analytics/branches/performance?summaryOnly=true&${globalQueryParams.toString()}`, fetcher)
+    // Fetches are deferred until the org/branch context has hydrated, and
+    // keepPreviousData keeps the current numbers on screen during filter changes
+    const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR<any>(isInitialized ? `/api/v1/analytics/branches/performance?summaryOnly=true&${globalQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     // ━━━ TIER 2: CHART (ANALYTICS) ━━━
     const [chartMonths, setChartMonths] = useState<number[]>([])
@@ -139,7 +142,7 @@ export default function BranchReportsPage() {
     if (chartMonths.length > 0) chartQueryParams.set("months", chartMonths.join(","))
     if (chartYears.length > 0) chartQueryParams.set("years", chartYears.join(","))
     
-    const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR<any>(`/api/v1/analytics/branches/performance?trendOnly=true&${chartQueryParams.toString()}`, fetcher)
+    const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR<any>(isInitialized ? `/api/v1/analytics/branches/performance?trendOnly=true&${chartQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     // ━━━ TIER 3: REPORT (TABLE) ━━━
     const [reportMonths, setReportMonths] = useState<number[]>([])
@@ -150,10 +153,10 @@ export default function BranchReportsPage() {
     if (reportMonths.length > 0) reportQueryParams.set("months", reportMonths.join(","))
     if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
 
-    const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR<any>(`/api/v1/analytics/branches/performance?${reportQueryParams.toString()}`, fetcher)
+    const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR<any>(isInitialized ? `/api/v1/analytics/branches/performance?${reportQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     // ━━━ TIER 4: ALL-TIME (YEAR SELECTION) ━━━
-    const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/branches/performance?allTime=true&${globalQueryParams.toString()}`, fetcher)
+    const { data: allTimeData } = useSWR<any>(isInitialized ? `/api/v1/analytics/branches/performance?allTime=true&${globalQueryParams.toString()}` : null, fetcher)
 
     const isInitialLoad = useRef(true)
 
@@ -394,6 +397,7 @@ export default function BranchReportsPage() {
                             icon={TrendingUp}
                             colorScheme="emerald"
                             trend={revenueTrend}
+                            isLoading={!globalData}
                         />
                     )}
                     {!pricesHidden && (
@@ -402,6 +406,7 @@ export default function BranchReportsPage() {
                             value={formatPKR(summary.totalOrders > 0 ? (summary.totalRevenue / summary.totalOrders) / 100 : 0)}
                             icon={Calculator}
                             colorScheme="blue"
+                            isLoading={!globalData}
                         />
                     )}
                     <KPICard
@@ -410,12 +415,14 @@ export default function BranchReportsPage() {
                         icon={ShoppingBag}
                         colorScheme="indigo"
                         trend={orderTrend}
+                        isLoading={!globalData}
                     />
-                    <KPICard 
+                    <KPICard
                         title={role === "BRANCH_ADMIN" ? "Branch Unit" : "Active Units"}
                         value={summary.activeBranches.toLocaleString()}
                         icon={Building2}
                         colorScheme="amber"
+                        isLoading={!globalData}
                     />
                 </div>
 

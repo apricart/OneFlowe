@@ -61,6 +61,7 @@ interface OrderItem {
   organizationName?: string | null
   branchId: number
   branchName?: string | null
+  branchCostCenterId?: string | null
   status: string
   statusAtRefund?: string | null
   refundedAt?: string | null
@@ -254,6 +255,7 @@ export default function OrdersManagementPage() {
       filtered = filtered.filter((o: OrderItem) =>
         o.tid.toLowerCase().includes(lowerQuery) ||
         o.id.toString().includes(lowerQuery) ||
+        (o.branchCostCenterId?.toLowerCase().includes(lowerQuery)) ||
         (o.itemNames?.toLowerCase().includes(lowerQuery))
       )
     }
@@ -402,6 +404,8 @@ export default function OrdersManagementPage() {
   const branches = branchesData?.items || []
   const selectedOrg = organizations.find((o: any) => o.id.toString() === organizationId)
   const selectedBranch = branches.find((b: any) => b.id.toString() === branchId)
+  const showCostCenterId = branches.some((b: any) => Boolean(b.costCenterId)) ||
+    filteredOrders.some((o: OrderItem) => Boolean(o.branchCostCenterId))
 
   const statusCounts = {
     all: orders.length,
@@ -534,7 +538,7 @@ export default function OrdersManagementPage() {
                 <div className="relative group min-w-[200px] sm:min-w-[280px]">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
                   <Input
-                    placeholder="Search by TID or ID..."
+                    placeholder="Search by TID, ID, or cost center..."
                     className="pl-9 h-8 text-[11px] font-bold bg-white dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 rounded-xl focus:ring-1 focus:ring-indigo-500/30 transition-all shadow-sm"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -628,6 +632,7 @@ export default function OrdersManagementPage() {
               isSuperAdmin={isSuperAdmin}
               isBranchAdmin={isBranchAdmin}
               isHeadOffice={isHeadOffice}
+              showCostCenterId={showCostCenterId}
               onUpdate={() => mutateOrders()}
             />
           </div>

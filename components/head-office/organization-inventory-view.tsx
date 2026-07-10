@@ -32,7 +32,7 @@ type OrganizationInventoryItem = {
     assignedAt: string
 }
 export default function HeadOfficeInventoryView() {
-    const { organizationId } = useAppContext()
+    const { organizationId, isInitialized } = useAppContext()
     const [searchQuery, setSearchQuery] = useState("")
     const debouncedSearch = useDebounce(searchQuery, 300)
     const [categoryFilter, setCategoryFilter] = useState("all")
@@ -41,13 +41,17 @@ export default function HeadOfficeInventoryView() {
     const [page, setPage] = useState(1)
     const PAGE_SIZE = 20
 
-    // Fetch ALL org inventory data once — no filter params in URL
+    // Fetch ALL org inventory data once — no filter params in URL.
+    // Deferred until the org context has hydrated so we don't fire an
+    // unscoped request first and re-fetch when organizationId arrives.
     const query = `/api/v1/head-office/organization-inventory?limit=5000${organizationId ? `&organizationId=${organizationId}` : ""}`
 
-    const { data, isLoading } = useSWR<{ items: OrganizationInventoryItem[]; total: number }>(query, fetcher, {
-        fallbackData: { items: [], total: 0 },
+    const { data, isLoading } = useSWR<{ items: OrganizationInventoryItem[]; total: number }>(isInitialized ? query : null, fetcher, {
+        // No fallbackData: zero-filled fallback made the stat cards flash "0"
+        // before the real numbers arrived.
         revalidateOnFocus: false,
         dedupingInterval: 30000,
+        keepPreviousData: true,
     })
 
     const allProducts = data?.items ?? []
@@ -161,18 +165,21 @@ export default function HeadOfficeInventoryView() {
                     value={totalAssigned}
                     icon={<Package className="h-5 w-5" />}
                     variant="blue"
+                    isLoading={!data}
                 />
                 <StatCard
                     label="Active SKUs"
                     value={activeCount}
                     icon={<CheckCircle className="h-5 w-5" />}
                     variant="green"
+                    isLoading={!data}
                 />
                 <StatCard
                     label="Inactive SKUs"
                     value={totalAssigned - activeCount}
                     icon={<XCircle className="h-5 w-5" />}
                     variant="red"
+                    isLoading={!data}
                 />
             </div>
 
@@ -335,11 +342,12 @@ export default function HeadOfficeInventoryView() {
     )
 }
 
-function StatCard({ label, value, icon, variant }: { 
-    label: string; 
-    value: string | number; 
+function StatCard({ label, value, icon, variant, isLoading = false }: {
+    label: string;
+    value: string | number;
     icon: React.ReactNode;
     variant: 'blue' | 'green' | 'red' | 'amber' | 'purple'
+    isLoading?: boolean
 }) {
     const variants = {
         blue: "bg-gradient-to-br from-blue-50/80 to-indigo-50/80 border-blue-100/50 text-blue-700 dark:from-blue-900/20 dark:to-indigo-900/20 dark:border-blue-800/30 dark:text-blue-400",
@@ -361,7 +369,11 @@ function StatCard({ label, value, icon, variant }: {
         <div className={cn("flex items-center justify-between p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md", variants[variant])}>
             <div className="space-y-1">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] opacity-80">{label}</p>
-                <p className="text-2xl font-black tracking-tight">{value}</p>
+                {isLoading ? (
+                    <div className="h-8 w-16 rounded-md bg-slate-300/40 dark:bg-slate-600/40 animate-pulse" />
+                ) : (
+                    <p className="text-2xl font-black tracking-tight">{value}</p>
+                )}
             </div>
             <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", iconBadge[variant])}>
                 {icon}

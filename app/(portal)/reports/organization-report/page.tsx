@@ -114,6 +114,7 @@ export default function OrganizationReportPage() {
         organizationId: contextOrgId,
         branchId: contextBranchId,
         branchIds: contextBranchIds,
+        isInitialized,
     } = useAppContext()
 
     // STATE DECLARATIONS
@@ -181,7 +182,9 @@ export default function OrganizationReportPage() {
     if (selectedYears.length > 0) globalQueryParams.set("years", selectedYears.join(","))
     if (compare) globalQueryParams.set("compare", "true")
 
-    const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR<any>(`/api/v1/analytics/organization-stats?${globalQueryParams.toString()}`, fetcher)
+    // Fetches are deferred until the org/branch context has hydrated, and
+    // keepPreviousData keeps the current numbers on screen during filter changes
+    const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR<any>(isInitialized ? `/api/v1/analytics/organization-stats?${globalQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     // ━━━ TIER 2: CHART (ANALYTICS) LOCAL STATE ━━━
     const [chartMonths, setChartMonths] = useState<number[]>([])
@@ -195,7 +198,7 @@ export default function OrganizationReportPage() {
     if (chartBranchIds.length > 0) chartQueryParams.set("branchIds", chartBranchIds.join(","))
     if (chartOrgIds.length > 0) chartQueryParams.set("organizationIds", chartOrgIds.join(","))
 
-    const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR<any>(`/api/v1/analytics/organization-stats?${chartQueryParams.toString()}`, fetcher)
+    const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR<any>(isInitialized ? `/api/v1/analytics/organization-stats?${chartQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     // ━━━ TIER 3: REPORT (TABLE) LOCAL STATE ━━━
     const [reportMonths, setReportMonths] = useState<number[]>([])
@@ -212,10 +215,10 @@ export default function OrganizationReportPage() {
     if (reportBranchIds.length > 0) reportQueryParams.set("branchIds", reportBranchIds.join(","))
     if (reportOrgIds.length > 0) reportQueryParams.set("organizationIds", reportOrgIds.join(","))
 
-    const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR<any>(`/api/v1/analytics/organization-stats?${reportQueryParams.toString()}`, fetcher)
+    const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR<any>(isInitialized ? `/api/v1/analytics/organization-stats?${reportQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     // ━━━ TIER 4: ALL-TIME (FOR YEAR SELECTION) ━━━
-    const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/organization-stats?allTime=true`, fetcher)
+    const { data: allTimeData } = useSWR<any>(isInitialized ? `/api/v1/analytics/organization-stats?allTime=true` : null, fetcher)
 
     const isInitialLoad = useRef(true)
     const lastSyncedBranchIds = useRef<string[]>([])
@@ -486,6 +489,7 @@ export default function OrganizationReportPage() {
                         subtitle={isBuyer ? "Consolidated net purchases" : "Consolidated net revenue"}
                         comparisonLabel="Prior Period"
                         comparisonValue={compare ? formatPKR(comparisonSummary.revenue) : undefined}
+                        isLoading={!globalData}
                     />
                     <KPICard
                         title="Total Orders"
@@ -496,6 +500,7 @@ export default function OrganizationReportPage() {
                         subtitle="Completed transactions"
                         comparisonLabel="Prior Period"
                         comparisonValue={compare ? comparisonSummary.orders.toLocaleString() : undefined}
+                        isLoading={!globalData}
                     />
                     <KPICard
                         title="Total Users"
@@ -503,6 +508,7 @@ export default function OrganizationReportPage() {
                         icon={Users}
                         colorScheme="violet"
                         subtitle="Across all branches"
+                        isLoading={!globalData}
                     />
                     {role === "SUPER_ADMIN" && (
                         <KPICard
@@ -511,6 +517,7 @@ export default function OrganizationReportPage() {
                             icon={Building2}
                             colorScheme="emerald"
                             subtitle="Active organizations"
+                            isLoading={!globalData}
                         />
                     )}
                 </div>

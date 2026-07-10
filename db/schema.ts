@@ -43,6 +43,7 @@ export const branches = pgTable(
     province: varchar("province", { length: 100 }),
     city: varchar("city", { length: 100 }),
     address: text("address"),
+    costCenterId: varchar("cost_center_id", { length: 128 }),
     // Avoid circular type init between users <-> branches; store admin user id without FK
     adminUserId: uuid("admin_user_id"),
     code: varchar("code", { length: 64 }),
@@ -57,6 +58,7 @@ export const branches = pgTable(
   (t) => ({
     orgIdx: index("branches_org_idx").on(t.organizationId),
     nameIdx: index("branches_name_idx").on(t.name),
+    costCenterIdx: index("branches_cost_center_idx").on(t.costCenterId),
     statusIdx: index("branches_status_idx").on(t.status),
     groupIdx: index("branches_group_idx").on(t.groupId),
   }),

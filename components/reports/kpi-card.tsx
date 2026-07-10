@@ -14,6 +14,9 @@ interface KPICardProps {
     comparisonValue?: string | number
     comparisonLabel?: string
     subtitle?: string
+    // Show a skeleton instead of the value — pass while the source data is
+    // still undefined so a fabricated 0 is never displayed
+    isLoading?: boolean
 }
 
 const colorMap = {
@@ -59,6 +62,7 @@ export function KPICard({
     comparisonValue,
     comparisonLabel,
     subtitle,
+    isLoading = false,
 }: KPICardProps) {
     const colors = colorMap[colorScheme]
     const chartData = trendData?.map((v, i) => ({ value: v, index: i })) || []
@@ -78,9 +82,13 @@ export function KPICard({
                         <p className="text-[10px] font-bold opacity-80 uppercase tracking-[0.15em] mb-1">
                             {title}
                         </p>
-                        <h3 className="text-xl xl:text-xl font-black tracking-tight text-slate-900 dark:text-white  min-w-0 sm:break-normal" >
-                            {value}
-                        </h3>
+                        {isLoading ? (
+                            <div className="h-7 w-20 rounded-md bg-slate-300/40 dark:bg-slate-600/40 animate-pulse" />
+                        ) : (
+                            <h3 className="text-xl xl:text-xl font-black tracking-tight text-slate-900 dark:text-white  min-w-0 sm:break-normal" >
+                                {value}
+                            </h3>
+                        )}
                     </div>
 
                     {/* Additional Sub info */}

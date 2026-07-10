@@ -6,6 +6,7 @@ import { hashPassword } from "@/lib/password"
 import { ok, error, requireApiRole, readJson } from "@/lib/api"
 import { getRequestScope } from "@/lib/auth"
 import { invalidateByPrefix } from "@/lib/cache-utils"
+import { invalidateSessionValidationCache } from "@/lib/session-validation-cache"
 import { headers } from "next/headers"
 import { assertUniqueUserFields, normalizeEmail, normalizeOptionalText, UserUniqueFieldError } from "@/lib/user-uniqueness"
 
@@ -137,6 +138,10 @@ export async function PATCH(
 
     // Execute update (includes sessionVersion bump if needed — single atomic write)
     await db.update(users).set(patch).where(eq(users.id, id))
+
+    // Drop the cached session-validation result so deactivation/password
+    // changes take effect on the target user's next session check
+    await invalidateSessionValidationCache(id)
 
     // Also delete physical sessions if they exist (for database-bound sessions if used)
     if (isSecurityChange) {
@@ -368,6 +373,10 @@ export async function DELETE(
       // Then delete the user from the database
       await db.delete(users).where(eq(users.id, id))
     }
+
+    // Drop the cached session-validation result so the deleted user's
+    // sessions die on their next session check (covers soft and hard delete)
+    await invalidateSessionValidationCache(id)
 
     // Invalidate users cache
     await invalidateByPrefix('users')

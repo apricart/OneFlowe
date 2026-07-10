@@ -25,7 +25,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     Loader2, AlertCircle, CheckCircle2, Package, TrendingUp, TrendingDown,
-    Award, Box, ChevronRight, ArrowDownAZ, ArrowDown01, RotateCcw,
+    Award, Box, ChevronRight, ArrowDownAZ, ArrowDown01, RotateCcw, Truck,
     User, Clock, Info, Search
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -35,7 +35,7 @@ import { GlobalDateFilter, getPresetRange, type FilterPreset } from "@/component
 import type { DateRange } from "@/lib/hooks/use-sales-performance"
 import { useAppContext } from "@/components/context/app-context"
 
-export type DrillDownType = "REVENUE" | "REJECTED" | "FULFILLED" | "ORDERS" | "REFUNDED" | "PENDING" | "APPROVED" | "PARTIAL"
+export type DrillDownType = "REVENUE" | "REJECTED" | "FULFILLED" | "ORDERS" | "REFUNDED" | "PENDING" | "APPROVED" | "PARTIAL" | "DELIVERED" | "NOT_DELIVERED"
 
 interface DrillDownSheetProps {
     isOpen: boolean
@@ -101,6 +101,16 @@ const TYPE_CONFIG = {
         title: "Active Orders",
         icon: CheckCircle2,
         color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
+    },
+    DELIVERED: {
+        title: "Delivered Orders",
+        icon: Truck,
+        color: "text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20",
+    },
+    NOT_DELIVERED: {
+        title: "Not Delivered Orders",
+        icon: Clock,
+        color: "text-sky-600 bg-sky-50 dark:bg-sky-900/20",
     },
     PARTIAL: {
         title: "Partial Fulfillment Analysis",

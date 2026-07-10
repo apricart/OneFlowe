@@ -93,7 +93,8 @@ export default function OrderReportPage() {
         organizationId: contextOrgId,
         branchId: contextBranchId,
         branchIds: contextBranchIds,
-        setBranchIds: setContextBranchIds
+        setBranchIds: setContextBranchIds,
+        isInitialized
     } = useAppContext()
 
     const { data: session, status: sessionStatus } = useSession()
@@ -180,8 +181,11 @@ export default function OrderReportPage() {
         if (compareMonths.length) globalParams.set("compareMonths", compareMonths.join(","))
         if (compareYears.length) globalParams.set("compareYears", compareYears.join(","))
     }
+    // Fetches are deferred until the org/branch context has hydrated, and
+    // keepPreviousData keeps the current numbers on screen during filter changes
     const { data: globalData, isLoading: isGlobalLoading, mutate: mutateGlobal } = useSWR(
-        `/api/v1/analytics/summary?${globalParams.toString()}&summaryOnly=true`, fetcher
+        isInitialized ? `/api/v1/analytics/summary?${globalParams.toString()}&summaryOnly=true` : null, fetcher,
+        { keepPreviousData: true }
     )
 
     // Tier 2: Chart/Trend Data
@@ -203,7 +207,8 @@ export default function OrderReportPage() {
     if (chartYears.length > 0) chartParams.set("years", chartYears.join(","))
     if (compare) chartParams.set("compare", "true")
     const { data: chartData, isLoading: isChartLoading, mutate: mutateChart } = useSWR(
-        `/api/v1/analytics/summary?${chartParams.toString()}&trendOnly=true`, fetcher
+        isInitialized ? `/api/v1/analytics/summary?${chartParams.toString()}&trendOnly=true` : null, fetcher,
+        { keepPreviousData: true }
     )
 
     // Tier 3: Report Table Data
@@ -226,11 +231,12 @@ export default function OrderReportPage() {
     if (reportMonths.length > 0) reportParams.set("months", reportMonths.join(","))
     if (reportYears.length > 0) reportParams.set("years", reportYears.join(","))
     const { data: reportData, isLoading: isReportLoading, mutate: mutateReport } = useSWR(
-        `/api/v1/analytics/summary?${reportParams.toString()}`, fetcher
+        isInitialized ? `/api/v1/analytics/summary?${reportParams.toString()}` : null, fetcher,
+        { keepPreviousData: true }
     )
 
     // All-time Data (for year ranges)
-    const { data: allTimeData } = useSWR(organizationId ? `/api/v1/analytics/summary?organizationId=${organizationId}&allTime=true` : null, fetcher)
+    const { data: allTimeData } = useSWR(isInitialized && organizationId ? `/api/v1/analytics/summary?organizationId=${organizationId}&allTime=true` : null, fetcher)
 
     useEffect(() => {
         setHasMounted(true)
@@ -530,18 +536,18 @@ export default function OrderReportPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {!pricesHidden && (
                         <div className="hover:scale-[1.02] transition-all duration-500">
-                            <KPICard title={kpiRevenueLabel} value={formatPKR(summary.totalSales / 100)} icon={TrendingUp} colorScheme="indigo" />
+                            <KPICard title={kpiRevenueLabel} value={formatPKR(summary.totalSales / 100)} icon={TrendingUp} colorScheme="indigo" isLoading={!globalData} />
                         </div>
                     )}
                     <div className="hover:scale-[1.02] transition-all duration-500">
-                        <KPICard title={pricesHidden ? "Items Ordered" : "Refund Impact"} value={pricesHidden ? Number(summary.totalItemsSold || 0).toLocaleString() : formatPKR(summary.totalRefunds / 100)} icon={RotateCcw} colorScheme="rose" />
+                        <KPICard title={pricesHidden ? "Items Ordered" : "Refund Impact"} value={pricesHidden ? Number(summary.totalItemsSold || 0).toLocaleString() : formatPKR(summary.totalRefunds / 100)} icon={RotateCcw} colorScheme="rose" isLoading={!globalData} />
                     </div>
                     <div className="hover:scale-[1.02] transition-all duration-500">
-                        <KPICard title="Total Orders" value={summary.totalOrderCount} icon={Package} colorScheme="blue" />
+                        <KPICard title="Total Orders" value={summary.totalOrderCount} icon={Package} colorScheme="blue" isLoading={!globalData} />
                     </div>
                     {!pricesHidden && (
                         <div className="hover:scale-[1.02] transition-all duration-500">
-                            <KPICard title={kpiAvgLabel} value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={Calculator} colorScheme="amber" />
+                            <KPICard title={kpiAvgLabel} value={formatPKR(summary.orderCount > 0 ? (summary.totalSales / summary.orderCount) / 100 : 0)} icon={Calculator} colorScheme="amber" isLoading={!globalData} />
                         </div>
                     )}
                 </div>

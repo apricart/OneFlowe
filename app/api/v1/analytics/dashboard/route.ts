@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
     const whereClause = and(...(orderConditions as any))
 
     const dayExpr = sql`date_trunc('day', ${orders.createdAt})`
-    const gmvRows = await db
+    const gmvQuery = db
       .select({
         day: dayExpr,
         totalCents: metricExpressions.revenue,
@@ -131,16 +131,12 @@ export async function GET(req: NextRequest) {
       .orderBy(sql`coalesce(count(${orders.id}), 0) desc`)
       .limit(role === "BRANCH_ADMIN" ? 1 : 5)
 
-    const branchRows = await branchQuery
-
     const countSelect = db.select({ count: sql<number>`coalesce(count(${branches.id}), 0)` }).from(branches)
-    const branchCountRows = branchFilters.length
-      ? await countSelect.where(and(...(branchFilters as any)))
-      : await countSelect
+    const branchCountQuery = branchFilters.length
+      ? countSelect.where(and(...(branchFilters as any)))
+      : countSelect
 
-    const branchCount = Number(((branchCountRows as any)[0]?.count) || 0)
-
-    let pendingApprovals = 0
+    let pendingQuery: Promise<any[]> | null = null
     if (role !== "SUPER_ADMIN") {
       const pendingConditions: any[] = [or(eq(orders.status, "PENDING"), eq(orders.status, "pending"))]
       if (organizationId) {
@@ -150,13 +146,11 @@ export async function GET(req: NextRequest) {
         pendingConditions.push(eq(orders.branchId, branchId))
       }
 
-      const pendingRow = await db
+      pendingQuery = db
         .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
         .from(orders)
         .leftJoin(branches, eq(orders.branchId, branches.id))
         .where(and(...(pendingConditions as any)))
-
-      pendingApprovals = Number(((pendingRow as any)[0]?.count) || 0)
     }
 
     const now = new Date()
@@ -177,12 +171,23 @@ export async function GET(req: NextRequest) {
       monthConditions.push(eq(orders.branchId, branchId))
     }
 
-    const ordersMonthRow = await db
+    const ordersMonthQuery = db
       .select({ count: sql<number>`coalesce(count(${orders.id}), 0)` })
       .from(orders)
       .leftJoin(branches, eq(orders.branchId, branches.id))
       .where(and(...(monthConditions as any)))
 
+    // All five aggregates are independent — run them in parallel
+    const [gmvRows, branchRows, branchCountRows, pendingRow, ordersMonthRow] = await Promise.all([
+      gmvQuery,
+      branchQuery,
+      branchCountQuery,
+      pendingQuery ?? Promise.resolve(null),
+      ordersMonthQuery,
+    ])
+
+    const branchCount = Number(((branchCountRows as any)[0]?.count) || 0)
+    const pendingApprovals = pendingRow ? Number(((pendingRow as any)[0]?.count) || 0) : 0
     const ordersThisMonth = Number(((ordersMonthRow as any)[0]?.count) || 0)
 
     const today = new Date()

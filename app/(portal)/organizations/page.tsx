@@ -9,6 +9,7 @@ type Branch = {
   province?: string | null
   city?: string | null
   address?: string | null
+  costCenterId?: string | null
   status?: "active" | "inactive"
 }
 import { Button } from "@/components/ui/button"
@@ -301,7 +302,11 @@ export default function OrganizationsPage() {
     }
     if (branchSearch.trim()) {
       const q = branchSearch.toLowerCase()
-      result = result.filter((b) => b.name.toLowerCase().includes(q) || b.code.toLowerCase().includes(q))
+      result = result.filter((b) =>
+        b.name.toLowerCase().includes(q) ||
+        b.code.toLowerCase().includes(q) ||
+        (b.costCenterId || "").toLowerCase().includes(q)
+      )
     }
     return result
   }, [visibleBranches, branchStatusFilter, branchSearch])
@@ -459,7 +464,7 @@ export default function OrganizationsPage() {
               <SummaryStat
                 label="Operational Reach"
                 value={`${filteredBranches.length} Branch${filteredBranches.length === 1 ? "" : "es"}`}
-                helper={branchStatusFilter === "all" ? "Full Distribution" : `${branchStatusFilter} Subset`}
+                // helper={branchStatusFilter === "all" ? "Full Distribution" : `${branchStatusFilter} Subset`}
                 icon={<GitBranch className="h-5 w-5" />}
               />
             </div>
@@ -476,7 +481,7 @@ export default function OrganizationsPage() {
                   <div className="relative group">
                     <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-indigo-500" />
                     <Input
-                      placeholder="Search branches..."
+                      placeholder="Search branches or cost centers..."
                       value={branchSearch}
                       onChange={(e) => setBranchSearch(e.target.value)}
                       className="pl-8 h-10 w-[180px] bg-slate-50/50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-700 focus:border-indigo-500/30 focus:ring-4 focus:ring-indigo-500/10 rounded-xl text-sm transition-all"
@@ -593,10 +598,11 @@ function BranchesTable({
       <table className="w-full text-sm border-collapse table-fixed">
         <thead>
           <tr className="text-left text-[10px] uppercase tracking-[0.2em] text-slate-400 font-semibold border-b border-slate-100 dark:border-slate-800/60">
-            <th className="pb-4 pr-2 font-semibold w-[30%]">Strategic Branch</th>
-            <th className="pb-4 pr-2 font-semibold w-[20%]">Code</th>
-            {showCompanyColumn && <th className="pb-4 pr-2 font-semibold w-[20%]">Parent</th>}
-            <th className="pb-4 pr-2 font-semibold w-[15%] text-center">Lifecycle</th>
+            <th className="pb-4 pr-2 font-semibold w-[26%]">Strategic Branch</th>
+            <th className="pb-4 pr-2 font-semibold w-[14%]">Code</th>
+            <th className="pb-4 pr-2 font-semibold w-[16%]">Cost Center</th>
+            {showCompanyColumn && <th className="pb-4 pr-2 font-semibold w-[17%]">Parent</th>}
+            <th className="pb-4 pr-2 font-semibold w-[12%] text-center">Lifecycle</th>
             <th className="pb-4 w-[15%] text-right">Actions</th>
           </tr>
         </thead>
@@ -622,6 +628,11 @@ function BranchesTable({
               <td className="py-5 pr-3">
                 <code className="inline-block whitespace-nowrap px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider border border-slate-200/50 dark:border-slate-700/50">
                   {b.code}
+                </code>
+              </td>
+              <td className="py-5 pr-3">
+                <code className="inline-block max-w-full truncate whitespace-nowrap px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider border border-slate-200/50 dark:border-slate-700/50">
+                  {b.costCenterId || "—"}
                 </code>
               </td>
               {showCompanyColumn && (
@@ -660,7 +671,7 @@ function BranchesTable({
           ))}
           {items.length === 0 && (
             <tr>
-              <td className="py-12 text-center" colSpan={showCompanyColumn ? 5 : 4}>
+              <td className="py-12 text-center" colSpan={showCompanyColumn ? 6 : 5}>
                 <div className="flex flex-col items-center justify-center space-y-3">
                   <div className="h-12 w-12 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center">
                     <GitBranch className="h-6 w-6 text-slate-300" />
@@ -1109,6 +1120,7 @@ function CreateBranchDialog({
   const [province, setProvince] = useState("")
   const [city, setCity] = useState("")
   const [address, setAddress] = useState("")
+  const [costCenterId, setCostCenterId] = useState("")
   const [status, setStatus] = useState<boolean>(true)
   const [saving, setSaving] = useState(false)
   const canSubmit = Boolean(
@@ -1126,6 +1138,7 @@ function CreateBranchDialog({
       province: province.trim(),
       city: city.trim(),
       address: address.trim(),
+      costCenterId: costCenterId.trim() || null,
       status: status ? "active" : "inactive",
     }
     console.log("[CreateBranchDialog] Submitting new branch:", payload)
@@ -1148,6 +1161,7 @@ function CreateBranchDialog({
       setProvince("")
       setCity("")
       setAddress("")
+      setCostCenterId("")
       setStatus(true)
       setOrgId(undefined)
 
@@ -1239,6 +1253,17 @@ function CreateBranchDialog({
                     placeholder="Street address, area, building, or landmark"
                     className="min-h-20 resize-none"
                     disabled={saving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="branch-cost-center-id">Cost center ID</Label>
+                  <Input
+                    id="branch-cost-center-id"
+                    value={costCenterId}
+                    onChange={(e) => setCostCenterId(e.target.value)}
+                    placeholder="Optional"
+                    disabled={saving}
+                    maxLength={128}
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">Branch code will be automatically generated.</p>
@@ -1490,6 +1515,7 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
   const [province, setProvince] = useState(branch.province ?? "")
   const [city, setCity] = useState(branch.city ?? "")
   const [address, setAddress] = useState(branch.address ?? "")
+  const [costCenterId, setCostCenterId] = useState(branch.costCenterId ?? "")
   const [status, setStatus] = useState<boolean>(isActiveStatus(branch.status))
 
   useEffect(() => {
@@ -1498,8 +1524,9 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
     setProvince(branch.province ?? "")
     setCity(branch.city ?? "")
     setAddress(branch.address ?? "")
+    setCostCenterId(branch.costCenterId ?? "")
     setStatus(isActiveStatus(branch.status))
-  }, [branch.name, branch.code, branch.province, branch.city, branch.address, branch.status])
+  }, [branch.name, branch.code, branch.province, branch.city, branch.address, branch.costCenterId, branch.status])
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -1555,6 +1582,16 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
                 className="min-h-20 resize-none"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="branch-cost-center-id-edit">Cost center ID</Label>
+              <Input
+                id="branch-cost-center-id-edit"
+                value={costCenterId}
+                onChange={(e) => setCostCenterId(e.target.value)}
+                placeholder="Optional"
+                maxLength={128}
+              />
+            </div>
             <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2">
               <div>
                 <Label htmlFor="branch-status-edit">Status</Label>
@@ -1580,6 +1617,7 @@ function EditBranchDialog({ branch, onSave }: { branch: Branch; onSave: (payload
                 province: province.trim() || null,
                 city: city.trim() || null,
                 address: address.trim() || null,
+                costCenterId: costCenterId.trim() || null,
                 status: status ? "active" : "inactive",
               })
               setOpen(false)

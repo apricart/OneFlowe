@@ -29,7 +29,7 @@ import { useAppContext } from "@/components/context/app-context"
 import { startOfDay, endOfDay, format, subDays, addDays } from "date-fns"
 
 export function SuperAdminDashboard() {
-  const { organizationId, branchId } = useAppContext()
+  const { organizationId, branchId, isInitialized } = useAppContext()
 
   // Super Admin always defaults to 'All Time'
   const defaultPreset = "all" as const
@@ -49,8 +49,11 @@ export function SuperAdminDashboard() {
   const allTimeEndDate = useMemo(() => new Date().toISOString(), [])
 
   // Fetch all-time data to extract available years from the database
+  // (deferred until the org/branch context has hydrated)
   const { data: allTimePerf } = useSWR(
-    `/api/v1/analytics/sales-performance?startDate=2015-01-01T00:00:00.000Z&endDate=${allTimeEndDate}&granularity=yearly&status=all`,
+    isInitialized
+      ? `/api/v1/analytics/sales-performance?startDate=2015-01-01T00:00:00.000Z&endDate=${allTimeEndDate}&granularity=yearly&status=all`
+      : null,
     fetcher
   )
 
@@ -179,7 +182,8 @@ export function SuperAdminDashboard() {
     months, years, compareMonths, compareYears,
     activePreset === "all" ? "yearly" : undefined,
     undefined, // organizationIds — scoped per card by context, not needed here
-    true        // includeStatusCounts — fetches all 6 status breakdowns in one query
+    true,       // includeStatusCounts — fetches all 6 status breakdowns in one query
+    { enabled: isInitialized, keepPreviousData: true }
   )
 
   const hasChartFilters = chartMonths.length > 0 || chartYears.length > 0
@@ -201,7 +205,9 @@ export function SuperAdminDashboard() {
     undefined, chartDateRange, "all", false, null,
     chartMonths, chartYears, [], [],
     chartGranularity,
-    chartSelectedOrgIds.length > 0 ? chartSelectedOrgIds : undefined
+    chartSelectedOrgIds.length > 0 ? chartSelectedOrgIds : undefined,
+    undefined,
+    { enabled: isInitialized, keepPreviousData: true }
   )
 
   const normalizedChartData = useMemo(() => {
@@ -278,6 +284,8 @@ export function SuperAdminDashboard() {
   const refundedCount = perfData?.statusCounts?.refundedCount ?? 0
   const rejectedCount = perfData?.statusCounts?.rejectedCount ?? 0
   const approvedCount = perfData?.statusCounts?.approvedCount ?? 0
+  const deliveredCount = perfData?.statusCounts?.deliveredCount ?? 0
+  const notDeliveredCount = perfData?.statusCounts?.notDeliveredCount ?? 0
 
   // Helper for building trend data
   const buildTrend = useCallback((current: number, prev: number | undefined, formatFn?: (v: number) => string) => {
@@ -381,7 +389,7 @@ export function SuperAdminDashboard() {
           trendValue={revenueTrend?.value}
           comparisonValue={revenueTrend?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={Package} title="Orders"
@@ -393,7 +401,7 @@ export function SuperAdminDashboard() {
           trendValue={ordersTrend?.value}
           comparisonValue={ordersTrend?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={Activity} title="Pending Approval"
@@ -405,7 +413,7 @@ export function SuperAdminDashboard() {
           trendValue={pendingTrend?.value}
           comparisonValue={pendingTrend?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={CheckCircle2} title="Active"
@@ -417,7 +425,11 @@ export function SuperAdminDashboard() {
           trendValue={approvedTrend?.value}
           comparisonValue={approvedTrend?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          details={[
+            { label: "Delivered", value: deliveredCount.toLocaleString() },
+            { label: "Not Delivered", value: notDeliveredCount.toLocaleString() },
+          ]}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
@@ -429,7 +441,7 @@ export function SuperAdminDashboard() {
           trendValue={fulfilledTrend?.value}
           comparisonValue={fulfilledTrend?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={RotateCcw} title="Refunded"
@@ -441,7 +453,7 @@ export function SuperAdminDashboard() {
           trendValue={refundedTrend?.value}
           comparisonValue={refundedTrend?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={XCircle} title="Rejected"
@@ -453,7 +465,7 @@ export function SuperAdminDashboard() {
           trendValue={rejectedTrend?.value}
           comparisonValue={rejectedTrend?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
       </div>
 
@@ -531,7 +543,7 @@ export function SuperAdminDashboard() {
                 )}
               </div>
 
-              {isLoadingChart ? (
+              {!chartPerfData ? (
                 <div className="h-[400px] flex items-center justify-center rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
                   <div className="flex flex-col items-center gap-3">
                     <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 dark:border-slate-800 border-t-emerald-500" />

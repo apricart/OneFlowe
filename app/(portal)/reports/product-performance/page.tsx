@@ -74,7 +74,8 @@ export default function ProductPerformancePage() {
         organizationId,
         branchId: contextBranchId,
         branchIds: contextBranchIds,
-        setBranchIds: setContextBranchIds
+        setBranchIds: setContextBranchIds,
+        isInitialized
     } = useAppContext()
 
     const [searchTerm, setSearchTerm] = useState("")
@@ -219,7 +220,7 @@ export default function ProductPerformancePage() {
     const allTimeQueryParams = new URLSearchParams()
     if (organizationId) allTimeQueryParams.set("organizationId", organizationId.toString())
     allTimeQueryParams.set("preset", "all")
-    const { data: allTimeData } = useSWR<any>(`/api/v1/analytics/products/performance?${allTimeQueryParams.toString()}`, fetcher)
+    const { data: allTimeData } = useSWR<any>(isInitialized ? `/api/v1/analytics/products/performance?${allTimeQueryParams.toString()}` : null, fetcher)
 
     const { data: groupsData } = useSWR(organizationId ? `/api/v1/groups?organizationId=${organizationId}` : "/api/v1/groups", fetcher)
     const availableGroups = groupsData?.groups || []
@@ -372,7 +373,9 @@ export default function ProductPerformancePage() {
     }
     if (compare) globalQueryParams.set("compare", "true")
 
-    const { data: globalPerfData, isLoading: isGlobalPerfLoading, mutate: mutateGlobalPerf } = useSWR<any>(`/api/v1/analytics/products/performance?${globalQueryParams.toString()}`, fetcher)
+    // Fetches are deferred until the org/branch context has hydrated, and
+    // keepPreviousData keeps the current numbers on screen during filter changes
+    const { data: globalPerfData, isLoading: isGlobalPerfLoading, mutate: mutateGlobalPerf } = useSWR<any>(isInitialized ? `/api/v1/analytics/products/performance?${globalQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     // ━━━ CHART DATA (Local Filtered) ━━━
     const isChartProductView = chartProductIds.length > 1
@@ -395,7 +398,7 @@ export default function ProductPerformancePage() {
     if (chartYears.length > 0) chartQueryParams.set("years", chartYears.join(","))
     if (compare) chartQueryParams.set("compare", "true")
 
-    const { data: chartPerfData, isLoading: isChartPerfLoading, mutate: mutateChart } = useSWR<any>(`/api/v1/analytics/products/performance?${chartQueryParams.toString()}`, fetcher)
+    const { data: chartPerfData, isLoading: isChartPerfLoading, mutate: mutateChart } = useSWR<any>(isInitialized ? `/api/v1/analytics/products/performance?${chartQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     const resetChartFilters = useCallback(() => {
         setChartYears(getDefaultChartYears())
@@ -431,7 +434,7 @@ export default function ProductPerformancePage() {
     if (reportYears.length > 0) reportQueryParams.set("years", reportYears.join(","))
     if (reportSearchTerm) reportQueryParams.set("searchTerm", reportSearchTerm)
 
-    const { data: ledgerData, isLoading: isLedgerLoading, mutate: mutateLedger } = useSWR<any>(`/api/v1/analytics/orders/itemized?${reportQueryParams.toString()}`, fetcher)
+    const { data: ledgerData, isLoading: isLedgerLoading, mutate: mutateLedger } = useSWR<any>(isInitialized ? `/api/v1/analytics/orders/itemized?${reportQueryParams.toString()}` : null, fetcher, { keepPreviousData: true })
 
     const resetReportFilters = useCallback(() => {
         setReportYears(getDefaultReportYears())
@@ -786,6 +789,7 @@ export default function ProductPerformancePage() {
                             trend={revenueTrend}
                             comparisonLabel="Prior"
                             comparisonValue={comparison ? formatPKR(comparison.totalRevenue / 100) : undefined}
+                            isLoading={!globalPerfData}
                         />
                     )}
                     <KPICard
@@ -796,6 +800,7 @@ export default function ProductPerformancePage() {
                         trend={volumeTrend}
                         comparisonLabel="Prior"
                         comparisonValue={comparison ? comparison.totalVolume.toLocaleString() : undefined}
+                        isLoading={!globalPerfData}
                     />
                     <KPICard
                         title={pricesHidden ? "Qty Refunded" : "Refund Loss"}
@@ -805,6 +810,7 @@ export default function ProductPerformancePage() {
                         trend={refundTrend}
                         comparisonLabel="Prior"
                         comparisonValue={comparison ? `${comparison.totalRefunds.toLocaleString()} items` : undefined}
+                        isLoading={!globalPerfData}
                     />
 
                       <KPICard
@@ -815,6 +821,7 @@ export default function ProductPerformancePage() {
                         trend={undefined}
                         comparisonLabel="Prior"
                         comparisonValue={comparison ? `${comparison.products.toLocaleString()} items` : undefined}
+                        isLoading={!globalPerfData}
                     />
                  
                 </div>

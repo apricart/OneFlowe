@@ -139,7 +139,8 @@ export default function BudgetsPage() {
     return `/api/v1/settings?organizationId=${organizationId}`
   }, [isHeadOffice, isInitialized, organizationId])
 
-  const { data: budgetsData, mutate } = useSWR<any>(budgetsEndpoint, fetcher)
+  // keepPreviousData keeps the current numbers on screen during filter changes
+  const { data: budgetsData, mutate } = useSWR<any>(budgetsEndpoint, fetcher, { keepPreviousData: true })
   const { data: settingsData } = useSWR<any>(settingsEndpoint, fetcher)
 
   const resetBudgetFilters = useCallback(() => {
@@ -550,6 +551,7 @@ export default function BudgetsPage() {
           icon={<Wallet className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-indigo-50/80 to-blue-50/80 border-indigo-100/50 text-indigo-700 dark:from-indigo-900/20 dark:to-blue-900/20 dark:border-indigo-800/30 dark:text-indigo-400"
           iconBadge="bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
+          isLoading={isHeadOffice && !budgetsData}
         />
         <CompactStatCard
           label="Spent This Period"
@@ -557,6 +559,7 @@ export default function BudgetsPage() {
           icon={<PieChart className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-rose-50/80 to-pink-50/80 border-rose-100/50 text-rose-700 dark:from-rose-900/20 dark:to-pink-900/20 dark:border-rose-800/30 dark:text-rose-400"
           iconBadge="bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400"
+          isLoading={isHeadOffice && !budgetsData}
         />
         <CompactStatCard
           label="Remaining"
@@ -564,6 +567,7 @@ export default function BudgetsPage() {
           icon={<CheckCircle2 className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-teal-50/80 to-emerald-50/80 border-teal-100/50 text-teal-700 dark:from-teal-900/20 dark:to-emerald-900/20 dark:border-teal-800/30 dark:text-teal-400"
           iconBadge="bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400"
+          isLoading={isHeadOffice && !budgetsData}
         />
         <CompactStatCard
           label="Avg Utilization"
@@ -571,6 +575,7 @@ export default function BudgetsPage() {
           icon={<Zap className="h-5 w-5" />}
           gradient="bg-gradient-to-br from-fuchsia-50/80 to-purple-50/80 border-fuchsia-100/50 text-fuchsia-700 dark:from-fuchsia-900/20 dark:to-purple-900/20 dark:border-fuchsia-800/30 dark:text-fuchsia-400"
           iconBadge="bg-fuchsia-100 dark:bg-fuchsia-900/40 text-fuchsia-600 dark:text-fuchsia-400"
+          isLoading={isHeadOffice && !budgetsData}
         />
       </div>
 
@@ -1022,12 +1027,14 @@ function CompactStatCard({
   icon,
   gradient,
   iconBadge,
+  isLoading = false,
 }: {
   label: string
   value: string | number
   icon: ReactNode
   gradient: string
   iconBadge: string
+  isLoading?: boolean
 }) {
   return (
     <Card className={cn("border rounded-2xl shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 [container-type:inline-size]", gradient)}>
@@ -1036,9 +1043,13 @@ function CompactStatCard({
           <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">
             {label}
           </p>
-          <p className="whitespace-nowrap text-[clamp(1.05rem,8.5cqw,2.1rem)] font-black leading-tight tracking-tight tabular-nums">
-            {value}
-          </p>
+          {isLoading ? (
+            <div className="h-8 w-20 rounded-md bg-slate-300/40 dark:bg-slate-600/40 animate-pulse" />
+          ) : (
+            <p className="whitespace-nowrap text-[clamp(1.05rem,8.5cqw,2.1rem)] font-black leading-tight tracking-tight tabular-nums">
+              {value}
+            </p>
+          )}
         </div>
         <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl 2xl:h-12 2xl:w-12", iconBadge)}>
            {icon}

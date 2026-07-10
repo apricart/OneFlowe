@@ -89,6 +89,7 @@ export async function GET(req: Request) {
           province: branchesTable.province,
           city: branchesTable.city,
           address: branchesTable.address,
+          costCenterId: branchesTable.costCenterId,
           code: branchesTable.code,
           status: branchesTable.status,
           groupId: branchesTable.groupId,
@@ -169,6 +170,11 @@ export async function POST(req: Request) {
       return error("Branch address must be between 5 and 500 characters", 400)
     }
 
+    const costCenterId = String(body.costCenterId || "").trim()
+    if (costCenterId.length > 128) {
+      return error("Cost center ID must be 128 characters or less", 400)
+    }
+
     // Validate status
     const validStatuses = ['active', 'inactive']
     const status = body.status ? String(body.status).toLowerCase() : 'active'
@@ -236,6 +242,7 @@ export async function POST(req: Request) {
         province,
         city,
         address,
+        costCenterId: costCenterId || null,
         code: finalCode,
         status,
       })

@@ -31,7 +31,8 @@ export function HeadOfficeDashboard() {
     organizationId,
     branchId: contextBranchId,
     branchIds: contextBranchIds,
-    setBranchIds: setContextBranchIds
+    setBranchIds: setContextBranchIds,
+    isInitialized
   } = useAppContext()
 
   // Head Office defaults to 'Today' or context
@@ -51,8 +52,12 @@ export function HeadOfficeDashboard() {
   const allTimeEndDate = useMemo(() => new Date().toISOString(), [])
 
   // Fetch all-time data to extract available years from the database
+  // (deferred until the org context has hydrated — previously this could fire
+  // with the literal string "organizationId=null" before initialization)
   const { data: allTimePerf } = useSWR(
-    `/api/v1/analytics/sales-performance?startDate=2015-01-01T00:00:00.000Z&endDate=${allTimeEndDate}&granularity=yearly&status=all&organizationId=${organizationId}`,
+    isInitialized && organizationId
+      ? `/api/v1/analytics/sales-performance?startDate=2015-01-01T00:00:00.000Z&endDate=${allTimeEndDate}&granularity=yearly&status=all&organizationId=${organizationId}`
+      : null,
     fetcher
   )
 
@@ -130,7 +135,8 @@ export function HeadOfficeDashboard() {
     months, years, compareMonths, compareYears,
     activePreset === "all" ? "yearly" : undefined,
     undefined, // organizationIds
-    true        // includeStatusCounts
+    true,       // includeStatusCounts
+    { enabled: isInitialized, keepPreviousData: true }
   )
 
   // Chart Logic (Local Filters)
@@ -163,7 +169,10 @@ export function HeadOfficeDashboard() {
     chartSelectedBranchIds.length > 0 ? chartSelectedBranchIds : undefined,
     undefined, chartDateRange, "all", false, null,
     chartMonths, chartYears, [], [],
-    chartGranularity
+    chartGranularity,
+    undefined,
+    undefined,
+    { enabled: isInitialized, keepPreviousData: true }
   )
 
   const normalizedChartData = useMemo(() => {
@@ -241,6 +250,8 @@ export function HeadOfficeDashboard() {
   const refundedCount = perfData?.statusCounts?.refundedCount ?? 0
   const rejectedCount = perfData?.statusCounts?.rejectedCount ?? 0
   const approvedCount = perfData?.statusCounts?.approvedCount ?? 0
+  const deliveredCount = perfData?.statusCounts?.deliveredCount ?? 0
+  const notDeliveredCount = perfData?.statusCounts?.notDeliveredCount ?? 0
 
   return (
     <motion.main 
@@ -301,7 +312,7 @@ export function HeadOfficeDashboard() {
           trendValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.value}
           comparisonValue={buildTrend(totalRevenue, perfData?.comparison?.totalNetSales ?? perfData?.comparison?.totalSales)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={Package} title="Orders"
@@ -313,7 +324,7 @@ export function HeadOfficeDashboard() {
           trendValue={buildTrend(totalOrders, perfData?.comparison?.totalOrders)?.value}
           comparisonValue={buildTrend(totalOrders, perfData?.comparison?.totalOrders)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={Activity} title="Pending Approval"
@@ -325,7 +336,7 @@ export function HeadOfficeDashboard() {
           trendValue={buildTrend(pendingCount, perfData?.comparison?.pendingCount)?.value}
           comparisonValue={buildTrend(pendingCount, perfData?.comparison?.pendingCount)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={CheckCircle2} title="Active"
@@ -337,7 +348,11 @@ export function HeadOfficeDashboard() {
           trendValue={buildTrend(approvedCount, perfData?.comparison?.approvedCount)?.value}
           comparisonValue={buildTrend(approvedCount, perfData?.comparison?.approvedCount)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          details={[
+            { label: "Delivered", value: deliveredCount.toLocaleString() },
+            { label: "Not Delivered", value: notDeliveredCount.toLocaleString() },
+          ]}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={CheckCircle2} title="Fulfilled"
@@ -349,7 +364,7 @@ export function HeadOfficeDashboard() {
           trendValue={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.value}
           comparisonValue={buildTrend(fulfilledCount, perfData?.comparison?.fulfilledCount)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={RotateCcw} title="Refunded"
@@ -361,7 +376,7 @@ export function HeadOfficeDashboard() {
           trendValue={buildTrend(refundedCount, perfData?.comparison?.refundedCount)?.value}
           comparisonValue={buildTrend(refundedCount, perfData?.comparison?.refundedCount)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
         <BankingKPICard
           icon={XCircle} title="Rejected"
@@ -373,7 +388,7 @@ export function HeadOfficeDashboard() {
           trendValue={buildTrend(rejectedCount, perfData?.comparison?.rejectedCount)?.value}
           comparisonValue={buildTrend(rejectedCount, perfData?.comparison?.rejectedCount)?.label}
           comparisonLabel="VS LAST"
-          isLoading={isLoadingPerf}
+          isLoading={!perfData}
         />
       </div>
 
@@ -429,7 +444,7 @@ export function HeadOfficeDashboard() {
               )}
             </div>
 
-            {isLoadingChart ? (
+            {!chartPerfData ? (
               <div className="h-[400px] flex items-center justify-center rounded-[2.5rem] border border-dashed border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
                 <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-200 dark:border-slate-800 border-t-emerald-500" />
               </div>

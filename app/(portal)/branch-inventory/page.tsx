@@ -54,7 +54,7 @@ export default function BranchInventoryPage() {
   const userBranchId = (session?.user as any)?.branchId
   const userOrgId = (session?.user as any)?.organizationId
 
-  const { branchId, organizationId } = useAppContext()
+  const { branchId, organizationId, isInitialized } = useAppContext()
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [subCategoryFilter, setSubCategoryFilter] = useState("all")
@@ -85,21 +85,24 @@ export default function BranchInventoryPage() {
     if (organizationId) statsParams.set("organizationId", String(organizationId))
   }
 
+  // No fallbackData on these: zero-filled fallback made the stat cards flash
+  // "0" before the real numbers arrived. Fetching is deferred until the
+  // org/branch context has hydrated to avoid an unscoped first request.
   const { data, isLoading, mutate } = useSWR<{
     items: BranchInventoryItem[]
     total: number
     pricesHidden?: boolean
-  }>(`/api/v1/branch/inventory?${params.toString()}`, fetcher, {
-    fallbackData: { items: [], total: 0 },
+  }>(isInitialized ? `/api/v1/branch/inventory?${params.toString()}` : null, fetcher, {
     refreshInterval: 5000,
+    keepPreviousData: true,
   })
 
   const { data: statsData, mutate: mutateStats } = useSWR<{
     items: BranchInventoryItem[]
     total: number
-  }>(`/api/v1/branch/inventory?${statsParams.toString()}`, fetcher, {
-    fallbackData: { items: [], total: 0 },
+  }>(isInitialized ? `/api/v1/branch/inventory?${statsParams.toString()}` : null, fetcher, {
     refreshInterval: 5000,
+    keepPreviousData: true,
   })
 
   const inventory = data?.items ?? []
@@ -153,18 +156,21 @@ export default function BranchInventoryPage() {
           value={totalAssigned}
           icon={<Package className="h-5 w-5" />}
           variant="blue"
+          isLoading={!statsData}
         />
         <StatCard
           label="Active SKUs"
           value={activeCount}
           icon={<CheckCircle2 className="h-5 w-5" />}
           variant="green"
+          isLoading={!statsData}
         />
         <StatCard
           label="Inactive SKUs"
           value={inactiveCount}
           icon={<XCircle className="h-5 w-5" />}
           variant="red"
+          isLoading={!statsData}
         />
       </div>
 
@@ -342,12 +348,14 @@ function StatCard({
   label,
   value,
   icon,
-  variant
+  variant,
+  isLoading = false
 }: {
   label: string
   value: string | number
   icon: ReactNode
   variant: "blue" | "green" | "red" | "amber" | "purple"
+  isLoading?: boolean
 }) {
   const variants = {
     blue: "bg-gradient-to-br from-blue-50/80 to-indigo-50/80 border-blue-100/50 text-blue-700 dark:from-blue-900/20 dark:to-indigo-900/20 dark:border-blue-800/30 dark:text-blue-400",
@@ -369,7 +377,11 @@ function StatCard({
     <div className={cn("flex items-center justify-between p-4 rounded-2xl border shadow-sm transition-all hover:shadow-md", variants[variant])}>
       <div className="space-y-1">
         <p className="text-[10px] font-bold uppercase tracking-[0.15em] opacity-80">{label}</p>
-        <p className="text-2xl font-black tracking-tight">{value}</p>
+        {isLoading ? (
+          <div className="h-8 w-16 rounded-md bg-slate-300/40 dark:bg-slate-600/40 animate-pulse" />
+        ) : (
+          <p className="text-2xl font-black tracking-tight">{value}</p>
+        )}
       </div>
       <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", iconBadge[variant])}>
         {icon}

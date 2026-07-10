@@ -20,7 +20,47 @@ export type CurrentUser = {
   mustChangePassword: boolean
 }
 
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
+import type { Session } from "next-auth"
+
+// ── Per-request memoization of session resolution ──
+// Next.js returns the same headers() instance for every call within a single
+// request and a fresh instance per request (verified empirically on this Next
+// version), so it is a safe per-request WeakMap key; entries are garbage-
+// collected with the request. React.cache() is deliberately NOT used here:
+// it does not memoize inside route handlers, where all our API traffic lives.
+const sessionPerRequest = new WeakMap<object, Promise<Session | null>>()
+const scopePerRequest = new WeakMap<object, Promise<RequestScope | null>>()
+
+async function requestMemoKey(): Promise<object | null> {
+  try {
+    return await headers()
+  } catch {
+    // Not inside a request scope (scripts, build time) — skip memoization
+    return null
+  }
+}
+
+/**
+ * getServerSession(authOptions), resolved at most once per request.
+ * Multiple helpers (requireApiRole, getRequestScope, route code) share the
+ * same resolution instead of re-running the session callback each time.
+ */
+export async function getSharedServerSession(): Promise<Session | null> {
+  const key = await requestMemoKey()
+  if (!key) return getServerSession(authOptions)
+
+  let pending = sessionPerRequest.get(key)
+  if (!pending) {
+    pending = getServerSession(authOptions).catch((err) => {
+      // Never memoize failures — the next caller retries
+      sessionPerRequest.delete(key)
+      throw err
+    })
+    sessionPerRequest.set(key, pending)
+  }
+  return pending
+}
 
 /**
  * Get current authenticated user
@@ -28,7 +68,7 @@ import { cookies } from 'next/headers'
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getSharedServerSession()
 
     if (!session?.user) {
       return null
@@ -76,10 +116,27 @@ export type RequestScope = {
 /**
  * Get request scope with user context
  * @returns RequestScope or null if not authenticated
+ *
+ * Memoized per request (same mechanism as getSharedServerSession) so that
+ * e.g. verifyResourceAccess + route code trigger the org/branch lookup once.
+ * Callers receive a fresh shallow copy so shared state cannot be mutated.
  */
 export async function getRequestScope(): Promise<RequestScope | null> {
+  const key = await requestMemoKey()
+  if (!key) return loadRequestScope()
+
+  let pending = scopePerRequest.get(key)
+  if (!pending) {
+    pending = loadRequestScope()
+    scopePerRequest.set(key, pending)
+  }
+  const scope = await pending
+  return scope ? { ...scope } : null
+}
+
+async function loadRequestScope(): Promise<RequestScope | null> {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getSharedServerSession()
 
     if (!session?.user) {
       return null

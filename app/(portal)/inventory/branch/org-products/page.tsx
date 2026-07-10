@@ -54,12 +54,14 @@ export default function ViewOrgProductsPage() {
     )
 
     // Fetch organization products
+    // No fallbackData: zero-filled fallback made the stat cards flash "0"
+    // before the real numbers arrived.
     const { data: productsData, isLoading } = useSWR<{ items: OrgProduct[]; total: number }>(
         selectedOrgId
             ? `/api/v1/head-office/organization-inventory?organizationId=${selectedOrgId}&status=${statusFilter}&limit=1000`
             : null,
         fetcher,
-        { fallbackData: { items: [], total: 0 } }
+        { keepPreviousData: true }
     )
 
     const orgProducts = productsData?.items ?? []
@@ -108,9 +110,9 @@ export default function ViewOrgProductsPage() {
             {/* Stats cards */}
             {selectedOrgId && (
                 <div className="grid gap-4 md:grid-cols-3">
-                    <StatsCard label="Total Products" value={orgProducts.length} accent="from-blue-500 to-cyan-500" />
-                    <StatsCard label="Active" value={activeCount} accent="from-emerald-500 to-green-500" />
-                    <StatsCard label="Inactive" value={inactiveCount} accent="from-amber-500 to-orange-500" />
+                    <StatsCard label="Total Products" value={orgProducts.length} accent="from-blue-500 to-cyan-500" isLoading={!productsData} />
+                    <StatsCard label="Active" value={activeCount} accent="from-emerald-500 to-green-500" isLoading={!productsData} />
+                    <StatsCard label="Inactive" value={inactiveCount} accent="from-amber-500 to-orange-500" isLoading={!productsData} />
                 </div>
             )}
 
@@ -274,12 +276,16 @@ export default function ViewOrgProductsPage() {
     )
 }
 
-function StatsCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+function StatsCard({ label, value, accent, isLoading = false }: { label: string; value: number; accent: string; isLoading?: boolean }) {
     return (
         <Card className="border border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900">
             <CardContent className="p-5 space-y-2">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-                <p className="text-2xl font-semibold text-slate-900 dark:text-white">{value}</p>
+                {isLoading ? (
+                    <div className="h-8 w-16 rounded-md bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                ) : (
+                    <p className="text-2xl font-semibold text-slate-900 dark:text-white">{value}</p>
+                )}
                 <div className={`h-1 rounded-full bg-gradient-to-r ${accent}`} />
             </CardContent>
         </Card>

@@ -33,6 +33,7 @@ type Branch = {
   province?: string | null
   city?: string | null
   address?: string | null
+  costCenterId?: string | null
   groupId?: number | null
   groupName?: string | null
 }
@@ -77,7 +78,8 @@ export default function BranchesPage() {
       const matchesSearch =
         !normalized ||
         branch.name.toLowerCase().includes(normalized) ||
-        (branch.code || "").toLowerCase().includes(normalized)
+        (branch.code || "").toLowerCase().includes(normalized) ||
+        (branch.costCenterId || "").toLowerCase().includes(normalized)
 
       const status = (branch.status || "active").toLowerCase()
       const matchesStatus =
@@ -245,7 +247,7 @@ export default function BranchesPage() {
               <div className="relative group w-full lg:w-64">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                 <Input
-                  placeholder="Search branches..."
+                  placeholder="Search branches or cost centers..."
                   className="pl-9 h-10 bg-slate-100/50 dark:bg-slate-900/50 border-transparent focus:bg-white dark:focus:bg-slate-900 transition-all rounded-xl"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
@@ -470,6 +472,7 @@ export default function BranchesPage() {
                           <TableRow className="bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50/50">
                             <TableHead className="py-4 pl-6">Branch</TableHead>
                             <TableHead>Code</TableHead>
+                            <TableHead>Cost Center</TableHead>
                             <TableHead>Primary Admin</TableHead>
                             <TableHead>Created</TableHead>
                             <TableHead>Status</TableHead>
@@ -503,6 +506,11 @@ export default function BranchesPage() {
                                 <TableCell>
                                   <span className="font-mono text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
                                     {branch.code || "—"}
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="font-mono text-xs font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                                    {branch.costCenterId || "â€”"}
                                   </span>
                                 </TableCell>
                                 <TableCell>
