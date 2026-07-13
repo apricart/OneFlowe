@@ -1,8 +1,0 @@
-﻿Location,TransactionNo,OrderNo,Date,UserDetails,LocationGroup,GrandTotal,OrderType,Order Status
-GSMP South,14,1,2026-07-02,SYED IBTIHAJ UDDIN (Manager GSMP),Tranmission Group,14987,Urgent,Order Placed
-People Services,16,1,2026-07-01,Hafiz Sharif,Enabling Group,149986,Counter Order,Order Placed
-GSMP East,14,1,2026-07-01,SAJID ALI (DGM GSMP),Tranmission Group,14982,Counter Order,Order Placed
-GSMP AQA,15,1,2026-07-01,MUDASSAR QAISER (Manager GSMP),Tranmission Group,14988,Urgent,Order Placed
-SCADA - SAS/RTU,21,1,2026-07-01,Sikander Sheikh (Manager SCADA),Tranmission Group,25785,Urgent,Order Placed
-Internal Audit,19,1,2026-07-01,Amina Akhtar,Enabling Group,64154,Urgent,Order Placed
-FMS,11,1,2026-07-01,WAJIHA AKHTER,Enabling Group,9980,Urgent,Order Placed

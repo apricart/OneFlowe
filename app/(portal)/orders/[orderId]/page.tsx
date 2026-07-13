@@ -432,18 +432,20 @@ export default function SuperAdminOrderDetailsPage() {
                   </div>
                 )}
 
-                {!pricesHidden && order.totalCents !== null && <div id={order.refundAmountCents && order.refundAmountCents > 0 ? undefined : "refund-details"} className="mx-6 mb-6 scroll-mt-6">
+                <div id={order.refundAmountCents && order.refundAmountCents > 0 ? undefined : "refund-details"} className="mx-6 mb-6 scroll-mt-6">
                   <RefundManagement
                     orderId={order.id}
                     orderTotalCents={order.totalCents}
                     orderStatus={order.status}
                     createdAt={order.createdAt}
+                    pricesHidden={pricesHidden}
+                    initialOrderItems={orderItems}
                     onRefundSuccess={() => mutate()}
                     refundAmountCents={order.refundAmountCents}
                     refundedAt={order.refundedAt}
                     refundReason={order.refundReason}
                   />
-                </div>}
+                </div>
               </Card>
 
               {/* SECURITY: Approval token is NEVER shown on Super Admin view.

@@ -1,0 +1,11 @@
+{
+  "branchAliases": {
+    "legacy branch spelling": "exact K-Electric database branch name"
+  },
+  "usersByLegacyOrderTakerId": {
+    "177": "00000000-0000-0000-0000-000000000000"
+  },
+  "productsByNormalizedName": {
+    "exact normalized legacy product name": 123
+  }
+}

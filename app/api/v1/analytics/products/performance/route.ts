@@ -43,8 +43,18 @@ export async function GET(req: NextRequest) {
         const productIdsRaw = url.searchParams.get("productIds")
         const parsedProductIds = productIdsRaw ? productIdsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 0) : []
 
+        // Most product-report requests use the singular organizationId from the
+        // global organization selector, while the report's multi-select uses
+        // organizationIds. Support both forms. Non-super-admin users must always
+        // remain scoped to the organization from their session.
         const organizationIdsRaw = url.searchParams.get("organizationIds")
-        const parsedOrgIds = organizationIdsRaw ? organizationIdsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 0) : []
+        const organizationIdRaw = url.searchParams.get("organizationId")
+        const requestedOrgIds = organizationIdsRaw
+            ? organizationIdsRaw.split(',').map(Number).filter(n => !isNaN(n) && n > 0)
+            : (organizationIdRaw && Number(organizationIdRaw) > 0 ? [Number(organizationIdRaw)] : [])
+        const parsedOrgIds = userRole === "SUPER_ADMIN"
+            ? requestedOrgIds
+            : (userOrgId ? [Number(userOrgId)] : [])
 
         // RBAC Context Parsing
         let branchIds: number[] = []

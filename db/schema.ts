@@ -1099,3 +1099,104 @@ export const scheduledReports = pgTable(
     enabledIdx: index("scheduled_reports_enabled_idx").on(t.enabled),
   }),
 )
+
+// ========================================
+// CONTROLLED LEGACY DATA IMPORTS
+// ========================================
+
+// Import batches and per-source mappings make historical imports auditable,
+// idempotent, and independently reversible without touching operational stock.
+export const legacyImportBatches = pgTable(
+  "legacy_import_batches",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: integer("organization_id").references(() => organizations.id).notNull(),
+    sourceSystem: varchar("source_system", { length: 64 }).notNull(),
+    sourceManifest: jsonb("source_manifest").$type<Record<string, any>>().notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("RUNNING"),
+    counts: jsonb("counts").$type<Record<string, number>>().notNull().default({}),
+    importedByUserId: uuid("imported_by_user_id").references(() => users.id).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    rolledBackAt: timestamp("rolled_back_at", { withTimezone: true }),
+  },
+  (t) => ({
+    orgIdx: index("legacy_import_batches_org_idx").on(t.organizationId),
+    sourceStatusIdx: index("legacy_import_batches_source_status_idx").on(t.sourceSystem, t.status),
+  }),
+)
+
+export const legacyProductMappings = pgTable(
+  "legacy_product_mappings",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id").references(() => organizations.id).notNull(),
+    sourceSystem: varchar("source_system", { length: 64 }).notNull(),
+    normalizedName: varchar("normalized_name", { length: 255 }).notNull(),
+    sourceName: varchar("source_name", { length: 255 }).notNull(),
+    sourceCodes: jsonb("source_codes").$type<string[]>().notNull().default([]),
+    globalProductId: integer("global_product_id").references(() => globalProducts.id).notNull(),
+    organizationInventoryId: integer("organization_inventory_id").references(() => organizationInventory.id).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sourceProductUq: uniqueIndex("legacy_product_mappings_source_product_uq").on(
+      t.organizationId,
+      t.sourceSystem,
+      t.normalizedName,
+    ),
+    productIdx: index("legacy_product_mappings_product_idx").on(t.globalProductId),
+  }),
+)
+
+export const legacyUserMappings = pgTable(
+  "legacy_user_mappings",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: integer("organization_id").references(() => organizations.id).notNull(),
+    sourceSystem: varchar("source_system", { length: 64 }).notNull(),
+    legacyOrderTakerId: integer("legacy_order_taker_id").notNull(),
+    branchId: integer("branch_id").references(() => branches.id).notNull(),
+    sourceName: varchar("source_name", { length: 255 }).notNull(),
+    userId: uuid("user_id").references(() => users.id).notNull(),
+    isSynthetic: boolean("is_synthetic").notNull().default(false),
+    createdByBatchId: uuid("created_by_batch_id").references(() => legacyImportBatches.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sourceUserUq: uniqueIndex("legacy_user_mappings_source_user_uq").on(
+      t.organizationId,
+      t.sourceSystem,
+      t.legacyOrderTakerId,
+      t.branchId,
+    ),
+    userIdx: index("legacy_user_mappings_user_idx").on(t.userId),
+    batchIdx: index("legacy_user_mappings_batch_idx").on(t.createdByBatchId),
+  }),
+)
+
+export const legacyOrderImports = pgTable(
+  "legacy_order_imports",
+  {
+    id: serial("id").primaryKey(),
+    batchId: uuid("batch_id").references(() => legacyImportBatches.id, { onDelete: "cascade" }).notNull(),
+    organizationId: integer("organization_id").references(() => organizations.id).notNull(),
+    sourceSystem: varchar("source_system", { length: 64 }).notNull(),
+    legacyOrderId: integer("legacy_order_id").notNull(),
+    orderId: integer("order_id").references(() => orders.id, { onDelete: "cascade" }).notNull(),
+    sourceChecksum: varchar("source_checksum", { length: 64 }).notNull(),
+    sourcePayload: jsonb("source_payload").$type<Record<string, any>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sourceOrderUq: uniqueIndex("legacy_order_imports_source_order_uq").on(
+      t.organizationId,
+      t.sourceSystem,
+      t.legacyOrderId,
+    ),
+    batchIdx: index("legacy_order_imports_batch_idx").on(t.batchId),
+    orderIdx: uniqueIndex("legacy_order_imports_order_idx").on(t.orderId),
+  }),
+)

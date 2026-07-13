@@ -23,9 +23,11 @@ import {
 
 interface RefundManagementProps {
     orderId: number
-    orderTotalCents: number
+    orderTotalCents: number | null
     orderStatus: string
     createdAt: string // Order creation date for refund window validation
+    pricesHidden?: boolean
+    initialOrderItems?: any[]
     refundAmountCents?: number | null
     refundedAt?: string | null
     refundReason?: string | null
@@ -39,6 +41,8 @@ export function RefundManagement({
     orderTotalCents,
     orderStatus,
     createdAt,
+    pricesHidden = false,
+    initialOrderItems = [],
     refundAmountCents,
     refundedAt,
     refundReason,
@@ -69,8 +73,8 @@ export function RefundManagement({
         if (orderData?.items?.[0]?.orderItems) {
             return orderData.items[0].orderItems
         }
-        return []
-    }, [orderData])
+        return initialOrderItems
+    }, [orderData, initialOrderItems])
 
     // Use API data if available, otherwise construct from order props if refunded
     const apiRefunds = refundsData?.refunds || []
@@ -93,12 +97,9 @@ export function RefundManagement({
         .filter((r: any) => r.status === 'PENDING')
         .reduce((sum: number, r: any) => sum + (r.amountCents || 0), 0)
 
-    const remainingRefundable = Math.max(0, orderTotalCents - (totalApproved + totalPending))
-    const isFullyRefunded = totalApproved >= orderTotalCents
-    const hasPendingRefunds = totalPending > 0
-
-    const isOrderApproved = ["APPROVED", "FULFILLED", "REFUNDED"].includes(orderStatus.toUpperCase())
-    const canRefund = isOrderApproved && remainingRefundable > 0 && isWithinRefundWindow
+    const remainingRefundable = pricesHidden || orderTotalCents === null
+        ? 0
+        : Math.max(0, orderTotalCents - (totalApproved + totalPending))
 
     // Calculate previously refunded quantities per item
     const refundedQuantities = useMemo(() => {
@@ -112,8 +113,11 @@ export function RefundManagement({
                 }
             }
         })
+        orderItems.forEach((item: any) => {
+            quantities[item.id] = Math.max(quantities[item.id] || 0, Number(item.quantityRefunded || 0))
+        })
         return quantities
-    }, [effectiveRefunds])
+    }, [effectiveRefunds, orderItems])
 
     // Calculate currently pending/requested quantities per item
     const requestedQuantities = useMemo(() => {
@@ -129,6 +133,31 @@ export function RefundManagement({
         })
         return quantities
     }, [effectiveRefunds])
+
+    const quantitySummary = useMemo(() => {
+        return orderItems.reduce((summary: { ordered: number, refunded: number, requested: number, remaining: number }, item: any) => {
+            const ordered = Number(item.quantity || 0)
+            const refunded = Number(refundedQuantities[item.id] || 0)
+            const requested = Number(requestedQuantities[item.id] || 0)
+            return {
+                ordered: summary.ordered + ordered,
+                refunded: summary.refunded + refunded,
+                requested: summary.requested + requested,
+                remaining: summary.remaining + Math.max(0, ordered - refunded - requested),
+            }
+        }, { ordered: 0, refunded: 0, requested: 0, remaining: 0 })
+    }, [orderItems, refundedQuantities, requestedQuantities])
+
+    const quantityOnlyRefundAvailable = refundsData?.quantityOnlyRefundAvailable !== false
+    const hasRefundCapacity = pricesHidden
+        ? quantityOnlyRefundAvailable && quantitySummary.remaining > 0
+        : remainingRefundable > 0
+    const isFullyRefunded = pricesHidden
+        ? orderStatus.toUpperCase() === "REFUNDED" || (orderItems.length > 0 && quantitySummary.remaining <= 0)
+        : orderTotalCents !== null && totalApproved >= orderTotalCents
+
+    const isOrderApproved = ["APPROVED", "FULFILLED", "REFUNDED"].includes(orderStatus.toUpperCase())
+    const canRefund = isOrderApproved && hasRefundCapacity && isWithinRefundWindow
 
     const handleItemToggle = (itemId: number, maxRefundableQty: number) => {
         setSelectedItems(prev => {
@@ -166,11 +195,17 @@ export function RefundManagement({
 
     // Calculate total amount for selected items
     const selectedRefundAmount = useMemo(() => {
+        if (pricesHidden) return 0
         return orderItems.reduce((total: number, item: any) => {
             const qty = selectedItems[item.id] || 0
-            return total + calculateLineCents(item.priceCents, qty)
+            return total + calculateLineCents(Number(item.priceCents || 0), qty)
         }, 0)
-    }, [orderItems, selectedItems])
+    }, [orderItems, pricesHidden, selectedItems])
+
+    const selectedRefundQuantity = useMemo(
+        () => Object.values(selectedItems).reduce((sum, quantity) => sum + Number(quantity || 0), 0),
+        [selectedItems]
+    )
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -180,7 +215,7 @@ export function RefundManagement({
             return
         }
 
-        if (selectedRefundAmount > remainingRefundable) {
+        if (!pricesHidden && selectedRefundAmount > remainingRefundable) {
             toast({
                 title: "Amount exceeds limit",
                 description: `Total refund amount (PKR ${(selectedRefundAmount / 100).toFixed(2)}) exceeds remaining refundable amount (PKR ${(remainingRefundable / 100).toFixed(2)})`,
@@ -209,7 +244,7 @@ export function RefundManagement({
             if (!res.ok) throw new Error(json.error || "Failed to process refund")
 
             toast({
-                title: "Refund Processed",
+                title: pricesHidden ? "Refund Request Submitted" : "Refund Processed",
                 description: json.message
             })
 
@@ -235,16 +270,22 @@ export function RefundManagement({
             {/* Refund Metrics Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900/50 rounded-xl p-4 text-center">
-                    <p className="text-[10px] uppercase tracking-wider font-semibold text-yellow-600 mb-1">Requested</p>
-                    <p className="text-xl font-bold text-yellow-700 dark:text-yellow-400">PKR {(totalPending / 100).toFixed(2)}</p>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-yellow-600 mb-1">{pricesHidden ? "Requested Qty" : "Requested"}</p>
+                    <p className="text-xl font-bold text-yellow-700 dark:text-yellow-400">
+                        {pricesHidden ? formatQuantity(quantitySummary.requested) : `PKR ${(totalPending / 100).toFixed(2)}`}
+                    </p>
                 </div>
                 <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/50 rounded-xl p-4 text-center">
-                    <p className="text-[10px] uppercase tracking-wider font-semibold text-green-600 mb-1">Refunded</p>
-                    <p className="text-xl font-bold text-green-700 dark:text-green-400">PKR {(totalApproved / 100).toFixed(2)}</p>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-green-600 mb-1">{pricesHidden ? "Refunded Qty" : "Refunded"}</p>
+                    <p className="text-xl font-bold text-green-700 dark:text-green-400">
+                        {pricesHidden ? formatQuantity(quantitySummary.refunded) : `PKR ${(totalApproved / 100).toFixed(2)}`}
+                    </p>
                 </div>
                 <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/50 rounded-xl p-4 text-center">
-                    <p className="text-[10px] uppercase tracking-wider font-semibold text-blue-600 mb-1">Remaining</p>
-                    <p className="text-xl font-bold text-blue-700 dark:text-blue-400">PKR {(remainingRefundable / 100).toFixed(2)}</p>
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-blue-600 mb-1">{pricesHidden ? "Remaining Qty" : "Remaining"}</p>
+                    <p className="text-xl font-bold text-blue-700 dark:text-blue-400">
+                        {pricesHidden ? formatQuantity(quantitySummary.remaining) : `PKR ${(remainingRefundable / 100).toFixed(2)}`}
+                    </p>
                 </div>
             </div>
 
@@ -259,13 +300,13 @@ export function RefundManagement({
                             Request Refund
                         </Button>
                     )}
-                    {!isOrderApproved && remainingRefundable > 0 && !showForm && (
+                    {!isOrderApproved && hasRefundCapacity && !showForm && (
                         <div className="text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-md border border-slate-200 flex items-center gap-2">
                             <Clock className="h-3 w-3" />
                             Refund available after approval
                         </div>
                     )}
-                    {isOrderApproved && !isWithinRefundWindow && remainingRefundable > 0 && !showForm && (
+                    {isOrderApproved && !isWithinRefundWindow && hasRefundCapacity && !showForm && (
                         <div className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-md border border-amber-200 flex items-center gap-2">
                             <Clock className="h-3 w-3" />
                             Refund period ended
@@ -275,9 +316,15 @@ export function RefundManagement({
             </div>
 
             {/* Refund window explanation */}
-            {isOrderApproved && !isWithinRefundWindow && remainingRefundable > 0 && !showForm && (
+            {isOrderApproved && !isWithinRefundWindow && hasRefundCapacity && !showForm && (
                 <p className="text-xs text-muted-foreground text-right mt-1">
                     Requests are limited to the calendar month of the order.
+                </p>
+            )}
+
+            {pricesHidden && !quantityOnlyRefundAvailable && !showForm && (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    This order has a legacy refund. A Super Admin must review it before another refund can be requested.
                 </p>
             )}
 
@@ -291,7 +338,7 @@ export function RefundManagement({
                             </div>
 
 
-                            {legacyRefundAmount > 0 && (
+                            {!pricesHidden && legacyRefundAmount > 0 && (
                                 <div className="bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 p-3 rounded text-sm mb-4">
                                     <p className="font-semibold text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
                                         <AlertTriangle className="h-4 w-4" />
@@ -310,11 +357,11 @@ export function RefundManagement({
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead className="w-10"></TableHead>
-                                            <TableHead className="w-[38%] whitespace-normal">Product</TableHead>
-                                            <TableHead className="w-[14%] text-right">Price</TableHead>
+                                            <TableHead className={pricesHidden ? "w-[50%] whitespace-normal" : "w-[38%] whitespace-normal"}>Product</TableHead>
+                                            {!pricesHidden && <TableHead className="w-[14%] text-right">Price</TableHead>}
                                             <TableHead className="w-[14%] text-right whitespace-normal">Remaining</TableHead>
                                             <TableHead className="text-center whitespace-normal w-[100px]">Qty to Refund</TableHead>
-                                            <TableHead className="w-[14%] text-right">Total</TableHead>
+                                            {!pricesHidden && <TableHead className="w-[14%] text-right">Total</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -327,16 +374,18 @@ export function RefundManagement({
                                                 const isFullyRefundedItem = remainingQty === 0
 
                                                 // Calculate if selecting this item (min qty 1) would exceed remaining balance
-                                                const costOfOne = item.priceCents
+                                                const costOfOne = Number(item.priceCents || 0)
                                                 const currentSelectedQty = selectedItems[item.id] || 0
                                                 const otherItemsTotal = selectedRefundAmount - (costOfOne * currentSelectedQty)
                                                 const availableForThisItem = remainingRefundable - otherItemsTotal
                                                 const step = sanitizeQuantityStep(Boolean(item.allowDecimalQuantity), item.quantityStep ?? 1)
-                                                const maxAffordableQty = Math.floor((availableForThisItem / costOfOne) / step) * step
+                                                const maxAffordableQty = pricesHidden || costOfOne <= 0
+                                                    ? remainingQty
+                                                    : Math.floor((availableForThisItem / costOfOne) / step) * step
 
                                                 const effectiveMaxQty = Math.min(remainingQty, maxAffordableQty)
 
-                                                const wouldExceedBalance = !isSelected && (selectedRefundAmount + costOfOne > remainingRefundable)
+                                                const wouldExceedBalance = !pricesHidden && !isSelected && (selectedRefundAmount + costOfOne > remainingRefundable)
                                                 const isDisable = isFullyRefundedItem || wouldExceedBalance
 
                                                 return (
@@ -359,9 +408,9 @@ export function RefundManagement({
                                                                 </span>
                                                             </div>
                                                         </TableCell>
-                                                        <TableCell className="text-right">
+                                                        {!pricesHidden && <TableCell className="text-right">
                                                             {(item.priceCents / 100).toFixed(2)}
-                                                        </TableCell>
+                                                        </TableCell>}
                                                         <TableCell className="text-right font-semibold">
                                                             {formatQuantity(remainingQty)}
                                                         </TableCell>
@@ -384,18 +433,18 @@ export function RefundManagement({
                                                                 </div>
                                                             )}
                                                         </TableCell>
-                                                        <TableCell className="text-right font-medium text-red-600">
+                                                        {!pricesHidden && <TableCell className="text-right font-medium text-red-600">
                                                             {isSelected
                                                                 ? (calculateLineCents(item.priceCents, selectedItems[item.id]) / 100).toFixed(2)
                                                                 : "0.00"
                                                             }
-                                                        </TableCell>
+                                                        </TableCell>}
                                                     </TableRow>
                                                 )
                                             })
                                         ) : (
                                             <TableRow>
-                                                <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
+                                                <TableCell colSpan={pricesHidden ? 4 : 6} className="text-center h-24 text-muted-foreground">
                                                     Loading items...
                                                 </TableCell>
                                             </TableRow>
@@ -405,8 +454,10 @@ export function RefundManagement({
                             </div>
 
                             <div className="flex justify-between items-center bg-slate-100 dark:bg-slate-800 p-3 rounded-lg">
-                                <span className="font-medium">Total Refund Amount:</span>
-                                <span className="text-lg font-bold">PKR {(selectedRefundAmount / 100).toFixed(2)}</span>
+                                <span className="font-medium">{pricesHidden ? "Total Quantity Selected:" : "Total Refund Amount:"}</span>
+                                <span className="text-lg font-bold">
+                                    {pricesHidden ? formatQuantity(selectedRefundQuantity) : `PKR ${(selectedRefundAmount / 100).toFixed(2)}`}
+                                </span>
                             </div>
 
                             <div className="space-y-2">
@@ -427,7 +478,11 @@ export function RefundManagement({
                                 <Button type="button" variant="ghost" size="sm" onClick={() => setShowForm(false)}>
                                     Cancel
                                 </Button>
-                                <Button type="submit" size="sm" disabled={processing || selectedRefundAmount <= 0}>
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={processing || (pricesHidden ? selectedRefundQuantity <= 0 : selectedRefundAmount <= 0)}
+                                >
                                     {processing ? "Processing..." : "Submit Refund"}
                                 </Button>
                             </div>
@@ -458,7 +513,7 @@ export function RefundManagement({
                                             <span className="font-mono text-xs text-primary font-semibold mr-2">
                                                 {refund.refundNumber || (refund.id !== 'legacy' ? `Refund-${String(refund.id).padStart(6, '0')}` : '')}
                                             </span>
-                                            PKR {(refund.amountCents / 100).toFixed(2)}
+                                            {!pricesHidden && `PKR ${(refund.amountCents / 100).toFixed(2)}`}
                                             <span className="text-muted-foreground font-normal ml-2">
                                                 via {refund.processedByUser?.fullName || 'System'}
                                             </span>
@@ -493,10 +548,10 @@ export function RefundManagement({
                                         <p className="text-xs font-medium text-muted-foreground mb-1">Refunded Items:</p>
                                         <ul className="space-y-1">
                                             {refund.items.map((item: any) => (
-                                                <li key={item.orderItemId} className="flex justify-between text-xs bg-white dark:bg-slate-900 p-2 rounded border">
-                                                    <span>{formatQuantity(item.quantity)}x {item.productName} ({item.unit})</span>
-                                                    <span className="font-medium">PKR {(item.amountCents / 100).toFixed(2)}</span>
-                                                </li>
+                                                 <li key={item.orderItemId} className="flex justify-between text-xs bg-white dark:bg-slate-900 p-2 rounded border">
+                                                     <span>{formatQuantity(item.quantity)}x {item.productName} ({item.unit})</span>
+                                                     {!pricesHidden && <span className="font-medium">PKR {(item.amountCents / 100).toFixed(2)}</span>}
+                                                 </li>
                                             ))}
                                         </ul>
                                     </div>

@@ -80,20 +80,23 @@ export default function RefundsPage() {
     const [pendingRefunds, setPendingRefunds] = useState<PendingRefundRequest[]>([])
     const [pendingRefundsLoading, setPendingRefundsLoading] = useState(false)
     const [pendingRefundsVersion, setPendingRefundsVersion] = useState(0)
+    const [reviewingRefund, setReviewingRefund] = useState<PendingRefundRequest | null>(null)
     const [cancelTarget, setCancelTarget] = useState<PendingRefundRequest | null>(null)
     const [cancelling, setCancelling] = useState(false)
 
     // Separate search function to be called from effect or button
-    const performSearch = async (tid: string) => {
+    const performSearch = async (tid: string, refundRequest: PendingRefundRequest | null = null) => {
         if (!tid.trim()) return
 
         setSearching(true)
         setError(null)
         setOrder(null)
         setSelectedItems(new Map())
+        setReviewingRefund(refundRequest)
 
         try {
-            const response = await fetch(`/api/v1/admin/refunds?q=${encodeURIComponent(tid.trim())}`)
+            const requestQuery = refundRequest ? `&refundRequestId=${refundRequest.id}` : ""
+            const response = await fetch(`/api/v1/admin/refunds?q=${encodeURIComponent(tid.trim())}${requestQuery}`)
             const data = await response.json()
 
             if (!response.ok) {
@@ -238,7 +241,7 @@ export default function RefundsPage() {
             })
             return
         }
-        setRefundReason("")
+        setRefundReason(reviewingRefund?.reason || "")
         setRefundDialogOpen(true)
     }
 
@@ -258,7 +261,8 @@ export default function RefundsPage() {
                 body: JSON.stringify({
                     orderId: order.id,
                     items: refundItems,
-                    reason: refundReason.trim() || undefined
+                    reason: refundReason.trim() || undefined,
+                    refundRequestId: reviewingRefund?.id,
                 })
             })
 
@@ -535,10 +539,10 @@ export default function RefundsPage() {
                                                     size="sm"
                                                     onClick={() => {
                                                         setSearchQuery(refund.tid)
-                                                        performSearch(refund.tid)
+                                                        performSearch(refund.tid, refund)
                                                     }}
                                                 >
-                                                    View
+                                                    Review
                                                 </Button>
                                                 <Button
                                                     variant="outline"
@@ -602,6 +606,11 @@ export default function RefundsPage() {
                             <CardTitle className="text-xl">Order: {order.tid}</CardTitle>
                             <div className="mt-2">
                                 {getStatusBadge(order.status, order.statusAtRefund)}
+                                {reviewingRefund && (
+                                    <Badge variant="outline" className="ml-2 font-mono text-xs text-primary">
+                                        Reviewing {reviewingRefund.refundNumber || `Refund-${String(reviewingRefund.id).padStart(6, '0')}`}
+                                    </Badge>
+                                )}
                             </div>
                         </div>
                         {canRefund && selectedItems.size > 0 && (
@@ -867,7 +876,9 @@ export default function RefundsPage() {
                             Confirm Refund
                         </DialogTitle>
                         <DialogDescription>
-                            This will refund the selected items and credit the branch budget.
+                            {reviewingRefund
+                                ? `This will approve ${reviewingRefund.refundNumber || `Refund-${String(reviewingRefund.id).padStart(6, '0')}`} and credit the branch budget.`
+                                : "This will refund the selected items and credit the branch budget."}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">

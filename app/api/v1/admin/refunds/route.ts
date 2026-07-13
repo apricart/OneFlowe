@@ -3,9 +3,10 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { orders, orderItems, organizations, branches, users, budgets, auditLogs, refunds, refundItems, globalProducts } from "@/db/schema"
-import { eq, or, ilike, sql, and, desc } from "drizzle-orm"
+import { eq, or, ilike, sql, and, desc, ne } from "drizzle-orm"
 import { releaseRefundedQuantityBudget } from "@/lib/server/product-quantity-budget-ledger"
 import { calculateLineCents, formatQuantity, validateProductQuantity } from "@/lib/quantity"
+import { resolveAdminRefundReason } from "@/lib/admin-refund-approval"
 
 /**
  * GET /api/v1/admin/refunds/search?q=<order_tid_or_id>
@@ -28,6 +29,14 @@ export async function GET(req: NextRequest) {
         // Get search query
         const { searchParams } = new URL(req.url)
         const query = searchParams.get("q")?.trim()
+        const refundRequestIdParam = searchParams.get("refundRequestId")
+        const refundRequestId = refundRequestIdParam && /^\d+$/.test(refundRequestIdParam)
+            ? Number(refundRequestIdParam)
+            : null
+
+        if (refundRequestIdParam && (!refundRequestId || refundRequestId <= 0)) {
+            return NextResponse.json({ error: "Invalid refund request ID" }, { status: 400 })
+        }
 
         if (searchParams.has("status") && searchParams.get("status") === "pending") {
             const pendingRefunds = await db
@@ -95,6 +104,25 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Order not found" }, { status: 404 })
         }
 
+        if (refundRequestId) {
+            const [pendingRequest] = await db
+                .select({ id: refunds.id })
+                .from(refunds)
+                .where(and(
+                    eq(refunds.id, refundRequestId),
+                    eq(refunds.orderId, orderData.id),
+                    eq(refunds.organizationId, orderData.organizationId!),
+                    eq(refunds.status, "PENDING"),
+                ))
+                .limit(1)
+
+            if (!pendingRequest) {
+                return NextResponse.json({
+                    error: "This refund request is no longer pending or does not belong to the selected order."
+                }, { status: 409 })
+            }
+        }
+
         // Get organization and branch names
         const [org] = await db
             .select({ name: organizations.name })
@@ -146,7 +174,9 @@ export async function GET(req: NextRequest) {
                 or(
                     eq(refunds.status, "APPROVED"),
                     eq(refunds.status, "COMPLETED"),
-                    eq(refunds.status, "PENDING")
+                    refundRequestId
+                        ? and(eq(refunds.status, "PENDING"), eq(refunds.id, refundRequestId))
+                        : eq(refunds.status, "PENDING")
                 )
             ))
 
@@ -210,7 +240,7 @@ export async function GET(req: NextRequest) {
  * POST /api/v1/admin/refunds
  * Process an item-level refund (Super Admin only)
  *
- * Body: { orderId: number, items: Array<{itemId: number, quantity: number}>, reason?: string }
+ * Body: { orderId: number, items: Array<{itemId: number, quantity: number}>, reason?: string, refundRequestId?: number }
  */
 export async function POST(req: NextRequest) {
     console.log("[Refunds API] POST endpoint called")
@@ -236,10 +266,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
         }
 
-        const { orderId, items, reason } = body as {
+        const { orderId, items, reason, refundRequestId } = body as {
             orderId: number
             items: Array<{ itemId: number; quantity: number }>
             reason?: string
+            refundRequestId?: number
         }
 
         // ===== INPUT VALIDATION =====
@@ -247,6 +278,10 @@ export async function POST(req: NextRequest) {
         // Validate orderId
         if (!orderId || !Number.isFinite(orderId) || orderId <= 0) {
             return NextResponse.json({ error: "Valid order ID is required" }, { status: 400 })
+        }
+
+        if (refundRequestId !== undefined && (!Number.isInteger(refundRequestId) || refundRequestId <= 0)) {
+            return NextResponse.json({ error: "Valid refund request ID is required" }, { status: 400 })
         }
 
         // Validate items array
@@ -297,6 +332,29 @@ export async function POST(req: NextRequest) {
 
         if (!orderData) {
             return NextResponse.json({ error: "Order not found" }, { status: 404 })
+        }
+
+        const [pendingRefundRequest] = refundRequestId
+            ? await db
+                .select({
+                    id: refunds.id,
+                    reason: refunds.reason,
+                    refundNumber: refunds.refundNumber,
+                })
+                .from(refunds)
+                .where(and(
+                    eq(refunds.id, refundRequestId),
+                    eq(refunds.orderId, orderData.id),
+                    eq(refunds.organizationId, orderData.organizationId!),
+                    eq(refunds.status, "PENDING"),
+                ))
+                .limit(1)
+            : []
+
+        if (refundRequestId && !pendingRefundRequest) {
+            return NextResponse.json({
+                error: "This refund request is no longer pending or does not belong to this order and organization."
+            }, { status: 409 })
         }
 
         // ===== STATUS VALIDATION =====
@@ -476,6 +534,7 @@ export async function POST(req: NextRequest) {
         const newApprovedTotal = approvedTotal + totalRefundAmount
         const isFullRefund = newApprovedTotal >= orderTotal
         const refundType = isFullRefund ? "FULL" : "PARTIAL"
+        const effectiveReason = resolveAdminRefundReason(reason, pendingRefundRequest?.reason)
 
         // ===== PROCESS REFUND IN TRANSACTION =====
         await db.transaction(async (tx) => {
@@ -511,7 +570,7 @@ export async function POST(req: NextRequest) {
                     refundedAt: new Date(),
                     refundedByUserId: userId,
                     refundAmountCents: newApprovedTotal,
-                    refundReason: reason?.trim() || orderData.refundReason,
+                    refundReason: effectiveReason || orderData.refundReason,
                     receiptData: updatedReceiptData || currentOrder?.receiptData,
                     updatedAt: new Date(),
                 })
@@ -570,29 +629,59 @@ export async function POST(req: NextRequest) {
                     totalRefundAmountPKR: (totalRefundAmount / 100).toFixed(2),
                     totalRefunded: newApprovedTotal,
                     isFullRefund,
-                    reason: reason?.trim() || "No reason provided",
+                    reason: effectiveReason || "No reason provided",
+                    approvedRefundRequestId: pendingRefundRequest?.id || null,
                 },
             })
 
-            // 4. Create refund record
-            const [newRefund] = await tx.insert(refunds).values({
-                organizationId: orderData.organizationId,
-                orderId,
-                amountCents: totalRefundAmount,
-                reason: reason?.trim() || null,
-                status: "APPROVED",
-                processedByUserId: userId,
-            }).returning({ id: refunds.id })
+            // 4. Approve the exact pending request when reviewing one. Direct
+            // refunds keep the existing behavior of creating a new record.
+            let approvedRefundId: number
+            if (pendingRefundRequest) {
+                const [approvedRequest] = await tx
+                    .update(refunds)
+                    .set({
+                        amountCents: totalRefundAmount,
+                        reason: effectiveReason,
+                        status: "APPROVED",
+                        processedByUserId: userId,
+                        updatedAt: new Date(),
+                    })
+                    .where(and(
+                        eq(refunds.id, pendingRefundRequest.id),
+                        eq(refunds.orderId, orderId),
+                        eq(refunds.organizationId, orderData.organizationId!),
+                        eq(refunds.status, "PENDING"),
+                    ))
+                    .returning({ id: refunds.id })
 
-            await tx.update(refunds)
-                .set({ refundNumber: `Refund-${String(newRefund.id).padStart(6, '0')}` })
-                .where(eq(refunds.id, newRefund.id))
+                if (!approvedRequest) {
+                    throw new Error("PENDING_REFUND_APPROVAL_CONFLICT")
+                }
+
+                approvedRefundId = approvedRequest.id
+                await tx.delete(refundItems).where(eq(refundItems.refundId, approvedRefundId))
+            } else {
+                const [newRefund] = await tx.insert(refunds).values({
+                    organizationId: orderData.organizationId,
+                    orderId,
+                    amountCents: totalRefundAmount,
+                    reason: effectiveReason,
+                    status: "APPROVED",
+                    processedByUserId: userId,
+                }).returning({ id: refunds.id })
+
+                approvedRefundId = newRefund.id
+                await tx.update(refunds)
+                    .set({ refundNumber: `Refund-${String(newRefund.id).padStart(6, '0')}` })
+                    .where(eq(refunds.id, newRefund.id))
+            }
 
             // 5. Insert refund items
-            if (newRefund && refundDetails.length > 0) {
+            if (refundDetails.length > 0) {
                 await tx.insert(refundItems).values(
                     refundDetails.map(item => ({
-                        refundId: newRefund.id,
+                        refundId: approvedRefundId,
                         orderItemId: item.itemId,
                         quantity: item.quantity,
                         amountCents: item.totalCents
@@ -600,18 +689,23 @@ export async function POST(req: NextRequest) {
                 )
             }
 
-            // 6. CLEAR PENDING REQUESTS: Mark any existing pending refunds for this order as SUPERSEDED
+            // 6. Mark only other pending requests for this order as superseded.
             // This ensures that 'hasRefundRequests' in order list becomes 0 and the "REQUESTED" badge disappears.
+            const supersedeConditions = [
+                eq(refunds.orderId, orderId),
+                eq(refunds.status, "PENDING"),
+            ]
+            if (pendingRefundRequest) {
+                supersedeConditions.push(ne(refunds.id, pendingRefundRequest.id))
+            }
+
             await tx.update(refunds)
                 .set({
                     status: "SUPERSEDED",
                     processedByUserId: userId,
                     updatedAt: new Date()
                 })
-                .where(and(
-                    eq(refunds.orderId, orderId),
-                    eq(refunds.status, "PENDING")
-                ))
+                .where(and(...supersedeConditions))
         })
 
         return NextResponse.json({
@@ -623,6 +717,11 @@ export async function POST(req: NextRequest) {
         })
 
     } catch (error: any) {
+        if (error?.message === "PENDING_REFUND_APPROVAL_CONFLICT") {
+            return NextResponse.json({
+                error: "This refund request was already processed or changed. Refresh and try again."
+            }, { status: 409 })
+        }
         console.error("[Refunds Process] Error:", error)
         console.error("[Refunds Process] Error message:", error?.message)
         console.error("[Refunds Process] Error code:", error?.code)

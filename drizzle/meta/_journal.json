@@ -197,6 +197,13 @@
       "when": 1783680000000,
       "tag": "20260710000000_add_branch_cost_center_id",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1783760400000,
+      "tag": "20260711000000_add_legacy_import_ledger",
+      "breakpoints": true
     }
   ]
 }

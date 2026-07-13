@@ -1813,13 +1813,13 @@ export default function OrderPortalPage() {
               </div>}
 
               {/* Refund Management */}
-              {/* Refund Management - Disabled for Order Portal */}
-              
-              {!pricesHidden && selectedOrder.totalCents !== null && <RefundManagement
+              <RefundManagement
                 orderId={selectedOrder.id}
                 orderTotalCents={selectedOrder.totalCents}
                 orderStatus={selectedOrder.status}
                 createdAt={selectedOrder.createdAt}
+                pricesHidden={pricesHidden}
+                initialOrderItems={orderDetailsData?.items?.[0]?.orderItems || selectedOrder.orderItems || []}
                 onRefundSuccess={() => {
                   // Refresh orders data
                   mutateOrders?.()
@@ -1827,7 +1827,7 @@ export default function OrderPortalPage() {
                 refundAmountCents={selectedOrder.refundAmountCents}
                 refundedAt={selectedOrder.refundedAt}
                 refundReason={selectedOrder.refundReason}
-              />}
+              />
              
             </div>
           )}

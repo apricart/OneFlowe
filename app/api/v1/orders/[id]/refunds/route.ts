@@ -10,6 +10,7 @@ import { orderSelectColumns } from "@/lib/order-select"
 import { calculateLineCents, formatQuantity, validateProductQuantity } from "@/lib/quantity"
 import { sendRefundRequestEmail } from "@/lib/email"
 import { ADMIN_OPERATIONS_EMAIL } from "@/lib/email/recipients"
+import { buildRefundSuccessPayload, redactRefundHistoryForPriceHidden } from "@/lib/refund-visibility"
 
 const refundRequestRoles = new Set(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"])
 
@@ -79,9 +80,7 @@ export async function GET(
     const userOrgId = (session.user as any).organizationId
     const userBranchId = (session.user as any).branchId
     const userId = (session.user as any).id as string
-    if (await shouldHidePricesForRole(userRole, order.organizationId)) {
-      return NextResponse.json({ error: "Refund details are unavailable while prices are hidden" }, { status: 403 })
-    }
+    const pricesHidden = await shouldHidePricesForRole(userRole, order.organizationId)
 
     if (!canAccessOrderForRefund(userRole, order, userOrgId, userBranchId, userId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
@@ -139,7 +138,27 @@ export async function GET(
       }))
     }
 
-    return NextResponse.json({ refunds: refundsWithItems })
+    if (pricesHidden) {
+      const approvedRecordTotal = refundsWithItems
+        .filter((refund) => ["APPROVED", "COMPLETED"].includes(String(refund.status).toUpperCase()))
+        .reduce((sum, refund) => sum + Number(refund.amountCents || 0), 0)
+      const pendingRecordTotal = refundsWithItems
+        .filter((refund) => String(refund.status).toUpperCase() === "PENDING")
+        .reduce((sum, refund) => sum + Number(refund.amountCents || 0), 0)
+      const trackedItemTotal = refundsWithItems
+        .filter((refund) => ["APPROVED", "COMPLETED", "PENDING"].includes(String(refund.status).toUpperCase()))
+        .flatMap((refund) => refund.items)
+        .reduce((sum, item) => sum + Number(item.amountCents || 0), 0)
+      const effectiveRefundTotal = Math.max(approvedRecordTotal, Number(order.refundAmountCents || 0)) + pendingRecordTotal
+
+      return NextResponse.json({
+        refunds: redactRefundHistoryForPriceHidden(refundsWithItems),
+        pricesHidden: true,
+        quantityOnlyRefundAvailable: effectiveRefundTotal <= trackedItemTotal,
+      })
+    }
+
+    return NextResponse.json({ refunds: refundsWithItems, pricesHidden: false })
   } catch (error: any) {
     console.error("Error fetching refunds:", error)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
@@ -209,9 +228,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const userId = (session.user as any).id as string
     const userOrgId = (session.user as any).organizationId
     const userBranchId = (session.user as any).branchId
-    if (await shouldHidePricesForRole(userRole, orderData.organizationId)) {
-      return NextResponse.json({ error: "Refund requests are unavailable while prices are hidden" }, { status: 403 })
-    }
+    const pricesHidden = await shouldHidePricesForRole(userRole, orderData.organizationId)
 
     if (!canAccessOrderForRefund(userRole, orderData, userOrgId, userBranchId, userId)) {
       return NextResponse.json({ error: "Forbidden: Cannot request a refund for this order" }, { status: 403 })
@@ -240,6 +257,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .select({
         orderItemId: refundItems.orderItemId,
         quantity: refundItems.quantity,
+        amountCents: refundItems.amountCents,
         status: refunds.status
       })
       .from(refundItems)
@@ -305,7 +323,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .from(refunds)
       .where(eq(refunds.orderId, orderId))
 
-    const approvedTotal = existingRefunds
+    const approvedRefundRecordTotal = existingRefunds
       .filter(r => r.status === 'APPROVED' || r.status === 'COMPLETED')
       .reduce((sum, r) => sum + (r.amountCents || 0), 0)
 
@@ -313,9 +331,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .filter(r => r.status === 'PENDING')
       .reduce((sum, r) => sum + (r.amountCents || 0), 0)
 
+    // Some legacy orders only have the order-level refund amount. Use the larger
+    // approved value so neither visible nor hidden flows can over-refund them.
+    const approvedTotal = Math.max(approvedRefundRecordTotal, Number(orderData.refundAmountCents || 0))
+    const trackedApprovedOrPendingTotal = previousRefunds
+      .filter(r => r.status === 'APPROVED' || r.status === 'COMPLETED' || r.status === 'PENDING')
+      .reduce((sum, r) => sum + Number(r.amountCents || 0), 0)
+    const hasUnitemizedRefundAmount = approvedTotal + pendingTotal > trackedApprovedOrPendingTotal
+
+    if (pricesHidden && hasUnitemizedRefundAmount) {
+      return NextResponse.json({
+        error: "This order has a legacy refund that requires administrator review before another refund can be requested."
+      }, { status: 409 })
+    }
+
     const remainingRefundableAmount = orderData.totalCents - (approvedTotal + pendingTotal)
 
     if (totalRefundAmount > remainingRefundableAmount) {
+      if (pricesHidden) {
+        return NextResponse.json({
+          error: "The selected quantities exceed this order's remaining refundable capacity."
+        }, { status: 400 })
+      }
       return NextResponse.json({
         error: `Refund amount (${(totalRefundAmount / 100).toFixed(2)} PKR) exceeds remaining refundable capacity (Total: ${(orderData.totalCents / 100).toFixed(2)}, Approved: ${(approvedTotal / 100).toFixed(2)}, Pending: ${(pendingTotal / 100).toFixed(2)}).`
       }, { status: 400 })
@@ -562,13 +599,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
-    return NextResponse.json({
-      message: userRole === "SUPER_ADMIN"
-        ? `Refund of ${(totalRefundAmount / 100).toFixed(2)} PKR processed successfully`
-        : `Refund request of ${(totalRefundAmount / 100).toFixed(2)} PKR submitted successfully`,
-      refundAmount: (totalRefundAmount / 100).toFixed(2),
-      remainingRefundable: ((remainingRefundableAmount - totalRefundAmount) / 100).toFixed(2)
-    })
+    return NextResponse.json(buildRefundSuccessPayload({
+      pricesHidden,
+      isSuperAdmin: userRole === "SUPER_ADMIN",
+      totalRefundAmount,
+      remainingRefundableAmount,
+    }))
   } catch (e: any) {
     console.error('[Refunds] Error processing refund:', e)
     if (e.code === '23503') {
