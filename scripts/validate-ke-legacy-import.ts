@@ -139,7 +139,16 @@ async function main() {
       select id, product_code, name, category_id, base_price_cents, unit, status, stock_quantity, deleted_at, created_at, updated_at
       from global_products where id = any($1::int[]) order by id
     `, [existingProductIds])).rows
-    assert(JSON.stringify(currentExistingProducts) === JSON.stringify(snapshot.globalProducts), "A pre-existing global product changed")
+    const changedExistingProducts = snapshot.globalProducts.flatMap((before: any, index: number) => {
+      const after = currentExistingProducts[index]
+      return JSON.stringify(after) === JSON.stringify(before)
+        ? []
+        : [{ id: before.id, before, after: after ?? null }]
+    })
+    assert(
+      changedExistingProducts.length === 0,
+      `A pre-existing global product changed: ${JSON.stringify(changedExistingProducts)}`,
+    )
 
     await client.query("commit")
     console.log(JSON.stringify({

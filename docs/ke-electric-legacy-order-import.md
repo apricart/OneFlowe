@@ -93,3 +93,46 @@ If validation fails, use the guarded rollback command:
 Rollback deletes only the batch-owned orders and items. It retains product and
 group assignments and inactive historical identities because later configuration
 or imports may depend on them.
+
+## Legacy product-code normalization
+
+The completed K-Electric batch owns 144 historical-only products (global product
+IDs `165` through `308`). Their canonical codes are `PRD--20` through
+`PRD--163`; the 5,171 corresponding imported order-item snapshots must carry the
+same codes. Product ID `7` (`PRD-007`, Sugar) was reused and is deliberately
+outside this renumbering.
+
+Before normalization, product ID `203` had one accidental UBL organization
+assignment (`organization_inventory.id=320`). The guarded migration may remove
+that exact assignment only when it still has no branch inventory, orders,
+budgets, allocations, restock requests, legacy mappings, or parallel product
+assignments. Any additional cross-tenant reference aborts the transaction.
+
+Required workflow:
+
+1. Apply `drizzle/20260713010000_add_normalized_global_product_code_uniqueness.sql`.
+   It refuses to install if active product codes collide after trimming and
+   case-folding.
+2. Save a fresh safety snapshot and dry-run report.
+3. Run the full rollback rehearsal with `--simulate`; it executes all mutations
+   and validations, then rolls the transaction back.
+4. Apply only with the saved preflight, an active SUPER_ADMIN actor, and the exact
+   confirmation printed by the dry run.
+5. Independently validate the commit and its immediate baseline:
+
+   `npm run validate:ke-legacy-products -- --commit-report=<commit.json> --baseline=<pre-change-snapshot.json>`
+
+The validator checks the code mapping, all K-Electric import totals, audit pair,
+normalized unique index, absence of cross-tenant references, and the protected
+pre-change rows. It permits only the intended 144 catalog code/timestamp changes
+and 5,171 order-item code changes. The next canonical product code is
+`PRD--164`.
+
+Emergency rollback is intentionally separate and defaults to read-only:
+
+`npm run rollback:ke-legacy-products -- --commit-report=<commit.json>`
+
+An apply rollback additionally requires the original actor and the exact
+confirmation printed by its dry run. It refuses to restore the old codes or UBL
+assignment if later orders, assignments, mappings, or other dependencies now use
+the affected products.

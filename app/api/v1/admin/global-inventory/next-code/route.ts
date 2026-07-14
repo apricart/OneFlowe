@@ -1,26 +1,10 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
-import { and, desc, eq, isNull } from "drizzle-orm"
+import { and, isNull, sql } from "drizzle-orm"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { globalProducts } from "@/db/schema"
-
-const DEFAULT_PRODUCT_CODE = "PRD-001"
-
-function incrementProductCode(productCode?: string | null) {
-  const normalizedCode = productCode?.trim()
-  const match = normalizedCode?.match(/^(.*?)(\d+)$/)
-
-  if (!match) {
-    return DEFAULT_PRODUCT_CODE
-  }
-
-  const [, prefix, numericSuffix] = match
-  const nextNumber = Number.parseInt(numericSuffix, 10) + 1
-  const nextSuffix = nextNumber.toString().padStart(numericSuffix.length, "0")
-
-  return `${prefix}${nextSuffix}`
-}
+import { getNextCanonicalProductCode } from "@/lib/product-code"
 
 async function productCodeExists(productCode: string) {
   const [existingProduct] = await db
@@ -28,7 +12,7 @@ async function productCodeExists(productCode: string) {
     .from(globalProducts)
     .where(
       and(
-        eq(globalProducts.productCode, productCode),
+        sql`lower(btrim(${globalProducts.productCode})) = lower(btrim(${productCode}))`,
         isNull(globalProducts.deletedAt)
       )
     )
@@ -49,21 +33,20 @@ export async function GET() {
       return NextResponse.json({ error: "Forbidden - Super Admin access required" }, { status: 403 })
     }
 
-    const [lastProduct] = await db
+    const catalogProducts = await db
       .select({
-        id: globalProducts.id,
         productCode: globalProducts.productCode,
       })
       .from(globalProducts)
       .where(isNull(globalProducts.deletedAt))
-      .orderBy(desc(globalProducts.createdAt), desc(globalProducts.id))
-      .limit(1)
 
-    let productCode = incrementProductCode(lastProduct?.productCode)
+    const observedProductCodes = catalogProducts.map(({ productCode }) => productCode)
+    let productCode = getNextCanonicalProductCode(observedProductCodes)
     let attempts = 0
 
     while (await productCodeExists(productCode)) {
-      productCode = incrementProductCode(productCode)
+      observedProductCodes.push(productCode)
+      productCode = getNextCanonicalProductCode(observedProductCodes)
       attempts += 1
 
       if (attempts >= 100) {
