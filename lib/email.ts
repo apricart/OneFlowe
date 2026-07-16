@@ -521,7 +521,12 @@ export async function sendOrderTokenEmail(details: OrderTokenEmailDetails): Prom
   }
 }
 
-function generateWelcomeEmailHTML(firstName: string, username: string, temporaryPassword: string): string {
+function generateWelcomeEmailHTML(
+  firstName: string,
+  username: string,
+  temporaryPassword: string,
+  loginUrl: string
+): string {
   return `
     <!DOCTYPE html>
     <html>
@@ -572,6 +577,21 @@ function generateWelcomeEmailHTML(firstName: string, username: string, temporary
                     </tr>
                   </table>
 
+                  <!-- Login Link -->
+                  <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 0 0 30px 0;">
+                    <tr>
+                      <td style="text-align: center;">
+                        <a href="${escapeHtml(loginUrl)}" target="_blank" style="display: inline-block; padding: 14px 28px; background-color: #667eea; color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">
+                          Log in to OneFlowe
+                        </a>
+                        <p style="margin: 16px 0 0 0; color: #6c757d; font-size: 13px; line-height: 1.5;">
+                          If the button does not work, copy and paste this URL into your browser:<br>
+                          <a href="${escapeHtml(loginUrl)}" target="_blank" style="color: #667eea; word-break: break-all;">${escapeHtml(loginUrl)}</a>
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+
                   <!-- Warning -->
                   <table role="presentation" style="width: 100%; border-collapse: collapse; margin: 0 0 24px 0;">
                     <tr>
@@ -609,10 +629,11 @@ export async function sendWelcomeEmail(
   to: string,
   firstName: string,
   username: string,
-  temporaryPassword: string
+  temporaryPassword: string,
+  loginUrl: string
 ): Promise<boolean> {
   try {
-    if (!to || !username || !temporaryPassword) {
+    if (!to || !username || !temporaryPassword || !loginUrl) {
       console.error('[Email] Invalid parameters for sendWelcomeEmail')
       return false
     }
@@ -626,7 +647,7 @@ export async function sendWelcomeEmail(
       fromName: "OneFlowe",
       to,
       subject: "Your OneFlowe account has been created",
-      html: generateWelcomeEmailHTML(firstName || username, username, temporaryPassword),
+      html: generateWelcomeEmailHTML(firstName || username, username, temporaryPassword, loginUrl),
       text: [
         `Welcome to Apricart OneFlowe`,
         ``,
@@ -637,6 +658,8 @@ export async function sendWelcomeEmail(
         ``,
         `Username:           ${username}`,
         `Temporary Password: ${temporaryPassword}`,
+        ``,
+        `Login URL: ${loginUrl}`,
         ``,
         `Keep your credentials confidential and do not share them with anyone.`,
         ``,

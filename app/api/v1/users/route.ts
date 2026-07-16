@@ -10,6 +10,20 @@ import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/
 import { assertUniqueUserFields, normalizeEmail, normalizeOptionalText, UserUniqueFieldError } from "@/lib/user-uniqueness"
 import { sendWelcomeEmail } from "@/lib/email"
 
+function getLoginUrl(requestUrl: string): string {
+  const configuredUrl = process.env.NEXTAUTH_URL?.trim()
+
+  if (configuredUrl) {
+    try {
+      return new URL("/login", configuredUrl).toString()
+    } catch {
+      console.error("[USERS_API] NEXTAUTH_URL is invalid; using the request origin for the welcome email")
+    }
+  }
+
+  return new URL("/login", requestUrl).toString()
+}
+
 
 export async function GET(req: Request) {
   const err = await requireApiRole(["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN"])
@@ -233,7 +247,8 @@ export async function POST(req: Request) {
     }
 
     // Send welcome email with credentials (non-blocking — never fail user creation over email)
-    sendWelcomeEmail(createdUser.email, createdUser.firstName || "", username, password).catch((emailErr) => {
+    const loginUrl = getLoginUrl(req.url)
+    sendWelcomeEmail(createdUser.email, createdUser.firstName || "", username, password, loginUrl).catch((emailErr) => {
       console.error("[USERS_API] Failed to send welcome email:", emailErr)
     })
 
