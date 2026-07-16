@@ -10,6 +10,7 @@ import { assertUniqueUserFields, normalizeEmail, normalizeOptionalText, UserUniq
 import { sendWelcomeEmail } from "@/lib/email"
 import { userCreateSchema, validationMessage } from "@/lib/server/mutation-validation"
 import { canAssignRole } from "@/lib/server/user-access-policy"
+import { withRateLimit } from "@/lib/rate-limiter"
 
 
 export async function GET(req: Request) {
@@ -53,6 +54,7 @@ export async function GET(req: Request) {
       .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
       .where(and(...conditions))
       .orderBy(desc(usersTable.createdAt))
+      .limit(500)
 
     return rows.map((r: any) => ({
       id: r.id,
@@ -106,6 +108,11 @@ export async function POST(req: Request) {
   // Get the current user's role to determine what roles they can create
   const scope = await getRequestScope()
   const currentUserRole = scope?.role
+
+  if (scope?.userId) {
+    const rateLimit = await withRateLimit("sensitive", scope.userId)
+    if (rateLimit) return rateLimit
+  }
 
   if (!currentUserRole || !canAssignRole(currentUserRole, role)) {
     console.error("[SECURITY] Role assignment denied:", { role, currentUserRole })

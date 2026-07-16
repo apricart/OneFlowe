@@ -9,6 +9,7 @@ import { releaseRefundedQuantityBudget } from "@/lib/server/product-quantity-bud
 import { orderSelectColumns } from "@/lib/order-select"
 import { calculateLineCents, formatQuantity, validateProductQuantity } from "@/lib/quantity"
 import { sendRefundRequestEmail } from "@/lib/email"
+import { withRateLimit } from "@/lib/rate-limiter"
 import { ADMIN_OPERATIONS_EMAIL } from "@/lib/email/recipients"
 import { buildRefundSuccessPayload, redactRefundHistoryForPriceHidden } from "@/lib/refund-visibility"
 import { refundRequestSchema, validationMessage } from "@/lib/server/mutation-validation"
@@ -173,6 +174,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    const rateLimit = await withRateLimit("refund", (session.user as any).id)
+    if (rateLimit) return rateLimit
 
     const { id } = await params
 

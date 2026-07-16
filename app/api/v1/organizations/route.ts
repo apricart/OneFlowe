@@ -56,6 +56,7 @@ export async function GET() {
         .from(orgsTable)
         .where(where)
         .orderBy(desc(orgsTable.createdAt))
+        .limit(500)
 
       if (items.length === 0) return { items, count: 0 }
 

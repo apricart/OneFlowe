@@ -50,6 +50,9 @@ export async function GET(req: NextRequest) {
       if (productIds.length === 0) {
         return NextResponse.json({ items: [] })
       }
+      if (productIds.length > 100) {
+        return NextResponse.json({ error: "A maximum of 100 image IDs is allowed" }, { status: 400 })
+      }
 
       const items = await db
         .select({
@@ -134,8 +137,8 @@ export async function GET(req: NextRequest) {
     const category = searchParams.get("category") || ""
     const status = searchParams.get("status") || ""
     const lite = searchParams.get("lite") === "true"
-    const page = parseInt(searchParams.get("page") || "1")
-    const limit = parseInt(searchParams.get("limit") || "50")
+    const page = Math.min(Math.max(Math.trunc(Number(searchParams.get("page"))) || 1, 1), 10_000)
+    const limit = Math.min(Math.max(Math.trunc(Number(searchParams.get("limit"))) || 50, 1), 500)
     const offset = (page - 1) * limit
 
     const cacheKey = scopedCacheKey('global-inv', { role: 'SUPER_ADMIN' }, {

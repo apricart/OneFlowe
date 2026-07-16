@@ -30,6 +30,7 @@ export async function GET(req: Request) {
       .from(suppliers)
       .where(where.length ? and(...where) : (undefined as any))
       .orderBy(desc(suppliers.createdAt))
+      .limit(500)
     return ok({ items })
   } catch (e: any) {
     if (e?.code === '42P01') {

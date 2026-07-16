@@ -1,5 +1,9 @@
 import { z } from "zod"
 import { MAX_BUSINESS_QUANTITY, isUniquePositiveIdList } from "@/lib/business-rules"
+import {
+  MAX_STORED_IMAGE_URL_LENGTH,
+  normalizeSafeImageUrl,
+} from "@/lib/security"
 
 export const systemRoleSchema = z.enum([
   "SUPER_ADMIN",
@@ -208,6 +212,15 @@ export const organizationSettingSchema = z.object({
   value: z.unknown(),
 }).strict()
 
+export const reportScheduleSchema = z.object({
+  id: positiveId.optional(),
+  reportName: z.string().trim().min(1).max(128),
+  frequency: z.enum(["daily", "weekly", "monthly"]),
+  format: z.enum(["pdf", "csv", "excel"]),
+  emails: z.array(z.string().trim().email().max(255)).min(1).max(20),
+  enabled: z.boolean().optional().default(true),
+}).strict()
+
 export const moneyBudgetUpdateSchema = z.object({
   branchId: positiveId,
   amountAllocatedCents: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER / 2),
@@ -234,7 +247,17 @@ export const quantityBudgetAllocationSchema = z.object({
   reason: z.string().trim().max(1_000).optional(),
 }).strict()
 
-const nullableUrl = z.union([z.string().trim().max(2_000), z.null()])
+const nullableImageUrl = z.union([
+  z.string()
+    .trim()
+    .max(MAX_STORED_IMAGE_URL_LENGTH)
+    .refine(
+      (value) => value === "" || normalizeSafeImageUrl(value) !== null,
+      "Image URL must be a same-origin path, HTTPS URL, or supported raster data URL",
+    )
+    .transform((value) => normalizeSafeImageUrl(value)),
+  z.null(),
+])
 const nullableLongText = z.union([z.string().trim().max(10_000), z.null()])
 
 export const globalProductUpdateSchema = z.object({
@@ -242,7 +265,7 @@ export const globalProductUpdateSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   description: nullableLongText.optional(),
   categoryId: nullablePositiveId.optional(),
-  imageUrl: nullableUrl.optional(),
+  imageUrl: nullableImageUrl.optional(),
   basePrice: z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   unit: z.string().trim().min(1).max(64).optional(),
   status: z.enum(["active", "inactive"]).optional(),
@@ -257,7 +280,7 @@ const globalProductAdminFields = {
   description: nullableLongText.optional(),
   categoryId: nullablePositiveId.optional(),
   subcategoryId: z.union([z.string(), z.number(), z.null()]).optional(),
-  imageUrl: nullableUrl.optional(),
+  imageUrl: nullableImageUrl.optional(),
   basePrice: z.number().finite().positive().max(Number.MAX_SAFE_INTEGER / 100),
   unit: z.string().trim().min(1).max(64).optional(),
   status: z.enum(["active", "inactive"]).optional(),
@@ -285,7 +308,7 @@ export const organizationProductUpdateSchema = z.object({
   customName: nullableText(255).optional(),
   customDescription: nullableLongText.optional(),
   customPrice: z.union([z.number().int().nonnegative(), z.null()]).optional(),
-  customImageUrl: nullableUrl.optional(),
+  customImageUrl: nullableImageUrl.optional(),
   tags: z.array(z.string().trim().max(100)).max(100).optional(),
   priority: z.number().int().min(-1_000_000).max(1_000_000).optional(),
 }).strict().refine((input) => Object.keys(input).some((key) => key !== "organizationProductId"), {

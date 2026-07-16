@@ -87,6 +87,7 @@ export async function GET(req: NextRequest) {
           )
         )
         .where(eq(globalProducts.status, "active"))
+        .limit(1000)
 
       return pricesHidden
         ? rows.map((item) => ({ ...item, basePrice: null, customPrice: null }))

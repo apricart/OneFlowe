@@ -112,6 +112,7 @@ export async function GET(req: Request) {
           scopedBranchId ? eq(branchesTable.id, scopedBranchId) : undefined
         ))
         .orderBy(desc(branchesTable.createdAt))
+        .limit(500)
 
       return { items, count: items.length }
     }

@@ -8,6 +8,7 @@ import useSWR from "swr"
 import Image from "next/image"
 import { getReceiptItemQuantity } from "@/lib/receipt-display"
 import { formatQuantity } from "@/lib/quantity"
+import { safeFilenamePart } from "@/lib/security"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -41,7 +42,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
             const url = window.URL.createObjectURL(blob)
             const a = document.createElement("a")
             a.href = url
-            a.download = `invoice-${data?.receiptData?.invoiceNumber || orderId}.pdf`
+            a.download = `invoice-${safeFilenamePart(data?.receiptData?.invoiceNumber, String(orderId))}.pdf`
             document.body.appendChild(a)
             a.click()
             window.URL.revokeObjectURL(url)
@@ -99,8 +100,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
     return (
         <div className={`receipt-container ${standalone ? 'py-8 px-4' : 'p-2'}`}>
             {/* Professional Styles */}
-            <style dangerouslySetInnerHTML={{
-                __html: `
+            <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
                 
                 .official-invoice {
@@ -292,7 +292,7 @@ export function ReceiptContent({ orderId, standalone = false, onClose }: Receipt
                     }
                     body { -webkit-print-color-adjust: exact; }
                 }
-            ` }} />
+            `}</style>
 
             {/* Action Bar */}
             <div className="flex justify-end gap-2 mb-6 print-hidden max-w-[850px] mx-auto">

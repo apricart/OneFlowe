@@ -127,7 +127,7 @@ export async function GET(req: NextRequest) {
           )
       }
 
-      const rows = await query.where(and(...whereConditions))
+      const rows = await query.where(and(...whereConditions)).limit(1000)
       return pricesHidden
         ? rows.map((item) => ({ ...item, basePrice: null, customPrice: null }))
         : rows

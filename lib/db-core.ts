@@ -9,6 +9,7 @@ export type DatabaseConnectionConfig = {
   poolMax: number
   idleTimeoutMs: number
   connectionTimeoutMs: number
+  statementTimeoutMs: number
   logQueries?: boolean
 }
 
@@ -43,6 +44,8 @@ export function createDatabaseConnection(config: DatabaseConnectionConfig) {
     max: config.poolMax,
     idleTimeoutMillis: config.idleTimeoutMs,
     connectionTimeoutMillis: config.connectionTimeoutMs,
+    statement_timeout: config.statementTimeoutMs,
+    query_timeout: config.statementTimeoutMs,
     allowExitOnIdle: true,
   })
 

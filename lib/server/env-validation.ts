@@ -93,6 +93,12 @@ const databaseRuntimeShape = {
     300_000,
     30_000,
   ),
+  PG_STATEMENT_TIMEOUT_MS: optionalInteger(
+    'PG_STATEMENT_TIMEOUT_MS',
+    1_000,
+    900_000,
+    60_000,
+  ),
 } as const
 
 const serverEnvSchema = z
@@ -120,6 +126,12 @@ const serverEnvSchema = z
       0,
       300,
       30,
+    ),
+    RATE_LIMIT_TRUST_PROXY_HOPS: optionalInteger(
+      'RATE_LIMIT_TRUST_PROXY_HOPS',
+      1,
+      5,
+      1,
     ),
 
     ORDER_TOKEN_ADMIN_EMAIL: z

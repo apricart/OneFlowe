@@ -150,21 +150,7 @@ async function runAutoFulfill(dryRun = false) {
   return { fulfilled, errors, dryRun }
 }
 
-// GET — triggered by EventBridge Scheduler (Authorization: Bearer <CRON_SECRET>)
-export async function GET(req: NextRequest) {
-  if (!isCronAuthorized(req)) return error("Unauthorized", 401)
-
-  try {
-    const result = await runAutoFulfill(false)
-    console.info("[AutoFulfill] Run complete:", result)
-    return ok(result)
-  } catch (e) {
-    console.error("[AutoFulfill] Unexpected error:", e)
-    return error("Auto-fulfillment run failed", 500)
-  }
-}
-
-// POST — manual trigger; pass { "dry_run": true } to preview without writing
+// POST — EventBridge trigger or manual preview with { "dry_run": true }.
 export async function POST(req: NextRequest) {
   if (!isCronAuthorized(req)) return error("Unauthorized", 401)
 

@@ -8,6 +8,7 @@ const connection = createDatabaseConnection({
   poolMax: databaseToolEnv.PGPOOL_MAX,
   idleTimeoutMs: databaseToolEnv.PGPOOL_IDLE_MS,
   connectionTimeoutMs: databaseToolEnv.PGPOOL_CONN_TIMEOUT_MS,
+  statementTimeoutMs: databaseToolEnv.PG_STATEMENT_TIMEOUT_MS,
   // Import and maintenance commands can query personal or credential-adjacent
   // values. Keep SQL parameters out of terminal logs unless explicitly opted in.
   logQueries: process.env.DATABASE_CLI_LOG_QUERIES === 'true',

@@ -12,9 +12,10 @@
  */
 
 import * as dotenv from "dotenv"
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "fs"
 import { basename, dirname, extname, resolve } from "path"
 import * as XLSX from "xlsx"
+import { sanitizeSpreadsheetRecords } from "../lib/spreadsheet"
 import { inArray, or, sql, type SQL } from "drizzle-orm"
 import {
   normalizeImportKey,
@@ -156,7 +157,7 @@ function credentialsWorkbook(items: Array<{
   branch: BranchRow | null
   temporaryPassword: string
 }>): Buffer {
-  const sheet = XLSX.utils.json_to_sheet(items.map((item) => ({
+  const sheet = XLSX.utils.json_to_sheet(sanitizeSpreadsheetRecords(items.map((item) => ({
     "Workbook Row": item.row.rowNumber,
     "Full Name": item.row.fullName,
     "Email": item.row.email,
@@ -165,7 +166,7 @@ function credentialsWorkbook(items: Array<{
     "Role": item.row.role,
     "Branch": item.row.role === "HEAD_OFFICE" ? "Head Office" : item.branch?.name ?? "",
     "Password Change Required": "Yes",
-  })))
+  }))))
   sheet["!cols"] = [
     { wch: 14 }, { wch: 28 }, { wch: 34 }, { wch: 28 },
     { wch: 28 }, { wch: 18 }, { wch: 36 }, { wch: 26 },
@@ -177,6 +178,9 @@ function credentialsWorkbook(items: Array<{
 
 function loadRecords(filePath: string, requestedSheet?: string): { records: UserImportRecord[]; sheetName: string } {
   if (!existsSync(filePath)) throw new Error(`Input file not found: ${filePath}`)
+  if (statSync(filePath).size > 10 * 1024 * 1024) {
+    throw new Error("User import file exceeds the 10MB limit.")
+  }
   const extension = extname(filePath).toLowerCase()
   if (![".csv", ".xls", ".xlsx"].includes(extension)) {
     throw new Error(`Unsupported input type "${extension}". Use CSV, XLS, or XLSX.`)
@@ -191,6 +195,7 @@ function loadRecords(filePath: string, requestedSheet?: string): { records: User
     defval: "",
     raw: false,
   })
+  if (records.length > 5000) throw new Error("User import exceeds the 5,000-row limit.")
   return { records, sheetName }
 }
 

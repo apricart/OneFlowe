@@ -24,6 +24,10 @@ import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 import * as XLSX from "xlsx"
 import { handleError } from "@/lib/error-handler"
+import {
+  createCsv,
+  sanitizeSpreadsheetRecords,
+} from "@/lib/spreadsheet"
 
 type UserRow = {
   id: string
@@ -511,7 +515,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       user.mfaEnabled ? "Enabled" : "Disabled"
     ])
 
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n")
+    const csvContent = createCsv(headers, rows)
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
@@ -536,7 +540,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
       "Security (MFA)": user.mfaEnabled ? "Enabled" : "Disabled"
     }))
 
-    const worksheet = XLSX.utils.json_to_sheet(data)
+    const worksheet = XLSX.utils.json_to_sheet(sanitizeSpreadsheetRecords(data))
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, "Users")
     XLSX.writeFile(workbook, `users-export-${new Date().getTime()}.xlsx`)

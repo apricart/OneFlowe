@@ -14,6 +14,7 @@ import {
   employeeCredentialUpdateSchema,
   validationMessage,
 } from "@/lib/server/mutation-validation";
+import { withRateLimit } from "@/lib/rate-limiter";
 
 async function POST(req: NextRequest) {
   try {
@@ -28,6 +29,9 @@ async function POST(req: NextRequest) {
     if (!scope || scope.role !== "BRANCH_ADMIN") {
       return error("Not a branch admin", 403)
     }
+
+    const rateLimit = await withRateLimit("sensitive", scope.userId)
+    if (rateLimit) return rateLimit
 
     const userBranchId = scope.branchId
     const orgId = scope.organizationId
@@ -87,6 +91,9 @@ async function GET(req: NextRequest) {
       return error("Not a branch admin", 403)
     }
 
+    const rateLimit = await withRateLimit("sensitive", scope.userId)
+    if (rateLimit) return rateLimit
+
     const userBranchId = scope.branchId
     const orgId = scope.organizationId
 
@@ -111,6 +118,7 @@ async function GET(req: NextRequest) {
           eq(employeeCredentials.organizationId, orgId)
         )
       )
+      .limit(500)
 
     return ok({ credentials: credentials }, { status: 200 })
   } catch (err: any) {
@@ -137,6 +145,9 @@ async function PUT(req: NextRequest) {
     if (!scope || scope.role !== "BRANCH_ADMIN") {
       return error("Not a branch admin", 403)
     }
+
+    const rateLimit = await withRateLimit("sensitive", scope.userId)
+    if (rateLimit) return rateLimit
 
     const userBranchId = scope.branchId
     if (!userBranchId) {

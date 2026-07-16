@@ -9,6 +9,7 @@ import { calculateLineCents, formatQuantity, validateProductQuantity } from "@/l
 import { resolveAdminRefundReason } from "@/lib/admin-refund-approval"
 import { adminRefundProcessSchema, validationMessage } from "@/lib/server/mutation-validation"
 import { isPaidForRefund, isRefundEligibleOrderStatus } from "@/lib/business-rules"
+import { withRateLimit } from "@/lib/rate-limiter"
 
 /**
  * GET /api/v1/admin/refunds/search?q=<order_tid_or_id>
@@ -260,6 +261,9 @@ export async function POST(req: NextRequest) {
         if (userRole !== "SUPER_ADMIN") {
             return NextResponse.json({ error: "Forbidden: Super Admin access required" }, { status: 403 })
         }
+
+        const rateLimit = await withRateLimit("refund", userId)
+        if (rateLimit) return rateLimit
 
         // Parse request body
         const rawBody = await req.json().catch(() => null)

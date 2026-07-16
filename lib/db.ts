@@ -9,6 +9,7 @@ const connection = createDatabaseConnection({
   poolMax: env.PGPOOL_MAX,
   idleTimeoutMs: env.PGPOOL_IDLE_MS,
   connectionTimeoutMs: env.PGPOOL_CONN_TIMEOUT_MS,
+  statementTimeoutMs: env.PG_STATEMENT_TIMEOUT_MS,
 })
 
 export const db = connection.db

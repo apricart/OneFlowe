@@ -1,9 +1,10 @@
 #!/usr/bin/env tsx
 
 import * as dotenv from "dotenv"
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs"
 import { extname, resolve } from "node:path"
 import * as XLSX from "xlsx"
+import { sanitizeSpreadsheetRecords } from "../lib/spreadsheet"
 import { and, eq, inArray, isNull, notInArray, or, sql, type SQL } from "drizzle-orm"
 
 import { generateImportPassword, hashImportPassword } from "../lib/password-cli"
@@ -68,6 +69,7 @@ function options(argv: string[]): Options {
 
 function readImportRows(file: string, usernameFormat: "explicit" | "first.last"): ParsedUserImportRow[] {
   if (!existsSync(file)) throw new Error(`Workbook not found: ${file}`)
+  if (statSync(file).size > 10 * 1024 * 1024) throw new Error("Workbook exceeds the 10MB limit.")
   const workbook = XLSX.readFile(file, { cellDates: false })
   const sheetName = workbook.SheetNames[0]
   if (!sheetName) throw new Error("Workbook has no sheets.")
@@ -75,19 +77,23 @@ function readImportRows(file: string, usernameFormat: "explicit" | "first.last")
     defval: "",
     raw: false,
   })
+  if (records.length > 5000) throw new Error("Workbook exceeds the 5,000-row limit.")
   return parseUserImportRecords(records, { usernameFormat })
 }
 
 function readCredentialRows(file: string): Array<Record<string, string | number>> {
   if (!existsSync(file)) throw new Error(`Credential source not found: ${file}`)
+  if (statSync(file).size > 10 * 1024 * 1024) throw new Error("Credential workbook exceeds the 10MB limit.")
   const workbook = XLSX.readFile(file)
   const sheet = workbook.Sheets.Credentials
   if (!sheet) throw new Error("Credential source has no Credentials sheet.")
-  return XLSX.utils.sheet_to_json<Record<string, string | number>>(sheet, { defval: "", raw: false })
+  const rows = XLSX.utils.sheet_to_json<Record<string, string | number>>(sheet, { defval: "", raw: false })
+  if (rows.length > 5000) throw new Error("Credential workbook exceeds the 5,000-row limit.")
+  return rows
 }
 
 function createCredentialWorkbook(rows: Array<Record<string, string | number>>): Buffer {
-  const sheet = XLSX.utils.json_to_sheet(rows)
+  const sheet = XLSX.utils.json_to_sheet(sanitizeSpreadsheetRecords(rows))
   sheet["!cols"] = [
     { wch: 14 }, { wch: 28 }, { wch: 34 }, { wch: 28 },
     { wch: 28 }, { wch: 18 }, { wch: 36 }, { wch: 26 },

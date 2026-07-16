@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
 import { budgets, orders, orderItems, organizationInventory, branchInventory, auditLogs, branches, globalProducts, productQuantityBudgets, refunds, systemLogs, groupAuditLogs, organizations, refundItems } from "@/db/schema"
 import { headers } from "next/headers"
-import { and, desc, eq, gte, lte, sql, inArray, isNull } from "drizzle-orm"
+import { and, desc, eq, gte, ilike, lte, or, sql, inArray, isNull } from "drizzle-orm"
 import { logOrderActivity } from "@/lib/global-logger"
 import { generateReceiptData } from "@/lib/receipt-generator"
 import { generateNextInvoiceNumber, hasInvoiceSequenceTable } from "@/lib/invoice-number"
@@ -15,6 +15,7 @@ import { getBudgetAllocationModeForOrganization } from "@/lib/server/budget-allo
 import { orderSelectColumns } from "@/lib/order-select"
 import { calculateLineCents, formatQuantity, roundQuantity, validateProductQuantity } from "@/lib/quantity"
 import { orderCreateSchema, validationMessage } from "@/lib/server/mutation-validation"
+import { withRateLimit } from "@/lib/rate-limiter"
 
 
 
@@ -66,6 +67,22 @@ export async function GET(req: NextRequest) {
     const groupIdsRaw = searchParams.get("groupIds") || undefined
     const monthsRaw = searchParams.get("months") || undefined
     const yearsRaw = searchParams.get("years") || undefined
+    const page = Math.min(Math.max(Math.trunc(Number(searchParams.get("page"))) || 1, 1), 10_000)
+    const requestedLimit = Math.trunc(Number(searchParams.get("limit"))) || 200
+    const limit = idParam ? 1 : Math.min(Math.max(requestedLimit, 1), 500)
+    const offset = idParam ? 0 : (page - 1) * limit
+    const conditions: any[] = []
+
+    if (q) {
+      if (q.length > 100) {
+        return NextResponse.json({ error: "Search query must be at most 100 characters" }, { status: 400 })
+      }
+      const escapedQuery = q.replace(/[\\%_]/g, "\\$&")
+      conditions.push(or(
+        ilike(orders.tid, `%${escapedQuery}%`),
+        ilike(branches.costCenterId, `%${escapedQuery}%`),
+      ))
+    }
 
     // Parsing branchIds
     const parsedBranchIds = branchIdsRaw
@@ -84,8 +101,6 @@ export async function GET(req: NextRequest) {
     const parsedYears = yearsRaw
       ? yearsRaw.split(",").map(id => Number(id)).filter(id => !isNaN(id) && id >= 2000 && id <= 2100)
       : []
-
-    const conditions: any[] = []
 
     // --- Role-based access ---
     if (role === "SUPER_ADMIN") {
@@ -235,8 +250,8 @@ export async function GET(req: NextRequest) {
       .leftJoin(organizations, eq(orders.organizationId, organizations.id))
 
     const items = await (conditions.length
-      ? selectBase.where(and(...conditions)).orderBy(desc(orders.createdAt))
-      : selectBase.orderBy(desc(orders.createdAt)))
+      ? selectBase.where(and(...conditions)).orderBy(desc(orders.createdAt)).limit(limit).offset(offset)
+      : selectBase.orderBy(desc(orders.createdAt)).limit(limit).offset(offset))
 
     const currentUserId = (session.user as any).id
 
@@ -267,15 +282,7 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    const filtered = q
-      ? sanitizedItems.filter((o) => {
-        const lowerQuery = q.toLowerCase()
-        return (
-          o.tid.toLowerCase().includes(lowerQuery) ||
-          (o.branchCostCenterId || "").toLowerCase().includes(lowerQuery)
-        )
-      })
-      : sanitizedItems
+    const filtered = sanitizedItems
 
     // Single order with items
     if (idParam && /^\d+$/.test(idParam)) {
@@ -328,7 +335,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ items: filtered, pricesHidden })
+    return NextResponse.json({
+      items: filtered,
+      pricesHidden,
+      pagination: {
+        page,
+        limit,
+        hasMore: filtered.length === limit,
+      },
+    })
   } catch (e: any) {
     console.error("Orders GET error:", e)
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
@@ -351,6 +366,8 @@ export async function POST(req: NextRequest) {
     let organizationId = (session.user as any).organizationId
     if (organizationId) organizationId = parseInt(String(organizationId))
     const userId = (session.user as any).id
+    const rateLimit = await withRateLimit("order", userId)
+    if (rateLimit) return rateLimit
     const idempotencyKey = req.headers.get("idempotency-key")?.trim() || ""
     if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
       return NextResponse.json({

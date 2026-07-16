@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm"
 import { getCurrentUser, verifyResourceAccess } from "@/lib/auth"
 import { sendOrderTokenEmail } from "@/lib/email"
 import { ADMIN_OPERATIONS_EMAIL } from "@/lib/email/recipients"
+import { withRateLimit } from "@/lib/rate-limiter"
 
 const TOKEN_EMAIL_RECIPIENT = ADMIN_OPERATIONS_EMAIL
 
@@ -17,6 +18,9 @@ export async function POST(
 
   const user = await getCurrentUser()
   if (!user) return error("Unauthorized", 401)
+
+  const rateLimit = await withRateLimit("email", user.id)
+  if (rateLimit) return rateLimit
 
   const params = await props.params
   const orderId = Number(params.id)
