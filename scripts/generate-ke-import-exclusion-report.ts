@@ -121,7 +121,7 @@ async function main() {
   }
   const rejectionById = new Map(source.rejected.map((rejection) => [rejection.legacyOrderId, rejection.reason as ExclusionReason]))
 
-  const { pool } = await import("../lib/db")
+  const { pool } = await import("../lib/db-cli")
   const batchResult = await pool.query(`
     select id, source_manifest, counts, imported_by_user_id, created_at, completed_at
     from legacy_import_batches

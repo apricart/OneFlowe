@@ -10,7 +10,7 @@ const ORG_ID = 10
 
 async function main() {
   const output = resolve(process.argv[2] || `backups/ke-import-state-${new Date().toISOString().replace(/[:.]/g, "-")}.json`)
-  const { pool } = await import("../lib/db")
+  const { pool } = await import("../lib/db-cli")
   const client = await pool.connect()
   try {
     await client.query("begin transaction isolation level repeatable read read only")

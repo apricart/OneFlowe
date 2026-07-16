@@ -146,7 +146,8 @@ export async function POST(req: NextRequest) {
 
         successfulRows++
       } catch (error: any) {
-        validationErrors.push({ row: rowNumber, errors: [error.message] })
+        console.error(`Product import failed for row ${rowNumber}:`, error)
+        validationErrors.push({ row: rowNumber, errors: ["Unable to import this row"] })
         failedRows++
       }
     }

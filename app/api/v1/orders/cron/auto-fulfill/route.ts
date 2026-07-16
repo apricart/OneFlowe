@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { orders, auditLogs, budgets } from "@/db/schema"
 import { ok, error } from "@/lib/api"
 import { moveHeldQuantityBudgetToUsedForOrder } from "@/lib/server/product-quantity-budget-ledger"
+import { env } from "@/lib/server/env"
 
 const BATCH_SIZE = 50
 // 48 hours — measured from orders.updatedAt, which is written by the fulfillment-status
@@ -13,9 +14,7 @@ const BATCH_SIZE = 50
 const DELIVERED_WINDOW_MS = 48 * 60 * 60 * 1000
 
 function isCronAuthorized(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET
-  if (!secret) return false
-  return req.headers.get("authorization") === `Bearer ${secret}`
+  return req.headers.get("authorization") === `Bearer ${env.CRON_SECRET}`
 }
 
 async function runAutoFulfill(dryRun = false) {
@@ -65,7 +64,7 @@ async function runAutoFulfill(dryRun = false) {
     try {
       const now = new Date()
 
-      await db.transaction(async (tx) => {
+      const didFulfill = await db.transaction(async (tx) => {
         // Re-read inside the transaction to guard against a simultaneous manual fulfillment
         const [live] = await tx
           .select({ status: orders.status, fulfillmentStatus: orders.fulfillmentStatus })
@@ -79,20 +78,28 @@ async function runAutoFulfill(dryRun = false) {
           live.fulfillmentStatus !== "DELIVERED"
         ) {
           // Already fulfilled (or rolled back) by another process — skip safely
-          return
+          return false
         }
 
         // 1. Mark order as FULFILLED
         //    fulfillmentStatus stays DELIVERED — it is already correct
         //    fulfilledByUserId is null because this is a system action
-        await tx
+        const [claimedOrder] = await tx
           .update(orders)
           .set({
             status: "FULFILLED",
             fulfilledAt: now,
             updatedAt: now,
           })
-          .where(and(eq(orders.id, order.id), eq(orders.status, "APPROVED")))
+          .where(and(
+            eq(orders.id, order.id),
+            eq(orders.status, "APPROVED"),
+            eq(orders.fulfillmentStatus, "DELIVERED"),
+            sql`NOT EXISTS (SELECT 1 FROM "refunds" WHERE "refunds"."order_id" = ${orders.id})`,
+          ))
+          .returning({ id: orders.id })
+
+        if (!claimedOrder) return false
 
         // 2. Move budget: held → spent (mirrors the manual fulfill route exactly)
         const orderMonth = order.createdAt
@@ -129,9 +136,11 @@ async function runAutoFulfill(dryRun = false) {
             deliveryCutoff: cutoff.toISOString(),
           },
         })
+
+        return true
       })
 
-      fulfilled++
+      if (didFulfill) fulfilled++
     } catch (e) {
       console.error(`[AutoFulfill] Failed on order ${order.tid}:`, e)
       errors++

@@ -227,7 +227,8 @@ export async function POST(req: NextRequest) {
 
         successfulRows++
       } catch (error: any) {
-        validationErrors.push({ row: rowNumber, errors: [error.message] })
+        console.error(`Global product import failed for row ${rowNumber}:`, error)
+        validationErrors.push({ row: rowNumber, errors: ["Unable to import this row"] })
         failedRows++
       }
     }
@@ -252,7 +253,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (error: any) {
     console.error("Error importing products:", error)
-    return NextResponse.json({ error: error.message || "Failed to import products" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to import products" }, { status: 500 })
   }
 }
 

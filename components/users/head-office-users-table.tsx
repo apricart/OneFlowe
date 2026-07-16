@@ -400,10 +400,28 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
         body.password = editForm.password
       }
 
-      await jsonFetcher(`/api/v1/users/${editingUser.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(body)
-      })
+      const accessBody: Record<string, unknown> = {}
+      const profileBody: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(body)) {
+        if (["role", "organizationId", "branchId", "mfaEnabled", "isActive"].includes(key)) {
+          accessBody[key] = value
+        } else {
+          profileBody[key] = value
+        }
+      }
+
+      if (Object.keys(accessBody).length > 0) {
+        await jsonFetcher(`/api/v1/users/${editingUser.id}/access`, {
+          method: "PATCH",
+          body: JSON.stringify(accessBody)
+        })
+      }
+      if (Object.keys(profileBody).length > 0) {
+        await jsonFetcher(`/api/v1/users/${editingUser.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(profileBody)
+        })
+      }
 
       onUserUpdate()
       closeEditDialog()
@@ -444,7 +462,7 @@ export function HeadOfficeUsersTable({ users, branches, organizations, userRole,
         : prev
     ))
     try {
-      await jsonFetcher(`/api/v1/users/${user.id}`, {
+      await jsonFetcher(`/api/v1/users/${user.id}/access`, {
         method: "PATCH",
         body: JSON.stringify({ isActive: nextIsActive })
       })

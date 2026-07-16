@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
         }
     } catch (e: any) {
         console.error("Schedule Save Error:", e)
-        return error(e.message || "Failed to save schedule")
+        return error("Failed to save schedule")
     }
 }
 

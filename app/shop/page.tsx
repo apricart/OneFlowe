@@ -135,6 +135,15 @@ export default function OrderPortalPage() {
   const [pageSize, setPageSize] = useState(12)
   const [currentPage, setCurrentPage] = useState(1)
   const [activeCategory, setActiveCategory] = useState<string>("All")
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false)
+  const orderIdempotencyKeyRef = React.useRef<string | null>(null)
+  const orderSubmissionInFlightRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (!orderSubmissionInFlightRef.current) {
+      orderIdempotencyKeyRef.current = null
+    }
+  }, [cart])
 
   // Auth check
   React.useEffect(() => {
@@ -441,11 +450,18 @@ export default function OrderPortalPage() {
   }
 
   const placeOrder = async () => {
-    if (!canCheckout) return
+    if (!canCheckout || orderSubmissionInFlightRef.current) return
+    orderSubmissionInFlightRef.current = true
+    setIsPlacingOrder(true)
+    const idempotencyKey = orderIdempotencyKeyRef.current || crypto.randomUUID()
+    orderIdempotencyKeyRef.current = idempotencyKey
     try {
       const res = await fetch("/api/v1/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify({
           items: cart.map(c => ({ organizationInventoryId: c.id, quantity: c.quantity })),
           ...(isAdmin && activeBranchId && { branchId: activeBranchId, organizationId: activeOrgId }),
@@ -453,6 +469,7 @@ export default function OrderPortalPage() {
       })
       const json = await res.json()
       if (!res.ok) {
+        orderIdempotencyKeyRef.current = null
         if (json.error?.toLowerCase().includes("stock") || json.error?.toLowerCase().includes("budget")) {
           mutateBranchInventory()
           mutateBudget()
@@ -468,6 +485,7 @@ export default function OrderPortalPage() {
         description: `TID: ${json.order?.tid}. Your order is now pending approval by the branch admin.`,
       })
       setCart([])
+      orderIdempotencyKeyRef.current = null
       setShowCheckout(false)
 
       // Revalidate all data so UI updates immediately without refresh
@@ -476,6 +494,9 @@ export default function OrderPortalPage() {
       mutateBranchInventory() // Update stock quantities
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" })
+    } finally {
+      orderSubmissionInFlightRef.current = false
+      setIsPlacingOrder(false)
     }
   }
 
@@ -1664,8 +1685,8 @@ export default function OrderPortalPage() {
             >
               Back
             </Button>
-            <Button onClick={placeOrder}>
-              Place Order
+            <Button onClick={placeOrder} disabled={!canCheckout || isPlacingOrder}>
+              {isPlacingOrder ? "Placing Order..." : "Place Order"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -8,6 +8,7 @@ import { getRequestScope } from "@/lib/auth"
 import { handleError } from "@/lib/error-handler"
 import { logError } from "@/lib/global-logger"
 import { getCached, invalidateByPrefix, scopedCacheKey, CACHE_TTL } from "@/lib/cache-utils"
+import { organizationCreateSchema, validationMessage } from "@/lib/server/mutation-validation"
 import {
   BUDGET_ALLOCATION_MODE_SETTING_KEY,
   DEFAULT_BUDGET_ALLOCATION_MODE,
@@ -102,7 +103,10 @@ export async function POST(req: Request) {
     const err = await requireApiRole(["SUPER_ADMIN"]) // Only Super Admin can create organizations
     if (err) return err
 
-    const body = await readJson<any>(req)
+    const rawBody = await readJson<unknown>(req)
+    const parsedBody = organizationCreateSchema.safeParse(rawBody)
+    if (!parsedBody.success) return error(validationMessage(parsedBody.error), 400)
+    const body = parsedBody.data
 
     // Validate required fields
     if (!body?.name || typeof body.name !== 'string') {

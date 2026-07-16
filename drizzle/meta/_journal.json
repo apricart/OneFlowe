@@ -211,6 +211,13 @@
       "when": 1783904400000,
       "tag": "20260713010000_add_normalized_global_product_code_uniqueness",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1784070000000,
+      "tag": "20260715000000_business_logic_integrity",
+      "breakpoints": true
     }
   ]
 }

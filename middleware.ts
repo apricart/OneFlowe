@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { logger } from "@/lib/utils"
 import { getToken } from "next-auth/jwt"
+import { edgeEnv } from "@/lib/edge/env"
 
 const protectedPrefixes = ["/dashboard", "/organizations", "/users", "/orders", "/inventory", "/budgets", "/reports", "/settings", "/branches", "/shop", "/change-password"]
 
@@ -54,7 +55,7 @@ export async function middleware(req: NextRequest) {
 
   if (!needsAuth) return withSecurityHeaders(response, pathname)
 
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  const token = await getToken({ req, secret: edgeEnv.NEXTAUTH_SECRET })
   if (!token) {
     logger("middleware", { reason: "no_session", path: pathname })
     const loginPath = "/login"

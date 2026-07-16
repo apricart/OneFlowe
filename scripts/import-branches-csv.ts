@@ -163,7 +163,7 @@ if (DRY_RUN) {
 // ─── Live insert (dynamic imports so dry-run never touches the DB) ─────────
 
 async function runInsert() {
-  const { db } = await import("../lib/db")
+  const { db } = await import("../lib/db-cli")
   const { branches: branchesTable, organizations } = await import("../db/schema")
   const { eq, and, sql } = await import("drizzle-orm")
   // Verify the organisation exists

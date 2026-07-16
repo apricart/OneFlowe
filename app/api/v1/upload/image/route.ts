@@ -67,8 +67,7 @@ export async function POST(req: NextRequest) {
     console.error("Critical Upload Error:", error)
     return NextResponse.json({
       error: "Internal Server Error",
-      details: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: "Upload failed"
     }, { status: 500 })
   }
 }

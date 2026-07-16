@@ -9,16 +9,19 @@ import { authOptions } from "@/lib/auth-options";
 import { getRequestScope } from "@/lib/auth";
 import { assertUniqueUserFields, normalizeEmail, UserUniqueFieldError } from "@/lib/user-uniqueness";
 import { invalidateSessionValidationCache } from "@/lib/session-validation-cache";
+import {
+  employeeCredentialCreateSchema,
+  employeeCredentialUpdateSchema,
+  validationMessage,
+} from "@/lib/server/mutation-validation";
 
 async function POST(req: NextRequest) {
   try {
-    const body = await readJson(req)
-    const { password, firstName, lastName, mfaEnabled } = body
-    const email = normalizeEmail(body.email)
-
-    if (!email || !password) {
-      return error("Email and password required", 400)
-    }
+    const rawBody = await readJson<unknown>(req)
+    const parsedBody = employeeCredentialCreateSchema.safeParse(rawBody)
+    if (!parsedBody.success) return error(validationMessage(parsedBody.error), 400)
+    const { password, firstName, lastName, mfaEnabled } = parsedBody.data
+    const email = normalizeEmail(parsedBody.data.email)
 
     // Get user scope with proper role and organization/branch info
     const scope = await getRequestScope()
@@ -118,13 +121,11 @@ async function GET(req: NextRequest) {
 
 async function PUT(req: NextRequest) {
   try {
-    const body = await readJson(req)
-    const { id, isActive, firstName, lastName, password } = body
-    const email = body.email !== undefined ? normalizeEmail(body.email) : undefined
-
-    if (!id) {
-      return error("ID required", 400)
-    }
+    const rawBody = await readJson<unknown>(req)
+    const parsedBody = employeeCredentialUpdateSchema.safeParse(rawBody)
+    if (!parsedBody.success) return error(validationMessage(parsedBody.error), 400)
+    const { id, isActive, firstName, lastName, password } = parsedBody.data
+    const email = parsedBody.data.email !== undefined ? normalizeEmail(parsedBody.data.email) : undefined
 
     const credId = typeof id === 'number' ? id : parseInt(id, 10)
     if (isNaN(credId)) {
@@ -157,27 +158,15 @@ async function PUT(req: NextRequest) {
       return error("Credential not found", 404)
     }
 
-    const updates: any = {}
-    if (isActive !== undefined) updates.isActive = isActive
-    if (firstName !== undefined) updates.firstName = firstName
-    if (lastName !== undefined) updates.lastName = lastName
-
     // Handle email update
     if (email && email !== cred.email) {
       await assertUniqueUserFields({ email }, undefined, credId)
-      updates.email = email
     }
 
     // Handle password update
+    let passwordHash: string | undefined
     if (password) {
-      // Validate password complexity
-      if (password.length < 12) {
-        return error("Password must be at least 12 characters", 400)
-      }
-      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password) || !/[^a-zA-Z0-9]/.test(password)) {
-        return error("Password must include uppercase, lowercase, number, and special character", 400)
-      }
-      updates.passwordHash = await hash(password, 10)
+      passwordHash = await hash(password, 10)
     }
 
     // Only password changes should invalidate the current session.
@@ -188,7 +177,14 @@ async function PUT(req: NextRequest) {
 
     const [updated] = await db
       .update(employeeCredentials)
-      .set({ ...updates, sessionVersion: nextVersion })
+      .set({
+        isActive,
+        firstName,
+        lastName,
+        email: email && email !== cred.email ? email : undefined,
+        passwordHash,
+        sessionVersion: nextVersion,
+      })
       .where(eq(employeeCredentials.id, credId))
       .returning()
 

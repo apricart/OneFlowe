@@ -1,14 +1,14 @@
-import * as dotenv from "dotenv"
-dotenv.config({ path: ".env.local" })
-
 import { Client } from "pg"
+import { loadMigrationEnv } from "../lib/server/migration-env"
+
+const migrationEnv = loadMigrationEnv()
 
 async function syncSchema() {
   try {
     console.log("🔄 Syncing schema with database...")
 
     const client = new Client({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: migrationEnv.MIGRATION_DATABASE_URL,
     })
 
     await client.connect()

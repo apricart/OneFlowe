@@ -7,8 +7,10 @@ import { verifyPassword } from "@/lib/password"
 import { checkMfaCooldown, verifyOTP, clearDailyCount } from "@/lib/mfa"
 import { compare } from "bcryptjs"
 import { getSessionValidationCache, setSessionValidationCache } from "@/lib/session-validation-cache"
+import { env } from "@/lib/server/env"
 
 export const authOptions: NextAuthOptions = {
+  secret: env.NEXTAUTH_SECRET,
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },  // 8-hour expiry (bank-grade)
   providers: [
     Credentials({
