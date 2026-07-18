@@ -13,7 +13,6 @@ const envPath = existsSync(resolve(process.cwd(), ".env.local"))
   : resolve(process.cwd(), ".env")
 dotenv.config({ path: envPath })
 
-import { db } from "./db"
 import { users, roles, rolePermissions, organizations, organizationSettings } from "@/db/schema"
 import { eq } from "drizzle-orm"
 import { ROLE_TEMPLATES, Permission } from "./permissions"
@@ -37,6 +36,10 @@ async function seed() {
   console.log("🌱 Starting database seed...\n")
 
   try {
+    // Import only after dotenv has populated process.env. Static imports are
+    // evaluated before this module body and caused db.ts to miss DATABASE_URL.
+    const { db } = await import("./db")
+
     // 1. Create Roles
     console.log("📝 Step 1: Creating roles...")
     const roleNames = ["SUPER_ADMIN", "HEAD_OFFICE", "BRANCH_ADMIN", "ORDER_PORTAL"]
