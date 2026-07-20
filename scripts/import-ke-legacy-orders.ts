@@ -225,7 +225,7 @@ async function main() {
     : source.manifest
   const digest = manifestDigest(confirmationManifest)
 
-  const { db, pool } = await import("../lib/db")
+  const { db, pool } = await import("../lib/db-cli")
   const schema = await import("../db/schema")
   const { and, eq, inArray, isNull, sql } = await import("drizzle-orm")
 

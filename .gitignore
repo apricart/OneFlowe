@@ -10,6 +10,7 @@ logs/
 # next.js
 /.next/
 /out/
+/tmp/
 
 # production
 /build
@@ -22,6 +23,7 @@ yarn-error.log*
 
 # env files
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -32,6 +34,9 @@ next-env.d.ts
 
 # database exports (uncomment to ignore, or keep specific files by not adding them)
 # database-export-*.sql
+<<<<<<< HEAD
 
 # Local logical backups created before rebuilding a test database
 /backups/test-db-rebuild-*.json.gz
+=======
+>>>>>>> origin/security-feature

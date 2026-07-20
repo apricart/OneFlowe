@@ -1,7 +1,7 @@
 import { ok, error, requireApiRole } from "@/lib/api"
 import { db } from "@/lib/db"
 import { orders } from "@/db/schema"
-import { eq } from "drizzle-orm"
+import { and, eq, sql } from "drizzle-orm"
 import { getCurrentUser } from "@/lib/auth"
 import { generateApprovalToken, hashApprovalToken } from "@/lib/approval-token"
 import { logTokenGenerated } from "@/lib/global-logger"
@@ -17,6 +17,7 @@ export async function POST(
 
   const params = await props.params
   const orderId = Number(params.id)
+  if (!Number.isInteger(orderId) || orderId <= 0) return error("Invalid order ID", 400)
   const user = await getCurrentUser()
 
   if (!user) return error("Unauthorized", 401)
@@ -38,7 +39,7 @@ export async function POST(
   const plainToken = generateApprovalToken(10)
   const tokenHash = await hashApprovalToken(plainToken)
 
-  await db.update(orders).set({
+  const [approved] = await db.update(orders).set({
     status: "APPROVED",
     approvedByUserId: user.id,
     approvedAt: new Date(),
@@ -46,7 +47,14 @@ export async function POST(
     approvalTokenHash: tokenHash,
     approvalTokenCreatedAt: new Date(),
     updatedAt: new Date()
-  }).where(eq(orders.id, orderId))
+  }).where(and(
+    eq(orders.id, orderId),
+    sql`UPPER(${orders.status}) = 'PENDING'`,
+  )).returning({ id: orders.id })
+
+  if (!approved) {
+    return error("Order was already approved, rejected, or otherwise changed", 409)
+  }
 
   // Log token generation
   logTokenGenerated(

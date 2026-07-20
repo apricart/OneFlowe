@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { safeFilenamePart } from "@/lib/security"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth-options"
 import { db } from "@/lib/db"
@@ -128,11 +129,12 @@ export async function GET(
         }
 
         const pdfBuffer = renderReceiptPagePdf(receiptData)
+        const invoiceFilePart = safeFilenamePart(receiptData.invoiceNumber, String(orderId))
 
         return new NextResponse(pdfBuffer, {
             headers: {
                 "Content-Type": "application/pdf",
-                "Content-Disposition": `attachment; filename="invoice-${receiptData.invoiceNumber}.pdf"`,
+                "Content-Disposition": `attachment; filename="invoice-${invoiceFilePart}.pdf"`,
             },
         })
     } catch (e: any) {
