@@ -12,6 +12,16 @@ describe('repository security boundaries', () => {
     expect(repositoryFile('next.config.mjs')).not.toMatch(/(^|\s)env\s*:/m)
   })
 
+  it('prepares the allowlisted Amplify runtime environment before Next.js builds', () => {
+    const buildSpec = repositoryFile('amplify.yml')
+    const runtimeEnvStep = buildSpec.indexOf('node scripts/write-amplify-runtime-env.mjs')
+    const nextBuildStep = buildSpec.indexOf('npm run build')
+
+    expect(runtimeEnvStep).toBeGreaterThan(-1)
+    expect(nextBuildStep).toBeGreaterThan(runtimeEnvStep)
+    expect(buildSpec).not.toMatch(/env\s*\|/)
+  })
+
   it('keeps general seeding free of administrator credentials', () => {
     const seed = repositoryFile('lib/seed.ts')
     expect(seed).not.toContain('SUPER_ADMIN_PASSWORD')

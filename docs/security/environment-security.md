@@ -34,6 +34,28 @@
    controlled bootstrap window, run the confirmed bootstrap once, and then
    delete both variables.
 
+## AWS Amplify Hosting SSR
+
+Amplify Hosting console variables are available to the build container but are
+not automatically available to the deployed Next.js SSR compute runtime. The
+repository-level `amplify.yml` runs `scripts/write-amplify-runtime-env.mjs`
+before `next build`. The script writes an ignored `.env.production` file using
+an exact runtime allowlist, validates all required variable names, and never
+prints their values.
+
+The allowlist deliberately excludes `MIGRATION_DATABASE_URL`, administrator
+bootstrap credentials, and permanent AWS access keys. Do not replace this with
+an unrestricted `env` dump and do not restore the custom `env` object in
+`next.config.mjs`.
+
+Amplify packages `.env.production` into the server deployment artifact. It is
+not included in browser JavaScript because none of these variables use the
+`NEXT_PUBLIC_` prefix, but users with deployment-artifact access can read it.
+Keep artifact access least-privileged, use separate values per branch, rotate
+secrets on exposure, and prefer Amplify secret management or SSM Parameter
+Store as the longer-term source of secrets. AWS service access must continue to
+use the Amplify SSR Compute IAM role rather than static AWS access keys.
+
 ## AWS workload identity
 
 The repository contains no CI workflow with enough account-specific information
