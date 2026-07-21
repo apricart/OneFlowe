@@ -20,6 +20,7 @@ import Image from "next/image"
 import { RefundManagement } from "@/components/refund-management"
 import { getOrderDerivedStatus } from "@/lib/order-status"
 import { ReceiptIconButton } from "@/components/receipts/receipt-icon-button"
+import { NotificationBell } from "@/components/notifications/notification-center"
 
 const ORDER_PORTAL_REFRESH_INTERVAL_MS = 5000
 
@@ -623,6 +624,8 @@ export default function OrderPortalPage() {
                 </div>
               </div>
             </div>}
+
+            {isOrderPortal && <NotificationBell />}
 
             {/* Cart Button */}
             <Button

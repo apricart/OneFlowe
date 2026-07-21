@@ -16,6 +16,7 @@ import { orderSelectColumns } from "@/lib/order-select"
 import { calculateLineCents, formatQuantity, roundQuantity, validateProductQuantity } from "@/lib/quantity"
 import { orderCreateSchema, validationMessage } from "@/lib/server/mutation-validation"
 import { withRateLimit } from "@/lib/rate-limiter"
+import { attemptImmediateOrderEmailDelivery, queueOrderCreatedNotifications } from "@/lib/server/order-notifications"
 
 
 
@@ -616,7 +617,7 @@ export async function POST(req: NextRequest) {
     const tid = generateTid()
     const invoiceSequenceReady = await hasInvoiceSequenceTable(db)
 
-    const created = await db.transaction(async (tx) => {
+    const creationResult = await db.transaction(async (tx) => {
       const budgetId = currentBudget?.id
       if (!budgetId) throw new Error("Budget ID missing")
 
@@ -903,8 +904,27 @@ export async function POST(req: NextRequest) {
         success: true
       })
 
-      return ord
+      const queuedNotifications = role === "ORDER_PORTAL"
+        ? await queueOrderCreatedNotifications(tx, {
+          order: ord,
+          requestedBy: String(
+            (session.user as any)?.fullName || "Order Portal user",
+          ).trim().slice(0, 255),
+        })
+        : { eventKeys: [], recipientCount: 0 }
+
+      return { order: ord, queuedNotifications }
     })
+
+    const created = creationResult.order
+    if (role === "ORDER_PORTAL" && creationResult.queuedNotifications.recipientCount === 0) {
+      console.warn("[OrderNotifications] No active Branch Admin recipient was available", {
+        orderId: created.id,
+        organizationId: created.organizationId,
+        branchId: created.branchId,
+      })
+    }
+    await attemptImmediateOrderEmailDelivery(creationResult.queuedNotifications.eventKeys)
 
     const safeOrder = pricesHidden
       ? {

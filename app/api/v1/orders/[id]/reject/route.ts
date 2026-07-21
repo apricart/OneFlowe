@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { releaseHeldQuantityBudgetForOrder } from "@/lib/server/product-quantity-budget-ledger"
 import { orderSelectColumns } from "@/lib/order-select"
 import { rejectionSchema, validationMessage } from "@/lib/server/mutation-validation"
+import { attemptImmediateOrderEmailDelivery, queueOrderDecisionNotification, type QueuedOrderNotifications } from "@/lib/server/order-notifications"
 
 export async function POST(
   req: Request,
@@ -38,8 +39,9 @@ export async function POST(
     return error(`Cannot reject order in ${ord.status} state`, 400)
   }
 
+  let queuedNotifications: QueuedOrderNotifications = { eventKeys: [], recipientCount: 0 }
   try {
-    await db.transaction(async (tx) => {
+    queuedNotifications = await db.transaction(async (tx) => {
       // Claim the transition. Only one simultaneous rejection/approval can win.
       const [rejectedOrder] = await tx.update(orders).set({
         status: "REJECTED",
@@ -89,6 +91,12 @@ export async function POST(
           })
           .where(eq(globalProducts.id, item.globalProductId))
       }
+
+      return queueOrderDecisionNotification(tx, {
+        order: rejectedOrder,
+        decision: "REJECTED",
+        rejectionReason: input.reason,
+      })
     })
   } catch (transitionError: any) {
     if (transitionError?.message === "ORDER_TRANSITION_CONFLICT") {
@@ -99,6 +107,15 @@ export async function POST(
     }
     throw transitionError
   }
+
+  if (queuedNotifications.recipientCount === 0) {
+    console.warn("[OrderNotifications] Rejected order creator was not an active scoped Order Portal user", {
+      orderId,
+      organizationId: ord.organizationId,
+      branchId: ord.branchId,
+    })
+  }
+  await attemptImmediateOrderEmailDelivery(queuedNotifications.eventKeys)
 
   return ok({ message: "Order rejected successfully" })
 }

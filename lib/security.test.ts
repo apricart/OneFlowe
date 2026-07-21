@@ -66,8 +66,41 @@ describe("browser security helpers", () => {
     })).toBe(false)
     expect(isCookieAuthenticatedMutationAllowed({
       ...base,
+      origin: "https://app.example",
+      secFetchSite: "same-site",
+    })).toBe(false)
+    expect(isCookieAuthenticatedMutationAllowed({
+      ...base,
       origin: null,
       secFetchSite: null,
+    })).toBe(false)
+  })
+
+  it("accepts browser-confirmed same-origin mutations behind a reverse proxy", () => {
+    expect(isCookieAuthenticatedMutationAllowed({
+      method: "POST",
+      requestUrl: "http://internal-next-server:3000/api/v1/users",
+      origin: "https://app.example",
+      secFetchSite: "same-origin",
+      cookieHeader: "__Secure-next-auth.session-token=abc",
+    })).toBe(true)
+  })
+
+  it("falls back to a strict Origin comparison without Fetch Metadata", () => {
+    const base = {
+      method: "POST",
+      requestUrl: "https://app.example/api/v1/users",
+      cookieHeader: "next-auth.session-token=abc",
+      secFetchSite: null,
+    }
+
+    expect(isCookieAuthenticatedMutationAllowed({
+      ...base,
+      origin: "https://app.example",
+    })).toBe(true)
+    expect(isCookieAuthenticatedMutationAllowed({
+      ...base,
+      origin: "https://attacker.example",
     })).toBe(false)
   })
 

@@ -225,7 +225,7 @@ Current browser usage writes application-generated workbooks rather than parsing
 ### Controls
 
 - NextAuth's built-in CSRF mechanism remains in place for authentication actions.
-- Cookie-authenticated `/api/v1` mutations now require a same-origin `Origin`, or same-origin Fetch Metadata evidence when `Origin` is absent.
+- Cookie-authenticated `/api/v1` mutations require browser-confirmed same-origin Fetch Metadata when available, with a strict same-origin `Origin` fallback for older clients. This remains reliable when a trusted reverse proxy gives Next.js an internal request URL.
 - Cross-site or unverifiable cookie-authenticated POST/PUT/PATCH/DELETE requests return `403`.
 - Bearer/non-cookie clients are not incorrectly subjected to cookie-CSRF logic.
 - The auto-fulfill cron no longer performs a state change on `GET`; the infrastructure path uses authenticated `POST`.

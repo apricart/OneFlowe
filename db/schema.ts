@@ -542,6 +542,8 @@ export const notifications = pgTable(
     branchId: integer("branch_id").references(() => branches.id),
     type: varchar("type", { length: 64 }).notNull(),
     targetRole: varchar("target_role", { length: 64 }),
+    orderId: integer("order_id").references(() => orders.id, { onDelete: "cascade" }),
+    eventKey: varchar("event_key", { length: 255 }),
     message: text("message").notNull(),
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
@@ -551,6 +553,51 @@ export const notifications = pgTable(
     typeIdx: index("notifications_type_idx").on(t.type),
     notiOrgIdx: index("notifications_org_idx").on(t.organizationId),
     notiBranchIdx: index("notifications_branch_idx").on(t.branchId),
+    notiOrderIdx: index("notifications_order_idx").on(t.orderId),
+    notiEventKeyUq: uniqueIndex("notifications_event_key_uq").on(t.eventKey),
+  }),
+)
+
+export const emailOutbox = pgTable(
+  "email_outbox",
+  {
+    id: serial("id").primaryKey(),
+    eventKey: varchar("event_key", { length: 255 }).notNull(),
+    recipientUserId: uuid("recipient_user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    recipientEmail: varchar("recipient_email", { length: 255 }).notNull(),
+    recipientRole: varchar("recipient_role", { length: 64 }).notNull(),
+    organizationId: integer("organization_id")
+      .references(() => organizations.id, { onDelete: "cascade" })
+      .notNull(),
+    branchId: integer("branch_id")
+      .references(() => branches.id, { onDelete: "cascade" })
+      .notNull(),
+    orderId: integer("order_id")
+      .references(() => orders.id, { onDelete: "cascade" })
+      .notNull(),
+    template: varchar("template", { length: 64 }).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("PENDING"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow(),
+    processingStartedAt: timestamp("processing_started_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    providerMessageId: varchar("provider_message_id", { length: 255 }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    eventKeyUq: uniqueIndex("email_outbox_event_key_uq").on(t.eventKey),
+    statusNextAttemptIdx: index("email_outbox_status_next_attempt_idx").on(t.status, t.nextAttemptAt),
+    recipientIdx: index("email_outbox_recipient_idx").on(t.recipientUserId),
+    orgIdx: index("email_outbox_org_idx").on(t.organizationId),
+    branchIdx: index("email_outbox_branch_idx").on(t.branchId),
+    orderIdx: index("email_outbox_order_idx").on(t.orderId),
+    attemptsNonnegative: check("email_outbox_attempts_nonnegative_ck", sql`${t.attempts} >= 0`),
+    statusValid: check("email_outbox_status_valid_ck", sql`${t.status} IN ('PENDING', 'PROCESSING', 'SENT', 'FAILED', 'SKIPPED')`),
   }),
 )
 
