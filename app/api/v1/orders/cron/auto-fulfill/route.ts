@@ -7,10 +7,7 @@ import { moveHeldQuantityBudgetToUsedForOrder } from "@/lib/server/product-quant
 import { env } from "@/lib/server/env"
 
 const BATCH_SIZE = 50
-// 48 hours — measured from orders.updatedAt, which is written by the fulfillment-status
-// route whenever it advances fulfillmentStatus. Once an order reaches DELIVERED the only
-// thing that would change updatedAt again is this cron itself, so updatedAt is a reliable
-// proxy for deliveredAt given the current schema has no dedicated deliveredAt column.
+// Auto-fulfillment is measured from the immutable physical-delivery timestamp.
 const DELIVERED_WINDOW_MS = 48 * 60 * 60 * 1000
 
 function isCronAuthorized(req: NextRequest): boolean {
@@ -25,7 +22,7 @@ async function runAutoFulfill(dryRun = false) {
   //   2. Delivery status is DELIVERED (physically received)
   //   3. No refund has been applied directly on the order (refundedAt / refundAmountCents)
   //   4. No refund record exists in any status (PENDING / APPROVED request blocks auto-fulfill)
-  //   5. updatedAt is older than 48 h (order has been in DELIVERED state for at least 48 h)
+  //   5. deliveredAt is older than 48 h (order has been in DELIVERED state for at least 48 h)
   const eligible = await db
     .select({
       id: orders.id,
@@ -43,7 +40,7 @@ async function runAutoFulfill(dryRun = false) {
         eq(orders.fulfillmentStatus, "DELIVERED"),
         isNull(orders.refundedAt),
         or(isNull(orders.refundAmountCents), eq(orders.refundAmountCents, 0)),
-        lte(orders.updatedAt, cutoff),
+        lte(orders.deliveredAt, cutoff),
         sql`NOT EXISTS (SELECT 1 FROM "refunds" WHERE "refunds"."order_id" = ${orders.id})`
       )
     )

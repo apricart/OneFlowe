@@ -63,11 +63,13 @@ export async function POST(
   try {
     await db.transaction(async (tx) => {
       // Claim the transition so only one simultaneous fulfilment can move ledgers.
+      const fulfilledAt = new Date()
       const [fulfilledOrder] = await tx.update(orders).set({
         status: "FULFILLED",
-        fulfilledAt: new Date(),
+        deliveredAt: fulfilledAt,
+        fulfilledAt,
         fulfilledByUserId: user.id,
-        updatedAt: new Date()
+        updatedAt: fulfilledAt,
       }).where(and(
         eq(orders.id, orderId),
         sql`UPPER(${orders.status}) = 'APPROVED'`,

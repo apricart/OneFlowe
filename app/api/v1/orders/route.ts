@@ -17,6 +17,7 @@ import { calculateLineCents, formatQuantity, roundQuantity, validateProductQuant
 import { orderCreateSchema, validationMessage } from "@/lib/server/mutation-validation"
 import { withRateLimit } from "@/lib/rate-limiter"
 import { attemptImmediateOrderEmailDelivery, queueOrderCreatedNotifications } from "@/lib/server/order-notifications"
+import { canViewFulfillmentToken } from "@/lib/fulfillment-token-access"
 
 
 
@@ -221,6 +222,7 @@ export async function GET(req: NextRequest) {
         taxCents: orders.taxCents,
         totalCents: orders.totalCents,
         createdAt: orders.createdAt,
+        deliveredAt: orders.deliveredAt,
         fulfilledAt: orders.fulfilledAt,
         branchName: branches.name,
         branchAddress: branches.address,
@@ -243,6 +245,7 @@ export async function GET(req: NextRequest) {
           FROM ${orderItems}
           WHERE ${orderItems.orderId} = ${orders.id}
         )`,
+        createdByUserId: orders.createdByUserId,
         approvedByUserId: orders.approvedByUserId,
         approvalToken: orders.approvalToken, // Will be filtered before return
       })
@@ -258,24 +261,24 @@ export async function GET(req: NextRequest) {
 
     // Sanitize items: Only show approvalToken to authorized roles
     const sanitizedItems = items.map(item => {
-      // Show token if:
-      // 1. User is the one who approved it
-      // 2. User is a Super Admin (needs it for fulfillment)
-      // 3. User is a Branch Admin (needs it to hand off to Super Admin)
-      const canSeeToken =
-        item.approvedByUserId === currentUserId ||
-        role === "SUPER_ADMIN" ||
-        role === "BRANCH_ADMIN";
+      const canSeeToken = canViewFulfillmentToken({
+        role,
+        userId: currentUserId,
+        orderStatus: item.status,
+        orderCreatedByUserId: item.createdByUserId,
+        orderApprovedByUserId: item.approvedByUserId,
+      })
+      const { createdByUserId: _createdByUserId, ...publicItem } = item
 
       const safeItem = pricesHidden
         ? {
-          ...item,
+          ...publicItem,
           subtotalCents: null,
           taxCents: null,
           totalCents: null,
           refundAmountCents: null,
         }
-        : item
+        : publicItem
 
       return {
         ...safeItem,

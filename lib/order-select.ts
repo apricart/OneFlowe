@@ -19,6 +19,7 @@ export const orderSelectColumns = {
   notes: orders.notes,
   createdByUserId: orders.createdByUserId,
   createdAt: orders.createdAt,
+  deliveredAt: orders.deliveredAt,
   fulfilledAt: orders.fulfilledAt,
   updatedAt: orders.updatedAt,
   approvedByUserId: orders.approvedByUserId,
@@ -77,7 +78,12 @@ export async function updateOrderFulfillmentStatusColumn(
   try {
     await client.execute(sql`
       UPDATE "orders"
-      SET "fulfillment_status" = ${status}, "updated_at" = NOW()
+      SET "fulfillment_status" = ${status},
+          "delivered_at" = CASE
+            WHEN ${status} = 'DELIVERED' THEN COALESCE("delivered_at", NOW())
+            ELSE "delivered_at"
+          END,
+          "updated_at" = NOW()
       WHERE "id" = ${orderId}
     `)
     return true
@@ -127,7 +133,12 @@ export async function transitionOrderFulfillmentStatusColumn(
   try {
     const result = await client.execute(sql`
       UPDATE "orders"
-      SET "fulfillment_status" = ${nextStatus}, "updated_at" = NOW()
+      SET "fulfillment_status" = ${nextStatus},
+          "delivered_at" = CASE
+            WHEN ${nextStatus} = 'DELIVERED' THEN COALESCE("delivered_at", NOW())
+            ELSE "delivered_at"
+          END,
+          "updated_at" = NOW()
       WHERE "id" = ${orderId}
         AND UPPER("status") = 'APPROVED'
         AND COALESCE("fulfillment_status", 'NOT_STARTED') = ${currentStatus}

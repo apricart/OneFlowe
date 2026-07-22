@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
-import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, AlertTriangle, DollarSign, Star, Zap, Package, TrendingDown, Grid, LogOut, ArrowRight, ArrowLeft, Calendar, MapPin, RefreshCw, Building2 } from "lucide-react"
+import { ShoppingBag, Search, Plus, Minus, Trash2, Home, X, CheckCircle, Clock, AlertTriangle, DollarSign, Star, Zap, Package, TrendingDown, Grid, LogOut, ArrowRight, ArrowLeft, Calendar, MapPin, RefreshCw, Building2, Copy, Send } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import Image from "next/image"
 import { RefundManagement } from "@/components/refund-management"
@@ -66,6 +66,7 @@ interface Order {
   refundReason?: string | null
   rejectionReason?: string | null
   statusAtRefund?: string | null
+  approvalToken?: string | null
   orderItems?: OrderItem[]
 }
 
@@ -137,6 +138,7 @@ export default function OrderPortalPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [activeCategory, setActiveCategory] = useState<string>("All")
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
+  const [isSendingTokenEmail, setIsSendingTokenEmail] = useState(false)
   const orderIdempotencyKeyRef = React.useRef<string | null>(null)
   const orderSubmissionInFlightRef = React.useRef(false)
 
@@ -219,6 +221,62 @@ export default function OrderPortalPage() {
       const freshOrders = await fetcher(`${ordersUrl}?refresh=${Date.now()}`)
       await mutateOrders(freshOrders, { revalidate: false })
       void mutateBudget()
+    }
+  }
+
+  const copyFulfillmentToken = async () => {
+    const token = selectedOrder?.approvalToken
+    if (!token) return
+
+    try {
+      await navigator.clipboard.writeText(token)
+      toast({
+        title: "Copied",
+        description: "Fulfillment token copied to clipboard.",
+      })
+    } catch {
+      toast({
+        title: "Copy failed",
+        description: "Could not copy the fulfillment token. Please select and copy it manually.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const sendFulfillmentToken = async () => {
+    if (!selectedOrder?.approvalToken) return
+
+    setIsSendingTokenEmail(true)
+    try {
+      const response = await fetch(`/api/v1/orders/${selectedOrder.id}/send-token-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+      const responseText = await response.text()
+      const data = responseText
+        ? (() => {
+            try {
+              return JSON.parse(responseText)
+            } catch {
+              return { error: responseText }
+            }
+          })()
+        : {}
+
+      if (!response.ok) throw new Error(data.error || "Failed to send token email")
+
+      toast({
+        title: "Token sent",
+        description: "Fulfillment token emailed to the admin.",
+      })
+    } catch (error) {
+      toast({
+        title: "Email failed",
+        description: error instanceof Error ? error.message : "Failed to send token email",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSendingTokenEmail(false)
     }
   }
 
@@ -1414,7 +1472,10 @@ export default function OrderPortalPage() {
 
             {/* Pagination controls */}
             {filteredProducts.length > 0 && (
-              <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className={cn(
+                "mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between",
+                cart.length > 0 && !showCart && "mb-20"
+              )}>
                 <div className="text-xs text-muted-foreground">
                   {(() => {
                     const start = (currentPage - 1) * pageSize + 1
@@ -1852,6 +1913,46 @@ export default function OrderPortalPage() {
                 refundedAt={selectedOrder.refundedAt}
                 refundReason={selectedOrder.refundReason}
               />
+
+              {isOrderPortal && selectedOrder.status.toUpperCase() === "APPROVED" && selectedOrder.approvalToken && (
+                <section className="min-w-0 space-y-3 border-t pt-4" aria-labelledby="fulfillment-token-heading">
+                  <h3 id="fulfillment-token-heading" className="text-lg font-semibold">Fulfillment Token</h3>
+                  <div className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/60 p-4 dark:border-indigo-800 dark:bg-indigo-950/20 sm:p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                      Share with Super Admin
+                    </p>
+                    <div className="flex min-w-0 items-stretch gap-2 sm:gap-3">
+                      <div className="min-w-0 flex-1 overflow-x-auto rounded-xl border border-indigo-200 bg-white px-4 py-3 font-mono text-lg font-bold tracking-[0.2em] text-indigo-700 shadow-sm dark:border-indigo-800 dark:bg-slate-950 dark:text-indigo-300 sm:text-xl">
+                        {selectedOrder.approvalToken}
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="outline"
+                        onClick={copyFulfillmentToken}
+                        aria-label="Copy fulfillment token"
+                        title="Copy fulfillment token"
+                        className="h-auto min-h-12 w-12 shrink-0 rounded-xl border-indigo-200 bg-white text-indigo-600 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-slate-950 dark:text-indigo-300 dark:hover:bg-indigo-950/50"
+                      >
+                        <Copy className="h-5 w-5" />
+                      </Button>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isSendingTokenEmail}
+                      onClick={sendFulfillmentToken}
+                      className="h-11 w-full rounded-xl border-indigo-200 bg-white font-semibold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-slate-950 dark:text-indigo-300 dark:hover:bg-indigo-950/50"
+                    >
+                      <Send className={cn("mr-2 h-4 w-4", isSendingTokenEmail && "animate-pulse")} />
+                      {isSendingTokenEmail ? "Sending Token..." : "Send Token to Admin"}
+                    </Button>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Provide this security token to the Super Admin to mark this order as fulfilled.
+                    </p>
+                  </div>
+                </section>
+              )}
              
             </div>
           )}

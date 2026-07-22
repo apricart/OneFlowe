@@ -97,6 +97,7 @@ describe("strict mutation schemas", () => {
       "priceCents",
       "totalCents",
       "paymentStatus",
+      "deliveredAt",
       "refundAmountCents",
       "status",
     ]) {

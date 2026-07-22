@@ -386,6 +386,7 @@ export const orders = pgTable(
       .references(() => users.id)
       .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
     fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
     // Approval tracking fields

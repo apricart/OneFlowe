@@ -1001,6 +1001,7 @@ async function main() {
         notes: `Historical import from ${LEGACY_SOURCE}; legacy order ${order.legacyOrderId}`,
         createdByUserId,
         createdAt: order.createdAt,
+        deliveredAt: order.fulfilledAt,
         fulfilledAt: order.fulfilledAt,
         updatedAt: order.fulfilledAt,
         receiptData: buildReceipt(order, branch, productIds) as any,

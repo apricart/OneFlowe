@@ -72,7 +72,13 @@ export async function POST(
       },
     })
 
-    return { ...order, fulfillmentStatus: nextStatus }
+    const [updatedOrder] = await tx
+      .select(orderSelectColumns)
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1)
+
+    return updatedOrder || { ...order, fulfillmentStatus: nextStatus }
   })
 
   if (updated === "missing-column") {
