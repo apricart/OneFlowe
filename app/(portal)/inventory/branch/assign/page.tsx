@@ -21,6 +21,12 @@ type Organization = { id: number; name: string }
 type Branch = { id: number; name: string; organizationId: number }
 type Group = { id: number; name: string; organizationId: number }
 
+type AssignmentState = {
+    organizationInventoryIds: number[]
+    partialOrganizationInventoryIds: number[]
+    branchCount: number
+}
+
 type OrgProduct = {
     id: number
     globalProductId: number
@@ -90,28 +96,57 @@ export default function AssignToBranchPage() {
             return
         }
 
+        const controller = new AbortController()
+        setAlreadyAssignedIds(new Set())
+        setSelectedProducts([])
+
         const fetchAssignments = async () => {
             setLoadingAssignments(true)
             try {
-                const res = await fetch(`/api/v1/head-office/branch-assignments?organizationId=${selectedOrgId}&groupId=${selectedGroup}&limit=1000`)
-                const data = await res.json()
-                if (res.ok && data.items) {
-                    // Get unique organizationInventoryIds that are already assigned in this group
-                    const assigned = new Set<number>()
-                    for (const item of data.items) {
-                        assigned.add(Number(item.organizationInventoryId))
-                    }
-                    setAlreadyAssignedIds(assigned)
+                const params = new URLSearchParams({
+                    organizationId: String(selectedOrgId),
+                    groupId: selectedGroup,
+                    view: "assignment-state",
+                })
+                const res = await fetch(
+                    `/api/v1/head-office/branch-assignments?${params.toString()}`,
+                    { signal: controller.signal },
+                )
+                const data = await res.json().catch(() => null) as AssignmentState | { error?: string } | null
+
+                if (!res.ok) {
+                    const message = data && "error" in data && data.error
+                        ? data.error
+                        : "Failed to load existing group assignments"
+                    throw new Error(message)
                 }
-            } catch {
-                // silently fail
+
+                if (!data || !("organizationInventoryIds" in data) || !Array.isArray(data.organizationInventoryIds)) {
+                    throw new Error("Invalid assignment-state response")
+                }
+
+                setAlreadyAssignedIds(new Set(data.organizationInventoryIds.map(Number)))
+            } catch (error) {
+                if (controller.signal.aborted) return
+                console.error("Failed to load group assignments:", error)
+                setAlreadyAssignedIds(new Set())
+                toast({
+                    title: "Unable to load assignments",
+                    description: error instanceof Error
+                        ? error.message
+                        : "Please refresh and try again.",
+                    variant: "destructive",
+                })
             } finally {
-                setLoadingAssignments(false)
+                if (!controller.signal.aborted) {
+                    setLoadingAssignments(false)
+                }
             }
         }
 
         fetchAssignments()
-        setSelectedProducts([]) // reset selection on group change
+
+        return () => controller.abort()
     }, [selectedGroup, selectedOrgId])
 
     // Search filtering

@@ -38,13 +38,114 @@ export async function GET(req: NextRequest) {
     const branchId = searchParams.get("branchId")
     const groupId = searchParams.get("groupId") // New parameter
     const productId = searchParams.get("productId")
+    const view = searchParams.get("view")
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "50")
     const offset = (page - 1) * limit
+    const parsedOrganizationId = Number(organizationId)
+
+    if (!Number.isInteger(parsedOrganizationId) || parsedOrganizationId <= 0) {
+      return NextResponse.json({ error: "Invalid organization ID" }, { status: 400 })
+    }
+
+    // The assign-to-group screen only needs product IDs, not one full product
+    // payload per branch. Keep this response small even when product images are
+    // stored as data URIs.
+    if (view === "assignment-state") {
+      const parsedGroupId = Number(groupId)
+      if (!Number.isInteger(parsedGroupId) || parsedGroupId <= 0) {
+        return NextResponse.json(
+          { error: "A valid groupId is required for assignment-state view" },
+          { status: 400 },
+        )
+      }
+
+      const [group] = await db.select({ id: groups.id })
+        .from(groups)
+        .where(
+          and(
+            eq(groups.id, parsedGroupId),
+            eq(groups.organizationId, parsedOrganizationId),
+          ),
+        )
+        .limit(1)
+
+      if (!group) {
+        return NextResponse.json({ error: "Group not found" }, { status: 404 })
+      }
+
+      const [groupBranchResult, assignmentCounts] = await Promise.all([
+        db.select({ count: sql<number>`count(*)::int` })
+          .from(branches)
+          .where(
+            and(
+              eq(branches.organizationId, parsedOrganizationId),
+              eq(branches.groupId, parsedGroupId),
+            ),
+          ),
+        db.select({
+          organizationInventoryId: branchInventory.organizationInventoryId,
+          assignedBranchCount: sql<number>`count(distinct ${branchInventory.branchId})::int`,
+        })
+          .from(branchInventory)
+          .innerJoin(
+            branches,
+            and(
+              eq(branchInventory.branchId, branches.id),
+              eq(branches.organizationId, parsedOrganizationId),
+            ),
+          )
+          .innerJoin(
+            organizationInventory,
+            and(
+              eq(branchInventory.organizationInventoryId, organizationInventory.id),
+              eq(organizationInventory.organizationId, parsedOrganizationId),
+              isNull(organizationInventory.deletedAt),
+            ),
+          )
+          .innerJoin(
+            globalProducts,
+            and(
+              eq(organizationInventory.globalProductId, globalProducts.id),
+              isNull(globalProducts.deletedAt),
+            ),
+          )
+          .where(
+            and(
+              eq(branchInventory.organizationId, parsedOrganizationId),
+              eq(branches.groupId, parsedGroupId),
+              isNull(branchInventory.deletedAt),
+            ),
+          )
+          .groupBy(branchInventory.organizationInventoryId),
+      ])
+
+      const branchCount = Number(groupBranchResult[0]?.count ?? 0)
+      const organizationInventoryIds: number[] = []
+      const partialOrganizationInventoryIds: number[] = []
+
+      for (const assignment of assignmentCounts) {
+        const assignedBranchCount = Number(assignment.assignedBranchCount)
+        if (branchCount > 0 && assignedBranchCount === branchCount) {
+          organizationInventoryIds.push(assignment.organizationInventoryId)
+        } else if (assignedBranchCount > 0) {
+          partialOrganizationInventoryIds.push(assignment.organizationInventoryId)
+        }
+      }
+
+      return NextResponse.json({
+        organizationInventoryIds,
+        partialOrganizationInventoryIds,
+        branchCount,
+      })
+    }
 
     const conditions = [
-      eq(branchInventory.organizationId, parseInt(organizationId)),
+      eq(branchInventory.organizationId, parsedOrganizationId),
+      eq(branches.organizationId, parsedOrganizationId),
+      eq(organizationInventory.organizationId, parsedOrganizationId),
       isNull(branchInventory.deletedAt),
+      isNull(organizationInventory.deletedAt),
       isNull(globalProducts.deletedAt),
     ]
 
@@ -59,8 +160,6 @@ export async function GET(req: NextRequest) {
     console.log('[API] GET branch-assignments params:', { organizationId, branchId, groupId })
     console.log('[API] Conditions count:', conditions.length)
     // productId refers to global product; filter via organizationInventory.globalProductId after join
-
-    const whereClause = and(...conditions)
 
     const [items, totalResult] = await Promise.all([
       db.select({
@@ -78,7 +177,15 @@ export async function GET(req: NextRequest) {
         productName: globalProducts.name,
         productCode: globalProducts.productCode,
         categoryName: categories.name,
-        productImageUrl: globalProducts.imageUrl,
+        // Inline data URIs can be hundreds of KB and are repeated for every
+        // branch. Keep URL-backed images, but never amplify embedded images in
+        // this list response.
+        productImageUrl: sql<string | null>`
+          case
+            when ${globalProducts.imageUrl} like 'data:%' then null
+            else ${globalProducts.imageUrl}
+          end
+        `,
         globalStatus: globalProducts.status,
         basePrice: globalProducts.basePrice,
         unit: globalProducts.unit,
